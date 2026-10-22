@@ -63,9 +63,9 @@ namespace {
     }
 
     const char* shape_names[tooie::parallax_pick::shape_count] = { "stone", "bumpy", "inverted", "cracks", "terraced", "rounded",
-        "grass", "wood", "bark", "brick", "dirt", "metal", "leaves", "tiles", "sand", "smooth" };
+        "grass", "wood", "bark", "brick", "dirt", "metal", "leaves", "tiles", "sand", "smooth", "ice" };
     const char* shape_labels[tooie::parallax_pick::shape_count] = { "Stone", "Bumpy", "Inverted", "Cracks", "Terraced", "Rounded",
-        "Grass", "Wood", "Bark", "Brick", "Dirt", "Metal", "Leaves", "Tiles", "Sand", "Smooth" };
+        "Grass", "Wood", "Bark", "Brick", "Dirt", "Metal", "Leaves", "Tiles", "Sand", "Smooth", "Ice" };
     const int depth_percents[tooie::parallax_pick::depth_count] = { 100, 25, 50, 150, 200, 300 };
     // Right click goes up from 100%, then round from the shallowest.
     const uint8_t depth_next[tooie::parallax_pick::depth_count] = { 3, 2, 0, 4, 5, 1 };
@@ -217,8 +217,7 @@ namespace {
         const uint32_t bits = RT64::SceneParallaxTexture(hash);
         pick.off = (bits == 0);
         if (!pick.off) {
-            pick.shape = uint8_t(((bits >> 17) & 0x7u) | (((bits >> 24) & 0x1u) << 3));
-            pick.depth = uint8_t((bits >> 20) & 0x7u);
+            pick.shape = uint8_t(((bits >> 17) & 0x7u) | (((bits >> 24) & 0x1u) << 3) | (((bits >> 20) & 0x1u) << 4));
             pick.shadows = ((bits >> 23) & 0x1u) == 0;
             pick.fine = uint8_t((bits >> 25) & 0x1Fu);
         }

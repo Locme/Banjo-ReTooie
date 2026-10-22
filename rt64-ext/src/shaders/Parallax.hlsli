@@ -111,22 +111,14 @@ float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, f
     // Smooth: Bumpy's full depth from the blurred brightness, with no stair steps.
     case 15u:
         return smoothstep(0.0f, 1.0f, darkness);
+    // Ice: a clear top layer with the pattern seen inside it: nothing stands at the surface, the frost and bubbles
+    // (the light parts) lie just under it and the dark parts deep down, softly (from the blurred brightness).
+    case 16u:
+        return 0.3f + 0.7f * smoothstep(0.0f, 1.0f, darkness);
     // Stone: the speckle on a stone's face isn't its shape, so most of it is one flat top and only the darkest parts
     // (the gaps, cracks and the shade under a ledge) sink, steeply at their edges.
     default:
         return smoothstep(0.65f, 0.95f, darkness);
-    }
-}
-
-// A texture's depth from its RASTER_PARALLAX_DEPTH_* index: 100% (the default), 25, 50, 150, 200 or 300%.
-float ParallaxDepthScale(uint index) {
-    switch (index) {
-    case 1u: return 0.25f;
-    case 2u: return 0.5f;
-    case 3u: return 1.5f;
-    case 4u: return 2.0f;
-    case 5u: return 3.0f;
-    default: return 1.0f;
     }
 }
 
@@ -135,10 +127,10 @@ float ParallaxDepthScale(uint index) {
 // light from straight up in the world. No change where it is flat: seen edge on, or far away.
 float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixelPosition, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, uint bits) {
     // The texture's own shape, depth and shadows (RasterParams.nightLight, rt64_raster_params.h).
-    const uint shape = ((bits >> 25) & 0x7u) | (((bits & RASTER_PARALLAX_SHAPE_HIGH) != 0) ? 8u : 0u);
+    const uint shape = ((bits >> 25) & 0x7u) | (((bits & RASTER_PARALLAX_SHAPE_HIGH) != 0) ? 8u : 0u) | (((bits & RASTER_PARALLAX_SHAPE_TOP) != 0) ? 16u : 0u);
     float4 params = FrParams.parallaxParams;
     const uint fineDepth = (bits & RASTER_PARALLAX_FINE_DEPTH) >> RASTER_PARALLAX_FINE_DEPTH_SHIFT;
-    params.x *= (fineDepth != 0) ? (float(fineDepth) * 0.1f) : ParallaxDepthScale((bits >> 28) & 0x7u);
+    params.x *= (fineDepth != 0) ? (float(fineDepth) * 0.1f) : 1.0f;
     const float4 shading = ((bits & RASTER_PARALLAX_NO_SHADOWS) != 0) ? float4(0.0f, 0.0f, 0.0f, 0.0f) : FrParams.parallaxShading;
     const float3 p = ParallaxViewPosition(pixelPosition);
     const float3 dp1 = ddx(p);

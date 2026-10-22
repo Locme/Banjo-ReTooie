@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T524 Ice parallax shape
+- Asked: 2026-10-21 23:57 UTC
+- Build: main (Ice parallax)
+- Steps:
+  1. Set Parallax to 100
+  2. Go to Hailfire Peaks' Icy Side and walk on the ice floors past the ice walls
+  3. Turn on Parallax Pick Mode and hover the ice: the label says Ice, no shadows (built-in); left click steps to Ice after Smooth on other textures
+- Look for: Does the ice look like clear ice with the pattern inside it as the camera moves, with no dark shadows? Too deep or too shallow?
+- Status: waiting for L
+
 ## T523 Light Source pick effect and its strength
 - Asked: 2026-10-21 23:11 UTC
 - Build: main (next build)

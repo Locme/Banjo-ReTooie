@@ -164,7 +164,7 @@ GroundVertex DSMain(GroundPatch p, float3 w : SV_DomainLocation, const OutputPat
             heightTile = ParallaxHeightTile(gpuTile);
         }
         const uint bits = gConstants.nightLight;
-        const uint shape = ((bits >> 25) & 0x7u) | (((bits & RASTER_PARALLAX_SHAPE_HIGH) != 0) ? 8u : 0u);
+        const uint shape = ((bits >> 25) & 0x7u) | (((bits & RASTER_PARALLAX_SHAPE_HIGH) != 0) ? 8u : 0u) | (((bits & RASTER_PARALLAX_SHAPE_TOP) != 0) ? 16u : 0u);
         const float2 range = float2((bits >> 8) & 0xFF, (bits >> 16) & 0xFF) / 255.0f;
 
         // The texture's depth, blurred over the spacing of the new vertices (a mip level that wide, and five taps), so
@@ -187,7 +187,7 @@ GroundVertex DSMain(GroundPatch p, float3 w : SV_DomainLocation, const OutputPat
 
         // Down by the texture's depth in world units: the Displaced ground setting at its picked depth.
         const uint fineDepth = (bits & RASTER_PARALLAX_FINE_DEPTH) >> RASTER_PARALLAX_FINE_DEPTH_SHIFT;
-        const float depthScale = (fineDepth != 0) ? (float(fineDepth) * 0.1f) : ParallaxDepthScale((bits >> 28) & 0x7u);
+        const float depthScale = (fineDepth != 0) ? (float(fineDepth) * 0.1f) : 1.0f;
         float4 up = FrParams.waterClipUp * (-depthAt * FrParams.groundParams.x * depthScale);
         up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
 #ifdef __spirv__

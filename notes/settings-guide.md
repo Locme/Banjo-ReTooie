@@ -268,9 +268,9 @@ F12 screenshots are taken before these filters, so they don't show them.
   as the camera moves. Higher is deeper; 100 is about 16 world units (Banjo is
   about 150 tall). Fades out on walls seen edge on and in the distance.
   Default: 0 (off).
-- **Parallax on original textures**: the game's own textures (3,481 of them,
+- **Parallax on original textures**: the game's own textures (3,517 of them,
   picked by eye, each with its own shape and depth: stone, brick, metal, wood,
-  bark, leaves, sand and the rest), whose depth is worked out from how dark each
+  bark, leaves, sand, ice and the rest), whose depth is worked out from how dark each
   part is. Off,
   only texture pack textures that come with a height map get parallax.
   Default: on.
@@ -312,9 +312,11 @@ the cursor names the texture and its parallax ("yours" or "built-in").
   Wood (shallow grain, deep gaps between planks), Bark (deep furrows), Brick
   (flat bricks, wide sunk mortar), Dirt (soft shallow lumps), Metal (flat
   plates, only the seams sink), Leaves (rounded, the shade under each sunk),
-  Tiles (flat tiles, a narrow sharp grout line), Sand (low soft ripples) and
-  Smooth (Bumpy's depth with no stair steps; Sand and Smooth blur the texture's
-  brightness first, which hides the jaggies of small textures), then Off.
+  Tiles (flat tiles, a narrow sharp grout line), Sand (low soft ripples),
+  Smooth (Bumpy's depth with no stair steps) and Ice (a clear top layer with the
+  frost and bubbles just under it and the dark parts deep inside; Sand, Smooth
+  and Ice blur the texture's brightness first, which hides the jaggies of small
+  textures), then Off. 25% depth is kept as 30%.
 - **Right click**: the depth, as a share of the Parallax slider: 100, 150, 200,
   300, 25 and 50%.
 - **Middle click**: its shadows off or on.

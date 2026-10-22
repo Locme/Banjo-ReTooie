@@ -9076,10 +9076,10 @@ index 4548f15..784123d 100644
  #ifdef HLSL_CPU
  };
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..215f32b 100644
+index 0a5c332..a4120db 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,88 @@
+@@ -9,11 +9,90 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -9117,12 +9117,14 @@ index 0a5c332..215f32b 100644
 +#define RASTER_NIGHT_LIGHT 0x1u
 +#define RASTER_PARALLAX 0x2u
 +#define RASTER_PARALLAX_HEIGHT_MAP 0x1000000u
-+// Banjo-Tooie: a texture's parallax shape in bits 25 to 27 with its bit 3 in RASTER_PARALLAX_SHAPE_HIGH (0 stone,
-+// 1 bumpy, 2 inverted, 3 cracks, 4 terraced, 5 rounded, 6 grass, 7 wood, 8 bark, 9 brick, 10 dirt, 11 metal, 12 leaves,
-+// 13 tiles, 14 sand, 15 smooth), its depth in 28 to 30 (0 100%, 1 25%, 2 50%, 3 150%, 4 200%, 5 300%) and no shadows in 31.
++// Banjo-Tooie: a texture's parallax shape in bits 25 to 27 with its bit 3 in RASTER_PARALLAX_SHAPE_HIGH and its bit 4 in
++// RASTER_PARALLAX_SHAPE_TOP (0 stone, 1 bumpy, 2 inverted, 3 cracks, 4 terraced, 5 rounded, 6 grass, 7 wood, 8 bark,
++// 9 brick, 10 dirt, 11 metal, 12 leaves, 13 tiles, 14 sand, 15 smooth, 16 ice), and no shadows in 31. Its depth is
++// RASTER_PARALLAX_FINE_DEPTH (100% when 0).
 +#define RASTER_PARALLAX_NO_SHADOWS 0x80000000u
 +#define RASTER_PARALLAX_SHAPE_HIGH 0x4u
-+// Banjo-Tooie: a texture's depth in 10% steps (1 to 31), instead of the depth bits, when not 0.
++#define RASTER_PARALLAX_SHAPE_TOP 0x10000000u
++// Banjo-Tooie: a texture's depth in 10% steps (1 to 31), when not 0.
 +#define RASTER_PARALLAX_FINE_DEPTH 0xF8u
 +#define RASTER_PARALLAX_FINE_DEPTH_SHIFT 3
 +    // Banjo-Tooie: no piece beside the draw on that side (RasterParams.seamTiles).

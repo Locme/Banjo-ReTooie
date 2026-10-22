@@ -486,23 +486,25 @@ namespace {
     // panels, pipes, machinery and rough ground, whose brightness reads as their shape (dark gaps, grooves and cracks
     // between lighter faces), picked by eye from a texture dump of every level. A fourth sweep (2026-10-20, with the
     // shapes pick mode has) gave each its shape and depth, and added foliage, grassy and sandy ground, bark and more rock
-    // and metal: 3,481 of the dump's 7,259 textures. Water, ice, glowing parts and painted or lettered textures are left
+    // and metal: 3,517 of the dump's 7,259 textures. Water, ice, glowing parts and painted or lettered textures are left
     // out: their dark parts aren't deeper. With each, its darkest and lightest brightness (0 to 255,
     // leaving out the darkest and lightest twentieth of its texels) from the same dump: its deepest and highest parts.
     // Its shape (tooie::parallax_pick::Shape, Stone unless given) and its depth in 10% steps of the Parallax setting
-    // (0: 100%; the sweep's shallow is 70% and deep 150%).
+    // (0: 100%; the sweep's shallow is 70% and deep 150%). The ice textures (ice_textures[] and ice_anywhere_textures[])
+    // are Ice, with no shadows: clear ice casts none (L, 2026-10-21).
     constexpr uint8_t Stone = tooie::parallax_pick::shape_stone, Bumpy = tooie::parallax_pick::shape_bumpy, Cracks = tooie::parallax_pick::shape_cracks,
         Terraced = tooie::parallax_pick::shape_terraced, Rounded = tooie::parallax_pick::shape_rounded,
         Grass = tooie::parallax_pick::shape_grass, Wood = tooie::parallax_pick::shape_wood, Bark = tooie::parallax_pick::shape_bark,
         Brick = tooie::parallax_pick::shape_brick, Dirt = tooie::parallax_pick::shape_dirt, Metal = tooie::parallax_pick::shape_metal,
         Leaves = tooie::parallax_pick::shape_leaves, Tiles = tooie::parallax_pick::shape_tiles, Sand = tooie::parallax_pick::shape_sand,
-        Smooth = tooie::parallax_pick::shape_smooth;
+        Smooth = tooie::parallax_pick::shape_smooth, Ice = tooie::parallax_pick::shape_ice;
     struct ParallaxTexture {
         uint64_t hash;
         uint8_t darkest;
         uint8_t lightest;
         uint8_t shape = tooie::parallax_pick::shape_stone;
         uint8_t fine = 0;
+        bool shadows = true;
     };
     constexpr ParallaxTexture parallax_textures[] = {
         { 0x0001617090b5bc7c, 50, 192, Dirt },
@@ -701,6 +703,7 @@ namespace {
         { 0x105556f416b5e4d5, 59, 155, Metal, 7 },
         { 0x1064da053ed6ce3c, 11, 120, Bumpy },
         { 0x10893c3bd73b6416, 25, 84, Brick },
+        { 0x10907a3d02067a62, 42, 230, Ice, 0, false },
         { 0x10941e5603ffe40c, 0, 116, Metal, 7 },
         { 0x109aa92135290686, 0, 159, Metal, 7 },
         { 0x10b2ea1809b77d5a, 7, 148 },
@@ -869,6 +872,7 @@ namespace {
         { 0x1ce159cf573ed433, 0, 105 },
         { 0x1cf577bcf120b2b6, 9, 219, Tiles, 7 },
         { 0x1d02d26d18562bdc, 39, 233, Brick },
+        { 0x1d045b70e33827c3, 13, 214, Ice, 0, false },
         { 0x1d1be3fa4faed238, 63, 167, Bumpy },
         { 0x1d57571bbe0ec873, 18, 58, Bumpy, 7 },
         { 0x1d65da6219880aab, 0, 134 },
@@ -964,7 +968,7 @@ namespace {
         { 0x23f3f4080f184ce4, 30, 208, Wood, 7 },
         { 0x23f567fdfd7fe9f5, 2, 147, Metal, 7 },
         { 0x23f7a96f9be65361, 64, 170, Smooth },
-        { 0x23fb73341a90acee, 30, 107, Bumpy },
+        { 0x23fb73341a90acee, 30, 107, Ice, 0, false },
         { 0x2428c6d4951a83db, 0, 48, Bumpy },
         { 0x2449ee8a63579727, 43, 111, Wood, 7 },
         { 0x2489804c2d11d428, 40, 126, Wood, 7 },
@@ -1004,7 +1008,7 @@ namespace {
         { 0x275a6695c97c94e8, 14, 108 },
         { 0x27703be820f9c016, 15, 148, Metal, 7 },
         { 0x27773327f32d3637, 9, 90, Cracks },
-        { 0x27a85a283bfcca1b, 22, 181, Bumpy },
+        { 0x27a85a283bfcca1b, 22, 181, Ice, 0, false },
         { 0x27ab6c27c9b08a64, 40, 130, Metal, 7 },
         { 0x27e39ebd724fa6fa, 7, 140, Bumpy, 15 },
         { 0x27f004c07ab108c9, 7, 158, Bumpy },
@@ -1166,7 +1170,7 @@ namespace {
         { 0x31c0936b2d6ac753, 9, 88, Leaves },
         { 0x31cce062f51590d7, 51, 173, Tiles, 7 },
         { 0x31d8fc33a7d41dd2, 51, 165, Smooth },
-        { 0x31d98da7f8ab6e40, 36, 247, Bumpy },
+        { 0x31d98da7f8ab6e40, 36, 247, Ice, 0, false },
         { 0x31ece8d332602440, 15, 50, Dirt, 7 },
         { 0x320323c422800ec7, 0, 73 },
         { 0x320f3db556e3c57e, 21, 85, Brick },
@@ -1199,7 +1203,7 @@ namespace {
         { 0x33f44855f63171b8, 15, 123, Metal, 7 },
         { 0x340779d04050291c, 85, 186, Cracks },
         { 0x341f9795584d17f2, 57, 209 },
-        { 0x343369c2081485f9, 33, 247, Rounded },
+        { 0x343369c2081485f9, 33, 247, Ice, 0, false },
         { 0x343a9584f6c5be74, 5, 67, Cracks },
         { 0x344f600fde2365fc, 2, 137, Bumpy, 15 },
         { 0x346d3bbe7c3f2dc6, 36, 116, Grass },
@@ -1213,9 +1217,11 @@ namespace {
         { 0x34bc0df8bc599c11, 64, 150, Metal, 7 },
         { 0x34e036b8d3a5ccbb, 46, 113, Leaves },
         { 0x34edb75eecfadfe4, 7, 109, Metal, 7 },
+        { 0x34f050082c5115e6, 22, 160, Ice, 0, false },
         { 0x35158ae452767f97, 33, 175, Leaves },
         { 0x351976c604fadf0d, 28, 112, Metal, 7 },
         { 0x3532348b25f70133, 23, 82, Metal, 7 },
+        { 0x35454ef2c5d88795, 21, 168, Ice, 0, false },
         { 0x354e3dc78c79296c, 52, 156, Bumpy },
         { 0x3556f1557d8289c6, 44, 90, Bumpy, 7 },
         { 0x3558cb0a913e66ba, 21, 134, Stone, 7 },
@@ -1245,6 +1251,7 @@ namespace {
         { 0x372bf031e71abc9f, 14, 124, Leaves },
         { 0x37302eb1b7793f17, 13, 129, Wood, 7 },
         { 0x37408a39190428cd, 43, 144, Bark },
+        { 0x37488137fb10db24, 7, 203, Ice, 0, false },
         { 0x3750a73192f3ddda, 11, 129, Wood, 7 },
         { 0x375f5a32d4750f05, 74, 148, Dirt },
         { 0x377e82608fb7bfbc, 34, 109, Dirt },
@@ -1295,6 +1302,7 @@ namespace {
         { 0x3a7948c749824309, 17, 115, Bumpy },
         { 0x3a83bd8d568e5360, 39, 99, Bumpy, 7 },
         { 0x3ad29cd1224072fd, 21, 139, Wood, 7 },
+        { 0x3ad422f50614deef, 73, 247, Ice, 0, false },
         { 0x3af04c7cc4fce273, 7, 164 },
         { 0x3af6f165bc6fe3e6, 13, 163, Bumpy },
         { 0x3b0915b3ead335c7, 40, 107, Bumpy, 7 },
@@ -1322,6 +1330,7 @@ namespace {
         { 0x3c084cd1e95a1ab5, 4, 167, Bumpy },
         { 0x3c08bbe7fb485a32, 37, 102, Dirt },
         { 0x3c17219a8253c2be, 11, 101, Wood, 7 },
+        { 0x3c2fe461b635534e, 60, 185, Ice, 0, false },
         { 0x3c4815e4b1bb8e98, 0, 91, Smooth },
         { 0x3c723669b32a24ec, 106, 176, Smooth, 7 },
         { 0x3c76ae27b3e43cc2, 0, 151, Metal, 7 },
@@ -1580,7 +1589,7 @@ namespace {
         { 0x501a72fe21324180, 7, 140, Metal, 7 },
         { 0x50230021e8e528ee, 31, 158, Metal, 7 },
         { 0x5026445d030afd6d, 16, 107, Bumpy },
-        { 0x5030ec15ded34bc9, 0, 177, Bumpy },
+        { 0x5030ec15ded34bc9, 0, 177, Ice, 0, false },
         { 0x5036251517514a3f, 17, 182, Bumpy },
         { 0x504066852db82e74, 38, 167, Metal, 7 },
         { 0x50464136b4087ab1, 11, 117, Metal, 7 },
@@ -1653,6 +1662,7 @@ namespace {
         { 0x549fb742f9b2bdff, 40, 174, Bark },
         { 0x54ea6ee2a2025ced, 36, 170, Metal, 7 },
         { 0x54f8745a17ed6b00, 19, 123, Bumpy },
+        { 0x5506dfde3b791931, 15, 162, Ice, 0, false },
         { 0x552ac2c29d54fc5a, 2, 122, Wood, 7 },
         { 0x5550d49ac5bd2d37, 0, 230, Bumpy },
         { 0x557b3919500d51d8, 30, 173, Bumpy },
@@ -1719,6 +1729,7 @@ namespace {
         { 0x5a021d0579321113, 17, 157 },
         { 0x5a14c1c874f488f0, 7, 75 },
         { 0x5a1c120d5e0fb46a, 7, 124, Metal, 7 },
+        { 0x5a223ae5487e2ed2, 69, 222, Ice, 0, false },
         { 0x5a23394829fdbaba, 41, 133, Wood, 7 },
         { 0x5a2c1493b3396e7d, 24, 218 },
         { 0x5a307c438d58f54d, 15, 154, Metal, 7 },
@@ -1796,7 +1807,7 @@ namespace {
         { 0x60016dedbd1c7418, 53, 172, Metal, 7 },
         { 0x60226ef635220c47, 103, 187, Sand },
         { 0x603a85a1e20cfabb, 23, 67, Metal, 7 },
-        { 0x604279c748dde428, 7, 157, Bumpy },
+        { 0x604279c748dde428, 7, 157, Ice, 0, false },
         { 0x6047bb0918006f16, 20, 133, Rounded },
         { 0x605204a6927feea0, 26, 196, Metal, 7 },
         { 0x6080ad261c12a620, 11, 69, Bumpy },
@@ -1814,6 +1825,7 @@ namespace {
         { 0x6157bd790da827c4, 39, 127, Metal, 7 },
         { 0x61609c3b3f69eb41, 64, 141, Bumpy },
         { 0x6161fd604987fced, 20, 217, Wood, 7 },
+        { 0x61651a70e726dbdb, 68, 247, Ice, 0, false },
         { 0x619da87b9bca19cd, 38, 150, Metal, 7 },
         { 0x61a27e3d19a60cad, 20, 87, Wood, 7 },
         { 0x61b0e35322cd50f9, 25, 130, Metal, 7 },
@@ -1886,6 +1898,7 @@ namespace {
         { 0x65f74ffea0da59a1, 15, 145 },
         { 0x6603155343b911f1, 44, 154, Bumpy },
         { 0x660a0fafa429e5e6, 0, 143, Metal, 7 },
+        { 0x664b0c6644060bed, 58, 247, Ice, 0, false },
         { 0x667956fd034ca4c7, 11, 151, Bumpy, 15 },
         { 0x6698ced22fac2011, 36, 161, Stone, 7 },
         { 0x66a3343d6189ffd4, 21, 157 },
@@ -1894,6 +1907,7 @@ namespace {
         { 0x66bd5ad13cd6c360, 53, 158, Metal, 7 },
         { 0x66dff166a80de94c, 26, 142, Metal, 7 },
         { 0x66f829f7e9a6ffd3, 39, 112, Metal, 7 },
+        { 0x6714212997654fa0, 16, 219, Ice, 0, false },
         { 0x6716c8bac2d0dee0, 15, 189, Rounded },
         { 0x6747c5c931e53c98, 44, 81, Brick },
         { 0x675ec03cbd102f4f, 0, 79, Brick },
@@ -1911,7 +1925,7 @@ namespace {
         { 0x685af9765395eb25, 7, 127, Wood },
         { 0x6894ef4a77692f63, 26, 110, Bumpy, 7 },
         { 0x689effeeacf7ba99, 23, 123, Bumpy },
-        { 0x68dbdb32fd236996, 7, 129, Bumpy },
+        { 0x68dbdb32fd236996, 7, 129, Ice, 0, false },
         { 0x68dcd1a23fd88e74, 2, 128, Bumpy, 7 },
         { 0x690254c6bebbc8e8, 26, 200, Rounded },
         { 0x6906d8eee5e3245a, 23, 75 },
@@ -2123,6 +2137,7 @@ namespace {
         { 0x772abb4beca34886, 34, 200, Metal, 7 },
         { 0x77398bd409ba04f5, 43, 95, Bumpy, 7 },
         { 0x7747cb19e1dc6333, 21, 95, Leaves },
+        { 0x7757c212c3543909, 29, 243, Ice, 0, false },
         { 0x7775b63e815f9d25, 7, 130, Wood },
         { 0x7778c4c1cccb7045, 24, 118, Bumpy },
         { 0x778a32a6cbe6cc18, 0, 66, Rounded },
@@ -2146,7 +2161,7 @@ namespace {
         { 0x788bcf44bb9e68a0, 18, 185, Metal, 7 },
         { 0x78a885de4b380162, 0, 98, Bumpy },
         { 0x78d00d310976a919, 17, 177, Bark },
-        { 0x78d3311792ce28ef, 22, 124, Bumpy },
+        { 0x78d3311792ce28ef, 22, 124, Ice, 0, false },
         { 0x78db74ee8d0e3f3d, 59, 123, Wood, 7 },
         { 0x7905224bdc01abf6, 0, 155 },
         { 0x790d6cf1ffa5b79a, 21, 200 },
@@ -2165,6 +2180,7 @@ namespace {
         { 0x7986ef655492a785, 0, 129, Bumpy },
         { 0x7994f3ddbaf27ac8, 23, 140, Bumpy },
         { 0x7997a9ce1f771171, 23, 208, Bumpy, 7 },
+        { 0x79a8b89ae797effa, 29, 247, Ice, 0, false },
         { 0x79f2f2d1b02fbb3f, 24, 225, Rounded },
         { 0x79f35ed6f23861b7, 15, 82, Cracks, 7 },
         { 0x79f8fd0432a49806, 55, 140, Brick },
@@ -2193,7 +2209,8 @@ namespace {
         { 0x7be6af50e6bbe865, 26, 133, Brick },
         { 0x7c25b9ee46295942, 34, 127, Cracks },
         { 0x7c4935943ff45c04, 38, 110 },
-        { 0x7c7d6480aa2a36a2, 0, 146, Bumpy },
+        { 0x7c6a08e45d7b0dcf, 71, 230, Ice, 0, false },
+        { 0x7c7d6480aa2a36a2, 0, 146, Ice, 0, false },
         { 0x7c9237d1787e4903, 14, 193, Leaves, 7 },
         { 0x7cbbc714e3b3a416, 17, 82, Wood },
         { 0x7cc5f18b9650741a, 14, 84, Bumpy },
@@ -2219,7 +2236,7 @@ namespace {
         { 0x7e2c280082c1b549, 7, 160, Metal, 7 },
         { 0x7e35542713feeee3, 0, 134, Metal, 7 },
         { 0x7e3c53a0394c6149, 17, 200, Bumpy, 7 },
-        { 0x7e3dde1e37601f1d, 15, 217, Bumpy },
+        { 0x7e3dde1e37601f1d, 15, 217, Ice, 0, false },
         { 0x7e674458ffb53a23, 40, 185, Rounded },
         { 0x7ea0035710bb7477, 80, 126, Dirt, 7 },
         { 0x7ea36a1331aaec40, 11, 123, Bumpy },
@@ -2232,6 +2249,7 @@ namespace {
         { 0x7f290c1d485d0efb, 12, 106, Brick },
         { 0x7f291a8011fd480e, 0, 113, Bumpy },
         { 0x7f2a27e193fc0c0b, 78, 166, Bumpy, 7 },
+        { 0x7f3d8973e3b1ccad, 21, 168, Ice, 0, false },
         { 0x7f43e664bc405717, 172, 237, Sand, 7 },
         { 0x7f43fde8c3cde238, 34, 100, Bumpy, 7 },
         { 0x7f4612fbdfd0fba1, 16, 95, Bumpy, 15 },
@@ -2307,7 +2325,7 @@ namespace {
         { 0x8305e8221d0a958e, 7, 148, Smooth },
         { 0x83134ad6a1e270bc, 37, 115, Cracks },
         { 0x83224706a3b80c1b, 7, 141, Stone, 7 },
-        { 0x8328161013507ecd, 15, 164, Bumpy },
+        { 0x8328161013507ecd, 15, 164, Ice, 0, false },
         { 0x836d440704f29d5d, 17, 114, Bumpy, 15 },
         { 0x8372f332a9fb59ae, 25, 143, Metal, 7 },
         { 0x837446c54f42960d, 0, 139 },
@@ -2357,6 +2375,7 @@ namespace {
         { 0x87170d94e2ac4056, 12, 178, Bumpy },
         { 0x87191a5c34c16ade, 7, 112, Bumpy },
         { 0x871f5794e21afc76, 15, 142, Wood },
+        { 0x8736bfc30bbe4140, 52, 247, Ice, 0, false },
         { 0x874e74587189a983, 36, 247, Bumpy, 15 },
         { 0x875fd71f83af4b7a, 0, 102, Bumpy },
         { 0x87c19a9f691b6298, 0, 111, Rounded },
@@ -2522,6 +2541,7 @@ namespace {
         { 0x94c6681123effb47, 27, 88, Metal, 7 },
         { 0x94cbff261d18ba58, 0, 179, Bumpy, 15 },
         { 0x94ce9f3c48c498aa, 35, 140, Brick, 7 },
+        { 0x94db90a8d01cd37c, 21, 136, Ice, 0, false },
         { 0x94e63a3b4b78fc54, 14, 94, Leaves, 7 },
         { 0x94e717979b0d8bec, 22, 134 },
         { 0x950461349ccac6b8, 7, 130, Bumpy, 15 },
@@ -2641,7 +2661,7 @@ namespace {
         { 0x9dfd9d7f943b778e, 33, 132 },
         { 0x9e03cdcf7b72b801, 7, 160, Wood, 7 },
         { 0x9e1238d95e5ddd31, 0, 90 },
-        { 0x9e1db7eb4ed945a5, 7, 189, Bumpy },
+        { 0x9e1db7eb4ed945a5, 7, 189, Ice, 0, false },
         { 0x9e54aaa6a4580c06, 27, 216, Bumpy },
         { 0x9e5511d1b9cf600b, 0, 223, Metal, 7 },
         { 0x9e6fcbeb7ca4a79b, 20, 109, Bumpy },
@@ -2666,15 +2686,18 @@ namespace {
         { 0xa005cf2925f112f2, 42, 179, Metal, 7 },
         { 0xa0393d4bafb9a1a3, 0, 171 },
         { 0xa0503c76848a3e24, 31, 83, Metal, 7 },
+        { 0xa05ce779f63ba5ba, 47, 247, Ice, 0, false },
+        { 0xa0754fa808c1eec1, 12, 236, Ice, 0, false },
         { 0xa08c0479242935a7, 7, 158, Rounded },
         { 0xa09c0a9a2c12c725, 7, 148, Bumpy },
         { 0xa0a5fc0eab54ee58, 17, 195, Wood },
         { 0xa0b0365bcc5cba16, 54, 254 },
-        { 0xa0c74c8970f42515, 4, 153, Bumpy },
+        { 0xa0c74c8970f42515, 4, 153, Ice, 0, false },
         { 0xa0c9f5d87a2719f3, 11, 222, Bumpy },
         { 0xa0d9d9703f991f7d, 10, 151, Bumpy },
         { 0xa0de3fc13405c501, 46, 146, Rounded },
         { 0xa0ec8f703e868df8, 52, 180, Wood, 7 },
+        { 0xa111f6281c4c0ff7, 184, 251, Ice, 0, false },
         { 0xa143bc99822bbca3, 0, 144 },
         { 0xa146cbb1e54c321f, 41, 119 },
         { 0xa158cf9c8d9cd419, 66, 116, Dirt },
@@ -2829,6 +2852,7 @@ namespace {
         { 0xa9eff74087fe8df3, 21, 139, Wood, 7 },
         { 0xa9f20b0c4ac98505, 33, 130, Wood, 7 },
         { 0xa9f56ccc9425035d, 46, 169, Rounded },
+        { 0xa9f95d7e99c45ea7, 74, 173, Ice, 0, false },
         { 0xaa1283507401823a, 0, 140, Bumpy },
         { 0xaa14bdbf49a24366, 10, 141, Wood, 7 },
         { 0xaa4030800363aab8, 2, 137, Wood, 7 },
@@ -2890,7 +2914,7 @@ namespace {
         { 0xae143d3065fa42e6, 67, 143, Metal, 7 },
         { 0xae1c01f3a5f4259e, 0, 169, Stone, 7 },
         { 0xae2dd14baf47086c, 41, 247, Wood, 7 },
-        { 0xae436b1f52b9b6e6, 69, 184, Bumpy, 7 },
+        { 0xae436b1f52b9b6e6, 69, 184, Ice, 0, false },
         { 0xae5b3131b684cffb, 0, 108, Wood, 7 },
         { 0xae67e8e96592a1fa, 18, 152, Metal, 7 },
         { 0xaea5124156ccb293, 12, 174, Bumpy },
@@ -2962,7 +2986,7 @@ namespace {
         { 0xb4baa6487c8ca8b9, 48, 168, Bumpy },
         { 0xb4cd454ea469d4f2, 33, 110 },
         { 0xb50440325f38ea78, 0, 103, Metal, 7 },
-        { 0xb5185cb35b5559d8, 31, 106, Bumpy },
+        { 0xb5185cb35b5559d8, 31, 106, Ice, 0, false },
         { 0xb524593b446b465c, 32, 78, Metal, 7 },
         { 0xb52788f10a0d0957, 15, 81, Wood, 7 },
         { 0xb570b1775626ec40, 24, 155, Metal, 7 },
@@ -3035,7 +3059,7 @@ namespace {
         { 0xb9845ade19e54572, 0, 185, Metal, 7 },
         { 0xb9862f775a0ad8c7, 10, 101 },
         { 0xb99861018e26672a, 41, 149, Bumpy },
-        { 0xb9ba390865aa6d04, 29, 247, Bumpy },
+        { 0xb9ba390865aa6d04, 29, 247, Ice, 0, false },
         { 0xb9d310cb7a7c7933, 30, 223, Metal, 7 },
         { 0xb9d792e14a181a6e, 55, 156 },
         { 0xb9f5123bf1caad50, 23, 136, Metal, 7 },
@@ -3107,6 +3131,7 @@ namespace {
         { 0xbf27855f92dba7b6, 2, 163, Stone, 7 },
         { 0xbf374b8eabd63568, 20, 154, Rounded },
         { 0xbf6f171e83660761, 33, 102, Wood, 7 },
+        { 0xbfc40d7b3dece6b7, 95, 217, Ice, 0, false },
         { 0xbfc628d6a6a0bb45, 27, 105 },
         { 0xbfcfb7888129f279, 8, 176, Rounded },
         { 0xbfdb7d5617ff07d6, 18, 125, Bumpy },
@@ -3117,7 +3142,7 @@ namespace {
         { 0xc01636bd34f40333, 74, 169, Stone, 7 },
         { 0xc018e6c0bf3d253f, 27, 108, Brick },
         { 0xc02ac78ae12a6577, 7, 148, Wood, 7 },
-        { 0xc03abd6a4d9d4295, 30, 107, Bumpy },
+        { 0xc03abd6a4d9d4295, 30, 107, Ice, 0, false },
         { 0xc04f4656f4aad135, 15, 148, Bumpy },
         { 0xc07d602ddfdbb77b, 85, 181, Dirt },
         { 0xc07f9031797fa8cb, 27, 187, Grass, 7 },
@@ -3170,6 +3195,7 @@ namespace {
         { 0xc3c8d31c4cc2523f, 44, 154, Bumpy },
         { 0xc3ce45257edceaa6, 35, 115, Brick },
         { 0xc3d7604e02cd7d74, 0, 56 },
+        { 0xc3ef62edd84ea687, 27, 252, Ice, 0, false },
         { 0xc3fcd00459ec477b, 17, 74, Brick },
         { 0xc3ffc54eb680c953, 18, 91, Cracks },
         { 0xc4025a99e510cf93, 33, 176, Metal, 7 },
@@ -3223,6 +3249,7 @@ namespace {
         { 0xc6fa6791fead6038, 22, 172, Bumpy },
         { 0xc6fb33c6dbebacad, 17, 90 },
         { 0xc6fd346ff864d089, 36, 162, Metal, 7 },
+        { 0xc720731faa60507b, 27, 95, Ice, 0, false },
         { 0xc727761fce953f65, 63, 171, Bumpy },
         { 0xc73ea6f8dcaede92, 9, 101, Metal, 7 },
         { 0xc742d778d4c95fb1, 42, 162, Rounded },
@@ -3263,6 +3290,7 @@ namespace {
         { 0xca0fbf643d425952, 49, 166, Bumpy },
         { 0xca13f12e2276e786, 43, 126, Dirt, 7 },
         { 0xca2dda4914227f0e, 0, 92, Bumpy },
+        { 0xca3ac18fa0ee884d, 32, 244, Ice, 0, false },
         { 0xca5cbf59b46e892b, 41, 153, Rounded },
         { 0xca6c07caeead8e52, 0, 181, Metal, 7 },
         { 0xca7ce0a0d8b68144, 24, 84, Wood, 7 },
@@ -3305,6 +3333,7 @@ namespace {
         { 0xccf9d177385d4ea6, 79, 186 },
         { 0xcd07a7dd6e04ede7, 18, 172 },
         { 0xcd0d975d6a1a3107, 45, 246, Metal, 7 },
+        { 0xcd3125fb97b26599, 29, 159, Ice, 0, false },
         { 0xcd3900c65823069d, 79, 170, Bumpy, 7 },
         { 0xcd55092bd5dfc4e4, 25, 105, Wood, 7 },
         { 0xcd72bc01685b7ce4, 7, 148, Metal, 7 },
@@ -3323,11 +3352,12 @@ namespace {
         { 0xce322197859812b3, 9, 35 },
         { 0xce3952edce0e23b1, 10, 157, Metal, 7 },
         { 0xce4ac150af1251fd, 27, 91, Metal, 7 },
+        { 0xce591e8142597cca, 54, 247, Ice, 0, false },
         { 0xce6c77f714b5c093, 17, 119, Metal, 7 },
         { 0xce7195375ad16a07, 11, 194, Bumpy },
         { 0xce75b46395137551, 20, 146, Brick },
         { 0xcea091859edffb7a, 70, 148, Smooth },
-        { 0xcea4f61a7e7130be, 49, 149, Bumpy, 7 },
+        { 0xcea4f61a7e7130be, 49, 149, Ice, 0, false },
         { 0xcea8be5df90d2df4, 14, 155, Dirt, 7 },
         { 0xcebb441714f8c0f6, 27, 136, Bumpy },
         { 0xcebd03adf337b45e, 19, 105, Wood, 7 },
@@ -3394,7 +3424,7 @@ namespace {
         { 0xd36884bd1f2fb61a, 0, 173, Metal, 7 },
         { 0xd369f7a38d1e5251, 14, 150, Bark },
         { 0xd3721bafc0c2acd3, 18, 168 },
-        { 0xd3e61b579c35618c, 40, 190, Stone, 5 },
+        { 0xd3e61b579c35618c, 40, 190, Ice, 0, false },
         { 0xd3f92553376a7758, 10, 83, Metal, 7 },
         { 0xd3fb04e8290eb89f, 46, 191, Bumpy, 7 },
         { 0xd4152d4dcb82a6d2, 18, 110, Metal, 7 },
@@ -3410,6 +3440,7 @@ namespace {
         { 0xd50f0236d1239f41, 21, 89, Bumpy, 7 },
         { 0xd5345be8fe2911bf, 31, 96, Brick },
         { 0xd539467535f6522b, 5, 102 },
+        { 0xd5787e1378d43620, 22, 176, Ice, 0, false },
         { 0xd587003a561ef253, 15, 74, Metal, 7 },
         { 0xd589ca1322c51835, 0, 72, Bumpy },
         { 0xd589d0c97824902b, 56, 123, Bumpy, 7 },
@@ -3580,6 +3611,7 @@ namespace {
         { 0xe07eed37e2e5a5e8, 20, 188, Rounded },
         { 0xe0b07525b3575e79, 121, 213 },
         { 0xe0bb5bfc116fa1c1, 9, 96, Bumpy },
+        { 0xe0d5ce6913a1288b, 29, 247, Ice, 0, false },
         { 0xe0dc4c270cce29d1, 15, 156 },
         { 0xe0e598c1a7f6d99a, 75, 169, Cracks, 7 },
         { 0xe0ec464e3b78b4da, 20, 175, Brick },
@@ -3617,6 +3649,7 @@ namespace {
         { 0xe35adcc021d648c8, 18, 89, Metal, 7 },
         { 0xe376d62d8359a6e0, 56, 144, Metal, 7 },
         { 0xe377597033cac2ff, 18, 218 },
+        { 0xe3890f274d878db4, 178, 229, Ice, 0, false },
         { 0xe3aa2d22e709a3ba, 0, 118, Rounded },
         { 0xe3aa7127fe0a8308, 32, 87 },
         { 0xe3bfd0c95386cb18, 18, 226, Metal, 7 },
@@ -3695,6 +3728,7 @@ namespace {
         { 0xe9338ce76bafa0d8, 50, 117, Metal, 7 },
         { 0xe94bf2c6e32f2cdf, 48, 137, Cracks, 7 },
         { 0xe94e47c49eecbad5, 0, 152 },
+        { 0xe9613c7dbc78b866, 109, 212, Ice, 0, false },
         { 0xe962d8953cd027d4, 32, 114 },
         { 0xe96b52b23d8fbe09, 33, 117, Metal, 7 },
         { 0xe97be88a8664f198, 31, 118, Metal, 7 },
@@ -3745,6 +3779,7 @@ namespace {
         { 0xed990b453fb935b0, 29, 125 },
         { 0xed9f5126d8d2e24f, 0, 114, Metal, 7 },
         { 0xeda3c7618ead95c5, 9, 168, Rounded },
+        { 0xedd50d1a56daa493, 67, 183, Ice, 0, false },
         { 0xede339dfda98f27d, 18, 123, Brick },
         { 0xee17ea138c267ee2, 23, 129 },
         { 0xee57aab90797e593, 0, 186 },
@@ -3756,6 +3791,7 @@ namespace {
         { 0xeea385c9af603ab5, 41, 84, Stone, 7 },
         { 0xeea8b5ed41ab6218, 14, 105 },
         { 0xeed8093f625587b2, 25, 131, Brick },
+        { 0xeef03afb17bf6360, 19, 197, Ice, 0, false },
         { 0xeefb8cee5e0e7c5a, 9, 105 },
         { 0xef1637c6d57aa9c6, 0, 125, Smooth },
         { 0xef23a62c6a70f5f0, 18, 118, Stone, 7 },
@@ -3938,7 +3974,7 @@ namespace {
         { 0xfc2a94befcacd6d7, 13, 74, Bumpy },
         { 0xfc3307662a1fe23b, 7, 70, Wood, 7 },
         { 0xfc4dc4c800ae0c7a, 77, 150, Wood, 3 },
-        { 0xfc57075b40c809cb, 22, 160, Smooth },
+        { 0xfc57075b40c809cb, 22, 160, Ice, 0, false },
         { 0xfc66a03814c8a735, 52, 158, Bumpy },
         { 0xfc6747679066341a, 7, 118, Bumpy },
         { 0xfc6be9330a92cb2c, 7, 208, Metal, 7 },
@@ -3953,6 +3989,7 @@ namespace {
         { 0xfd1a7ff24377ea2e, 0, 149, Metal, 7 },
         { 0xfd4a1a28c5c31509, 7, 100, Metal, 7 },
         { 0xfd56ae8dc8c57a6b, 40, 176, Metal, 7 },
+        { 0xfd9b9d2facc15775, 75, 247, Ice, 0, false },
         { 0xfd9c7ac571d17add, 5, 75 },
         { 0xfdc5ecae4f2dcb6a, 7, 109, Wood, 7 },
         { 0xfdcd0591736854c2, 36, 159, Metal, 7 },
@@ -4272,13 +4309,13 @@ namespace {
         std::vector<uint8_t> fines;
         // (The sand ones are where Tessellated sand lies.)
         std::vector<uint64_t> sand;
-        auto add = [&](uint64_t hash, uint8_t darkest, uint8_t lightest, uint8_t shape, uint8_t fine) {
+        auto add = [&](uint64_t hash, uint8_t darkest, uint8_t lightest, uint8_t shape, uint8_t fine, bool shadows) {
             const auto pick = picks.find(hash);
             uint8_t final_shape = shape;
             if (pick != picks.end()) {
                 const bool off = pick->second.off;
                 const uint8_t style = pick->second.style();
-                const uint8_t fine = pick->second.fine;
+                const uint8_t fine = pick->second.fine_depth();
                 final_shape = pick->second.shape;
                 picks.erase(pick);
                 if (off) {
@@ -4289,6 +4326,7 @@ namespace {
             } else {
                 tooie::parallax_pick::Pick built_in;
                 built_in.shape = shape;
+                built_in.shadows = shadows;
                 styles.push_back(built_in.style());
                 fines.push_back(fine);
             }
@@ -4301,12 +4339,12 @@ namespace {
         };
         for (const ParallaxTexture& texture : parallax_textures) {
             if (std::find(skip.begin(), skip.end(), texture.hash) == skip.end()) {
-                add(texture.hash, texture.darkest, texture.lightest, texture.shape, texture.fine);
+                add(texture.hash, texture.darkest, texture.lightest, texture.shape, texture.fine, texture.shadows);
             }
         }
         // Textures picked that the built-in list leaves out, with a middling range.
         for (const auto& [hash, pick] : std::unordered_map<uint64_t, tooie::parallax_pick::Pick>(picks)) {
-            add(hash, 40, 190, tooie::parallax_pick::shape_stone, 0);
+            add(hash, 40, 190, tooie::parallax_pick::shape_stone, 0, true);
         }
         RT64::SetSceneParallaxTextures(hashes.data(), ranges.data(), hashes.size(), styles.data(), fines.data());
         RT64::SetSceneSandTextures(sand.data(), sand.size());
