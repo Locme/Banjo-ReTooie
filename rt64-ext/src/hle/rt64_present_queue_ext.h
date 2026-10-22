@@ -60,6 +60,8 @@ namespace RT64 {
         double cpuMs[5] = {};
         // Of the renderer thread's time, the deep snow's and tessellated sand's parts (RendererSnowPart).
         double snowMs[4] = {};
+        // Of the effects setup (RendererCpuPart::Effects), each part's time (RendererEffectsPart).
+        double effectsMs[6] = {};
     };
 
     FrameStats TakeFrameStats();
@@ -74,6 +76,10 @@ namespace RT64 {
     // ground draws take it (snowShellCount), the models pressing it (snowTouchDraw), and its ground's edges.
     enum class RendererSnowPart : uint32_t { Trail, Ground, Touch, Edges, Count };
     void RecordRendererSnowTimes(const double (&ms)[uint32_t(RendererSnowPart::Count)]);
+    // The effects setup's parts (endFramebuffers): fur normals, the grass mask with snow and sand (whose own parts are
+    // RendererSnowPart), instanced grass, the ray traced scene's acceleration structures, the uploads, the shader views.
+    enum class RendererEffectsPart : uint32_t { Fur, MaskAndSnow, Grass, RtScene, Uploads, Views, Count };
+    void RecordRendererEffectsTimes(const double (&ms)[uint32_t(RendererEffectsPart::Count)]);
     void RecordShaderCompiled();
     // The game read the controller at this steady_clock time (ns). The next game frame
     // handed to RT64 takes the latest such time with it.

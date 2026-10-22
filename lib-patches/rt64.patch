@@ -1964,7 +1964,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..ad92ae5 100644
+index 9fae0d4..49870a1 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,20 @@
@@ -3717,7 +3717,7 @@ index 9fae0d4..ad92ae5 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3247,2122 @@ namespace RT64 {
+@@ -1747,25 +3247,2133 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -5486,7 +5486,16 @@ index 9fae0d4..ad92ae5 100644
 +
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
          bool shaderViewRtEnabled = false;
++        // Banjo-Tooie: each part's time, to the frame overlay (RendererEffectsPart).
++        double effectsMs[uint32_t(RendererEffectsPart::Count)] = {};
++        auto effectsLap = std::chrono::steady_clock::now();
++        auto effectsPart = [&](RendererEffectsPart part) {
++            const auto now = std::chrono::steady_clock::now();
++            effectsMs[uint32_t(part)] += std::chrono::duration<double, std::milli>(now - effectsLap).count();
++            effectsLap = now;
++        };
 +        finishFurNormals();
++        effectsPart(RendererEffectsPart::Fur);
 +        // Banjo-Tooie: deep snow's trail grid (a cell of nothing until there is one), only the rows changed since the
 +        // last upload: the buffer keeps the rest.
 +        std::pair<size_t, size_t> snowTrailRange = { 0, 0 };
@@ -5831,7 +5840,9 @@ index 9fae0d4..ad92ae5 100644
 +        std::vector<BufferUploader::Upload> grassUploads;
 +        const auto finishStart = std::chrono::steady_clock::now();
 +        grassMaskMs += std::chrono::duration<double, std::milli>(finishStart - maskStart).count();
++        effectsPart(RendererEffectsPart::MaskAndSnow);
 +        finishGrassInstancing(worker, grassUploads);
++        effectsPart(RendererEffectsPart::Grass);
 +        grassFinishMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - finishStart).count();
 +        grassTimedFrames++;
          std::vector<BufferUploader::Upload> shaderUploads = {
@@ -5847,6 +5858,19 @@ index 9fae0d4..ad92ae5 100644
  
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
+@@ -1816,8 +5424,12 @@ namespace RT64 {
+         }
+ #   endif
+ 
++        effectsPart(RendererEffectsPart::RtScene);
+         shaderUploader->submit(worker, shaderUploads);
++        effectsPart(RendererEffectsPart::Uploads);
+         updateShaderViews(worker, drawBuffers, outputBuffers, shaderViewRtEnabled);
++        effectsPart(RendererEffectsPart::Views);
++        RecordRendererEffectsTimes(effectsMs);
+     }
+ 
+     void FramebufferRenderer::advanceFrame(bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
 index 3add9c3..7763663 100644
 --- a/src/render/rt64_framebuffer_renderer.h

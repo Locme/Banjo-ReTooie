@@ -138,6 +138,13 @@ namespace RT64 {
         }
     }
 
+    void RecordRendererEffectsTimes(const double (&ms)[uint32_t(RendererEffectsPart::Count)]) {
+        const std::scoped_lock lock(frameStatsMutex);
+        for (uint32_t i = 0; i < uint32_t(RendererEffectsPart::Count); i++) {
+            frameStats.effectsMs[i] += ms[i];
+        }
+    }
+
     void RecordGpuSectionTime(GpuSection section, double ms) {
         const std::scoped_lock lock(frameStatsMutex);
         frameStats.sectionMs[uint32_t(section)] += ms;
