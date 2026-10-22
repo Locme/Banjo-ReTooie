@@ -1522,8 +1522,14 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
             continue;
         }
         const float falloff = saturate(1.0f - fromSurface / light.w);
-        const float reachHere = falloff * falloff;
-        influence = max(influence, reachHere);
+        // A Light Source pick leaves the room's own light as it is (dimming it round the object and adding its own
+        // back drew a bright patch, a "ball", round it; L 2026-10-22) and adds a gentler light that fades out
+        // smoothly, so what is round the object is just lit a little more, evenly.
+        const bool source = radius > 0.0f;
+        const float reachHere = source ? (0.45f * falloff * falloff * falloff) : (falloff * falloff);
+        if (!source) {
+            influence = max(influence, reachHere);
+        }
         const float3 direction = toLight / distance;
         const float facing = dot(worldNormal, direction);
         // At most six lights traced a pixel (a room full of lamps traced every one).
@@ -1847,7 +1853,7 @@ float3 PathDirectLight(float3 at, float3 normal) {
             continue;
         }
         const float falloff = saturate(1.0f - fromSurface / lamp.w);
-        light += float3(1.0f, 0.8f, 0.55f) * (1.3f * falloff * falloff * facing);
+        light += float3(1.0f, 0.8f, 0.55f) * ((radius > 0.0f) ? (0.45f * falloff * falloff * falloff) : (1.3f * falloff * falloff)) * facing;
     }
     return light;
 }

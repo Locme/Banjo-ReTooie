@@ -146,7 +146,7 @@
   1. Graphics > Ray tracing on
   2. Pick an object in Shader Effects pick mode and give it Light Source (9), e.g. the one from your screenshot (31d98c...)
   3. Look round it, then try a few strengths with Shift + mouse wheel
-- Look for: No bright blobs round the object any more; the area round it is lit evenly, as if the whole object glowed
+- Look for: No bright blobs round the object any more; the area round it is lit evenly, as if the whole object glowed (second fix, 2026-10-22 21:00: no bright patch round it either)
 - Status: waiting for L
 
 ## T531 Sand footprints with the camera straight above
