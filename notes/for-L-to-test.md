@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T555 Save Pick and Paste Pick in all three pick modes
+- Asked: 2026-10-22 21:55 UTC
+- Build: main
+- Steps:
+  1. In any texture pick mode, change a texture in Parallax, Shader Effects and Ray Tracing Material pick modes, then press Save Pick in one of them
+  2. Copy a texture's pick, then Paste Pick onto another texture
+  3. Turn on DEV > Picker Save Only Current Active and repeat
+- Look for: With the switch off, Save Pick writes all three files and Paste copies all three; with it on, only the mode that is on
+- Status: waiting for L
+
 ## T554 Ray tracing resolution drop-down (Half / Medium / High)
 - Asked: 2026-10-22 21:00 UTC
 - Build: main @ HEAD

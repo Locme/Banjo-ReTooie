@@ -8,6 +8,10 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <string>
+
+#include "recomp.h"
+#include "recompui/config.h"
 
 namespace tooie::parallax_pick {
     // A texture's parallax as picked.
@@ -51,6 +55,11 @@ namespace tooie::parallax_pick {
         }
     };
 
+    // DEV > Picker Save Only Current Active (L, 2026-10-22): off (the default), Save Pick and Paste Pick act on the
+    // texture under the cursor in all three texture pick modes (Parallax, Shader Effects, Ray Tracing Material) at once;
+    // on, only in the pick mode that is on.
+    inline const std::string save_only_active_option = "picker_save_only_active";
+    void add_dev_option(recomp::config::Config& wip);
     // Starts watching the key and the mouse and loads parallax_tags.txt (once).
     void start();
     // Bumped each time a pick changes, so the texture list is rebuilt.

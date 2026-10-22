@@ -29,6 +29,7 @@
 
 #include "tooie_dev_files.h"
 #include "tooie_effect_pick.h"
+#include "tooie_game.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_tags.h"
 #include "tooie_material_pick.h"
@@ -135,6 +136,15 @@ namespace {
             } else {
                 out << text << " " << shape_names[pick.shape] << " " << pick.depth_percent() << "% " << (pick.shadows ? "shadows" : "noshadows") << "\n";
             }
+        }
+    }
+
+    // DEV > Picker Save Only Current Active (off: Save Pick and Paste Pick act in all three texture pick modes).
+    bool save_only_active() {
+        try {
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::parallax_pick::save_only_active_option));
+        } catch (...) {
+            return false;
         }
     }
 
@@ -830,10 +840,16 @@ namespace {
             int interp_mode;
             bool no_effects;
             tooie::material_pick::Material material;
+            // Entries changed together (a Paste Pick in every texture pick mode) share a group, undone together (0: alone).
+            uint32_t group = 0;
         };
         std::vector<Undo> undo_stack;
-        // Copy Pick's copy (Paste Pick puts it on what is under the cursor, in the same mode).
+        uint32_t next_group = 1;
+        // Copy Pick's copy (Paste Pick puts it on what is under the cursor, in the same mode), and with Picker Save Only
+        // Current Active off, the texture's state in the other texture pick modes too.
         Undo copied{ mode_off, 0, false, Pick{}, 0, 0, false, tooie::material_pick::Material{} };
+        std::vector<Undo> copied_all;
+        static const Mode texture_modes[3] = { mode_parallax, mode_effects, mode_material };
         // The texture or model's state now, in the mode's terms.
         auto snapshot = [&](Mode m, uint64_t key) {
             Undo u{ m, key, false, Pick{}, 0, tooie::interp_tags::mode_default, false, tooie::material_pick::Material{} };
@@ -861,11 +877,12 @@ namespace {
                 tooie::material_pick::set(key, u.had ? &u.material : nullptr);
             }
         };
-        auto remember = [&](Mode m, uint64_t key) {
+        auto remember = [&](Mode m, uint64_t key, uint32_t group = 0) {
             if (key == 0) {
                 return;
             }
             undo_stack.push_back(snapshot(m, key));
+            undo_stack.back().group = group;
             if (undo_stack.size() > 200) {
                 undo_stack.erase(undo_stack.begin());
             }
@@ -1078,7 +1095,17 @@ namespace {
                 const uint64_t key = interp_on ? uint64_t(tooie::interp_tags::hovered()) : hash;
                 char text[160] = {};
                 if (press_undo) {
-                    if (undo_stack.empty() || (undo_stack.back().mode != mode)) {
+                    if (!undo_stack.empty() && (undo_stack.back().group != 0)) {
+                        // A change made in every texture pick mode at once, undone the same way.
+                        const uint32_t group = undo_stack.back().group;
+                        const uint64_t undone = undo_stack.back().key;
+                        while (!undo_stack.empty() && (undo_stack.back().group == group)) {
+                            const Undo u = undo_stack.back();
+                            undo_stack.pop_back();
+                            apply(u, u.key);
+                        }
+                        snprintf(text, sizeof(text), "Undone: %016llx as it was", (unsigned long long)undone);
+                    } else if (undo_stack.empty() || (undo_stack.back().mode != mode)) {
                         snprintf(text, sizeof(text), "Nothing to undo in this pick mode");
                     } else {
                         const Undo u = undo_stack.back();
@@ -1091,11 +1118,25 @@ namespace {
                         snprintf(text, sizeof(text), "Nothing under the cursor to copy");
                     } else {
                         copied = snapshot(mode, key);
+                        copied_all.clear();
+                        if (!interp_on && !save_only_active()) {
+                            for (const Mode m : texture_modes) {
+                                copied_all.push_back(snapshot(m, key));
+                            }
+                        }
                         snprintf(text, sizeof(text), "Copied %016llx's pick", (unsigned long long)key);
                     }
                 } else if (press_paste) {
                     if (key == 0) {
                         snprintf(text, sizeof(text), "Nothing under the cursor to paste on");
+                    } else if (!interp_on && !copied_all.empty() && !save_only_active()) {
+                        // Every texture pick mode's state at once.
+                        const uint32_t group = next_group++;
+                        for (const Undo& u : copied_all) {
+                            remember(u.mode, key, group);
+                            apply(u, key);
+                        }
+                        snprintf(text, sizeof(text), "Pasted onto %016llx in all three pick modes (not saved yet)", (unsigned long long)key);
                     } else if (copied.mode != mode) {
                         snprintf(text, sizeof(text), "Copy a pick in this pick mode first");
                     } else {
@@ -1134,6 +1175,12 @@ namespace {
                 char text[192];
                 if (interp_on ? (model == 0) : (hash == 0)) {
                     snprintf(text, sizeof(text), "Nothing under the cursor to %s", press_save ? "save" : "delete");
+                } else if (press_save && !interp_on && !save_only_active()) {
+                    // The texture in every texture pick mode at once.
+                    save_one(hash);
+                    save_one_effect(hash);
+                    tooie::material_pick::save_one(hash);
+                    snprintf(text, sizeof(text), "%s saved to Dev Files/parallax_tags.txt, shader_effect_tags.txt and rt_material_tags.txt", name);
                 } else if (press_save) {
                     if (interp_on) {
                         tooie::interp_tags::save_one(model);
@@ -1484,4 +1531,12 @@ void tooie::effect_pick::for_each(const std::function<void(uint64_t hash, Effect
 
 int tooie::parallax_pick::Pick::depth_percent() const {
     return (fine != 0) ? int(fine) * 10 : depth_percents[depth];
+}
+
+void tooie::parallax_pick::add_dev_option(recomp::config::Config& wip) {
+    wip.add_bool_option(
+        save_only_active_option,
+        "Picker Save Only Current Active",
+        "On, the Save Pick and Paste Pick keys act only in the pick mode that is on. Off, they act on the texture under the cursor in all three texture pick modes at once (Parallax, Shader Effects and Ray Tracing Material): Save Pick writes its parallax, shader effects and material to their files, and Paste Pick puts all three of the copied texture's on it. Interpolation pick mode, which picks models, always saves only there.",
+        false);
 }

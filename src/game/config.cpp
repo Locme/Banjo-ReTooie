@@ -29,6 +29,7 @@
 #include "tooie_discord.h"
 #include "tooie_free_camera.h"
 #include "tooie_level_warp.h"
+#include "tooie_parallax_pick.h"
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
 #include "tooie_player_cheats.h"
@@ -972,6 +973,7 @@ void tooie::init_config() {
             show_cheats_tab();
         });
     tooie::level_warp::add_option(wip);
+    tooie::parallax_pick::add_dev_option(wip);
     recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
     move_saved_hud_placement();
