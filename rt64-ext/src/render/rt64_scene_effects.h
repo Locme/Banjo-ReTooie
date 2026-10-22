@@ -348,6 +348,8 @@ namespace RT64 {
     void SetSceneRayTracingPlayerShadows(bool enabled);
     // Graphics > Half-resolution ray tracing: the sun's traced shadows and the traced light beams at half size.
     void SetSceneRayTracingHalf(bool enabled);
+    // Graphics > Ray detail distances: past the first, half the traced rays a pixel; past the second, a quarter (0 for never).
+    void SetSceneRayDetailDistances(float half, float quarter);
     // Banjo-Tooie: Traced light beams, 0 off to 1; direction (world, towards the light) for a room whose light comes
     // in at its windows from a known way, or null for the sun.
     void SetSceneTracedBeams(float strength, const float *direction);

@@ -332,6 +332,7 @@ namespace RT64 {
     static std::atomic<bool> rayTracingHitColours{ false };
     static std::atomic<bool> rayTracingPlayerShadows{ true };
     static std::atomic<bool> rayTracingHalf{ false };
+    static std::atomic<float> rayDetailDistances[2] = { 2000.0f, 4000.0f };
     static std::atomic<float> rayTracingSmoothing{ 0.5f };
     static std::atomic<uint32_t> pathTracingBounces{ 0 };
     // Traced light beams: strength, then the room's light direction (world, towards it), or 0 for the sun.
@@ -549,6 +550,11 @@ namespace RT64 {
 
     void SetSceneRayTracingHalf(bool enabled) {
         rayTracingHalf.store(enabled);
+    }
+
+    void SetSceneRayDetailDistances(float half, float quarter) {
+        rayDetailDistances[0].store(std::max(half, 0.0f));
+        rayDetailDistances[1].store(std::max(quarter, 0.0f));
     }
 
     void SetSceneRayTracingPlayerShadows(bool enabled) {
@@ -2565,7 +2571,7 @@ namespace RT64 {
         // dropping to the depth march and its shadow map, which made the shadows come and go.
         // The lights are written every pass, whatever the casters.
         if (res.lightsBuffer == nullptr) {
-            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 3)));
+            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 4)));
             res.lightsBuffer->setName("Scene Effects lights");
         }
         if (res.radianceBuffer == nullptr) {
@@ -2575,7 +2581,7 @@ namespace RT64 {
         if (res.lightsBuffer != nullptr) {
             const SceneEffectsSettings lightSettings = GetSceneEffects();
             float *mapped = reinterpret_cast<float *>(res.lightsBuffer->map());
-            memset(mapped, 0, 16 * (SceneMaxLights + 3));
+            memset(mapped, 0, 16 * (SceneMaxLights + 4));
             mapped[0] = float(lightSettings.lightCount);
             mapped[1] = rayTracingHitColours.load() ? 1.0f : 0.0f;
             mapped[2] = rayTracingSmoothing.load();
@@ -2606,17 +2612,20 @@ namespace RT64 {
             // then Tiles times 256, then Smooth times 65536.
             mapped[11] = !rayScenesShine.load() ? 0.0f : std::round(rayTracingMaterials[0].load() * 100.0f) + std::round(rayTracingMaterials[1].load() * 100.0f) * 256.0f +
                 std::round(rayTracingMaterials[2].load() * 100.0f) * 65536.0f;
-            memcpy(mapped + 12, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
+            // Ray detail by distance: past the first the rays a pixel are halved, past the second quartered (0 for never).
+            mapped[12] = rayDetailDistances[0].load();
+            mapped[13] = rayDetailDistances[1].load();
+            memcpy(mapped + 16, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
             // The level's reaches as whole numbers: a fraction marks a Light Source pick and holds its object's size
             // (SceneLightSourceW).
             for (uint32_t i = 0; i < std::min(lightSettings.lightCount, SceneMaxLights); i++) {
-                mapped[12 + i * 4 + 3] = std::floor(mapped[12 + i * 4 + 3]);
+                mapped[16 + i * 4 + 3] = std::floor(mapped[16 + i * 4 + 3]);
             }
             // The lit lamps after the level's lights.
             {
                 const std::scoped_lock lampLock(lampMutex);
                 const uint32_t lamps = std::min(lampLightCount, SceneMaxLights - std::min(lightSettings.lightCount, SceneMaxLights));
-                memcpy(mapped + 12 + lightSettings.lightCount * 4, lampLights, size_t(lamps) * 4 * sizeof(float));
+                memcpy(mapped + 16 + lightSettings.lightCount * 4, lampLights, size_t(lamps) * 4 * sizeof(float));
                 mapped[0] = float(lightSettings.lightCount + lamps);
             }
             res.lightsBuffer->unmap();
@@ -3564,7 +3573,7 @@ namespace RT64 {
             res.sceneSetBvh = nullptr;
             if (worker->device->getCapabilities().rayQuery && res.bvhReady) {
                 res.sceneSet->setAccelerationStructure(res.sceneSet->gSceneBVH, res.bvhTlas.get());
-                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 3));
+                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 4));
                 res.sceneSet->setBuffer(res.sceneSet->gRadianceCache, res.radianceBuffer.get(), 8ull << 20);
                 res.sceneSetBvh = res.bvhTlas.get();
             }
