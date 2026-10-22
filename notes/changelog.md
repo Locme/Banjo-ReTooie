@@ -120,6 +120,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
+- Displaced ground costs much less: only the ground within a quarter of its reach is cut finely, and further off the pieces grow to four times as long (a sixteenth as many). Untested on PC (T530).
 - Displaced ground: the ground no longer wobbles while the camera moves, reaches 8000 units by default (new Displaced ground distance setting, 2000-20000), and stays flat under the grass edging the game paints over dirt (L). Untested on PC (T518).
 - 3D grass is faster on the CPU: the map of where roads, paths and floors cover the grass is now kept from frame to frame for each draw and only redone for draws that move or change, and ground far from any grass is skipped. Headless in Spiral Mountain this part went from about 20 ms to about 1 ms a frame. Untested on PC (T515).
 - Displaced ground: with Parallax on original textures on, floors whose texture is in the parallax list are drawn tessellated and the dark parts of the texture (cracks, gaps, grooves) are pushed down, so they change the outline of the ground; walls keep their parallax. Graphics > Displaced ground 0-100 (default 0). Needs a graphics card with tessellation; untested on PC (T513).

@@ -48,18 +48,23 @@ float4 GroundClip(float3 world) {
     return float4(dot(FrParams.waterWorldToClip[0], p), dot(FrParams.waterWorldToClip[1], p), dot(FrParams.waterWorldToClip[2], p), dot(FrParams.waterWorldToClip[3], p));
 }
 
-// How finely an edge between two world points is cut: by its length alone (one piece per few units, never more than the
-// cap), so the new vertices stay put in the world as the camera moves and the ground doesn't swim; uncut past the reach,
-// where the dips have faded out. By the edge alone, so the triangles either side of it cut it the same way and no cracks
-// open. (The camera's distance is to the nearest point on the edge, so a big triangle under the camera is still cut.)
+// How finely an edge between two world points is cut: one piece per few units up to the cap, by the edge's length, so
+// near the camera (within a quarter of the reach) the new vertices stay put in the world as the camera moves and the
+// ground doesn't swim. Further off the pieces grow to four times as long by half the reach (a sixteenth as many
+// vertices: the dips there are a few pixels wide, and cutting the whole reach finely cost far too much), and past the
+// reach, where the dips have faded out, the edge is left whole. By the edge alone, so the triangles either side of it
+// cut it the same way and no cracks open. (The camera's distance is to the nearest point on the edge, so a big triangle
+// under the camera is still cut.)
 float GroundEdgeFactor(float3 a, float3 b) {
     const float4 params = FrParams.groundParams;
     const float3 ab = b - a;
     const float t = saturate(dot(FrParams.waterCamera.xyz - a, ab) / max(dot(ab, ab), 1e-4f));
-    if (distance(a + ab * t, FrParams.waterCamera.xyz) > params.w) {
+    const float cameraDistance = distance(a + ab * t, FrParams.waterCamera.xyz);
+    if (cameraDistance > params.w) {
         return 1.0f;
     }
-    return clamp(length(ab) / abs(params.z), 1.0f, params.y);
+    const float piece = abs(params.z) * lerp(1.0f, 4.0f, smoothstep(params.w * 0.25f, params.w * 0.5f, cameraDistance));
+    return clamp(length(ab) / piece, 1.0f, params.y);
 }
 
 // Whether all three corners lie past one side of the screen (with room for the dips to reach back in).
