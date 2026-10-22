@@ -2056,8 +2056,8 @@ namespace RT64 {
     }
 
     float SceneSnowZoom(const interop::FrameParams &frameParams) {
-        // grassProjection.y is the projection's 1 / tan(half the field of view): about 2 for the game's usual camera.
-        return std::clamp(SnowUsualFov / std::max(frameParams.grassProjection.y, 1e-3f), 0.2f, 1.0f);
+        // snowCamera.w is the projection's 1 / tan(half the field of view): about 2 for the game's usual camera.
+        return std::clamp(SnowUsualFov / std::max(frameParams.snowCamera.w, 1e-3f), 0.2f, 1.0f);
     }
 
     uint32_t SceneSnowShellsAt(float distanceToCamera, const interop::FrameParams &frameParams) {

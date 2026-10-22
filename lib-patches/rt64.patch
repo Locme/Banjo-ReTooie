@@ -1967,7 +1967,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..da8fa04 100644
+index 9fae0d4..2f5cfd8 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,20 @@
@@ -2592,7 +2592,7 @@ index 9fae0d4..da8fa04 100644
 +        if (end > drawData.faceIndices.size()) {
 +            return 0;
 +        }
-+        const hlslpp::float3 camera(frameParams.grassWorldX.w, frameParams.grassWorldY.w, frameParams.grassWorldZ.w);
++        const hlslpp::float3 camera(frameParams.snowCamera.x, frameParams.snowCamera.y, frameParams.snowCamera.z);
 +        const hlslpp::float3 player(frameParams.snowPlayer.x, frameParams.snowPlayer.z, frameParams.snowPlayer.y);
 +        const bool havePlayer = frameParams.snowPlayer.w > 0.0f;
 +        const float zoom = SceneSnowZoom(frameParams);
@@ -3534,7 +3534,7 @@ index 9fae0d4..da8fa04 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2811,182 @@ namespace RT64 {
+@@ -1450,12 +2811,183 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3617,6 +3617,7 @@ index 9fae0d4..da8fa04 100644
 +                                    grassViewport.scale, grassViewport.translate, fbParams.resolution, p.submissionFrame, frameParams, snowTrail))
 +                                {
 +                                    snowShells = SceneSnowShells();
++                                    frameParams.snowCamera = { frameParams.grassWorldX.w, frameParams.grassWorldY.w, frameParams.grassWorldZ.w, frameParams.grassProjection.y };
 +                                }
 +                            }
 +                        }
@@ -3717,7 +3718,7 @@ index 9fae0d4..da8fa04 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3137,7 @@ namespace RT64 {
+@@ -1606,6 +3138,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3725,7 +3726,7 @@ index 9fae0d4..da8fa04 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3214,20 @@ namespace RT64 {
+@@ -1682,6 +3215,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3746,7 +3747,7 @@ index 9fae0d4..da8fa04 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3293,2266 @@ namespace RT64 {
+@@ -1747,25 +3294,2266 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -6018,7 +6019,7 @@ index 9fae0d4..da8fa04 100644
  
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
-@@ -1816,8 +5603,12 @@ namespace RT64 {
+@@ -1816,8 +5604,12 @@ namespace RT64 {
          }
  #   endif
  
@@ -9300,10 +9301,10 @@ index 3f33475..7d84d10 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..e24dd62 100644
+index 2e62aaf..06e19fe 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,148 @@ namespace interop {
+@@ -13,6 +13,152 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -9449,6 +9450,10 @@ index 2e62aaf..e24dd62 100644
 +        // way (RASTER_PARALLAX_CAMERA): the map from world space to clip space as RasterVS places the vertices (four rows),
 +        // then the camera's world x, y and z. Each framebuffer's own, as parallax's (its size changes the map).
 +        float4 groundCameras[20];
++        // Banjo-Tooie: deep snow's and tessellated sand's camera, from the frame's first 3D world (where the snow was
++        // worked out): its world position, and its projection's y scale (as grassProjection.y). The grass terms it came
++        // from are worked out again for a later world (after an HD shadow), and the snow's reach and cuts must not follow.
++        float4 snowCamera;
      };
  #ifdef HLSL_CPU
  };
