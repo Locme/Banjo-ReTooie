@@ -368,7 +368,6 @@ void tooie::init_config() {
     tooie::torch_enemy::add_option(general);
     tooie::boss_rush::add_option(general);
     tooie::mirror_mode::add_option(general);
-#ifndef TOOIE_BAREBONE  // jiggle options (the barebone build has no jiggle physics)
     general.add_bool_option(
         tooie::snout_jiggle::option,
         "Snout jiggle",
@@ -498,7 +497,6 @@ void tooie::init_config() {
         "The feathers on top of Mumbo's head wobble on springs as he moves, whether you play as him or meet him in his skull. Uses the Kazooie jiggle settings.",
         false);
     }
-#endif  // TOOIE_BAREBONE: jiggle options
     general.add_bool_option(
         tooie::damage::double_damage_option,
         "Enemies do double damage",
@@ -546,9 +544,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::save_backups_option, "Saves");
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports and cut content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
-#ifndef TOOIE_BAREBONE
     recompui::config::set_option_group(tooie::snout_jiggle::option, "Jiggle");
-#endif
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Gameplay");
     recompui::config::set_option_group(tooie::damage::aim_option, "Gameplay");
     recompui::config::set_option_group(tooie::damage::aim_chance_option, "Gameplay");
