@@ -44,7 +44,8 @@ namespace tooie::day_night {
     // Call once per frame from the game thread (tooie_warp_tick).
     void tick(uint8_t* rdram);
     // The light in world space, a unit vector towards the sun (the moon at night), always well above the
-    // horizon. False while the cycle is off or the map is not one that cycles: keep your own light then.
+    // horizon. While the cycle is off or the map is not one that cycles, the sun moved with Move Sun or saved in
+    // sun.txt for the map (sun_control.cpp); false when there is none: keep your own light then.
     bool sun_direction(float out[3]);
 }
 
