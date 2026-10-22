@@ -1967,7 +1967,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..6c7782c 100644
+index 9fae0d4..7700fbe 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,20 @@
@@ -3379,7 +3379,7 @@ index 9fae0d4..6c7782c 100644
  
      void FramebufferRenderer::waitForUploaders() {
          shaderUploader->wait();
-@@ -1350,10 +2588,43 @@ namespace RT64 {
+@@ -1350,10 +2588,48 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3416,14 +3416,19 @@ index 9fae0d4..6c7782c 100644
 +        snowTessPipeline = snowShellsForced ? nullptr : rasterShaderUber->snowTessPipeline.get();
 +        waterTessPipeline = rasterShaderUber->waterTessReady.load();
 +        // (Built the first time Displaced ground is on.)
++        // (and with it, every listed floor shader's displaced version is queued with the shader list, under the "Compiling
++        // shaders" notice, so no floor waits for its shader on a first visit).
 +        if (SceneGroundDisplacement() > 0.0f) {
 +            rasterShaderUber->startGroundTess();
++            if (!p.ubershadersOnly) {
++                p.rasterShaderCache->queueGroundVariants();
++            }
 +        }
 +        groundTessPipeline = rasterShaderUber->groundTessReady.load();
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2657,11 @@ namespace RT64 {
+@@ -1386,6 +2662,11 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3435,7 +3440,7 @@ index 9fae0d4..6c7782c 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2684,69 @@ namespace RT64 {
+@@ -1408,6 +2689,69 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3505,7 +3510,7 @@ index 9fae0d4..6c7782c 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2770,22 @@ namespace RT64 {
+@@ -1431,6 +2775,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3528,7 +3533,7 @@ index 9fae0d4..6c7782c 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2805,182 @@ namespace RT64 {
+@@ -1450,12 +2810,182 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3711,7 +3716,7 @@ index 9fae0d4..6c7782c 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3131,7 @@ namespace RT64 {
+@@ -1606,6 +3136,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3719,7 +3724,7 @@ index 9fae0d4..6c7782c 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3208,20 @@ namespace RT64 {
+@@ -1682,6 +3213,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3740,7 +3745,7 @@ index 9fae0d4..6c7782c 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3287,2228 @@ namespace RT64 {
+@@ -1747,25 +3292,2228 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4464,7 +4469,7 @@ index 9fae0d4..6c7782c 100644
 +                            }
 +                        }
 +                    }
-+                }
+                 }
 +                // (Other level draws lying on the ground: where one does, the ground stays where it is under it.)
 +                if (groundTessOn && (groundValue == 0) && !excluded && worldOpen && (proj.type == Projection::Type::Perspective) &&
 +                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.triangleCount > 0) && levelGeometry(drawData, call) &&
@@ -4487,7 +4492,7 @@ index 9fae0d4..6c7782c 100644
 +                    else {
 +                        p.rasterShaderCache->submit(groundDesc);
 +                    }
-                 }
++                }
 +                instanceGroundPipelineVector.resize(instanceIndex, nullptr);
 +                instanceGroundPipelineVector.push_back(groundPipeline);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
@@ -5978,7 +5983,7 @@ index 9fae0d4..6c7782c 100644
  
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
-@@ -1816,8 +5559,12 @@ namespace RT64 {
+@@ -1816,8 +5564,12 @@ namespace RT64 {
          }
  #   endif
  
@@ -6974,7 +6979,7 @@ index 3b991ff..48b0986 100644
          RasterShaderUber(RenderDevice *device, RenderShaderFormat shaderFormat, const RenderMultisampling &multisampling, const ShaderLibrary *shaderLibrary, uint32_t threadCount);
          ~RasterShaderUber();
 diff --git a/src/render/rt64_raster_shader_cache.cpp b/src/render/rt64_raster_shader_cache.cpp
-index bf7b669..4cab260 100644
+index bf7b669..89fcf0d 100644
 --- a/src/render/rt64_raster_shader_cache.cpp
 +++ b/src/render/rt64_raster_shader_cache.cpp
 @@ -4,17 +4,26 @@
@@ -7051,7 +7056,7 @@ index bf7b669..4cab260 100644
              }
          }
      }
-@@ -85,8 +111,13 @@ namespace RT64 {
+@@ -85,13 +111,19 @@ namespace RT64 {
  
          descQueueActiveCount = threadCount;
  
@@ -7066,7 +7071,13 @@ index bf7b669..4cab260 100644
          }
  #endif
      }
-@@ -109,6 +140,8 @@ namespace RT64 {
+ 
+     RasterShaderCache::~RasterShaderCache() {
++        SetShaderListCache(nullptr);
+         compilationThreads.clear();
+     }
+ 
+@@ -109,6 +141,8 @@ namespace RT64 {
          if (shaderFormat == RenderShaderFormat::SPIRV) {
              optimizerCacheSPIRV.initialize();
          }
@@ -7075,7 +7086,7 @@ index bf7b669..4cab260 100644
      }
  
      void RasterShaderCache::submit(const ShaderDescription &desc) {
-@@ -119,10 +152,35 @@ namespace RT64 {
+@@ -119,10 +153,35 @@ namespace RT64 {
              const uint64_t shaderHash = desc.hash();
              bool &found = shaderHashes[shaderHash];
              if (found) {
@@ -7111,7 +7122,7 @@ index bf7b669..4cab260 100644
          }
  
          // Push a new shader compilation to the queue.
-@@ -138,6 +196,9 @@ namespace RT64 {
+@@ -138,6 +197,9 @@ namespace RT64 {
          {
              std::unique_lock<std::mutex> queueLock(descQueueMutex);
              descQueue = std::queue<ShaderDescription>();
@@ -7122,7 +7133,7 @@ index bf7b669..4cab260 100644
  
          bool keepWaiting = false;
 diff --git a/src/render/rt64_raster_shader_cache.h b/src/render/rt64_raster_shader_cache.h
-index 5c40c18..487a0a5 100644
+index 5c40c18..19ce026 100644
 --- a/src/render/rt64_raster_shader_cache.h
 +++ b/src/render/rt64_raster_shader_cache.h
 @@ -12,17 +12,37 @@
@@ -7164,7 +7175,7 @@ index 5c40c18..487a0a5 100644
              ~CompilationThread();
              void loop();
          };
-@@ -45,6 +65,17 @@ namespace RT64 {
+@@ -45,6 +65,21 @@ namespace RT64 {
          std::unique_ptr<ShaderCompiler> shaderCompiler;
          RenderMultisampling multisampling;
          bool usesHDR = false;
@@ -7179,14 +7190,19 @@ index 5c40c18..487a0a5 100644
 +        std::unordered_set<uint64_t> listPromoted;
 +        std::ofstream listFile;
 +        uint32_t listCount = 0;
++        // Banjo-Tooie: the listed shaders with parallax mapping, whose displaced ground versions (RENDER_FEATURE_GROUND_TESS)
++        // are queued with the list once Displaced ground is on (queueGroundVariants), so floors are ready from the start.
++        std::vector<ShaderDescription> listedParallax;
++        std::atomic<bool> groundVariantsQueued = false;
          
          RasterShaderCache(uint32_t threadCount, uint32_t ubershaderThreadCount);
          ~RasterShaderCache();
-@@ -55,5 +86,6 @@ namespace RT64 {
+@@ -55,5 +90,7 @@ namespace RT64 {
          RasterShader *getGPUShader(const ShaderDescription &desc);
          RasterShaderUber *getGPUShaderUber() const;
          uint32_t shaderCount();
 +        void loadShaderList();
++        void queueGroundVariants();
      };
  };
 \ No newline at end of file

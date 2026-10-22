@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T546 Displaced ground shaders built at start
+- Asked: 2026-10-22 UTC
+- Build: main
+- Steps:
+  1. Graphics > Shaders > Displaced ground above 0, then close the game
+  2. Start the game again: "Compiling shaders N%" counts the floors' displaced shaders too (the log says "compiling N displaced ground shaders")
+  3. Once it reaches 100%, go into a level you have visited before (Terrydactyland, Mayahem Temple)
+- Look for: no hitch or flat floor that turns displaced a moment later on entering. Turning Displaced ground on in the menu starts the same compile at once.
+- Status: waiting for L
+
 ## T545 Ray detail distances (half and quarter)
 - Asked: 2026-10-22 12:55 UTC
 - Build: main

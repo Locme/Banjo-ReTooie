@@ -2075,10 +2075,19 @@ namespace RT64 {
     static std::mutex waterTessMutex;
     static WaterTessShared waterTessShared;
 
+    void QueueGroundShaders();
+
     void SetSceneGroundDisplacement(float amount, float reach) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.groundDisplacement = std::clamp(amount, 0.0f, 1.0f);
-        effectsSettings.groundReach = std::clamp(reach, 500.0f, 50000.0f);
+        {
+            const std::scoped_lock lock(effectsMutex);
+            effectsSettings.groundDisplacement = std::clamp(amount, 0.0f, 1.0f);
+            effectsSettings.groundReach = std::clamp(reach, 500.0f, 50000.0f);
+        }
+
+        // The floors' displaced shaders compile with the shader list from now on, not on a first visit.
+        if (amount > 0.0f) {
+            QueueGroundShaders();
+        }
     }
 
     float SceneGroundDisplacement() {

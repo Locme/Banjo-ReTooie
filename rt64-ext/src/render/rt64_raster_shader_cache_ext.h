@@ -21,6 +21,9 @@ namespace RT64 {
         extern std::atomic<uint32_t> listProgressDone;
         extern std::atomic<uint32_t> listProgressTotal;
     }
+    struct RasterShaderCache;
+    // The cache whose list was loaded (null once it is gone), for QueueGroundShaders.
+    void SetShaderListCache(RasterShaderCache *cache);
     using namespace shaderlistext;
 }
 
