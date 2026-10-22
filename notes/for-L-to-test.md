@@ -1,5 +1,44 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T539 Built-in ray tracing materials (texture sweep)
+- Asked: 2026-10-22 UTC
+- Build: claude/project-thread-rjo479 (not built on a PC yet)
+- Steps:
+  1. Pull the build; turn Graphics > Ray tracing on (no picks needed)
+  2. Walk a level with metal, rust, gold, leaves, gems: shiny textures should reflect with the right roughness
+  3. In Ray Tracing Material Pick Mode press 9 (Show All) to see every textured material; aim at one: the label says built-in
+  4. Left click a built-in one to switch it off; Shift + left puts the built-in back
+  5. Check the frame rate in a metal-heavy room (rough metals use 3 to 4 rays per pixel)
+  6. Aim at ice, a lamp or grass: the label says a shader effect owns it and it has no built-in material; on a parallax stone it says parallax stacks
+- Look for: wrong calls (a stone shown as steel, a lamp as gold), too noisy or too costly spots. Send me the textures to fix.
+- Status: waiting for L
+
+## T538 Ray traced BRDF and subsurface scattering
+- Asked: 2026-10-22 12:06 UTC
+- Build: claude/project-thread-rjo479 (not built on a PC yet)
+- Steps:
+  1. Pull the build; Graphics > Ray Tracing: turn Ray tracing on
+  2. Find a shiny surface (metal, gold) and set Ray traced BRDF to 0, 30, 70: the reflection goes from a mirror to a blur
+  3. With Ray traced BRDF above 0, turn Reflections > Stochastic reflections up: it should do nothing (the traced BRDF is in charge)
+  4. Stand under or beside a tree or bush with the sun behind it; raise Ray traced subsurface scattering to 50 and 100
+  5. In Ray Tracing Material Pick Mode give a texture the Wax or Leaf preset and Shift + wheel Subsurface (key 7 chooses it)
+  6. Set both sliders back to 0
+- Look for: BRDF 0 looks exactly as before. Above 0 shiny surfaces blur like brushed metal (grain at 70+ is expected). Leaves with the sun behind them glow and their shaded side keeps a soft glow rather than flat dark; nothing else changes. Frame rate cost of each?
+- Status: waiting for L
+
+## T537 Ray Tracing Material Pick Mode (PBR materials)
+- Asked: 2026-10-22 11:58 UTC
+- Build: claude/project-thread-rjo479 (not built on a PC yet)
+- Steps:
+  1. Pull main and build; bind Controls > Pick Modes > Ray Tracing Material Pick Mode; turn Graphics > Ray tracing on
+  2. Spiral Mountain or any level: press the key, aim at a stone or metal texture and left click (the label says it has a material); middle click steps presets (Mirror, Brushed metal, Gold, Plastic, Rubber, Glowing)
+  3. Shift + wheel changes the chosen property (right click or keys 1 to 6 choose: albedo red/green/blue, roughness, metalness, emissive; Ctrl for fine)
+  4. Set Mirror: roughness 0, metalness 100; then raise roughness to 40 and 80 and watch the reflection go from sharp to brushed
+  5. Set metalness 0 and 100 with the same roughness; set Albedo to a strong colour and see a metal reflect in that colour
+  6. Set Emissive to 100 and 300 on a wall near a dark corner and on a floor, and look at the walls round it
+  7. Save Pick (the key you bound), restart and see it kept; Delete Saved Pick takes it off
+  8. Turn Ray tracing off, and look at textures with no pick
+- Look for: Textures you did not pick look exactly as before. A picked one: albedo tints it; roughness widens the reflection from a mirror to a blur (noisy at high roughness is expected for now); metalness 100 darkens the surface to almost only its reflection, in the albedo's colour; emissive makes it glow past the shadows and lights what is near it, also showing in other shiny surfaces' reflections. Anything that costs frame rate with materials on? Does the label read well and does Show All (key 8) pulse every textured material?
 ## T535 Ray tracing speed-ups (masks, kept level structure, lamps at half resolution)
 - Asked: 2026-10-22 12:45 UTC
 - Build: main

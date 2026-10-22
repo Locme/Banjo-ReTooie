@@ -65,6 +65,57 @@ StructuredBuffer<GPUTile> gRayGPUTiles : register(t4, space1);
 Texture2D<float4> gRayTextures[8192] : register(t0, space2);
 #endif
 
+// A surface's Ray Tracing Material Pick Mode material (production PBR): the albedo it is tinted by, roughness and
+// metalness (0 to 1) and emissive (1 is as bright again). The index sits above Parallax's shape in a geometry's material
+// word; the records follow the geometries in the same buffer (SceneMaxRayMaterials + 1 of them from entry 8192).
+struct RayPbr {
+    bool present;
+    float3 albedo;
+    float roughness;
+    float metalness;
+    float emissive;
+    float subsurface;
+};
+
+RayPbr RayPbrNone() {
+    RayPbr none;
+    none.present = false;
+    none.albedo = 1.0f;
+    none.roughness = 0.5f;
+    none.metalness = 0.0f;
+    none.emissive = 0.0f;
+    none.subsurface = 0.0f;
+    return none;
+}
+
+// Ray Tracing Material Pick Mode: whether the traced scene holds a surface with a material of that mode's (lights word 9,
+// bit 2 (value 4); the traced scene's records follow its geometries).
+// The same word carries the Ray traced BRDF roughness (percent times 8) and the subsurface scattering strength (percent times 1024).
+#ifdef RAY_TRACED
+uint RayHeaderWord() {
+    return uint(asfloat(gLights.Load(36)) + 0.5f);
+}
+bool RayPbrOn() {
+    return (RayHeaderWord() & 4u) != 0u;
+}
+float RayBrdfRoughness() {
+    return float((RayHeaderWord() >> 3u) & 127u) / 100.0f;
+}
+float RaySssStrength() {
+    return float(RayHeaderWord() >> 10u) / 100.0f;
+}
+#else
+bool RayPbrOn() {
+    return false;
+}
+float RayBrdfRoughness() {
+    return 0.0f;
+}
+float RaySssStrength() {
+    return 0.0f;
+}
+#endif
+
 // Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
 // black and white white (out = c * e / (1 + c * (e - 1))).
 float3 Adapt(float3 color) {
@@ -902,7 +953,26 @@ uint RayGeometryFlags(uint geometry) {
 
 // A geometry's material (SceneMaterialTexture: Parallax's shape + 1; 0 for none).
 uint RayGeometryMaterial(uint geometry) {
-    return (geometry == RayGrassGeometry) ? 0u : gRayGeometries.Load(geometry * 16u + 12u);
+    return (geometry == RayGrassGeometry) ? 0u : (gRayGeometries.Load(geometry * 16u + 12u) & 0xFFu);
+}
+
+RayPbr RayGeometryPbr(uint geometry) {
+    RayPbr material = RayPbrNone();
+    if (!RayPbrOn() || (geometry == RayGrassGeometry)) {
+        return material;
+    }
+    const uint index = gRayGeometries.Load(geometry * 16u + 12u) >> 8u;
+    if (index == 0u) {
+        return material;
+    }
+    const uint2 words = gRayGeometries.Load2((8192u + index) * 16u);
+    material.present = true;
+    material.albedo = float3(float(words.x & 255u), float((words.x >> 8u) & 255u), float((words.x >> 16u) & 255u)) / 255.0f;
+    material.roughness = float(words.x >> 24u) / 100.0f;
+    material.metalness = float(words.y & 255u) / 100.0f;
+    material.emissive = float((words.y >> 8u) & 0xFFFFu) / 100.0f;
+    material.subsurface = float(words.y >> 24u) / 100.0f;
+    return material;
 }
 
 int RayWrap(int texel, int mask, bool mirror) {
@@ -1134,13 +1204,12 @@ bool RadianceLoad(float3 world, out float3 colour) {
 // How much a pixel's surface reflects by its material (Parallax's list and picks), found by a short ray from just in
 // front of it: metal, glazed tiles and smooth surfaces as their sliders say (fully, 60% and 35% by default); otherwise for anything else (L, 2026-10-21:
 // ray tracing took no notice of the material list).
-float MaterialShine(float3 center, float otherwise) {
-    // Graphics > Ray Tracing's Metal, Tiles and Smooth reflection sliders (gLights 11, packed; 0 when nothing in the
-    // scene has a material that reflects, and no ray is needed).
-    const uint packed = uint(asfloat(gLights.Load(44)) + 0.5f);
+// The geometry a pixel's surface belongs to (a short ray from just in front of it); false where the ray finds none.
+bool SurfaceGeometry(float3 center, out uint geometry) {
+    geometry = 0u;
     const float distance = length(center);
-    if ((packed == 0u) || (distance < 10.0f)) {
-        return otherwise;
+    if (distance < 10.0f) {
+        return false;
     }
     RayDesc ray;
     ray.Origin = ViewToWorldPoint(center * (1.0f - 6.0f / distance));
@@ -1151,16 +1220,41 @@ float MaterialShine(float3 center, float otherwise) {
     query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
     query.Proceed();
     if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+        return false;
+    }
+    geometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
+    return true;
+}
+
+float MaterialShine(float3 center, float otherwise) {
+    // Graphics > Ray Tracing's Metal, Tiles and Smooth reflection sliders (gLights 11, packed; 0 when nothing in the
+    // scene has a material that reflects, and no ray is needed).
+    const uint packed = uint(asfloat(gLights.Load(44)) + 0.5f);
+    if (packed == 0u) {
         return otherwise;
     }
-    const uint material = RayGeometryMaterial(RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()));
+    uint geometry;
+    if (!SurfaceGeometry(center, geometry)) {
+        return otherwise;
+    }
+    const uint material = RayGeometryMaterial(geometry);
     return (material == 12u) ? float(packed & 0xFFu) / 100.0f : (material == 14u) ? float((packed >> 8) & 0xFFu) / 100.0f :
         (material == 16u) ? float(packed >> 16) / 100.0f : otherwise;
 }
 
-float4 TracedReflection(int2 pixel, float3 center, float3 normal) {
-    const float3 direction = reflect(normalize(center), normal);
-    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
+// A pixel's surface's Ray Tracing Material Pick Mode material, none (present false) where it has none.
+RayPbr PbrAt(float3 center) {
+    uint geometry;
+    if (!RayPbrOn() || !SurfaceGeometry(center, geometry)) {
+        return RayPbrNone();
+    }
+    return RayGeometryPbr(geometry);
+}
+
+// A reflection ray from origin along direction (view space). softness (0 to 1) blurs what it finds towards the half-size scene
+// (a rough surface's lobe); a surface with a Ray Tracing Material Pick Mode material tints it by its albedo and adds its
+// emissive, as the ray's payload.
+float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
     const float rayDistance = 3000.0f;
     RayDesc ray;
     ray.Origin = ViewToWorldPoint(origin);
@@ -1200,7 +1294,14 @@ float4 TracedReflection(int2 pixel, float3 center, float3 normal) {
     const float sampleDepth = LoadDepth(int2(inside));
     const float thickness = max(-hit.z * 0.03f, 20.0f);
     const bool inView = onScreen && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hit.z <= thickness));
-    const float3 colour = gColor.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb;
+    float3 colour = gColor.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb;
+    if (softness > 0.0f) {
+        colour = lerp(colour, gColorHalf.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb, saturate(softness * 2.0f));
+    }
+    if (RayPbrOn()) {
+        const RayPbr hitMaterial = RayGeometryPbr(RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()));
+        colour = colour * hitMaterial.albedo * (1.0f + hitMaterial.emissive);
+    }
     if (!inView && HitColoursOn()) {
         // Off the screen or hidden: the colour the surface had when it was last seen.
         float3 remembered;
@@ -1209,6 +1310,60 @@ float4 TracedReflection(int2 pixel, float3 center, float3 normal) {
         }
     }
     return float4(colour, inView ? RayEdgeFade(inside) : 0.5f);
+}
+
+float4 TracedReflection(int2 pixel, float3 center, float3 normal) {
+    const float3 direction = reflect(normalize(center), normal);
+    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
+    return TracedReflectionRay(origin, direction, 0.0f);
+}
+
+// A reflection off a rough surface (Ray Tracing Material Pick Mode): rays over the GGX lobe of the roughness (0 to 1), a few
+// to a pixel with the 4x4 block's pattern spreading the rest (as StochasticReflection), weighted by the BRDF over each ray's
+// probability, so a tight lobe is a mirror and a wide one the brushed blur of the scene.
+float4 TracedRoughReflection(int2 pixel, float3 center, float3 normal, float roughness) {
+    if (roughness < 0.03f) {
+        return TracedReflection(pixel, center, normal);
+    }
+    const float3 incoming = normalize(center);
+    const float3 V = -incoming;
+    const float3 up = (abs(normal.z) < 0.999f) ? float3(0.0f, 0.0f, 1.0f) : float3(1.0f, 0.0f, 0.0f);
+    const float3 tangent = normalize(cross(up, normal));
+    const float3 bitangent = cross(normal, tangent);
+    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
+    const uint cell = uint(pixel.x & 3) + 4u * uint(pixel.y & 3);
+    const float m = roughness * roughness;
+    const float m2 = m * m;
+    float3 colourSum = 0.0f;
+    float hitSum = 0.0f;
+    float totalSum = 0.0f;
+    [unroll] for (int r = 0; r < 4; r++) {
+        // A fourth ray only for the wider lobes.
+        if ((r == 3) && (roughness < 0.35f)) {
+            continue;
+        }
+        const float n = float((cell * 7u) % 16u) * 4.0f + float(r);
+        const float2 xi = frac(0.5f + n * float2(0.7548776662f, 0.5698402910f));
+        const float phi = 6.28318531f * xi.x;
+        const float cosTheta = sqrt((1.0f - xi.y) / (1.0f + (m2 - 1.0f) * xi.y));
+        const float sinTheta = sqrt(max(1e-5f, 1.0f - cosTheta * cosTheta));
+        const float3 H = normalize(tangent * (sinTheta * cos(phi)) + bitangent * (sinTheta * sin(phi)) + normal * cosTheta);
+        const float d = (cosTheta * m2 - cosTheta) * cosTheta + 1.0f;
+        const float pdf = max(m2 / (3.14159265f * d * d) * cosTheta, 1e-4f);
+        const float3 direction = reflect(incoming, H);
+        if (dot(direction, normal) <= 0.0f) {
+            continue;
+        }
+        const float weight = StochasticWeight(V, direction, normal, roughness) / pdf;
+        totalSum += weight;
+        const float4 found = TracedReflectionRay(origin, direction, roughness);
+        colourSum += found.rgb * (weight * found.a);
+        hitSum += weight * found.a;
+    }
+    if (hitSum <= 0.0f) {
+        return 0.0f;
+    }
+    return float4(colourSum / hitSum, saturate(hitSum / max(totalSum, 1e-5f)));
 }
 
 // Shadows from the level's lights (lamps, fires): for each light that reaches the surface, rays from it to the light
@@ -1425,6 +1580,25 @@ float TraceDistance(float3 origin, float3 direction, float reach) {
     return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? query.CommittedRayT() : -1.0f;
 }
 
+// The geometry a ray meets (as TraceDistance traces it), false where it meets none.
+bool TraceGeometry(float3 origin, float3 direction, float reach, out uint geometry) {
+    geometry = 0u;
+    RayDesc ray;
+    ray.Origin = ViewToWorldPoint(origin);
+    ray.Direction = ViewToWorldDirection(direction);
+    ray.TMin = 0.0f;
+    ray.TMax = reach;
+    RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+    query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
+    while (query.Proceed()) {
+    }
+    if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+        return false;
+    }
+    geometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
+    return true;
+}
+
 // Traced ambient occlusion: the share of the cosine-spread rays that reach the open (a ray that hits something
 // within the radius counts less the further away it was). Two rays a pixel, 32 over each 4x4 block.
 // How far the indirect pass's rays start off the surface: clear of a second layer the game draws just over some ground
@@ -1580,7 +1754,16 @@ float3 TracedGI(float3 center, float3 normal, uint cell) {
         }
         const float far = lerp(1.0f, 0.4f, saturate(t / (nearReach * 4.0f)));
         float trust;
-        const float3 hitColour = HitColour(hit, trust);
+        float3 hitColour = HitColour(hit, trust);
+        // A surface with a Ray Tracing Material Pick Mode material tints the light it sends back by its albedo, and an
+        // emissive one gives off its own light into the ray's payload whether or not the picture shows it lit.
+        if (RayPbrOn()) {
+            uint hitGeometry;
+            if (TraceGeometry(origin, direction, t * 1.01f, hitGeometry)) {
+                const RayPbr hitMaterial = RayGeometryPbr(hitGeometry);
+                hitColour = hitColour * hitMaterial.albedo + hitMaterial.albedo * (hitMaterial.emissive * 0.35f);
+            }
+        }
         light += hitColour * trust * far;
         // The path's further hops. Each spot the path lands on also brings the sun's and the lamps' traced light
         // (PathDirectLight) on its own colour, so path tracing carries real light round corners, not only the colours
@@ -1621,6 +1804,56 @@ float3 TracedGI(float3 center, float3 normal, uint cell) {
         }
     }
     return light * 0.5f;
+}
+
+// Traced subsurface scattering: the light that gets into a thin or soft surface (a leaf, a petal, wax) from the side away from the
+// camera and comes out where it is seen. The sun and the nearest lamp behind the surface each get a ray from just behind
+// it; reaching the light, they add the light times how squarely it faces the back. The light is tinted by the surface's own
+// colour where it is added (scene * light). center and normal are view space, the normal facing the camera.
+float3 TracedSubsurface(float3 center, float3 normal) {
+    const float lift = IndirectLift(center);
+    const float3 behind = center - normal * lift;
+    float3 light = 0.0f;
+    if (dot(gConstants.sun.xyz, gConstants.sun.xyz) > 0.25f) {
+        const float3 toSun = normalize(gConstants.sun.xyz);
+        const float back = saturate(-dot(normal, toSun));
+        if ((back > 0.02f) && (TraceDistance(behind, toSun, 20000.0f) < 0.0f)) {
+            light += float3(1.0f, 0.93f, 0.78f) * (0.9f * back);
+        }
+    }
+    const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
+    const float3 worldBehind = ViewToWorldPoint(behind);
+    const float3 worldNormal = normalize(ViewToWorldDirection(normal));
+    uint traced = 0u;
+    [loop] for (uint i = 0u; (i < count) && (traced < 1u); i++) {
+        const float4 lamp = asfloat(gLights.Load4(16u * (i + 3u)));
+        const float3 toLight = lamp.xyz - worldBehind;
+        const float distance = length(toLight);
+        const float radius = LightSourceRadius(lamp.w);
+        const float fromSurface = max(distance - radius, 0.0f);
+        if ((distance < 10.0f) || (fromSurface > lamp.w)) {
+            continue;
+        }
+        const float back = -dot(worldNormal, toLight / distance);
+        if (back <= 0.0f) {
+            continue;
+        }
+        traced++;
+        RayDesc ray;
+        ray.Origin = worldBehind;
+        ray.Direction = toLight / distance;
+        ray.TMin = 0.0f;
+        ray.TMax = max(distance - max(60.0f, radius), 1.0f);
+        RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+        query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
+        query.Proceed();
+        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+            continue;
+        }
+        const float falloff = saturate(1.0f - fromSurface / lamp.w);
+        light += float3(1.0f, 0.8f, 0.55f) * (1.3f * falloff * falloff * back);
+    }
+    return light;
 }
 
 // Traced refraction: where the eye's ray, bent as it enters the water (a surface pointing up at the viewer, an index
@@ -4320,7 +4553,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             return float4(dot(scene, float3(0.299f, 0.587f, 0.114f)).xxx * 0.25f, 0.0f);
         }
 #ifdef RAY_TRACED
-        const float4 reflection = TracedReflection(pixel, center, normal);
+        const float4 reflection = (RayBrdfRoughness() > 0.0f) ? TracedRoughReflection(pixel, center, normal, RayBrdfRoughness()) : TracedReflection(pixel, center, normal);
 #else
         const float4 reflection = ScreenSpaceReflection(pixel, center, normal);
 #endif
@@ -4375,7 +4608,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
     const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
     // Eye adaptation also draws the scene itself.
-    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (DayMistSetting().x > 0.0f) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (DayMistSetting().x > 0.0f) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
 
     if (depth >= 0.99999f) {
         // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -4415,14 +4648,29 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     const bool occlusion = AoStrength() > 0.0f;
     const bool globalIllumination = (SsgiStrength() > 0.0f) && redraw;
 #ifdef RAY_TRACED
+    // Ray Tracing Material Pick Mode: this surface's material, when it has one.
+    RayPbr pbr = RayPbrNone();
+    // How much light passes through this surface (traced subsurface scattering): a Ray Tracing Material pick's own, else
+    // Graphics > Ray tracing's slider on the leaves and grass Parallax knows (materials 13 and 7).
+    float subsurface = 0.0f;
+    if (redraw && (RayPbrOn() || (RaySssStrength() > 0.0f))) {
+        uint surfaceGeometry;
+        if (SurfaceGeometry(ViewPosition(pixel, depth), surfaceGeometry)) {
+            pbr = RayGeometryPbr(surfaceGeometry);
+            const uint shape = RayGeometryMaterial(surfaceGeometry);
+            subsurface = pbr.present ? pbr.subsurface : (((shape == 13u) || (shape == 7u)) ? RaySssStrength() : 0.0f);
+        }
+    }
     // Traced, the surfaces Parallax marks metal, tiles or smooth reflect too, as much as their material does.
-    const bool reflectionsWanted = (SsrStrength() > 0.0f) && redraw && (depth < 0.99999f);
+    const bool reflectionsWanted = ((SsrStrength() > 0.0f) || pbr.present) && redraw && (depth < 0.99999f);
     // (A grate's holes are left out of the shiny mask where it is drawn: RasterPS.)
     const bool masked = reflectionsWanted && ReflectiveAt(pixel, depth);
     // A shiny-list texture with no material of its own reflects fully.
     const float shine = reflectionsWanted ? MaterialShine(ViewPosition(pixel, depth), masked ? 1.0f : 0.0f) : 1.0f;
-    const bool reflections = reflectionsWanted && (masked || (shine > 0.0f));
+    const bool reflections = reflectionsWanted && (masked || (shine > 0.0f) || pbr.present);
 #else
+    const RayPbr pbr = RayPbrNone();
+    const float subsurface = 0.0f;
     const float shine = 1.0f;
     const bool reflections = (SsrStrength() > 0.0f) && redraw && ReflectiveAt(pixel, depth);
 #endif
@@ -4528,6 +4776,15 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         keep *= 1.0f - strength * edge;
     }
 
+#ifdef RAY_TRACED
+    // Traced subsurface scattering: the sun's and a lamp's light through the back of the surface, and a soft coloured glow where
+    // its shade would go flat dark (light that scattered inside).
+    if (subsurface > 0.0f) {
+        const float3 sssCenter = ViewPosition(pixel, depth);
+        const float3 sssNormal = ViewNormal(pixel, sssCenter);
+        lamp += TracedSubsurface(sssCenter, sssNormal) * subsurface + (1.0f - saturate(keep)) * (subsurface * 0.2f);
+    }
+#endif
     // Rim light: a soft warm-white light added along the edges.
     float3 rim = 0.0f;
     if (RimStrength() > 0.0f) {
@@ -4538,6 +4795,11 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     if (gConstants.view.x < 1.5f) {
         // (No glow round the level's lights in the air: it showed as balls round every light, L 2026-10-21.)
         rim += HalfTraced() ? TracedHalfBeams(pixel) : TracedBeams(pixel, depth);
+    }
+    // Ray Tracing Material Pick Mode's emissive: the surface's own colour, tinted by its albedo, added as light that shadows
+    // and the traced lighting don't dim (and the bloom picks up).
+    if (pbr.present && (pbr.emissive > 0.0f)) {
+        rim += gColor.Load(int3(pixel, 0)).rgb * pbr.albedo * pbr.emissive;
     }
 #endif
 
@@ -4562,6 +4824,9 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     if (redraw) {
         float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, abs(gConstants.bloom.y), gConstants.bloom.y < 0.0f) :
             (gConstants.view.w > 0.0f) ? HeatHaze(pixel, -ViewPosition(pixel, depth).z) : gColor.Load(int3(pixel, 0)).rgb;
+        // Ray Tracing Material Pick Mode: the albedo tints the surface before anything lights it. A metal has no diffuse
+        // colour of its own, only what it reflects (below).
+        scene *= pbr.albedo;
         if (gConstants.water.z > 0.0f) {
             // The surface's own colour lit by it, and a little of it straight on, so dark corners take on the
             // colour of what is around them.
@@ -4585,7 +4850,9 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             // occlusion, Lagarde and de Rousiers 2014, as the Unity GTAO does for its reflections). At 100 a
             // surface seen straight on is three quarters mirror, and fully at grazing angles.
 #ifdef RAY_TRACED
-            const float4 reflection = TracedReflection(pixel, center, normal);
+            // Ray traced BRDF: every traced reflection over a GGX lobe, a material's own roughness where it has one.
+            const float lobe = pbr.present ? pbr.roughness : RayBrdfRoughness();
+            const float4 reflection = (lobe > 0.0f) ? TracedRoughReflection(pixel, center, normal, lobe) : TracedReflection(pixel, center, normal);
 #else
             const float roughness = SsrRoughness();
             const float4 reflection = (roughness > 0.0f) ? StochasticReflection(pixel, center, normal, roughness) : ScreenSpaceReflection(pixel, center, normal);
@@ -4593,7 +4860,18 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             const float facing = saturate(dot(-normalize(center), normal));
             const float fresnel = 0.75f + 0.75f * pow(1.0f - facing, 2.0f);
             const float specularOcclusion = occlusion ? saturate(pow(facing + indirect.a, 0.5f) - 1.0f + indirect.a) : 1.0f;
-            scene = lerp(scene, reflection.rgb, saturate(SsrStrength() * shine * fresnel * reflection.a * specularOcclusion));
+            if (pbr.present) {
+                // Production PBR: the reflected share is Schlick's Fresnel from the base reflectance, 4% for a dielectric and
+                // the albedo for a metal (tinting what it reflects); a metal keeps only a sliver of diffuse, as much as its
+                // reflection is trusted.
+                const float baseReflectance = lerp(0.04f, 1.0f, pbr.metalness);
+                const float schlick = baseReflectance + (1.0f - baseReflectance) * pow(1.0f - facing, 5.0f);
+                scene *= lerp(1.0f, 0.12f, pbr.metalness * reflection.a);
+                const float3 tint = lerp(1.0f, pbr.albedo, pbr.metalness);
+                scene = lerp(scene, reflection.rgb * tint, saturate(schlick * reflection.a * specularOcclusion));
+            } else {
+                scene = lerp(scene, reflection.rgb, saturate(SsrStrength() * shine * fresnel * reflection.a * specularOcclusion));
+            }
         }
         if (gConstants.water.y > 1.5f) {
             // Modern water in place of the game's: flat water over something further down gets the new water;

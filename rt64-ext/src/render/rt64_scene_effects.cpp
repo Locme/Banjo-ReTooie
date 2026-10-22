@@ -323,6 +323,12 @@ namespace RT64 {
     // material reflects (MaterialShine), and any level cut-out (SunThroughCutout).
     static std::atomic<bool> rayScenesShine{ true };
     static std::atomic<bool> rayScenesLevelCutouts{ true };
+    // Whether the last traced scene held a draw with a ray tracing material (SetSceneRayMaterials), so the traced pass looks
+    // for them.
+    static std::atomic<bool> rayScenesPbr{ false };
+    // Ray traced BRDF's roughness and traced subsurface scattering's strength, in percent.
+    static std::atomic<uint32_t> rayTracingBrdfPercent{ 0 };
+    static std::atomic<uint32_t> rayTracingSubsurfacePercent{ 0 };
     static std::atomic<bool> rayTracingHitColours{ false };
     static std::atomic<bool> rayTracingPlayerShadows{ true };
     static std::atomic<bool> rayTracingHalf{ false };
@@ -1054,13 +1060,50 @@ namespace RT64 {
         return parallaxAllTextures ? (40u | (190u << 8)) : 0u;
     }
 
-    uint32_t SceneMaterialTexture(uint64_t hash) {
-        const std::scoped_lock lock(parallaxMutex);
-        const auto it = parallaxTextures.find(hash);
-        if (it == parallaxTextures.end()) {
-            return 0u;
+    // Ray Tracing Material Pick Mode's materials: each picked texture's index (from 1) in the table the traced pass reads
+    // (SceneMaxRayMaterials records, written beside the ray geometries), and the two words of its record.
+    static std::mutex rayMaterialMutex;
+    static std::unordered_map<uint64_t, uint32_t> rayMaterialIndices;
+    static std::vector<uint32_t> rayMaterialWords;
+    static std::atomic<bool> rayMaterialsAny{ false };
+
+    void SetSceneRayTracingBrdfSubsurface(float brdfRoughness, float subsurface) {
+        rayTracingBrdfPercent.store(uint32_t(std::round(std::clamp(brdfRoughness, 0.0f, 1.0f) * 100.0f)));
+        rayTracingSubsurfacePercent.store(uint32_t(std::round(std::clamp(subsurface, 0.0f, 1.0f) * 100.0f)));
+    }
+
+    void SetSceneRayMaterials(const uint64_t *hashes, const uint32_t *albedoRoughness, const uint32_t *metalnessEmissive, size_t count) {
+        count = std::min<size_t>(count, SceneMaxRayMaterials);
+        std::unordered_map<uint64_t, uint32_t> indices;
+        std::vector<uint32_t> words;
+        for (size_t i = 0; i < count; i++) {
+            indices[hashes[i]] = uint32_t(i + 1);
+            words.push_back(albedoRoughness[i]);
+            words.push_back(metalnessEmissive[i]);
         }
-        return (((it->second >> 17) & 0x7u) | (((it->second >> 24) & 0x1u) << 3)) + 1u;
+        const std::scoped_lock lock(rayMaterialMutex);
+        rayMaterialIndices.swap(indices);
+        rayMaterialWords.swap(words);
+        rayMaterialsAny.store(count != 0);
+    }
+
+    uint32_t SceneMaterialTexture(uint64_t hash) {
+        uint32_t material = 0u;
+        {
+            const std::scoped_lock lock(parallaxMutex);
+            const auto it = parallaxTextures.find(hash);
+            if (it != parallaxTextures.end()) {
+                material = (((it->second >> 17) & 0x7u) | (((it->second >> 24) & 0x1u) << 3)) + 1u;
+            }
+        }
+        if (rayMaterialsAny.load()) {
+            const std::scoped_lock lock(rayMaterialMutex);
+            const auto it = rayMaterialIndices.find(hash);
+            if (it != rayMaterialIndices.end()) {
+                material |= it->second << SceneRayMaterialIndexShift;
+            }
+        }
+        return material;
     }
 
     void SetSceneAurora(bool enabled) {
@@ -2449,7 +2492,7 @@ namespace RT64 {
         // The set the rays read textures through: this frame's buffers when it has them all, else empty stand-ins.
         res.rayTextureCacheSet = textures.textureSet;
         if (res.rayGeometryBuffer == nullptr) {
-            res.rayGeometryBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * 2 * MaxGeometries));
+            res.rayGeometryBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (MaxGeometries + SceneMaxRayMaterials + 1)));
             res.rayGeometryBuffer->setName("Scene Effects ray geometries");
         }
         if (res.rayDummyBuffer == nullptr) {
@@ -2550,8 +2593,11 @@ namespace RT64 {
             // 3 when the scene also has a level cut-out (SunThroughCutout has something to find).
             mapped[8] = (building && haveTextureBuffers && (res.rayTextureCacheSet != nullptr)) ? (rayScenesLevelCutouts.load() ? 3.0f : 1.0f) : 0.0f;
             // Whether the player casts traced shadows (Traced shadows of the player).
-            // Player shadows off (1), plus 2 for the half-size traced shadows and beams (the indirect pass draws them).
-            mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayTracingHalf.load() ? 2.0f : 0.0f);
+            // Player shadows off (1), plus 2 for the half-size traced shadows and beams (the indirect pass draws them), plus 4 when the
+            // scene has a draw with a ray tracing material (Ray Tracing Material Pick Mode), plus the Ray traced BRDF roughness in
+            // percent times 8 and the subsurface scattering strength in percent times 1024.
+            mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayTracingHalf.load() ? 2.0f : 0.0f) + (rayScenesPbr.load() ? 4.0f : 0.0f) +
+                float(rayTracingBrdfPercent.load() * 8u + rayTracingSubsurfacePercent.load() * 1024u);
             // The 3D grass (when it is in the structure): how far along a ray its blades are passed by, so a ray from a
             // blade or the ground among them (whose surfaces the picture only roughly has) isn't stopped by its own
             // blade and its neighbours: one and a half blade heights.
@@ -2593,6 +2639,7 @@ namespace RT64 {
         modelMeshes.clear();
         bool sceneShine = false;
         bool sceneLevelCutouts = false;
+        bool scenePbr = false;
         uint32_t *geometryTable = reinterpret_cast<uint32_t *>(res.rayGeometryBuffer->map());
         for (size_t i = 0; i < drawCount; i++) {
             const SceneRayDraw &draw = draws[i];
@@ -2605,7 +2652,9 @@ namespace RT64 {
                 continue;
             }
             const bool cutout = (draw.flags & SceneRayDrawCutout) != 0;
-            const uint32_t material = draw.flags >> SceneRayDrawMaterialShift;
+            // The low byte of the material is Parallax's shape + 1, the next byte the ray tracing material's index.
+            const uint32_t material = (draw.flags >> SceneRayDrawMaterialShift) & 0xFFu;
+            scenePbr = scenePbr || ((draw.flags >> (SceneRayDrawMaterialShift + SceneRayMaterialIndexShift)) != 0u);
             sceneShine = sceneShine || (material == 12) || (material == 14) || (material == 16);
             sceneLevelCutouts = sceneLevelCutouts || ((draw.flags & (SceneRayDrawCutout | SceneRayDrawModel)) == SceneRayDrawCutout);
             uint32_t *entry = geometryTable + ((model ? MaxGeometries : 0) + meshes.size()) * 4;
@@ -2616,7 +2665,18 @@ namespace RT64 {
             meshes.emplace_back(RenderBufferReference(indices, uint64_t(draw.indexStart) * sizeof(uint32_t)), RenderBufferReference(worldPos, 0),
                 RenderFormat::R32_UINT, RenderFormat::R32G32B32_FLOAT, draw.indexCount - (draw.indexCount % 3), worldPosVertexCount, uint32_t(sizeof(float) * 4), !cutout);
         }
+        // The ray tracing materials' records after the geometries' (record 0 is none).
+        {
+            uint32_t *table = geometryTable + MaxGeometries * 4;
+            memset(table, 0, size_t(SceneMaxRayMaterials + 1) * 16);
+            const std::scoped_lock lock(rayMaterialMutex);
+            for (size_t i = 0; (i * 2 + 1) < rayMaterialWords.size(); i++) {
+                table[(i + 1) * 4] = rayMaterialWords[i * 2];
+                table[(i + 1) * 4 + 1] = rayMaterialWords[i * 2 + 1];
+            }
+        }
         res.rayGeometryBuffer->unmap();
+        rayScenesPbr.store(scenePbr);
         rayScenesShine.store(sceneShine);
         rayScenesLevelCutouts.store(sceneLevelCutouts);
         if (levelMeshes.empty() && modelMeshes.empty()) {
@@ -2772,7 +2832,7 @@ namespace RT64 {
                     withGrass ? (grassBuild ? "rebuilt" : "kept") : "none", (unsigned long long)(res.grassBlasSize / 1024), grass.reach);
                 uint32_t modelDraws = 0, modelTris = 0, cutDraws = 0, shineDraws = 0, materialDraws = 0;
                 for (size_t i = 0; i < drawCount; i++) {
-                    const uint32_t material = draws[i].flags >> SceneRayDrawMaterialShift;
+                    const uint32_t material = (draws[i].flags >> SceneRayDrawMaterialShift) & 0xFFu;
                     if (material != 0) { materialDraws++; }
                     if ((material == 12) || (material == 14) || (material == 16)) { shineDraws++; }
                     if ((draws[i].flags & SceneRayDrawModel) != 0) { modelDraws++; modelTris += draws[i].indexCount / 3; }

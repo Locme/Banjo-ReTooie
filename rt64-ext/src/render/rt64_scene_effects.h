@@ -303,6 +303,11 @@ namespace RT64 {
     // Banjo-Tooie: bits 8 to 15 of a ray draw's flags carry its material (SceneMaterialTexture), which the traced
     // effects read where they meet it (metal and tiles reflect, L 2026-10-21).
     constexpr uint32_t SceneRayDrawMaterialShift = 8;
+    // Banjo-Tooie: a ray draw's material is Parallax's shape + 1 in its low byte and, above it (shifted by this), the index
+    // of its Ray Tracing Material Pick Mode material (SetSceneRayMaterials), 0 for none.
+    constexpr uint32_t SceneRayMaterialIndexShift = 8;
+    // Most materials the picks can hold at once.
+    constexpr uint32_t SceneMaxRayMaterials = 255;
     // The frame's buffers the traced effects read the textures of what they meet from: its index buffer, texture coordinates
     // (two floats a vertex), RDP and GPU tiles, and the texture cache's descriptor set.
     struct SceneRayTextures {
@@ -332,6 +337,9 @@ namespace RT64 {
     // Banjo-Tooie: Graphics > Ray tracing hit colours: a ray that lands where the picture can't see finds the colour that
     // spot had when it was last on screen (a world radiance cache, written from the screen each frame).
     void SetSceneRayTracingHitColours(bool enabled);
+    // Banjo-Tooie: Graphics > Ray tracing > Ray traced BRDF (the roughness, 0 to 1, of every traced reflection's GGX lobe; 0
+    // keeps the mirror) and Ray traced subsurface scattering (its strength on leaves and grass, 0 to 1; 0 is off).
+    void SetSceneRayTracingBrdfSubsurface(float brdfRoughness, float subsurface);
     // Banjo-Tooie: Ray tracing noise smoothing, 0 (the raw rays) to 1.
     void SetSceneRayTracingSmoothing(float smoothing);
     // Banjo-Tooie: Path tracing, its bounces after the first (0 off, up to 4).
@@ -543,6 +551,11 @@ namespace RT64 {
     // Banjo-Tooie: a texture's material from the parallax list and Parallax pick mode's picks (its shape + 1: metal 12,
     // tiles 14, smooth 16), whether or not Parallax is on; 0 for none.
     uint32_t SceneMaterialTexture(uint64_t hash);
+    // Banjo-Tooie: Ray Tracing Material Pick Mode's materials for the traced pass (production PBR), one for each picked
+    // texture. albedoRoughness: red | green << 8 | blue << 16 | roughness (0 to 100) << 24. metalnessEmissive: metalness (0 to
+    // 100) | emissive (percent, 0 to 1000) << 8 | subsurface (0 to 100) << 24. A drawn surface carrying one has its albedo tinted, reflects by its
+    // metalness through a lobe as wide as its roughness, and glows by its emissive, where the rays meet it too.
+    void SetSceneRayMaterials(const uint64_t *hashes, const uint32_t *albedoRoughness, const uint32_t *metalnessEmissive, size_t count);
     // Whether the water mask should be drawn this frame (reflections on, or the F6 water view).
     bool SceneWaterWanted();
     // Banjo-Tooie: the flat water went into the water mask tessellated (WaterTess.hlsl) for this worker's next effects pass.
