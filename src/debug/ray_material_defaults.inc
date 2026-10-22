@@ -1092,7 +1092,6 @@
         { 0xcf44715486561836ull, c_steel },
         { 0xcf8aefe2740a4e39ull, c_rust },
         { 0xcf9b98f733e91169ull, c_leaf },
-        { 0xcfbc306c2368f7d9ull, c_leaf },
         { 0xcffd264d69b2c6b6ull, c_steel },
         { 0xd0435f7f70422238ull, c_rust },
         { 0xd069164a0e0edcc1ull, c_rust },

@@ -3454,7 +3454,6 @@ namespace {
         { 0xcf6ef877cce4b28f, 0, 142 },
         { 0xcf8605db3e2066ac, 65, 169, Bumpy, 7 },
         { 0xcf8aefe2740a4e39, 10, 54, Metal, 7 },
-        { 0xcfbc306c2368f7d9, 12, 125, Leaves },
         { 0xcfe9a1a43d4a739c, 16, 149, Dirt },
         { 0xcff5c8dfca3a46be, 41, 189, Cracks },
         { 0xcffd264d69b2c6b6, 12, 110, Metal, 7 },
