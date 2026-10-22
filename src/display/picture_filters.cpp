@@ -4338,19 +4338,20 @@ namespace {
                 light_reaches.push_back(9.0f * float(tooie::effect_pick::light_strength(picked)));
             }
         }
-        // Ray Tracing Material Pick Mode: the materials go to the traced pass, and an emissive one also lights the scene as a Light
+        // Ray Tracing Material Pick Mode: the materials (the built-in ones from the texture sweep, a pick over each) go to the traced pass, and an emissive pick also lights the scene as a Light
         // Source would (half the emissive's percent as its strength), unless Shader Effects pick mode has given the texture
         // a Light Source of its own.
         {
             std::vector<uint64_t> material_hashes;
             std::vector<uint32_t> albedo_roughness;
             std::vector<uint32_t> metalness_emissive;
-            tooie::material_pick::for_each([&](uint64_t hash, const tooie::material_pick::Material& material) {
+            tooie::material_pick::for_each_effective([&](uint64_t hash, const tooie::material_pick::Material& material, bool own) {
                 material_hashes.push_back(hash);
                 albedo_roughness.push_back(uint32_t(material.red) | (uint32_t(material.green) << 8) | (uint32_t(material.blue) << 16) | (uint32_t(material.roughness) << 24));
                 metalness_emissive.push_back(uint32_t(material.metalness) | (uint32_t(material.emissive) << 8) | (uint32_t(material.subsurface) << 24));
                 const auto own_light = picks.find(hash);
-                if ((material.emissive > 0) && ((own_light == picks.end()) || !tooie::effect_pick::has(own_light->second, tooie::effect_pick::effect_light))) {
+                // (Only a player's own pick lights the scene: the built-in glowing textures would use up the lights.)
+                if (own && (material.emissive > 0) && ((own_light == picks.end()) || !tooie::effect_pick::has(own_light->second, tooie::effect_pick::effect_light))) {
                     light_sources.push_back(hash);
                     light_reaches.push_back(9.0f * std::max(10.0f, float(material.emissive) * 0.5f));
                 }

@@ -8,6 +8,7 @@
 #include <map>
 #include <mutex>
 #include <sstream>
+#include <unordered_map>
 
 #include "tooie_dev_files.h"
 #include "tooie_material_pick.h"
@@ -27,6 +28,9 @@ namespace {
 
     // The line of a material: "albedo=RRGGBB roughness=N metalness=N emissive=N".
     std::string material_text(const Material& m) {
+        if (m.none) {
+            return "none";
+        }
         char text[96];
         snprintf(text, sizeof(text), "albedo=%02X%02X%02X roughness=%d metalness=%d emissive=%d subsurface=%d", m.red, m.green, m.blue, int(m.roughness), int(m.metalness), int(m.emissive), int(m.subsurface));
         return text;
@@ -37,7 +41,7 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(file_path().parent_path(), ec);
         std::ofstream out(file_path());
-        out << "# Ray tracing materials (Ray Tracing Material Pick Mode key): texture, albedo (hex colour), roughness (0 to 100), metalness (0 to 100), emissive (percent), subsurface (0 to 100). Send this file in for the port's list.\n";
+        out << "# Ray tracing materials (Ray Tracing Material Pick Mode key): texture, albedo (hex colour), roughness (0 to 100), metalness (0 to 100), emissive (percent), subsurface (0 to 100), or none (switches a built-in material off). Send this file in for the port's list.\n";
         for (const auto& [hash, material] : saved_materials) {
             char text[32];
             snprintf(text, sizeof(text), "%016llx", (unsigned long long)hash);
@@ -76,6 +80,53 @@ namespace {
         // Leaf: sun behind it shows green through it.
         { 120, 220, 70, 70, 0, 0, 90 },
     };
+    // The classes the sweep of the texture dump sorted textures into (see ray_material_defaults.inc), and the material each gets.
+    enum MaterialClass : uint8_t { c_chrome, c_gold, c_copper, c_steel, c_rust, c_glass, c_gem, c_glaze, c_plastic, c_leaf, c_petal, c_wax, c_glow };
+    const Material class_materials[] = {
+        // chrome: polished metal, a sharp reflection.
+        { 255, 255, 255, 12, 100, 0, 0, false },
+        // gold.
+        { 255, 205, 100, 22, 100, 0, 0, false },
+        // copper and bronze.
+        { 235, 150, 105, 30, 100, 0, 0, false },
+        // steel: satin grey metal, a soft reflection.
+        { 255, 255, 255, 45, 85, 0, 0, false },
+        // rust: worn, dull metal, a wide faint one.
+        { 255, 255, 255, 78, 45, 0, 0, false },
+        // glass.
+        { 255, 255, 255, 4, 0, 0, 0, false },
+        // gem: glossy, light through it, a faint glow.
+        { 255, 255, 255, 8, 0, 15, 50, false },
+        // glaze: ceramic, polished stone, glossy paint.
+        { 255, 255, 255, 18, 0, 0, 0, false },
+        // plastic.
+        { 255, 255, 255, 30, 0, 0, 0, false },
+        // leaf: rough, light through it.
+        { 255, 255, 255, 75, 0, 0, 70, false },
+        // petal and soft fruit.
+        { 255, 255, 255, 60, 0, 0, 85, false },
+        // wax, jelly and slime.
+        { 255, 255, 255, 35, 0, 0, 80, false },
+        // glow: lit lamps, glowing crystals and magic (no light source of its own: the Lamp and Light Source picks do that).
+        { 255, 255, 255, 50, 0, 150, 0, false },
+    };
+    struct BuiltIn {
+        uint64_t hash;
+        MaterialClass material;
+    };
+    const BuiltIn built_ins[] = {
+#include "ray_material_defaults.inc"
+    };
+    const std::unordered_map<uint64_t, Material>& built_in_map() {
+        static const std::unordered_map<uint64_t, Material> map = [] {
+            std::unordered_map<uint64_t, Material> built;
+            for (const BuiltIn& entry : built_ins) {
+                built[entry.hash] = class_materials[entry.material];
+            }
+            return built;
+        }();
+        return map;
+    }
     const char* preset_names[tooie::material_pick::preset_count] = { "Default", "Mirror", "Brushed metal", "Gold", "Plastic", "Rubber", "Glowing", "Wax", "Leaf" };
 }
 
@@ -106,6 +157,7 @@ void tooie::material_pick::load() {
             while (words >> word) {
                 const size_t equals = word.find('=');
                 if (equals == std::string::npos) {
+                    material.none = material.none || (word == "none");
                     continue;
                 }
                 const std::string name = word.substr(0, equals);
@@ -146,6 +198,46 @@ void tooie::material_pick::for_each(const std::function<void(uint64_t hash, cons
     }
 }
 
+bool tooie::material_pick::builtin(uint64_t hash, Material& material) {
+    const auto& map = built_in_map();
+    const auto it = map.find(hash);
+    if (it == map.end()) {
+        return false;
+    }
+    material = it->second;
+    return true;
+}
+
+bool tooie::material_pick::effective(uint64_t hash, Material& material, bool& own) {
+    own = false;
+    {
+        std::lock_guard lock{ materials_mutex };
+        const auto it = materials.find(hash);
+        if (it != materials.end()) {
+            own = true;
+            material = it->second;
+            return !material.none;
+        }
+    }
+    return builtin(hash, material);
+}
+
+void tooie::material_pick::for_each_effective(const std::function<void(uint64_t hash, const Material& material, bool own)>& visit) {
+    {
+        std::lock_guard lock{ materials_mutex };
+        for (const auto& [hash, material] : materials) {
+            if (!material.none) {
+                visit(hash, material, true);
+            }
+        }
+        for (const auto& [hash, material] : built_in_map()) {
+            if (materials.find(hash) == materials.end()) {
+                visit(hash, material, false);
+            }
+        }
+    }
+}
+
 bool tooie::material_pick::get(uint64_t hash, Material& material) {
     std::lock_guard lock{ materials_mutex };
     const auto it = materials.find(hash);
@@ -170,7 +262,10 @@ void tooie::material_pick::set(uint64_t hash, const Material* material) {
 
 std::string tooie::material_pick::step_property(uint64_t hash, Property property, int notches, bool fine) {
     Material material;
-    get(hash, material);
+    bool own = false;
+    if (!effective(hash, material, own)) {
+        material = Material{};
+    }
     const int step = (property <= property_blue) ? (fine ? 1 : 16) : ((property == property_emissive) ? (fine ? 5 : 25) : (fine ? 1 : 5));
     auto stepped = [&](int value, int low, int high) { return std::clamp(value + notches * step, low, high); };
     switch (property) {
@@ -252,21 +347,25 @@ std::string tooie::material_pick::describe(uint64_t hash, uint32_t layer, uint32
         return "No textured surface here";
     }
     Material material;
-    const bool own = get(hash, material);
+    bool own = false;
+    const bool has = effective(hash, material, own);
     const char* note = "";
+    bool switched_off = false;
     {
         std::lock_guard lock{ materials_mutex };
         note = note_locked(hash);
+        const auto it = materials.find(hash);
+        switched_off = (it != materials.end()) && it->second.none;
     }
-    char text[640];
-    if (own) {
-        snprintf(text, sizeof(text), "%016llx\nRay tracing material (yours%s)\nAlbedo %02X%02X%02X, Roughness %d%%, Metalness %d%%, Emissive %d%%, Subsurface %d%%\n"
-            "Shift + wheel: %s (Ctrl: fine). Right click or keys 1-7: change what the wheel does\nLeft click: take it off, middle click or key 8: next preset, key 9: Show All %s",
-            (unsigned long long)hash, note, material.red, material.green, material.blue, int(material.roughness), int(material.metalness), int(material.emissive), int(material.subsurface),
+    char text[700];
+    if (has) {
+        snprintf(text, sizeof(text), "%016llx\nRay tracing material (%s%s)\nAlbedo %02X%02X%02X, Roughness %d%%, Metalness %d%%, Emissive %d%%, Subsurface %d%%\n"
+            "Shift + wheel: %s (Ctrl: fine). Right click or keys 1-7: change what the wheel does\nLeft click: switch it off, middle click or key 8: next preset, key 9: Show All %s",
+            (unsigned long long)hash, own ? "yours" : "built-in", note, material.red, material.green, material.blue, int(material.roughness), int(material.metalness), int(material.emissive), int(material.subsurface),
             property_labels[chosen], show_all ? "on" : "off");
     } else {
-        snprintf(text, sizeof(text), "%016llx\nNo ray tracing material\nLeft click: give it one, middle click: a preset, Shift + wheel: %s\nKeys 1-7 choose what the wheel does, key 9: Show All %s",
-            (unsigned long long)hash, property_labels[chosen], show_all ? "on" : "off");
+        snprintf(text, sizeof(text), "%016llx\nNo ray tracing material%s%s\nLeft click: give it one, middle click: a preset, Shift + wheel: %s\nKeys 1-7 choose what the wheel does, key 9: Show All %s",
+            (unsigned long long)hash, switched_off ? " (its built-in one is switched off)" : "", note, property_labels[chosen], show_all ? "on" : "off");
     }
     std::string result = text;
     if (layers > 1) {

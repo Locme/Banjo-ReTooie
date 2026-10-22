@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T536 Built-in ray tracing materials (texture sweep)
+- Asked: 2026-10-22 UTC
+- Build: claude/project-thread-rjo479 (not built on a PC yet)
+- Steps:
+  1. Pull the build; turn Graphics > Ray tracing on (no picks needed)
+  2. Walk a level with metal, rust, gold, leaves, gems: shiny textures should reflect with the right roughness
+  3. In Ray Tracing Material Pick Mode press 9 (Show All) to see every textured material; aim at one: the label says built-in
+  4. Left click a built-in one to switch it off; Shift + left puts the built-in back
+  5. Check the frame rate in a metal-heavy room (rough metals use 3 to 4 rays per pixel)
+- Look for: wrong calls (a stone shown as steel, a lamp as gold), too noisy or too costly spots. Send me the textures to fix.
+- Status: waiting for L
+
 ## T535 Ray traced BRDF and subsurface scattering
 - Asked: 2026-10-22 12:06 UTC
 - Build: claude/project-thread-rjo479 (not built on a PC yet)

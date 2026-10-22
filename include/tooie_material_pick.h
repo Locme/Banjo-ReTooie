@@ -21,8 +21,10 @@ namespace tooie::material_pick {
         uint16_t emissive = 0;
         // 0 to 100.
         uint8_t subsurface = 0;
+        // A pick that switches the built-in material of a texture off (file word "none").
+        bool none = false;
         bool operator==(const Material& o) const {
-            return (red == o.red) && (green == o.green) && (blue == o.blue) && (roughness == o.roughness) && (metalness == o.metalness) && (emissive == o.emissive) && (subsurface == o.subsurface);
+            return (red == o.red) && (green == o.green) && (blue == o.blue) && (roughness == o.roughness) && (metalness == o.metalness) && (emissive == o.emissive) && (subsurface == o.subsurface) && (none == o.none);
         }
         bool operator!=(const Material& o) const { return !(*this == o); }
     };
@@ -51,6 +53,13 @@ namespace tooie::material_pick {
     uint32_t version();
     // Each texture picked, with its material.
     void for_each(const std::function<void(uint64_t hash, const Material& material)>& visit);
+    // The materials that ship with the port (sweeps of the 7,259-texture dump, src/debug/ray_material_defaults.inc). A pick
+    // of the same texture replaces its built-in one; a "none" pick switches it off.
+    bool builtin(uint64_t hash, Material& material);
+    // A texture's material as the traced pass gets it: its pick, else its built-in one; false for none. own: it is a pick.
+    bool effective(uint64_t hash, Material& material, bool& own);
+    // Every texture with a material as the traced pass gets it (picks over the built-in ones, "none" picks left out).
+    void for_each_effective(const std::function<void(uint64_t hash, const Material& material, bool own)>& visit);
 
     // A texture's material as it stands (false: none).
     bool get(uint64_t hash, Material& material);

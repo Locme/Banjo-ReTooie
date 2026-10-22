@@ -888,7 +888,7 @@ namespace {
                 "Shader Effects pick mode: right click or keys 1-9 choose an effect, left click turns it on or off (hold to paint), middle click Show All, Shift + wheel Light Source strength, Shift + left click built-in, wheel deeper",
                 "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
                     "Shift + left click default, wheel deeper",
-                "Ray Tracing Material pick mode: left click gives or takes off a material, middle click steps a preset, Shift + wheel changes albedo, roughness, metalness or emissive (right click or keys 1-7 choose which, Ctrl fine), key 9 Show All, wheel deeper" };
+                "Ray Tracing Material pick mode: left click gives or switches off a material, middle click steps a preset, Shift + wheel changes albedo, roughness, metalness or emissive (right click or keys 1-7 choose which, Ctrl fine), key 9 Show All, wheel deeper" };
             static const char* off_toasts[4] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off", "Ray Tracing Material pick mode off" };
             for (int k = 0; k < 4; k++) {
                 const bool down = tooie::hotkeys::down(keys[k]);
@@ -1336,8 +1336,15 @@ namespace {
                     if (left || reset) {
                         remember(mode, hash);
                         tooie::material_pick::Material material;
-                        if (reset || tooie::material_pick::get(hash, material)) {
+                        bool own = false;
+                        if (reset) {
+                            // Back to the built-in choice.
                             tooie::material_pick::set(hash, nullptr);
+                        } else if (tooie::material_pick::effective(hash, material, own)) {
+                            // Switched off (a built-in one stays off until Shift + left click).
+                            material = tooie::material_pick::Material{};
+                            material.none = true;
+                            tooie::material_pick::set(hash, &material);
                         } else {
                             material = tooie::material_pick::preset_material(0, material);
                             tooie::material_pick::set(hash, &material);
@@ -1347,7 +1354,6 @@ namespace {
                     if (middle) {
                         remember(mode, hash);
                         tooie::material_pick::Material material;
-                        tooie::material_pick::get(hash, material);
                         material = tooie::material_pick::preset_material(next_preset, material);
                         tooie::material_pick::set(hash, &material);
                         tooie::toast::show(std::string("Preset: ") + tooie::material_pick::preset_name(next_preset));
