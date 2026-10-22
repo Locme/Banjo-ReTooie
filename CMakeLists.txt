@@ -60,6 +60,12 @@ if (TOOIE_BAREBONE)
     add_compile_definitions(TOOIE_BAREBONE)
     message(STATUS "Barebone build: jiggle physics and optional extra shader passes left out")
 endif()
+if (TOOIE_BAREBONE)
+    # The barebone build keeps the jiggle option hooks as no-ops (snout_jiggle_barebone.cpp).
+    set(TOOIE_SNOUT_SOURCE ${CMAKE_SOURCE_DIR}/src/gameplay/snout_jiggle_barebone.cpp)
+else()
+    set(TOOIE_SNOUT_SOURCE ${CMAKE_SOURCE_DIR}/src/gameplay/snout_jiggle.cpp)
+endif()
 if (TOOIE_LTO AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     if (NOT MSVC)
         # The default GNU linker cannot link LLVM bitcode; lld can.
@@ -369,7 +375,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/field_of_view.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/cutscene_skip.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/honeycomb_glitter.cpp
-    ${CMAKE_SOURCE_DIR}/src/gameplay/snout_jiggle.cpp
+    ${TOOIE_SNOUT_SOURCE}
     ${CMAKE_SOURCE_DIR}/src/gameplay/original_honeycomb.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/window_beams.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/jiggy_dance.cpp
