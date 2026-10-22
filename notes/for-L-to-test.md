@@ -8,6 +8,7 @@
   2. Stand where your screenshot was in Terrydactyland (-4367, 3322, -1133) and note the fps and GPU ms with Displaced ground at 60, then at 0
   3. Do the same in the intro
 - Look for: Displaced ground should now cost a few ms, not half the frame rate. In the first seconds after loading a level it may still be slower (the floors' shaders are built in the background). Check that floors look the same as before (colours, lighting) and no floor turns black or disappears. Send console.log if a message says the graphics driver could not build a pipeline.
+- Status: waiting for L
 
 ## T531 Sand footprints with the camera straight above
 - Asked: 2026-10-22 11:08 UTC
