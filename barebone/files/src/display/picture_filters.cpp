@@ -4202,7 +4202,6 @@ namespace {
             graphics.update_option_value(texture_upscale_option, (uint32_t)TextureUpscale::Double);
             graphics.update_option_value(water_waves_option, 50.0);
             graphics.update_option_value(light_shafts_option, 40.0);
-            graphics.update_option_value(sun_shadows_option, 60.0);
         } else if (preset == Preset::Retro) {
             graphics.update_option_value(dither16_option, (uint32_t)Colour16::Console);
             graphics.update_option_value(crt_option, true);
@@ -4559,8 +4558,8 @@ void tooie::picture_filters::apply() {
     }
     RT64::SetSceneScreenSpaceReflections((float)(shader(value<double>(ssr_option, 0.0)) / 100.0), (traced_brdf > 0.0f) ? 0.0f : (float)(shader(value<double>(ssr_stochastic_option, 0.0)) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
-    sun_shadows = value<double>(sun_shadows_option, 0.0) > 0.0;
-    RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true),
+    sun_shadows = false;  // barebone: no sun shadow map
+    RT64::SetSceneSunShadows(0.0f, value<bool>(sun_shadow_banjo_option, true),
         (float)(value<double>(sun_shadow_softness_option, 60.0) / 100.0));
     const float shadow_distance = (float)value<double>(sun_shadow_distance_option, 3000.0);
     sun_shadow_reach = sun_shadows ? shadow_distance : 0.0f;
@@ -5515,6 +5514,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Heat haze",
         "Near lava (Hailfire Peaks' lava side, Chilli Billi, inside the volcano), the air shimmers above hot things such as lava and fire, more in the distance. 0 is off.",
         0, 100, 5, 0, false, 0);
+#if 0  // barebone: no sun shadow map options
     graphics.add_number_option(
         sun_shadows_option,
         "Sun shadows",
@@ -5535,6 +5535,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Sun shadow distance",
         "How far from the camera sun shadows are sharp, in game units; past it the level's shadows carry on, softer. The whole level casts, and characters and objects within this distance, on screen or not, so shadows stay put as the camera turns. Past 6000 each shadow is a little blurrier, and higher costs more.",
         1500, 20000, 500, 0, false, 3000);
+#endif
     graphics.add_number_option(
         light_shafts_option,
         "Light shafts",
