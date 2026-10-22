@@ -5337,7 +5337,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         ray_tracing_smoothing_option,
         "Ray tracing noise smoothing",
-        "How much the ray traced light and shadows are smoothed out where they get grainy, mostly on Banjo's fur (whose surface turns every pixel, so each pixel caught different rays and the fur crawled as he moved). Higher is calmer but softer; 0 is the raw rays. 50 is the default. Needs Ray tracing on.",
+        "How much the ray traced light and shadows are smoothed out where they get grainy: the soft edges of sun, lamp and model shadows everywhere (higher turns every pixel's rays more alike: calmer, the edge in fine steps), and most on Banjo's fur (whose surface turns every pixel, so each pixel caught different rays and the fur crawled as he moved). 0 is the raw rays. 50 is the default. Needs Ray tracing on.",
         0, 100, 5, 0, false, 50);
     graphics.add_number_option(
         ray_tracing_brdf_option,

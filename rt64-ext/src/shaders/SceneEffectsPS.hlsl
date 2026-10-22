@@ -1494,7 +1494,8 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
     float influence = 0.0f;
     // A turn of the disc's points for each pixel (interleaved gradient noise), so two rays a light over neighbouring
     // pixels cover the disc as four did, at half the cost (L, 2026-10-22: Bottles' House at 20 fps).
-    const float turn = frac(52.9829189f * frac(0.06711056f * float(pixel.x) + 0.00583715f * float(pixel.y))) * 6.2831853f;
+    // Noise smoothing takes the turn towards the same for every pixel.
+    const float turn = frac(52.9829189f * frac(0.06711056f * float(pixel.x) + 0.00583715f * float(pixel.y))) * 6.2831853f * (1.0f - RtSmoothing() * 0.8f);
     uint traced = 0u;
     // Fewer lights and rays far off (Ray detail distances): six lights at two rays, three at one, then one at one.
     const uint detail = RayDetail(-center.z);
@@ -1604,7 +1605,7 @@ float ModelShadow(float3 center, float3 normal) {
     const float reach = 400.0f;
     float shade = 0.0f;
     // Two rays, turned a different way each pixel (the noise smoothing evens them out).
-    const float turn = frac(52.9829189f * frac(dot(center.xy, float2(0.06711056f, 0.00583715f)) * 37.0f)) * 3.14159265f;
+    const float turn = frac(52.9829189f * frac(dot(center.xy, float2(0.06711056f, 0.00583715f)) * 37.0f)) * 3.14159265f * (1.0f - RtSmoothing() * 0.8f);
     [unroll] for (int k = 0; k < 2; k++) {
         const float angle = float(k) * 3.14159265f + turn;
         RayDesc ray;
@@ -4253,7 +4254,8 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
             }
             traced++;
             // Steadier on Banjo with the noise smoothing: a different turn each pixel speckled his fur.
-            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f * (onBanjo ? 1.0f - RtSmoothing() : 1.0f);
+            // Noise smoothing turns all pixels' rays the same way (on Banjo even more): smoother, the edge in steps.
+            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f * (1.0f - RtSmoothing() * (onBanjo ? 1.0f : 0.8f));
             const float radius = sqrt((float(k) + 0.5f) / float(Rays)) * spread;
             const float3 direction = normalize(sunDirection + (side * cos(angle) + up * sin(angle)) * radius);
             RayDesc ray;
