@@ -226,6 +226,16 @@
 - Look for: Do the keys, painting, Show All and Slight Glow work as described?
 - Status: waiting for L
 
+## T521 Thick 3D picket fence mod (Spiral Mountain)
+- Asked: 2026-10-21 21:44 UTC
+- Build: main @ 5236e52 + mod zip in project files
+- Steps:
+  1. Copy mods/Thick Fence v1.zip into the game's mods folder and turn it on in the Mods tab
+  2. Start a new area load (warp to Spiral Mountain from the Warp tab, or restart the game)
+  3. Walk to the yellow picket fences in Spiral Mountain and look along them from the side and from a slant
+- Look for: Do the pickets and rails now have a thick side view, with the same front look as before? Any holes, wrong colours on the sides, or a big frame rate drop? (about 20,000 extra triangles; the fence is 12 units thick)
+- Status: waiting for L
+
 ## T520 Several shader effects on one texture
 - Asked: 2026-10-21 21:12 UTC
 - Build: main (next build)
