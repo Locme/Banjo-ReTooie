@@ -7231,7 +7231,7 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..81d77ab 100644
+index d1c5273..66d146b 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -17,6 +17,23 @@
@@ -7567,7 +7567,7 @@ index d1c5273..81d77ab 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +1076,199 @@ namespace RT64 {
+@@ -832,6 +1076,201 @@ namespace RT64 {
              }
          }
  
@@ -7712,9 +7712,10 @@ index d1c5273..81d77ab 100644
 +            indirectDesc.pixelShader = indirectShader.get();
 +            sceneIndirect.pipeline = device->createGraphicsPipeline(indirectDesc);
 +
-+            // The same with the occlusion and bounce light traced, Vulkan only.
++            // The same with the occlusion and bounce light traced (and Half-resolution ray tracing's sun shadows and light
++            // beams below them), Vulkan only, with the traced pass's layout: its rays read the textures of what they meet.
 +#           ifndef __APPLE__
-+            if (rayQuery && (shaderFormat == RenderShaderFormat::SPIRV)) {
++            if (rayQuery && (shaderFormat == RenderShaderFormat::SPIRV) && (sceneEffectsTraced.pipelineLayout != nullptr)) {
 +                const void *tracedBlob = SceneIndirectRTPSBlobSPIRV;
 +                size_t tracedSize = sizeof(SceneIndirectRTPSBlobSPIRV);
 +                switch (multisampling.sampleCount) {
@@ -7735,6 +7736,7 @@ index d1c5273..81d77ab 100644
 +                }
 +                std::unique_ptr<RenderShader> tracedIndirect = device->createShader(tracedBlob, tracedSize, "PSMain", shaderFormat);
 +                indirectDesc.pixelShader = tracedIndirect.get();
++                indirectDesc.pipelineLayout = sceneEffectsTraced.pipelineLayout.get();
 +                sceneIndirectTraced.pipeline = device->createGraphicsPipeline(indirectDesc);
 +            }
 +#           endif

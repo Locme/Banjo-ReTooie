@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T534 Half-resolution ray tracing (175 FPS)
+- Asked: 2026-10-22 12:20 UTC
+- Build: main
+- Steps:
+  1. Ray tracing on, Traced light beams at 60, Frame overlay Full
+  2. In Terrydactyland at 175 FPS, note "traced effects" and the fps
+  3. Turn on Graphics > Ray Tracing > Half-resolution ray tracing (applies live) and note them again
+  4. Look at sun shadow edges and light beams with it on
+- Look for: Traced effects should drop by about half (headless: 256-318 ms down to about 88 ms plus about 40 ms more in "AO and bounce light", which now traces them). Shadow edges a little softer, no blocky edges or shadows bleeding across objects. Off should look exactly as before
+- Status: waiting for L
+
 ## T533 Displaced ground cost (floors' own shaders)
 - Asked: 2026-10-22 11:32 UTC
 - Build: main

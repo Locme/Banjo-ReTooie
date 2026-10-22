@@ -835,7 +835,13 @@ bool HitColoursOn() {
 
 // Traced shadows of the player off: Banjo casts no traced shadows (lights word 9).
 bool PlayerShadowsOff() {
-    return asfloat(gLights.Load(36)) > 0.5f;
+    return (uint(asfloat(gLights.Load(36)) + 0.5f) & 1u) != 0u;
+}
+
+// Half-resolution ray tracing: the sun's traced shadows and the traced light beams come from the indirect pass's lower
+// half (one ray set for each 2x2 pixels), see TracedHalfAt.
+bool HalfTraced() {
+    return (uint(asfloat(gLights.Load(36)) + 0.5f) & 2u) != 0u;
 }
 
 // Ray tracing noise smoothing, 0 (the raw rays) to 1.
@@ -3716,6 +3722,67 @@ bool SunThroughCutout(float3 worldStart, float3 worldSun) {
 }
 #endif
 
+#ifdef RAY_TRACED
+// Half-resolution ray tracing (HalfTraced). The indirect pass's lower half, one texel for each 2x2 pixels (for the pixel at
+// twice its place): the light beams (rgb, TracedBeams) and the sun shadow's share of blocked rays (a; 2 where the spot is
+// enclosed, so in shade whatever the rays say). The pass reads it back for each pixel from the texels round it on the same
+// surface (as IndirectAt does), the beams smoothly as they are soft anyway.
+static int gSunHalf = 0;
+
+int2 TracedHalfSize() {
+    return max(int2(gConstants.projection.zw) / 2, int2(1, 1));
+}
+
+float TracedHalfShadow(int2 pixel, float3 center, float3 normal) {
+    const int2 halfSize = TracedHalfSize();
+    // The 2x2 texels round the pixel (each stands for the pixel at twice its place).
+    const int2 base = int2(floor((float2(pixel) - 1.0f) * 0.5f));
+    const float2 f = (float2(pixel) - float2(base * 2)) * 0.5f;
+    const float tolerance = max(-center.z * 0.03f, 2.0f);
+    float shadow = 0.0f;
+    float weight = 0.0f;
+    float enclosed = 0.0f;
+    float nearest = 1e9f;
+    float nearestValue = 0.0f;
+    [unroll] for (int k = 0; k < 4; k++) {
+        const int2 corner = int2(k & 1, k >> 1);
+        const int2 q = clamp(base + corner, int2(0, 0), halfSize - 1);
+        const float sampleDepth = LoadDepth(q * 2);
+        const float value = gIndirect.Load(int3(q.x, q.y + halfSize.y, 0)).a;
+        if (sampleDepth >= 0.99999f) {
+            continue;
+        }
+        const float planeDistance = abs(dot(ViewPosition(q * 2, sampleDepth) - center, normal));
+        if (planeDistance < nearest) {
+            nearest = planeDistance;
+            nearestValue = value;
+        }
+        const float2 b = lerp(1.0f - f, f, float2(corner));
+        const float w = saturate(1.0f - planeDistance / tolerance) * (b.x * b.y + 1e-3f);
+        if (value > 1.5f) {
+            enclosed += w;
+        }
+        else {
+            shadow += value * w;
+            weight += w;
+        }
+    }
+    if ((weight + enclosed) < 1e-4f) {
+        // Nothing on the same surface round it (a thin pole): the texel on the nearest one.
+        return nearestValue;
+    }
+    return (enclosed > weight) ? 2.0f : shadow / max(weight, 1e-4f);
+}
+
+float3 TracedHalfBeams(int2 pixel) {
+    const int2 halfSize = TracedHalfSize();
+    const float2 textureSize = float2(halfSize.x, halfSize.y * 2);
+    // Kept inside the lower half, so the upper half's texels never blend in.
+    const float2 at = clamp((float2(pixel) + 0.5f) * 0.5f, 0.5f, float2(halfSize) - 0.5f) + float2(0.0f, float(halfSize.y));
+    return gIndirect.SampleLevel(LinearSampler, at / textureSize, 0).rgb;
+}
+#endif
+
 // sunlight: with ray tracing, the sun's light let in through a cut-out's holes (a grate) onto what is under cover behind
 // it (SunThroughCutout). The game lit such spots as if in shade, so traced shadows alone could only darken them and
 // the light through the grate never showed (L, 2026-10-21).
@@ -3725,6 +3792,11 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
     // Fades out with distance: far away the depth buffer is too coarse and the shadows too small to tell.
     const float near = saturate(1.0f - (distance - 4000.0f) / 3000.0f);
     if (near <= 0.0f) {
+#ifdef RAY_TRACED
+        if (gSunHalf == 1) {
+            return 0.0f;
+        }
+#endif
         return 1.0f;
     }
     // Softness (shadows.w, below 1; 2 is added to leave Banjo out).
@@ -3773,8 +3845,17 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
         float blocked = 0.0f;
         // Two rays across the cone first; only where they disagree (the shadow's soft edge) the other two are traced.
+        // Half-resolution ray tracing reads what the indirect pass traced instead (gSunHalf 2).
         int traced = 0;
-        [loop] for (int k = 0; k < Rays; k++) {
+        if (gSunHalf == 2) {
+            const float half = TracedHalfShadow(pixel, center, surfaceNormal);
+            if (half > 1.5f) {
+                return 1.0f;
+            }
+            blocked = half;
+            traced = 1;
+        }
+        [loop] for (int k = 0; (k < Rays) && (gSunHalf != 2); k++) {
             if ((k == 2) && ((blocked == 0.0f) || (blocked == 2.0f))) {
                 break;
             }
@@ -3792,9 +3873,12 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
             // Under ray tracing, Traced shadows of the player decides (not Sun shadows on Banjo).
             blocked += TraceOccluded(ray, PlayerShadowsOff() ? 1u : 0u) ? 1.0f : 0.0f;
         }
-        shadow = blocked / float(traced);
-        if (((shadow > 0.0f) || (facing < 0.0f)) && Enclosed(ViewToWorldPoint(start))) {
-            return 1.0f;
+        shadow = blocked / float(max(traced, 1));
+        if ((gSunHalf != 2) && ((shadow > 0.0f) || (facing < 0.0f)) && Enclosed(ViewToWorldPoint(start))) {
+            return (gSunHalf == 1) ? 2.0f : 1.0f;
+        }
+        if (gSunHalf == 1) {
+            return shadow;
         }
         if ((shadow < 1.0f) && (facing > 0.0f) && !onBanjo && SunThroughCutout(ViewToWorldPoint(start), normalize(ViewToWorldDirection(sunDirection)))) {
             sunlight += float3(1.0f, 0.93f, 0.78f) * (0.9f * facing * (1.0f - shadow) * near);
@@ -4040,6 +4124,23 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 // own, one GTAO slice and two SSGI rays a pixel, turned through each 4x4 block (IndirectCell) for IndirectAt to
 // gather.
 float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
+#ifdef RAY_TRACED
+    // The lower half (drawn only with Half-resolution ray tracing): the light beams and the sun shadow (TracedHalfAt).
+    const int2 halfSize = TracedHalfSize();
+    if (int(pos.y) >= halfSize.y) {
+        const int2 lowerPixel = int2(int(pos.x), int(pos.y) - halfSize.y) * 2;
+        const float lowerDepth = LoadDepth(lowerPixel);
+        float4 lower = float4(TracedBeams(lowerPixel, lowerDepth), 0.0f);
+        if ((lowerDepth < 0.99999f) && (gConstants.shadows.x > 0.0f)) {
+            const float3 lowerCenter = ViewPosition(lowerPixel, lowerDepth);
+            float3 unused = 0.0f;
+            gSunHalf = 1;
+            lower.a = SunShadow(lowerPixel, lowerCenter, ViewNormal(lowerPixel, lowerCenter), unused);
+            gSunHalf = 0;
+        }
+        return lower;
+    }
+#endif
     const int2 halfPixel = int2(pos.xy);
     const int2 pixel = halfPixel * 2;
     const float depth = LoadDepth(pixel);
@@ -4325,7 +4426,13 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             keep *= pow(saturate(MultiBounce(indirect.a, albedo)), AoStrength() * (banjoBody ? 0.5f : 2.0f));
         }
         if (sunShadows) {
+#ifdef RAY_TRACED
+            gSunHalf = HalfTraced() ? 2 : 0;
+#endif
             keep *= SunShadow(pixel, center, normal, lamp);
+#ifdef RAY_TRACED
+            gSunHalf = 0;
+#endif
         }
 #ifdef RAY_TRACED
         // Not tied to the sun: lamps and fires cast their own in caves and at night.
@@ -4385,7 +4492,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // Traced light beams, added like the rim light (the fog still covers them).
     if (gConstants.view.x < 1.5f) {
         // (No glow round the level's lights in the air: it showed as balls round every light, L 2026-10-21.)
-        rim += TracedBeams(pixel, depth);
+        rim += HalfTraced() ? TracedHalfBeams(pixel) : TracedBeams(pixel, depth);
     }
 #endif
 

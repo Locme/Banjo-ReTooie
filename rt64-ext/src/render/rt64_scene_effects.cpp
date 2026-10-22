@@ -318,6 +318,7 @@ namespace RT64 {
     static std::atomic<bool> rayScenesLevelCutouts{ true };
     static std::atomic<bool> rayTracingHitColours{ false };
     static std::atomic<bool> rayTracingPlayerShadows{ true };
+    static std::atomic<bool> rayTracingHalf{ false };
     static std::atomic<float> rayTracingSmoothing{ 0.5f };
     static std::atomic<uint32_t> pathTracingBounces{ 0 };
     // Traced light beams: strength, then the room's light direction (world, towards it), or 0 for the sun.
@@ -531,6 +532,10 @@ namespace RT64 {
 
     void SetSceneRayTracingHitColours(bool enabled) {
         rayTracingHitColours.store(enabled);
+    }
+
+    void SetSceneRayTracingHalf(bool enabled) {
+        rayTracingHalf.store(enabled);
     }
 
     void SetSceneRayTracingPlayerShadows(bool enabled) {
@@ -2538,7 +2543,8 @@ namespace RT64 {
             // 3 when the scene also has a level cut-out (SunThroughCutout has something to find).
             mapped[8] = (building && haveTextureBuffers && (res.rayTextureCacheSet != nullptr)) ? (rayScenesLevelCutouts.load() ? 3.0f : 1.0f) : 0.0f;
             // Whether the player casts traced shadows (Traced shadows of the player).
-            mapped[9] = rayTracingPlayerShadows.load() ? 0.0f : 1.0f;
+            // Player shadows off (1), plus 2 for the half-size traced shadows and beams (the indirect pass draws them).
+            mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayTracingHalf.load() ? 2.0f : 0.0f);
             // The 3D grass (when it is in the structure): how far along a ray its blades are passed by, so a ray from a
             // blade or the ground among them (whose surfaces the picture only roughly has) isn't stopped by its own
             // blade and its neighbours: one and a half blade heights.
@@ -3400,7 +3406,8 @@ namespace RT64 {
         }
 
         // The indirect pass's target, at half size (made again after a resize) and cleared to no occlusion and no
-        // light, so the pass can always read it.
+        // light, so the pass can always read it. Twice as tall: the lower half holds the half-size traced sun shadows
+        // and light beams (Half-resolution ray tracing), which the same pass draws when that is on.
         const uint32_t indirectWidth = std::max(colorTarget->width / 2, 1U);
         const uint32_t indirectHeight = std::max(colorTarget->height / 2, 1U);
         if ((res.indirectTexture != nullptr) && ((res.indirectWidth != indirectWidth) || (res.indirectHeight != indirectHeight))) {
@@ -3408,7 +3415,7 @@ namespace RT64 {
             res.retireLater(std::move(res.indirectTexture));
         }
         if (res.indirectTexture == nullptr) {
-            res.indirectTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(indirectWidth, indirectHeight, RenderFormat::R16G16B16A16_FLOAT));
+            res.indirectTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(indirectWidth, indirectHeight * 2, RenderFormat::R16G16B16A16_FLOAT));
             res.indirectTexture->setName("Scene Effects Indirect");
             const RenderTexture *texture = res.indirectTexture.get();
             res.indirectFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
@@ -3502,17 +3509,27 @@ namespace RT64 {
         WorkloadGpuSections().end(effectsSpan);
 
         // The indirect pass: GTAO and SSGI at half size, with the same constants and inputs as the pass, which
-        // gathers them. Only when one of them is on (SSGI only while the pass draws the scene, as it reads it).
-        if (((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) {
+        // gathers them. Only when one of them is on (SSGI only while the pass draws the scene, as it reads it), or
+        // for Half-resolution ray tracing: its lower half, the traced sun shadows and light beams for the pass to read.
+        const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr) &&
+            (res.rayTexturesSet != nullptr) && (res.rayTextureCacheSet != nullptr);
+        const bool tracedHalf = tracedIndirect && rayTracingHalf.load();
+        if ((((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) || tracedHalf) {
             commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
             commandList->setFramebuffer(res.indirectFramebuffer.get());
             GpuSectionScope timedIndirect(WorkloadGpuSections(), GpuSection::IndirectLight, commandList);
-            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(indirectHeight)));
-            commandList->setScissors(RenderRect(0, 0, indirectWidth, indirectHeight));
-            const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr);
+            const uint32_t drawnHeight = tracedHalf ? indirectHeight * 2 : indirectHeight;
+            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(drawnHeight)));
+            commandList->setScissors(RenderRect(0, 0, indirectWidth, drawnHeight));
+            // The traced form reads the rays' textures too (cut-outs let the sun through their holes), so it takes the
+            // traced pass's layout and sets.
             commandList->setPipeline(tracedIndirect ? shaderLibrary->sceneIndirectTraced.pipeline.get() : shaderLibrary->sceneIndirect.pipeline.get());
-            commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
+            commandList->setGraphicsPipelineLayout(tracedIndirect ? shaderLibrary->sceneEffectsTraced.pipelineLayout.get() : shaderLibrary->sceneEffects.pipelineLayout.get());
             commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
+            if (tracedIndirect) {
+                commandList->setGraphicsDescriptorSet(res.rayTexturesSet->get(), 1);
+                commandList->setGraphicsDescriptorSet(res.rayTextureCacheSet, 2);
+            }
             commandList->setGraphicsPushConstants(0, &constants);
             commandList->setVertexBuffers(0, nullptr, 0, nullptr);
             commandList->drawInstanced(3, 1, 0, 0);

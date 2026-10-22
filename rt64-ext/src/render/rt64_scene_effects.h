@@ -338,6 +338,8 @@ namespace RT64 {
     void SetScenePathTracing(uint32_t bounces);
     // Graphics > Ray tracing's "Traced shadows of the player": off, Banjo (whoever is played) casts no traced shadows.
     void SetSceneRayTracingPlayerShadows(bool enabled);
+    // Graphics > Half-resolution ray tracing: the sun's traced shadows and the traced light beams at half size.
+    void SetSceneRayTracingHalf(bool enabled);
     // Banjo-Tooie: Traced light beams, 0 off to 1; direction (world, towards the light) for a room whose light comes
     // in at its windows from a known way, or null for the sun.
     void SetSceneTracedBeams(float strength, const float *direction);
