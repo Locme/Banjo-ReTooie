@@ -1967,7 +1967,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..2f5cfd8 100644
+index 9fae0d4..04f0bc6 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,20 @@
@@ -3534,7 +3534,7 @@ index 9fae0d4..2f5cfd8 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2811,183 @@ namespace RT64 {
+@@ -1450,12 +2811,186 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3559,8 +3559,11 @@ index 9fae0d4..2f5cfd8 100644
 +            // The material's shader: a picture drawn twice in layers (a Split-Up pad's) pairs within each layer.
 +            uint64_t shader;
 +        };
-+        std::vector<SeamPiece> seamPieces;
-+        std::vector<SeamPoint> seamPoints;
++        // Kept between calls (cleared here) so their memory is reused: building them anew was most of the renderer's CPU time.
++        thread_local std::vector<SeamPiece> seamPieces;
++        thread_local std::vector<SeamPoint> seamPoints;
++        seamPieces.clear();
++        seamPoints.clear();
 +        const bool seamsOn = SceneTextureSeams();
 +        float pickCursorX = 0.0f, pickCursorY = 0.0f;
 +        uint64_t pickHighlight = 0;
@@ -3718,7 +3721,7 @@ index 9fae0d4..2f5cfd8 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3138,7 @@ namespace RT64 {
+@@ -1606,6 +3141,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3726,7 +3729,7 @@ index 9fae0d4..2f5cfd8 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3215,20 @@ namespace RT64 {
+@@ -1682,6 +3218,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3747,7 +3750,7 @@ index 9fae0d4..2f5cfd8 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3294,2266 @@ namespace RT64 {
+@@ -1747,25 +3297,2280 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4556,16 +4559,28 @@ index 9fae0d4..2f5cfd8 100644
 +            auto same = [](const interop::float3 &a, const interop::float3 &b) {
 +                return (std::abs(a.x - b.x) < 2e-4f) && (std::abs(a.y - b.y) < 2e-4f) && (std::abs(a.z - b.z) <= (std::max(std::abs(a.z), std::abs(b.z)) * 2e-3f + 1e-4f));
 +            };
-+            // Each edge point by its cell, with its piece.
-+            std::unordered_multimap<uint64_t, uint32_t> pointsByCell;
-+            std::vector<uint32_t> pointPiece(seamPoints.size());
++            // Each edge point by its cell, with its piece: a list sorted by cell (a hash multimap allocated a node per point
++            // every frame, which with the lookups below was most of the renderer's CPU time in Terrydactyland).
++            thread_local std::vector<std::pair<uint64_t, uint32_t>> pointsByCell;
++            thread_local std::vector<uint32_t> pointPiece;
++            pointsByCell.clear();
++            pointPiece.assign(seamPoints.size(), 0);
 +            for (uint32_t i = 0; i < seamPieces.size(); i++) {
 +                for (uint32_t k = 0; k < seamPieces[i].pointCount; k++) {
 +                    const uint32_t pi = seamPieces[i].pointStart + k;
 +                    pointPiece[pi] = i;
-+                    pointsByCell.emplace(cellOf(seamPoints[pi].position.x, seamPoints[pi].position.y), pi);
++                    pointsByCell.emplace_back(cellOf(seamPoints[pi].position.x, seamPoints[pi].position.y), pi);
 +                }
 +            }
++            std::sort(pointsByCell.begin(), pointsByCell.end());
++            auto cellRange = [&](uint64_t cell) {
++                auto first = std::lower_bound(pointsByCell.begin(), pointsByCell.end(), std::pair<uint64_t, uint32_t>(cell, 0));
++                auto last = first;
++                while ((last != pointsByCell.end()) && (last->first == cell)) {
++                    last++;
++                }
++                return std::make_pair(first, last);
++            };
 +            // The piece whose edge (other) meets a's edge (edge) at two or more points.
 +            auto find = [&](uint32_t ai, uint32_t edge, uint32_t other) -> uint32_t {
 +                const SeamPiece &a = seamPieces[ai];
@@ -4579,12 +4594,14 @@ index 9fae0d4..2f5cfd8 100644
 +                    if ((pa.edges & edge) == 0) {
 +                        continue;
 +                    }
-+                    const int64_t cx = int64_t(std::floor(pa.position.x * 2048.0f)), cy = int64_t(std::floor(pa.position.y * 2048.0f));
++                    // Only the cells a point within same()'s reach (2e-4 on x and y, with a margin) can be in, usually one (it was all nine around).
++                    const int64_t x0 = int64_t(std::floor((pa.position.x - 2.5e-4f) * 2048.0f)), x1 = int64_t(std::floor((pa.position.x + 2.5e-4f) * 2048.0f));
++                    const int64_t y0 = int64_t(std::floor((pa.position.y - 2.5e-4f) * 2048.0f)), y1 = int64_t(std::floor((pa.position.y + 2.5e-4f) * 2048.0f));
 +                    uint32_t matchedHere[8] = {};
 +                    uint32_t matchedHereCount = 0;
-+                    for (int64_t dx = -1; dx <= 1; dx++) {
-+                        for (int64_t dy = -1; dy <= 1; dy++) {
-+                            auto range = pointsByCell.equal_range((uint64_t(uint32_t(int32_t(cx + dx))) << 32) | uint64_t(uint32_t(int32_t(cy + dy))));
++                    for (int64_t cellX = x0; cellX <= x1; cellX++) {
++                        for (int64_t cellY = y0; cellY <= y1; cellY++) {
++                            auto range = cellRange((uint64_t(uint32_t(int32_t(cellX))) << 32) | uint64_t(uint32_t(int32_t(cellY))));
 +                            for (auto it = range.first; it != range.second; it++) {
 +                                const SeamPoint &pb = seamPoints[it->second];
 +                                const uint32_t bi = pointPiece[it->second];
@@ -6019,7 +6036,7 @@ index 9fae0d4..2f5cfd8 100644
  
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
-@@ -1816,8 +5604,12 @@ namespace RT64 {
+@@ -1816,8 +5621,12 @@ namespace RT64 {
          }
  #   endif
  
