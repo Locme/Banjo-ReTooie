@@ -123,6 +123,11 @@ ultramodern::input::connected_device_info_t get_connected_device_info(int contro
 
 #include "icon_bytes.h"
 
+namespace plume {
+    // lib/rt64/src/contrib/plume/plume_vulkan.h (from lib-patches/plume.patch).
+    void SetPipelineCachePath(const std::filesystem::path &path);
+}
+
 namespace RT64 {
     // lib/rt64/src/render/rt64_raster_shader_cache.h (from lib-patches/rt64.patch).
     void SetShaderListPath(const std::filesystem::path &path);
@@ -814,6 +819,8 @@ int main(int argc, char** argv) {
     // background at start (roadmap 4.32), so a first visit to an area stutters less. On Windows the
     // compiled shaders are also kept, in cache/shaders, so that compile is quick after the first time.
     RT64::SetShaderListPath(app_folder / "cache" / "shader_list.bin");
+    // Vulkan also keeps the driver's compiled pipelines here (plume.patch), so the list is quick after the first start.
+    plume::SetPipelineCachePath(app_folder / "cache" / "vulkan_pipelines.bin");
     tooie::shader_progress::start();
 #ifdef _WIN32
     // The Windows build has no console, so keep what the game and the runtime

@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T540 Shader pipeline cache (Vulkan)
+- Asked: 2026-10-22 UTC
+- Build: claude/project-thread-6bme9v (not built on a PC yet)
+- Steps:
+  1. Start on Vulkan, let "Compiling shaders N%" reach 100%; cache/vulkan_pipelines.bin appears
+  2. Quit and start again: the percentage should run through far quicker
+  3. Send console.log: it shows "[shaders] Vulkan pipeline cache: N bytes read" (0 the first time)
+  4. Delete the file: the next start is slow once and the file comes back
+
 ## T539 Built-in ray tracing materials (texture sweep)
 - Asked: 2026-10-22 UTC
 - Build: claude/project-thread-rjo479 (not built on a PC yet)
