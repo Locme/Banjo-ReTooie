@@ -999,7 +999,7 @@ index 3227ab1..31bc74e 100644
      }
  
      void PresentQueue::threadLoop() {
-@@ -449,22 +657,58 @@ namespace RT64 {
+@@ -449,22 +657,61 @@ namespace RT64 {
          uint32_t displayTimingRate = UINT32_MAX;
          const bool displayTiming = ext.device->getCapabilities().displayTiming;
          bool swapChainValid = !ext.swapChain->needsResize();
@@ -1025,7 +1025,11 @@ index 3227ab1..31bc74e 100644
 +                else if (presentThreadRunning) {
                      processCursor = threadCursor;
                      threadCursor = (threadCursor + 1) % presents.size();
-                     skipPresent = (writeCursor != threadCursor);
+-                    skipPresent = (writeCursor != threadCursor);
++                    // Banjo-Tooie: only skip a present when two or more newer ones are queued. The game may keep two presents
++                    // queued (WaitForPresentBacklog) and this thread has just taken the older, so a skip on any newer one
++                    // dropped every other frame whenever the renderer was the limit (175 FPS and up showed about 60 with the game at 146).
++                    skipPresent = (((writeCursor - threadCursor + int(presents.size())) % int(presents.size())) >= 2);
                  }
              }
  
