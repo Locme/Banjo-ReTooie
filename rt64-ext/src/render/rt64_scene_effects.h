@@ -547,6 +547,10 @@ namespace RT64 {
     void FinishScenePick();
     // Fills the frame's parallax terms (after ComputeSceneGrass filled the camera's). False when it is off.
     bool ComputeSceneParallax(interop::FrameParams &frameParams);
+    // The camera terms parallax mapping finds a pixel's place with (FrameParams.parallaxCameras), for a draw's projection
+    // and its framebuffer's viewport. False for a projection that isn't a perspective one.
+    bool SceneParallaxCamera(const interop::float4x4 &projection, const interop::float3 &viewportScale, const interop::float3 &viewportTranslate,
+        float viewportWidth, float viewportHeight, interop::float4 &depthTerms, interop::float4 &projectionTerms);
     // A texture's brightness range for parallax mapping (darkest | lightest << 8), 0 for none or when the original
     // textures are off (only meaningful after ComputeSceneParallax returned true).
     uint32_t SceneParallaxTexture(uint64_t hash);

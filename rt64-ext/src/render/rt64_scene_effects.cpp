@@ -1372,6 +1372,20 @@ namespace RT64 {
         return interop::float4{ t.x - b * t.z, t.y - b * t.w, a * t.z, a * t.w };
     }
 
+    bool SceneParallaxCamera(const interop::float4x4 &projection, const interop::float3 &viewportScale, const interop::float3 &viewportTranslate,
+        float viewportWidth, float viewportHeight, interop::float4 &depthTerms, interop::float4 &projectionTerms)
+    {
+        // As ComputeSceneGrass works out grassDepthTerms and grassProjection.
+        const float (&m)[4][4] = projection.m;
+        if ((std::abs(m[2][3] + 1.0f) > 0.01f) && (std::abs(m[3][2] + 1.0f) > 0.01f)) {
+            return false;
+        }
+        const bool rowVector = std::abs(m[2][3] + 1.0f) <= std::abs(m[3][2] + 1.0f);
+        depthTerms = DepthTermsForViewport(rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] }, viewportScale.z, viewportTranslate.z);
+        projectionTerms = { m[0][0], m[1][1], viewportWidth, viewportHeight };
+        return true;
+    }
+
     bool ComputeSceneFur(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
         const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams)
     {

@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T547 Parallax flicker (each world pass has its own camera)
+- Asked: 2026-10-22 13:20 UTC
+- Build: main
+- Steps:
+  1. Parallax at 100, HD shadows on as you play them
+  2. Play where you saw parallax flatten out and come back, walking past walls and things that cast shadows
+- Look for: Whether parallax still turns itself off and on
+- Status: waiting for L
+
 ## T546 Displaced ground shaders built at start
 - Asked: 2026-10-22 UTC
 - Build: main
