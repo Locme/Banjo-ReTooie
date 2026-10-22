@@ -342,6 +342,19 @@ size_t tooie::material_pick::save_all() {
     return saved_materials.size();
 }
 
+namespace {
+    std::vector<uint64_t> effect_owned;
+    std::vector<uint64_t> parallax_owned;
+}
+
+void tooie::material_pick::set_owners(std::vector<uint64_t> effect, std::vector<uint64_t> parallax) {
+    std::sort(effect.begin(), effect.end());
+    std::sort(parallax.begin(), parallax.end());
+    std::lock_guard lock{ materials_mutex };
+    effect_owned = std::move(effect);
+    parallax_owned = std::move(parallax);
+}
+
 std::string tooie::material_pick::describe(uint64_t hash, uint32_t layer, uint32_t layers, Property chosen, bool show_all) {
     if (hash == 0) {
         return "No textured surface here";
@@ -368,6 +381,15 @@ std::string tooie::material_pick::describe(uint64_t hash, uint32_t layer, uint32
             (unsigned long long)hash, switched_off ? " (its built-in one is switched off)" : "", note, property_labels[chosen], show_all ? "on" : "off");
     }
     std::string result = text;
+    {
+        std::lock_guard lock{ materials_mutex };
+        if (std::binary_search(effect_owned.begin(), effect_owned.end(), hash)) {
+            result += "\nA shader effect owns this texture (ice, lamp, grass or glow): it gets no built-in material";
+        }
+        if (std::binary_search(parallax_owned.begin(), parallax_owned.end(), hash)) {
+            result += "\nParallax is on this texture too: it stacks with the material";
+        }
+    }
     if (layers > 1) {
         result += "\nLayer " + std::to_string((layer % layers) + 1) + " of " + std::to_string(layers);
     }

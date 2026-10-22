@@ -9,6 +9,7 @@
   3. In Ray Tracing Material Pick Mode press 9 (Show All) to see every textured material; aim at one: the label says built-in
   4. Left click a built-in one to switch it off; Shift + left puts the built-in back
   5. Check the frame rate in a metal-heavy room (rough metals use 3 to 4 rays per pixel)
+  6. Aim at ice, a lamp or grass: the label says a shader effect owns it and it has no built-in material; on a parallax stone it says parallax stacks
 - Look for: wrong calls (a stone shown as steel, a lamp as gold), too noisy or too costly spots. Send me the textures to fix.
 - Status: waiting for L
 

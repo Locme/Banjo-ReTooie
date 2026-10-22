@@ -4345,7 +4345,21 @@ namespace {
             std::vector<uint64_t> material_hashes;
             std::vector<uint32_t> albedo_roughness;
             std::vector<uint32_t> metalness_emissive;
+            // Textures a shader effect owns (ice, lamps, grass, glow) get no built-in material; picks of the player's win.
+            std::vector<uint64_t> effect_owned = ice;
+            for (const std::vector<uint64_t>* owned : { &ice_anywhere, &lamps, &grass, &edges, &glow }) {
+                effect_owned.insert(effect_owned.end(), owned->begin(), owned->end());
+            }
+            std::vector<uint64_t> parallax_owned;
+            for (const ParallaxTexture& texture : parallax_textures) {
+                parallax_owned.push_back(texture.hash);
+            }
+            tooie::material_pick::set_owners(effect_owned, parallax_owned);
+            std::sort(effect_owned.begin(), effect_owned.end());
             tooie::material_pick::for_each_effective([&](uint64_t hash, const tooie::material_pick::Material& material, bool own) {
+                if (!own && std::binary_search(effect_owned.begin(), effect_owned.end(), hash)) {
+                    return;
+                }
                 material_hashes.push_back(hash);
                 albedo_roughness.push_back(uint32_t(material.red) | (uint32_t(material.green) << 8) | (uint32_t(material.blue) << 16) | (uint32_t(material.roughness) << 24));
                 metalness_emissive.push_back(uint32_t(material.metalness) | (uint32_t(material.emissive) << 8) | (uint32_t(material.subsurface) << 24));

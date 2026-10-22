@@ -7,6 +7,7 @@
 // reflection rays are scattered over is: 0 a mirror, 100 brushed), metalness (0 a dielectric, 100 a metal that reflects in its
 // albedo's colour with no diffuse of its own), emissive (light it gives off into the traced scene, in percent of its own
 // colour) and subsurface (how much light a lamp or the sun behind it carries through, tinted by the albedo). The picks are kept in rt_material_tags.txt in the Dev Files folder and sent to RT64 (SetSceneRayMaterials).
+#include <vector>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -77,6 +78,8 @@ namespace tooie::material_pick {
     size_t save_all();
 
     // The label beside the cursor for a texture.
+    // Textures a shader effect (ice, lamp, grass, glow) or parallax also owns, for the label; the effect ones get no built-in material.
+    void set_owners(std::vector<uint64_t> effect, std::vector<uint64_t> parallax);
     std::string describe(uint64_t hash, uint32_t layer, uint32_t layers, Property chosen, bool show_all);
 }
 
