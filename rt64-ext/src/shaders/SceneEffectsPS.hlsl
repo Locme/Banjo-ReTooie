@@ -1291,11 +1291,22 @@ float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
     ray.TMin = 0.0f;
     // The direction keeps the view's scale, so t is in view units.
     ray.TMax = rayDistance;
-    // Cut-outs are passed by; the 3D grass is seen (away from where the ray starts).
+    // Cut-outs are seen where their texture is solid (a grate's bars, Banjo's textured parts: characters are drawn as
+    // cut-outs), passed by in their holes; the 3D grass is seen (away from where the ray starts).
     RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
     while (query.Proceed()) {
-        if ((query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) && (query.CandidateInstanceID() == RayGrassInstance) && RayGrassStops(ray, query.CandidateTriangleRayT())) {
+        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
+            continue;
+        }
+        if (query.CandidateInstanceID() == RayGrassInstance) {
+            if (RayGrassStops(ray, query.CandidateTriangleRayT())) {
+                query.CommitNonOpaqueTriangleHit();
+            }
+            continue;
+        }
+        const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
+        if (RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
             query.CommitNonOpaqueTriangleHit();
         }
     }
@@ -1336,6 +1347,14 @@ float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
         float3 remembered;
         if (RadianceLoad(ViewToWorldPoint(hit), remembered)) {
             return float4(remembered, 0.85f);
+        }
+    }
+    // Off the screen or hidden, the screen there shows something else (a mirror showed stripes of whatever was drawn
+    // where the hit would be, L 2026-10-22): a textured surface's own texel, a little dimmed for the light it lacks.
+    if (!inView && (query.CommittedInstanceID() != RayGrassInstance) && RayTexturesOn()) {
+        const uint hitGeometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
+        if ((RayGeometryFlags(hitGeometry) & 2u) != 0u) {
+            return float4(RayTexel(hitGeometry, query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics()).rgb * 0.8f, 0.8f);
         }
     }
     return float4(colour, inView ? RayEdgeFade(inside) : 0.5f);
