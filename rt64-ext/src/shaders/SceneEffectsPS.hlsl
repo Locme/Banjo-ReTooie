@@ -986,8 +986,12 @@ bool TraceOccluded(RayDesc ray, uint mode) {
             if (((RayGeometryFlags(geometry) & 1u) != 0u) && !RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
                 continue;
             }
+            // Mode 3: the level only (models, Banjo among them, let the ray by).
+            if ((mode == 3u) && ((RayGeometryFlags(geometry) & 4u) != 0u)) {
+                continue;
+            }
             const bool banjo = BanjoHit(geometry, ray.Origin + ray.Direction * query.CandidateTriangleRayT());
-            if ((mode == 1u) != banjo) {
+            if (((mode == 1u) || (mode == 3u)) != banjo) {
                 query.CommitNonOpaqueTriangleHit();
                 query.Abort();
             }
@@ -1205,8 +1209,10 @@ bool Enclosed(float3 worldStart) {
         ray.Direction = directions[k];
         ray.TMin = 0.0f;
         ray.TMax = 6000.0f;
-        // Banjo standing over the spot doesn't make it a room.
-        if (!TraceOccluded(ray, 1u)) {
+        // Only the level makes a room: Banjo standing over the spot doesn't, nor a model beside it (a note pedestal
+        // closed the one way out for the floor round it, so its shadow there came out lit and the rest dark: a
+        // reversed shadow, L 2026-10-22).
+        if (!TraceOccluded(ray, 3u)) {
             return false;
         }
     }
