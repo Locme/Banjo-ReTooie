@@ -620,7 +620,7 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..31bc74e 100644
+index 3227ab1..7afa390 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,10 +4,17 @@
@@ -936,7 +936,7 @@ index 3227ab1..31bc74e 100644
                  }
              }
  
-@@ -384,7 +554,7 @@ namespace RT64 {
+@@ -384,14 +554,16 @@ namespace RT64 {
              }
  
              // As soon as we're done with the first render target, we notify the workload queue it can proceed.
@@ -945,11 +945,24 @@ index 3227ab1..31bc74e 100644
                  notifyPresentId(present);
              }
  
-@@ -401,7 +571,44 @@ namespace RT64 {
+             if (presentFrame && swapChainValid) {
+                 // Wait until the approximate time the next present should be at the current intended rate.
+                 if ((presentTimestamp != Timestamp()) && (targetRate > 0) && (targetRate > viOriginalRate)) {
++                    const auto sleepStart = std::chrono::steady_clock::now();
+                     Timer::preciseSleepUntil(presentTimestamp + std::chrono::nanoseconds(1'000'000'000 / targetRate));
++                    paceSleepNs += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - sleepStart).count();
+                 }
+ 
+                 if (presentWaitEnabled) {
+@@ -400,8 +572,48 @@ namespace RT64 {
+ 
                  RenderCommandSemaphore *waitSemaphore = drawSemaphores[swapChainIndex].get();
                  presentTimestamp = Timer::current();
++                const auto presentCallStart = std::chrono::steady_clock::now();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
 -                presentProfiler.logAndRestart();
++                paceCallNs += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - presentCallStart).count();
++                paceShown++;
 +
 +                // Banjo-Tooie, headless testing: TOOIE_FAKE_VSYNC=<hz> holds each present to that rate, as a
 +                // vsync'd monitor does (software rendering on a virtual display presents at once).
@@ -991,7 +1004,7 @@ index 3227ab1..31bc74e 100644
              }
          }
      }
-@@ -428,6 +635,7 @@ namespace RT64 {
+@@ -428,6 +640,7 @@ namespace RT64 {
      void PresentQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % presents.size();
@@ -999,7 +1012,7 @@ index 3227ab1..31bc74e 100644
      }
  
      void PresentQueue::threadLoop() {
-@@ -449,22 +657,61 @@ namespace RT64 {
+@@ -449,22 +662,61 @@ namespace RT64 {
          uint32_t displayTimingRate = UINT32_MAX;
          const bool displayTiming = ext.device->getCapabilities().displayTiming;
          bool swapChainValid = !ext.swapChain->needsResize();
@@ -1065,7 +1078,24 @@ index 3227ab1..31bc74e 100644
                  const bool needsResize = ext.swapChain->needsResize() || !swapChainValid;
                  if (needsResize) {
                      ext.presentGraphicsWorker->commandList->begin();
-@@ -518,6 +762,15 @@ namespace RT64 {
+@@ -504,13 +756,16 @@ namespace RT64 {
+                 skipPresent = skipPresent || ext.swapChain->isEmpty();
+ 
+                 Present &present = presents[processCursor];
++                const auto workloadWaitStart = std::chrono::steady_clock::now();
+                 ext.workloadQueue->waitForWorkloadId(present.workloadId);
++                paceWorkloadWaitNs += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - workloadWaitStart).count();
+ 
+                 if (!presentThreadRunning) {
+                     continue;
+                 }
+ 
+                 if (skipPresent) {
++                    paceSkipped++;
+                     skipInterpolation();
+                     notifyPresentId(present);
+                 }
+@@ -518,6 +773,15 @@ namespace RT64 {
                      threadPresent(present, swapChainValid);
                  }
  
@@ -1081,7 +1111,7 @@ index 3227ab1..31bc74e 100644
                  if (!present.paused) {
                      if (!present.fbOperations.empty()) {
                          const std::scoped_lock lock(screenFbChangePoolMutex);
-@@ -528,6 +781,7 @@ namespace RT64 {
+@@ -528,6 +792,7 @@ namespace RT64 {
                      threadAdvanceBarrier();
                  }
  

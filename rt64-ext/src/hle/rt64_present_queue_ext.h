@@ -33,6 +33,14 @@ namespace RT64 {
     typedef std::function<void(uint32_t width, uint32_t height, std::vector<uint8_t> &&rgba)> ScreenshotCallback;
     void RequestScreenshot(ScreenshotCallback callback);
 
+    // Present counts and time since the last call (then reset): presents shown and skipped, time asleep to hold the
+    // target rate, in vkQueuePresent, and waiting for the renderer to finish a frame.
+    struct PaceStats {
+        uint64_t shown = 0, skipped = 0;
+        double sleepMs = 0.0, presentCallMs = 0.0, workloadWaitMs = 0.0;
+    };
+    PaceStats TakePaceStats();
+
     // Frame statistics for the Banjo-Tooie frame rate overlay, taken from the timings RT64
     // already keeps (presentProfiler and rendererGPUProfiler). Each read returns the totals
     // since the last read and starts them again from zero.
@@ -98,6 +106,9 @@ namespace RT64 {
         constexpr auto idleRepaintAfter = std::chrono::milliseconds(100);
         constexpr auto idleRepaintInterval = std::chrono::milliseconds(16);
         void countPresentDone();
+
+        // The present thread's pacing totals since the last TakePaceStats (the game's [pace] log line).
+        extern std::atomic<uint64_t> paceShown, paceSkipped, paceSleepNs, paceCallNs, paceWorkloadWaitNs;
 
         extern std::mutex screenshotMutex;
         extern ScreenshotCallback screenshotCallback;

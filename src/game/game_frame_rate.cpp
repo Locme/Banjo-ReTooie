@@ -71,6 +71,12 @@ namespace RT64 {
     // lib/rt64/src/hle/rt64_vi.h (from lib-patches/rt64.patch).
     void SetFixedFrameRate(uint32_t rate);
     bool WaitForPresentBacklog(uint32_t maxBacklog, uint32_t timeoutMs);
+    // rt64-ext/src/hle/rt64_present_queue_ext.h.
+    struct PaceStats {
+        uint64_t shown = 0, skipped = 0;
+        double sleepMs = 0.0, presentCallMs = 0.0, workloadWaitMs = 0.0;
+    };
+    PaceStats TakePaceStats();
     // lib/rt64/src/common/rt64_timer.h: short sleeps, then a spin for the last bit.
     struct Timer {
         static void preciseSleepUntil(const std::chrono::high_resolution_clock::time_point endTime);
@@ -291,6 +297,34 @@ namespace {
         }
     }
 
+    // Every 5 s in a paced mode: where the frames go, to tell a slow game from a slow screen. Game frames a
+    // second, the presents shown and skipped, and the milliseconds a second each side spent waiting: the game for
+    // the screen's backlog and for its own deadline, the present thread asleep to hold the rate, in the
+    // present call and for the renderer to finish a frame.
+    void log_pace(std::chrono::steady_clock::time_point start, std::chrono::steady_clock::time_point backlog_done,
+        std::chrono::steady_clock::time_point end, int32_t rate) {
+        using clock = std::chrono::steady_clock;
+        static clock::time_point window_start = clock::now();
+        static uint32_t frames = 0;
+        static double backlog_ms = 0.0, deadline_ms = 0.0;
+        frames++;
+        backlog_ms += std::chrono::duration<double, std::milli>(backlog_done - start).count();
+        deadline_ms += std::chrono::duration<double, std::milli>(end - backlog_done).count();
+        const double seconds = std::chrono::duration<double>(end - window_start).count();
+        if (seconds < 5.0) {
+            return;
+        }
+        const RT64::PaceStats screen = RT64::TakePaceStats();
+        std::printf("[pace] rate %d: game %.0f fps, presents shown %.0f/s skipped %.0f/s; per second: game waited %.0f ms for the screen backlog and %.0f ms for its deadline; present thread slept %.0f ms, in present %.0f ms, waited for the renderer %.0f ms\n",
+            (int)rate, frames / seconds, screen.shown / seconds, screen.skipped / seconds, backlog_ms / seconds, deadline_ms / seconds,
+            screen.sleepMs / seconds, screen.presentCallMs / seconds, screen.workloadWaitMs / seconds);
+        std::fflush(stdout);
+        window_start = end;
+        frames = 0;
+        backlog_ms = 0.0;
+        deadline_ms = 0.0;
+    }
+
     void pace_frame(uint8_t* rdram, int32_t rate) {
         if (pacer.done) {
             return;
@@ -494,10 +528,13 @@ extern "C" void tooie_frame_wait(uint8_t* rdram, recomp_context* ctx) {
         // Don't run more than two frames ahead of the screen: frames the renderer
         // can't show in time took GPU time from the ones it shows (L: Uncapped
         // made 300+ game frames a second but showed 100, 2026-10-16).
+        const auto pace_start = std::chrono::steady_clock::now();
         wait_for_backlog_yielding(rdram, 2, 100);
+        const auto pace_backlog_done = std::chrono::steady_clock::now();
         if (rate > 0) {
             pace_frame(rdram, rate);
         }
+        log_pace(pace_start, pace_backlog_done, std::chrono::steady_clock::now(), rate);
         // No VI wait: the extra VI after the last swap has shown it already.
         ctx->r2 = (int32_t)MEM_W(0, (gpr)(int32_t)0x80079704) + (int32_t)MEM_W(0, (gpr)(int32_t)0x80079138);
     }

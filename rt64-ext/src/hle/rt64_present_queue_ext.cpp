@@ -29,6 +29,8 @@ namespace RT64 {
         // sent nothing for idleRepaintAfter, every idleRepaintInterval.
         std::atomic<bool> idleRepaintWanted = false;
 
+        std::atomic<uint64_t> paceShown{ 0 }, paceSkipped{ 0 }, paceSleepNs{ 0 }, paceCallNs{ 0 }, paceWorkloadWaitNs{ 0 };
+
         void countPresentDone() {
             {
                 std::scoped_lock lock(backlogMutex);
@@ -36,6 +38,16 @@ namespace RT64 {
             }
             backlogCondition.notify_all();
         }
+    }
+
+    PaceStats TakePaceStats() {
+        PaceStats stats;
+        stats.shown = presentext::paceShown.exchange(0);
+        stats.skipped = presentext::paceSkipped.exchange(0);
+        stats.sleepMs = double(presentext::paceSleepNs.exchange(0)) / 1e6;
+        stats.presentCallMs = double(presentext::paceCallNs.exchange(0)) / 1e6;
+        stats.workloadWaitMs = double(presentext::paceWorkloadWaitNs.exchange(0)) / 1e6;
+        return stats;
     }
 
     void SetIdleRepaint(bool enabled) {
