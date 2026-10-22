@@ -43,8 +43,9 @@ GPUTile ParallaxHeightTile(GPUTile gpuTile) {
 
 // How deep the texture's surface lies at a place on it, 0 (the top) to 1 (the deepest): from a texture pack's height map
 // (white high, black deep), or else from the texture's brightness within its own range (x its darkest, y its lightest),
-// in the texture's shape (RASTER_PARALLAX_SHAPE_*, picked per texture in pick mode).
-float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, bool heightMap, uint shape) {
+// in the texture's shape (RASTER_PARALLAX_SHAPE_*, picked per texture in pick mode). blur: Sand and Smooth's brightness
+// blurred (five lookups); without it, one (the march's coarse steps, ParallaxOffset).
+float ParallaxDepthLookup(OtherMode otherMode, RenderFlags renderFlags, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, bool heightMap, uint shape, bool blur) {
     const float4 c = sampleTexture(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, gpuTile, false);
     if (heightMap) {
         return saturate(1.0f - c.r);
@@ -52,8 +53,8 @@ float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, f
 
     float luma = dot(c.rgb, float3(0.299f, 0.587f, 0.114f));
     // Sand and Smooth: the brightness blurred over about a texel and a half, so the surface has no stair steps where a
-    // small texture's texels meet (jaggies), at four more lookups a step.
-    if (shape >= 14u) {
+    // small texture's texels meet (jaggies), at four more lookups.
+    if (blur && (shape >= 14u)) {
         const float2 o = float2(0.75f, -0.75f);
         luma *= 0.2f;
         luma += 0.2f * dot(sampleTexture(otherMode, renderFlags, uv + o.xx, ddxUV, ddyUV, rdpTile, gpuTile, false).rgb, float3(0.299f, 0.587f, 0.114f));
@@ -122,6 +123,10 @@ float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, f
     }
 }
 
+float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, bool heightMap, uint shape) {
+    return ParallaxDepthLookup(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, gpuTile, range, heightMap, shape, true);
+}
+
 // How far to move the texture coordinates at this pixel so the textures show the place the view ray meets the height
 // field (xy), and how lit that place is (z): darker deep down and in the shadow the stones above it cast, with the
 // light from straight up in the world. No change where it is flat: seen edge on, or far away.
@@ -184,12 +189,14 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
         uvFull *= maxTexels / uvLength;
     }
 
-    // Down the ray in even steps (more of them seen at a slant) until it goes under the surface, then halving the
-    // last step to find where the two cross.
-    const float steps = lerp(params.w, 8.0f, vn);
+    // Down the ray in even steps (more of them seen at a slant, fewer far off, where the offset covers fewer pixels)
+    // until it goes under the surface, then halving the last step to find where the two cross. The steps look the
+    // brightness up once; the halving blurs it for Sand and Smooth. (24 steps of five lookups each all over a level of
+    // sandy rock took Terrydactyland to about 10 fps, L 2026-10-21.)
+    const float steps = max(lerp(params.w, 8.0f, vn) * (1.0f - 0.6f * saturate(distance / params.z)), 4.0f);
     const float stepSize = 1.0f / steps;
     float layer = 0.0f;
-    float surface = ParallaxDepthAt(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape);
+    float surface = ParallaxDepthLookup(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape, false);
     float previousLayer = 0.0f;
     float previousSurface = surface;
     [loop]
@@ -197,7 +204,7 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
         previousLayer = layer;
         previousSurface = surface;
         layer = min(layer + stepSize, 1.0f);
-        surface = ParallaxDepthAt(otherMode, renderFlags, uv + uvFull * layer, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape);
+        surface = ParallaxDepthLookup(otherMode, renderFlags, uv + uvFull * layer, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape, false);
     }
 
     [loop]
@@ -226,7 +233,9 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
     const float3 up = normalize(FrParams.grassWorldY.xyz);
     const float3 l = normalize(up + v * 0.35f);
     const float nl = dot(n, l);
-    if ((shading.y > 0.0f) && (nl > 0.05f) && (hit > 0.02f)) {
+    // (Fading out before the rest of it does, and not looked for past that, where the shadows are a pixel or two.)
+    const float shadowFade = 1.0f - smoothstep(params.y * 0.6f, params.y, distance);
+    if ((shading.y > 0.0f) && (nl > 0.05f) && (hit > 0.02f) && (shadowFade > 0.0f)) {
         const float3 lateralLight = (l - n * nl) / max(nl, 0.25f) * depthScale;
         float2 uvLight = float2(dot(gu, lateralLight), dot(gv, lateralLight));
         const float uvLightLength = length(uvLight);
@@ -238,10 +247,10 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
         for (uint k = 1; k <= 6; k++) {
             const float rise = hit * (float(k) / 6.0f);
             const float rayLayer = hit - rise;
-            const float s = ParallaxDepthAt(otherMode, renderFlags, hitUV + uvLight * rise, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape);
+            const float s = ParallaxDepthLookup(otherMode, renderFlags, hitUV + uvLight * rise, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape, false);
             shadow = max(shadow, saturate((rayLayer - s) * 3.0f) * (1.0f - float(k - 1) / 6.0f));
         }
-        lit *= 1.0f - shading.y * shadow;
+        lit *= 1.0f - shading.y * shadow * shadowFade;
     }
 
     return float3(uvFull * hit, lerp(1.0f, lit, fade));

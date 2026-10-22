@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T525 Terrydactyland frame rate with Tessellated sand or Parallax
+- Asked: 2026-10-22 00:54 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand only, go to Terrydactyland, walk around on the sand and note the fps
+  2. Turn Tessellated sand off and Parallax on, walk around the same place and note the fps
+  3. Turn both on
+- Look for: Is each one well above 10 fps now? Do footprints still show near Banjo? Does parallax on the rock and sand look the same as before up close (no new jaggies or flat spots)?
+- Status: waiting for L
+
 ## T524 Ice parallax shape
 - Asked: 2026-10-21 23:57 UTC
 - Build: main (Ice parallax)
