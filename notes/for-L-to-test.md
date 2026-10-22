@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T536 Built-in ray tracing materials (texture sweep)
+## T539 Built-in ray tracing materials (texture sweep)
 - Asked: 2026-10-22 UTC
 - Build: claude/project-thread-rjo479 (not built on a PC yet)
 - Steps:
@@ -13,7 +13,7 @@
 - Look for: wrong calls (a stone shown as steel, a lamp as gold), too noisy or too costly spots. Send me the textures to fix.
 - Status: waiting for L
 
-## T535 Ray traced BRDF and subsurface scattering
+## T538 Ray traced BRDF and subsurface scattering
 - Asked: 2026-10-22 12:06 UTC
 - Build: claude/project-thread-rjo479 (not built on a PC yet)
 - Steps:
@@ -26,7 +26,7 @@
 - Look for: BRDF 0 looks exactly as before. Above 0 shiny surfaces blur like brushed metal (grain at 70+ is expected). Leaves with the sun behind them glow and their shaded side keeps a soft glow rather than flat dark; nothing else changes. Frame rate cost of each?
 - Status: waiting for L
 
-## T534 Ray Tracing Material Pick Mode (PBR materials)
+## T537 Ray Tracing Material Pick Mode (PBR materials)
 - Asked: 2026-10-22 11:58 UTC
 - Build: claude/project-thread-rjo479 (not built on a PC yet)
 - Steps:
@@ -39,6 +39,25 @@
   7. Save Pick (the key you bound), restart and see it kept; Delete Saved Pick takes it off
   8. Turn Ray tracing off, and look at textures with no pick
 - Look for: Textures you did not pick look exactly as before. A picked one: albedo tints it; roughness widens the reflection from a mirror to a blur (noisy at high roughness is expected for now); metalness 100 darkens the surface to almost only its reflection, in the albedo's colour; emissive makes it glow past the shadows and lights what is near it, also showing in other shiny surfaces' reflections. Anything that costs frame rate with materials on? Does the label read well and does Show All (key 8) pulse every textured material?
+## T535 Ray tracing speed-ups (masks, kept level structure, lamps at half resolution)
+- Asked: 2026-10-22 12:45 UTC
+- Build: main
+- Steps:
+  1. Ray tracing on, Frame overlay Full; compare "ray tracing build" and "traced effects" with the numbers before this build (same spot)
+  2. Check lamp and fire shadows (Bottles' House, a cave), Banjo's shadow with Traced shadows of the player off and on, and sun shadows outdoors
+  3. Turn on Half-resolution ray tracing indoors with lamps and check the lamp light
+- Look for: Same picture as before with Half-resolution off (lamp light may reach a little closer to the lamp's own fitting). Faster: headless Spiral Mountain build 4 -> 1.5 ms (the level's structure is kept), traced effects about 290 -> 200 ms. Wrong or missing shadows after a door or platform moves would mean the kept level structure missed a change
+- Status: waiting for L
+
+## T534 Half-resolution ray tracing (175 FPS)
+- Asked: 2026-10-22 12:20 UTC
+- Build: main
+- Steps:
+  1. Ray tracing on, Traced light beams at 60, Frame overlay Full
+  2. In Terrydactyland at 175 FPS, note "traced effects" and the fps
+  3. Turn on Graphics > Ray Tracing > Half-resolution ray tracing (applies live) and note them again
+  4. Look at sun shadow edges and light beams with it on
+- Look for: Traced effects should drop by about half (headless: 256-318 ms down to about 88 ms plus about 40 ms more in "AO and bounce light", which now traces them). Shadow edges a little softer, no blocky edges or shadows bleeding across objects. Off should look exactly as before
 - Status: waiting for L
 
 ## T533 Displaced ground cost (floors' own shaders)

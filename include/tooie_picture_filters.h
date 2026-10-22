@@ -74,6 +74,7 @@ namespace tooie::picture_filters {
     inline const std::string ray_tracing_tiles_option = "ray_tracing_tiles";
     inline const std::string ray_tracing_smooth_option = "ray_tracing_smooth";
     inline const std::string ray_tracing_hit_colours_option = "ray_tracing_hit_colours";
+    inline const std::string ray_tracing_half_option = "ray_tracing_half";
     inline const std::string ray_tracing_player_shadows_option = "ray_tracing_player_shadows";
     inline const std::string ray_tracing_smoothing_option = "ray_tracing_smoothing";
     // Ray traced BRDF (reflection roughness for every traced reflection, switching the screen-space Stochastic reflections off) and

@@ -125,6 +125,13 @@ namespace RT64 {
             uint64_t grassBuiltGeneration = UINT64_MAX;
             const RenderBuffer *grassBuiltVertices = nullptr;
             uint32_t bvhInstanceCount = 0;
+            const RenderBuffer *bvhInstanceBuffers[3] = {};
+            // The level's own draws (bvhBlas holds the models'): kept while their fingerprint (levelKey) is the same.
+            std::unique_ptr<RenderBuffer> levelBlasBuffer;
+            std::unique_ptr<RenderAccelerationStructure> levelBlas;
+            uint64_t levelBlasSize = 0;
+            uint64_t levelBuiltKey = 0;
+            size_t levelBuiltCount = 0;
             bool bvhReady = false;
             // A structure has been built at least once: a pass with no casters of its own reuses it (it holds the world
             // in world space, so it stays right as the camera moves).
@@ -324,6 +331,7 @@ namespace RT64 {
     static std::atomic<uint32_t> rayTracingSubsurfacePercent{ 0 };
     static std::atomic<bool> rayTracingHitColours{ false };
     static std::atomic<bool> rayTracingPlayerShadows{ true };
+    static std::atomic<bool> rayTracingHalf{ false };
     static std::atomic<float> rayTracingSmoothing{ 0.5f };
     static std::atomic<uint32_t> pathTracingBounces{ 0 };
     // Traced light beams: strength, then the room's light direction (world, towards it), or 0 for the sun.
@@ -537,6 +545,10 @@ namespace RT64 {
 
     void SetSceneRayTracingHitColours(bool enabled) {
         rayTracingHitColours.store(enabled);
+    }
+
+    void SetSceneRayTracingHalf(bool enabled) {
+        rayTracingHalf.store(enabled);
     }
 
     void SetSceneRayTracingPlayerShadows(bool enabled) {
@@ -2468,7 +2480,7 @@ namespace RT64 {
     // positions the vertex processor worked out, under one instance of the identity transform. Does nothing unless
     // RayTracingActive(); on a failure the pass falls back to the depth march (bvhReady stays false).
     void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
-        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, const SceneRayGrass &grass)
+        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, const SceneRayGrass &grass, uint64_t levelKey)
     {
         Resources &res = resourcesFor(worker);
         res.bvhReady = false;
@@ -2581,10 +2593,11 @@ namespace RT64 {
             // 3 when the scene also has a level cut-out (SunThroughCutout has something to find).
             mapped[8] = (building && haveTextureBuffers && (res.rayTextureCacheSet != nullptr)) ? (rayScenesLevelCutouts.load() ? 3.0f : 1.0f) : 0.0f;
             // Whether the player casts traced shadows (Traced shadows of the player).
-            // Plus 2 when the scene has a draw with a ray tracing material (Ray Tracing Material Pick Mode), plus the Ray traced
-            // BRDF roughness in percent times 4 and the subsurface scattering strength in percent times 512.
-            mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayScenesPbr.load() ? 2.0f : 0.0f) +
-                float(rayTracingBrdfPercent.load() * 4u + rayTracingSubsurfacePercent.load() * 512u);
+            // Player shadows off (1), plus 2 for the half-size traced shadows and beams (the indirect pass draws them), plus 4 when the
+            // scene has a draw with a ray tracing material (Ray Tracing Material Pick Mode), plus the Ray traced BRDF roughness in
+            // percent times 8 and the subsurface scattering strength in percent times 1024.
+            mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayTracingHalf.load() ? 2.0f : 0.0f) + (rayScenesPbr.load() ? 4.0f : 0.0f) +
+                float(rayTracingBrdfPercent.load() * 8u + rayTracingSubsurfacePercent.load() * 1024u);
             // The 3D grass (when it is in the structure): how far along a ray its blades are passed by, so a ray from a
             // blade or the ground among them (whose surfaces the picture only roughly has) isn't stopped by its own
             // blade and its neighbours: one and a half blade heights.
@@ -2615,15 +2628,27 @@ namespace RT64 {
         static const bool bvhLog = (getenv("TOOIE_RT_LOG") != nullptr);
         // One geometry a draw (so a ray's geometry index finds the draw, its tile and its texture coordinates): solid
         // draws opaque, cut-outs not (the rays that read textures test them; the rest pass them by).
-        thread_local std::vector<RenderBottomLevelASMesh> meshes;
-        meshes.clear();
+        // The level's own draws and the models' (characters, enemies, objects) go in separate bottom level structures:
+        // the level's is kept while it is unchanged (levelKey), built for fast tracing, and the models' is built again
+        // each frame. Rays that only care about models (Banjo's shadow) or only the level (Enclosed) pick theirs by mask
+        // (SceneEffectsPS.hlsl RayLevelMask, RayModelMask). The geometry table has the level's from 0 and the models'
+        // from MaxGeometries (the models' instance's custom index), so a ray's geometry finds its draw either way.
+        thread_local std::vector<RenderBottomLevelASMesh> levelMeshes;
+        thread_local std::vector<RenderBottomLevelASMesh> modelMeshes;
+        levelMeshes.clear();
+        modelMeshes.clear();
         bool sceneShine = false;
         bool sceneLevelCutouts = false;
         bool scenePbr = false;
         uint32_t *geometryTable = reinterpret_cast<uint32_t *>(res.rayGeometryBuffer->map());
-        for (size_t i = 0; (i < drawCount) && (meshes.size() < MaxGeometries); i++) {
+        for (size_t i = 0; i < drawCount; i++) {
             const SceneRayDraw &draw = draws[i];
             if (draw.indexCount < 3) {
+                continue;
+            }
+            const bool model = (draw.flags & SceneRayDrawModel) != 0;
+            std::vector<RenderBottomLevelASMesh> &meshes = model ? modelMeshes : levelMeshes;
+            if (meshes.size() >= MaxGeometries) {
                 continue;
             }
             const bool cutout = (draw.flags & SceneRayDrawCutout) != 0;
@@ -2632,7 +2657,7 @@ namespace RT64 {
             scenePbr = scenePbr || ((draw.flags >> (SceneRayDrawMaterialShift + SceneRayMaterialIndexShift)) != 0u);
             sceneShine = sceneShine || (material == 12) || (material == 14) || (material == 16);
             sceneLevelCutouts = sceneLevelCutouts || ((draw.flags & (SceneRayDrawCutout | SceneRayDrawModel)) == SceneRayDrawCutout);
-            uint32_t *entry = geometryTable + meshes.size() * 4;
+            uint32_t *entry = geometryTable + ((model ? MaxGeometries : 0) + meshes.size()) * 4;
             entry[0] = draw.indexStart;
             entry[1] = draw.tileIndex;
             entry[2] = draw.flags & ((1u << SceneRayDrawMaterialShift) - 1u);
@@ -2654,14 +2679,24 @@ namespace RT64 {
         rayScenesPbr.store(scenePbr);
         rayScenesShine.store(sceneShine);
         rayScenesLevelCutouts.store(sceneLevelCutouts);
-        if (meshes.empty()) {
+        if (levelMeshes.empty() && modelMeshes.empty()) {
             return;
         }
         res.bvhReady = false;
         RenderDevice *device = worker->device;
         RenderCommandList *commandList = worker->commandList.get();
-        RenderBottomLevelASBuildInfo blasInfo;
-        device->setBottomLevelASBuildInfo(blasInfo, meshes.data(), uint32_t(meshes.size()), true, false);
+        // The level's: built again only when its draws changed (or with no fingerprint to tell).
+        const bool withLevel = !levelMeshes.empty();
+        const bool levelKept = withLevel && (levelKey != 0) && (res.levelBuiltKey == levelKey) && (res.levelBuiltCount == levelMeshes.size()) && (res.levelBlas != nullptr);
+        RenderBottomLevelASBuildInfo levelInfo;
+        if (withLevel && !levelKept) {
+            device->setBottomLevelASBuildInfo(levelInfo, levelMeshes.data(), uint32_t(levelMeshes.size()), false, true);
+        }
+        const bool withModels = !modelMeshes.empty();
+        RenderBottomLevelASBuildInfo modelInfo;
+        if (withModels) {
+            device->setBottomLevelASBuildInfo(modelInfo, modelMeshes.data(), uint32_t(modelMeshes.size()), true, false);
+        }
         RenderBottomLevelASBuildInfo grassInfo;
         if (withGrass) {
             const RenderBottomLevelASMesh grassMesh(RenderBufferReference(), RenderBufferReference(grass.vertices, 0), RenderFormat::UNKNOWN, RenderFormat::R32G32B32_FLOAT,
@@ -2670,41 +2705,51 @@ namespace RT64 {
         }
 
         // Buffers that are too small are replaced (the old ones kept until the GPU is done with them).
-        bool instancesChanged = false;
-        if ((res.bvhBlas == nullptr) || (res.bvhBlasSize < blasInfo.accelerationStructureSize)) {
-            const uint64_t size = std::max<uint64_t>(blasInfo.accelerationStructureSize + blasInfo.accelerationStructureSize / 2, 1u << 20);
-            res.retireLater(std::move(res.bvhBlas));
-            res.retireLater(std::move(res.bvhBlasBuffer));
-            res.bvhBlasBuffer = device->createBuffer(RenderBufferDesc::AccelerationStructureBuffer(size));
-            res.bvhBlasBuffer->setName("Scene Effects BLAS");
-            res.bvhBlas = device->createAccelerationStructure(RenderAccelerationStructureDesc(RenderAccelerationStructureType::BOTTOM_LEVEL, RenderBufferReference(res.bvhBlasBuffer.get()), size));
-            res.bvhBlasSize = size;
-            instancesChanged = true;
+        auto grow = [&](std::unique_ptr<RenderBuffer> &buffer, std::unique_ptr<RenderAccelerationStructure> &structure, uint64_t &capacity, uint64_t needed, const char *name) {
+            if ((structure != nullptr) && (capacity >= needed)) {
+                return false;
+            }
+            const uint64_t size = std::max<uint64_t>(needed + needed / 2, 1u << 20);
+            res.retireLater(std::move(structure));
+            res.retireLater(std::move(buffer));
+            buffer = device->createBuffer(RenderBufferDesc::AccelerationStructureBuffer(size));
+            buffer->setName(name);
+            structure = device->createAccelerationStructure(RenderAccelerationStructureDesc(RenderAccelerationStructureType::BOTTOM_LEVEL, RenderBufferReference(buffer.get()), size));
+            capacity = size;
+            return true;
+        };
+        if (withLevel && !levelKept) {
+            grow(res.levelBlasBuffer, res.levelBlas, res.levelBlasSize, levelInfo.accelerationStructureSize, "Scene Effects level BLAS");
+        }
+        if (withModels) {
+            grow(res.bvhBlasBuffer, res.bvhBlas, res.bvhBlasSize, modelInfo.accelerationStructureSize, "Scene Effects models BLAS");
+        }
+        if (withGrass && grow(res.grassBlasBuffer, res.grassBlas, res.grassBlasSize, grassInfo.accelerationStructureSize, "Scene Effects grass BLAS")) {
+            res.grassBuiltGeneration = UINT64_MAX;
         }
         bool grassBuild = false;
-        if (withGrass && ((res.grassBlas == nullptr) || (res.grassBlasSize < grassInfo.accelerationStructureSize))) {
-            const uint64_t size = std::max<uint64_t>(grassInfo.accelerationStructureSize, 1u << 20);
-            res.retireLater(std::move(res.grassBlas));
-            res.retireLater(std::move(res.grassBlasBuffer));
-            res.grassBlasBuffer = device->createBuffer(RenderBufferDesc::AccelerationStructureBuffer(size));
-            res.grassBlasBuffer->setName("Scene Effects grass BLAS");
-            res.grassBlas = device->createAccelerationStructure(RenderAccelerationStructureDesc(RenderAccelerationStructureType::BOTTOM_LEVEL, RenderBufferReference(res.grassBlasBuffer.get()), size));
-            res.grassBlasSize = size;
-            res.grassBuiltGeneration = UINT64_MAX;
-            instancesChanged = true;
-        }
         if (withGrass) {
             grassBuild = (res.grassBuiltGeneration != grass.generation) || (res.grassBuiltVertices != grass.vertices);
         }
-        RenderTopLevelASInstance instances[2] = {
-            RenderTopLevelASInstance(RenderBufferReference(res.bvhBlasBuffer.get()), 0, 0x01, 0, true, RenderAffineTransform()),
-            RenderTopLevelASInstance(RenderBufferReference(res.grassBlasBuffer.get()), 1, 0x02, 0, true, RenderAffineTransform())
-        };
-        const uint32_t instanceCount = withGrass ? 2u : 1u;
-        if (instanceCount != res.bvhInstanceCount) {
-            res.bvhInstanceCount = instanceCount;
-            instancesChanged = true;
+        // Instance 0 the level (mask 1), the models (mask 4, custom index MaxGeometries), the grass (mask 2, RayGrassInstance).
+        RenderTopLevelASInstance instances[3];
+        const RenderBuffer *instanceBuffers[3] = {};
+        uint32_t instanceCount = 0;
+        if (withLevel) {
+            instanceBuffers[instanceCount] = res.levelBlasBuffer.get();
+            instances[instanceCount++] = RenderTopLevelASInstance(RenderBufferReference(res.levelBlasBuffer.get()), 0, 0x01, 0, true, RenderAffineTransform());
         }
+        if (withModels) {
+            instanceBuffers[instanceCount] = res.bvhBlasBuffer.get();
+            instances[instanceCount++] = RenderTopLevelASInstance(RenderBufferReference(res.bvhBlasBuffer.get()), uint32_t(MaxGeometries), 0x04, 0, true, RenderAffineTransform());
+        }
+        if (withGrass) {
+            instanceBuffers[instanceCount] = res.grassBlasBuffer.get();
+            instances[instanceCount++] = RenderTopLevelASInstance(RenderBufferReference(res.grassBlasBuffer.get()), 0xFFFFFFu, 0x02, 0, true, RenderAffineTransform());
+        }
+        const bool instancesChanged = (instanceCount != res.bvhInstanceCount) || !std::equal(instanceBuffers, instanceBuffers + 3, res.bvhInstanceBuffers);
+        res.bvhInstanceCount = instanceCount;
+        std::copy(instanceBuffers, instanceBuffers + 3, res.bvhInstanceBuffers);
         RenderTopLevelASBuildInfo tlasInfo;
         device->setTopLevelASBuildInfo(tlasInfo, instances, instanceCount, true, false);
         if ((res.bvhTlas == nullptr) || (res.bvhTlasSize < tlasInfo.accelerationStructureSize)) {
@@ -2716,7 +2761,8 @@ namespace RT64 {
             res.bvhTlas = device->createAccelerationStructure(RenderAccelerationStructureDesc(RenderAccelerationStructureType::TOP_LEVEL, RenderBufferReference(res.bvhTlasBuffer.get()), size));
             res.bvhTlasSize = size;
         }
-        const uint64_t scratchNeeded = std::max({ blasInfo.scratchSize, tlasInfo.scratchSize, withGrass ? grassInfo.scratchSize : 0 });
+        const uint64_t scratchNeeded = std::max({ (withLevel && !levelKept) ? levelInfo.scratchSize : 0, withModels ? modelInfo.scratchSize : 0, tlasInfo.scratchSize,
+            withGrass ? grassInfo.scratchSize : 0 });
         if ((res.bvhScratchBuffer == nullptr) || (res.bvhScratchSize < scratchNeeded)) {
             const uint64_t size = std::max<uint64_t>(scratchNeeded + scratchNeeded / 2, 1u << 20);
             res.retireLater(std::move(res.bvhScratchBuffer));
@@ -2732,38 +2778,41 @@ namespace RT64 {
             memcpy(mapped, tlasInfo.instancesBufferData.data(), tlasInfo.instancesBufferData.size());
             res.bvhInstancesBuffer->unmap();
         }
-        if ((res.bvhBlas == nullptr) || (res.bvhTlas == nullptr) || (res.bvhScratchBuffer == nullptr) || (res.bvhInstancesBuffer == nullptr)) {
+        if ((withLevel && (res.levelBlas == nullptr)) || (withModels && (res.bvhBlas == nullptr)) || (res.bvhTlas == nullptr) || (res.bvhScratchBuffer == nullptr) || (res.bvhInstancesBuffer == nullptr)) {
             return;
         }
 
         GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::RayTracingBuild, false));
         const int buildSpan = WorkloadGpuSections().start(GpuSection::RayTracingBuild, commandList);
-        commandList->barriers(RenderBarrierStage::COMPUTE, {
-            RenderBufferBarrier(const_cast<RenderBuffer *>(worldPos), RenderBufferAccess::READ),
-            RenderBufferBarrier(const_cast<RenderBuffer *>(indices), RenderBufferAccess::READ),
-            RenderBufferBarrier(res.bvhBlasBuffer.get(), RenderBufferAccess::WRITE),
-            RenderBufferBarrier(res.bvhScratchBuffer.get(), RenderBufferAccess::WRITE)
-        });
-        commandList->buildBottomLevelAS(res.bvhBlas.get(), RenderBufferReference(res.bvhScratchBuffer.get()), blasInfo);
-        if (grassBuild) {
+        // Each build in turn through the one scratch buffer.
+        auto buildBottom = [&](RenderAccelerationStructure *structure, RenderBuffer *buffer, const RenderBottomLevelASBuildInfo &info, const RenderBuffer *vertices) {
             commandList->barriers(RenderBarrierStage::COMPUTE, {
-                RenderBufferBarrier(const_cast<RenderBuffer *>(grass.vertices), RenderBufferAccess::READ),
-                RenderBufferBarrier(res.grassBlasBuffer.get(), RenderBufferAccess::WRITE),
+                RenderBufferBarrier(const_cast<RenderBuffer *>(vertices), RenderBufferAccess::READ),
+                RenderBufferBarrier(const_cast<RenderBuffer *>(indices), RenderBufferAccess::READ),
+                RenderBufferBarrier(buffer, RenderBufferAccess::WRITE),
                 RenderBufferBarrier(res.bvhScratchBuffer.get(), RenderBufferAccess::WRITE)
             });
-            commandList->buildBottomLevelAS(res.grassBlas.get(), RenderBufferReference(res.bvhScratchBuffer.get()), grassInfo);
+            commandList->buildBottomLevelAS(structure, RenderBufferReference(res.bvhScratchBuffer.get()), info);
+        };
+        if (withLevel && !levelKept) {
+            buildBottom(res.levelBlas.get(), res.levelBlasBuffer.get(), levelInfo, worldPos);
+            res.levelBuiltKey = levelKey;
+            res.levelBuiltCount = levelMeshes.size();
+        }
+        if (withModels) {
+            buildBottom(res.bvhBlas.get(), res.bvhBlasBuffer.get(), modelInfo, worldPos);
+        }
+        if (grassBuild) {
+            buildBottom(res.grassBlas.get(), res.grassBlasBuffer.get(), grassInfo, grass.vertices);
             res.grassBuiltGeneration = grass.generation;
             res.grassBuiltVertices = grass.vertices;
         }
         commandList->barriers(RenderBarrierStage::COMPUTE, {
-            RenderBufferBarrier(res.bvhBlasBuffer.get(), RenderBufferAccess::READ),
             RenderBufferBarrier(res.bvhScratchBuffer.get(), RenderBufferAccess::WRITE),
             RenderBufferBarrier(res.bvhTlasBuffer.get(), RenderBufferAccess::WRITE)
         });
-        if (withGrass) {
-            commandList->barriers(RenderBarrierStage::COMPUTE, {
-                RenderBufferBarrier(res.grassBlasBuffer.get(), RenderBufferAccess::READ)
-            });
+        for (uint32_t i = 0; i < instanceCount; i++) {
+            commandList->barriers(RenderBarrierStage::COMPUTE, { RenderBufferBarrier(const_cast<RenderBuffer *>(instanceBuffers[i]), RenderBufferAccess::READ) });
         }
         commandList->buildTopLevelAS(res.bvhTlas.get(), RenderBufferReference(res.bvhScratchBuffer.get()), RenderBufferReference(res.bvhInstancesBuffer.get()), tlasInfo);
         commandList->barriers(RenderBarrierStage::GRAPHICS | RenderBarrierStage::COMPUTE, {
@@ -2778,8 +2827,8 @@ namespace RT64 {
             static auto lastLog = std::chrono::steady_clock::now();
             if (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(1000)) {
                 lastLog = std::chrono::steady_clock::now();
-                fprintf(stderr, "[rt] BVH built: %zu geometries, %u triangles, BLAS %llu KB, TLAS %llu KB, scratch %llu KB, grass %s (BLAS %llu KB, reach %.0f)\n", meshes.size(), blasInfo.primitiveCount,
-                    (unsigned long long)(res.bvhBlasSize / 1024), (unsigned long long)(res.bvhTlasSize / 1024), (unsigned long long)(res.bvhScratchSize / 1024),
+                fprintf(stderr, "[rt] BVH built: level %zu geometries (%s, BLAS %llu KB), models %zu geometries (BLAS %llu KB), TLAS %llu KB, scratch %llu KB, grass %s (BLAS %llu KB, reach %.0f)\n",
+                    levelMeshes.size(), levelKept ? "kept" : "rebuilt", (unsigned long long)(res.levelBlasSize / 1024), modelMeshes.size(), (unsigned long long)(res.bvhBlasSize / 1024), (unsigned long long)(res.bvhTlasSize / 1024), (unsigned long long)(res.bvhScratchSize / 1024),
                     withGrass ? (grassBuild ? "rebuilt" : "kept") : "none", (unsigned long long)(res.grassBlasSize / 1024), grass.reach);
                 uint32_t modelDraws = 0, modelTris = 0, cutDraws = 0, shineDraws = 0, materialDraws = 0;
                 for (size_t i = 0; i < drawCount; i++) {
@@ -3460,7 +3509,9 @@ namespace RT64 {
         }
 
         // The indirect pass's target, at half size (made again after a resize) and cleared to no occlusion and no
-        // light, so the pass can always read it.
+        // light, so the pass can always read it. Three times as tall: the bands below hold the half-size traced sun
+        // shadows and light beams, then the lamps' light (Half-resolution ray tracing), which the same pass draws when
+        // that is on.
         const uint32_t indirectWidth = std::max(colorTarget->width / 2, 1U);
         const uint32_t indirectHeight = std::max(colorTarget->height / 2, 1U);
         if ((res.indirectTexture != nullptr) && ((res.indirectWidth != indirectWidth) || (res.indirectHeight != indirectHeight))) {
@@ -3468,7 +3519,7 @@ namespace RT64 {
             res.retireLater(std::move(res.indirectTexture));
         }
         if (res.indirectTexture == nullptr) {
-            res.indirectTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(indirectWidth, indirectHeight, RenderFormat::R16G16B16A16_FLOAT));
+            res.indirectTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(indirectWidth, indirectHeight * 3, RenderFormat::R16G16B16A16_FLOAT));
             res.indirectTexture->setName("Scene Effects Indirect");
             const RenderTexture *texture = res.indirectTexture.get();
             res.indirectFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
@@ -3562,17 +3613,27 @@ namespace RT64 {
         WorkloadGpuSections().end(effectsSpan);
 
         // The indirect pass: GTAO and SSGI at half size, with the same constants and inputs as the pass, which
-        // gathers them. Only when one of them is on (SSGI only while the pass draws the scene, as it reads it).
-        if (((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) {
+        // gathers them. Only when one of them is on (SSGI only while the pass draws the scene, as it reads it), or
+        // for Half-resolution ray tracing: its lower half, the traced sun shadows and light beams for the pass to read.
+        const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr) &&
+            (res.rayTexturesSet != nullptr) && (res.rayTextureCacheSet != nullptr);
+        const bool tracedHalf = tracedIndirect && rayTracingHalf.load();
+        if ((((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) || tracedHalf) {
             commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
             commandList->setFramebuffer(res.indirectFramebuffer.get());
             GpuSectionScope timedIndirect(WorkloadGpuSections(), GpuSection::IndirectLight, commandList);
-            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(indirectHeight)));
-            commandList->setScissors(RenderRect(0, 0, indirectWidth, indirectHeight));
-            const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr);
+            const uint32_t drawnHeight = tracedHalf ? indirectHeight * 3 : indirectHeight;
+            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(drawnHeight)));
+            commandList->setScissors(RenderRect(0, 0, indirectWidth, drawnHeight));
+            // The traced form reads the rays' textures too (cut-outs let the sun through their holes), so it takes the
+            // traced pass's layout and sets.
             commandList->setPipeline(tracedIndirect ? shaderLibrary->sceneIndirectTraced.pipeline.get() : shaderLibrary->sceneIndirect.pipeline.get());
-            commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
+            commandList->setGraphicsPipelineLayout(tracedIndirect ? shaderLibrary->sceneEffectsTraced.pipelineLayout.get() : shaderLibrary->sceneEffects.pipelineLayout.get());
             commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
+            if (tracedIndirect) {
+                commandList->setGraphicsDescriptorSet(res.rayTexturesSet->get(), 1);
+                commandList->setGraphicsDescriptorSet(res.rayTextureCacheSet, 2);
+            }
             commandList->setGraphicsPushConstants(0, &constants);
             commandList->setVertexBuffers(0, nullptr, 0, nullptr);
             commandList->drawInstanced(3, 1, 0, 0);

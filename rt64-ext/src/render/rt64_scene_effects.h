@@ -326,7 +326,7 @@ namespace RT64 {
         float reach = 0.0f;
     };
     void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
-        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, const SceneRayGrass &grass);
+        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, const SceneRayGrass &grass, uint64_t levelKey = 0);
     void SetSceneRayTracing(bool enabled);
     // Banjo-Tooie: Graphics > Ray tracing strength (0 to 1, 0.6 the default): the least each traced effect shows at while
     // ray tracing is active (see RefreshReflections).
@@ -346,6 +346,8 @@ namespace RT64 {
     void SetScenePathTracing(uint32_t bounces);
     // Graphics > Ray tracing's "Traced shadows of the player": off, Banjo (whoever is played) casts no traced shadows.
     void SetSceneRayTracingPlayerShadows(bool enabled);
+    // Graphics > Half-resolution ray tracing: the sun's traced shadows and the traced light beams at half size.
+    void SetSceneRayTracingHalf(bool enabled);
     // Banjo-Tooie: Traced light beams, 0 off to 1; direction (world, towards the light) for a room whose light comes
     // in at its windows from a known way, or null for the sun.
     void SetSceneTracedBeams(float strength, const float *direction);
