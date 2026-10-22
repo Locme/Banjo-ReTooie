@@ -67,10 +67,9 @@ bool SnowTrailInBox(float2 low, float2 high) {
     return false;
 }
 
-// Sand's footprints are shallow: past this far from the camera they are only a few pixels across, so the sand there isn't
-// cut for them (by each edge's middle, so the triangles either side of an edge agree) and shows none. (900 cut most of
-// Terrydactyland's big sand triangles up to 64 times over: about 10 fps there, L 2026-10-21.)
-static const float SandTessReach = 400.0f;
+// Sand's footprints are shallow: past this far from the camera they are smaller than a pixel, so the sand there isn't cut
+// for them (by each edge's middle, so the triangles either side of an edge agree).
+static const float SandTessReach = 900.0f;
 
 float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
     // (Untouched snow lies flat over the ground, raised by the same height all over a triangle: nothing to cut.)
