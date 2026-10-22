@@ -466,6 +466,15 @@ void tooie::day_night::tick(uint8_t* rdram) {
     // Sunrise is to the lean's left looking along it: (+x) for the usual lean to +z.
     float sky[3] = { along * lean_dir[1] + lean * lean_dir[0], up, -along * lean_dir[0] + lean * lean_dir[1] };
     normalize(sky);
+    // A sun moved with Move Sun or saved in sun.txt stands where it was put all day (L, 2026-10-22: moving it did
+    // nothing in Terrydactyland, where the cycle only leant its path towards it); the moon keeps its own path.
+    if (height >= -0.1f) {
+        float by_hand[3];
+        if (tooie::sun_control::map_sun(map, by_hand)) {
+            normalize(by_hand);
+            std::copy(std::begin(by_hand), std::end(by_hand), sky);
+        }
+    }
     // For sun_direction (HD shadows): something to cast shadows with, never lower than about 10 degrees.
     float direction[3] = { sky[0], std::max(sky[1], 0.18f), sky[2] };
     normalize(direction);

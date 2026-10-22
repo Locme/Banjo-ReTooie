@@ -75,7 +75,7 @@ void tooie::hotkeys::register_inputs() {
     add(GameInput::PICK_UNDO, "Undo Pick",
         "In a pick mode, takes back the last change to a texture or model (clicks, pastes, Shift + wheel depth, Delete Saved Pick), one at a time.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
     add(GameInput::SUN_MOVE, "Move Sun",
-        "Hold it and turn the mouse wheel to move the level's sun, for the ray traced light and the sun shadows: the wheel turns it round the compass, Ctrl + wheel raises or lowers it, Shift for fine steps. It stays where you put it until the game closes; Save Sun Location keeps it. While Day and Night is on, the day's path leans towards it.", SDL_SCANCODE_UNKNOWN, "Ray Trace Debug");
+        "Hold it and turn the mouse wheel to move the level's sun, for the ray traced light and the sun shadows: the wheel turns it round the compass, Ctrl + wheel raises or lowers it, Shift for fine steps. It stays where you put it until the game closes; Save Sun Location keeps it. With Day and Night on it stands there all day (the moon keeps its own path at night).", SDL_SCANCODE_UNKNOWN, "Ray Trace Debug");
     add(GameInput::SUN_SAVE, "Save Sun Location",
         "Saves where the sun stands in this level to sun.txt in the Dev Files folder next to the save files. The game reads it back at start, and you can send it in for the levels' built-in suns.", SDL_SCANCODE_UNKNOWN, "Ray Trace Debug");
 }
