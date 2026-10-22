@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <filesystem>
 
 namespace RT64 {
     namespace shaderlistext {
@@ -25,6 +26,11 @@ namespace RT64 {
     // The cache whose list was loaded (null once it is gone), for QueueGroundShaders.
     void SetShaderListCache(RasterShaderCache *cache);
     using namespace shaderlistext;
+
+    // The list of every shader the game is known to ask for, shipped with it (same format as cache/shader_list.bin).
+    // Its shaders are queued at start along with the player's own list; never written to. An empty path (the
+    // default) uses none. Set before the renderer starts.
+    void SetShippedShaderListPath(const std::filesystem::path &path);
 }
 
 #endif // RT64_EXT_RENDER_RT64_RASTER_SHADER_CACHE_EXT_H

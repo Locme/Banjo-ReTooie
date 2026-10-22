@@ -320,6 +320,10 @@ Applied in `lib/rt64/src/contrib/plume` (a submodule of rt64).
 * **Android** (`CMakeLists.txt`, `plume_render_interface_types.h`): the SDL Vulkan surface is used on Android
   too, so the window handle is the SDL window there, as on Linux.
 
+* **Vulkan pipeline cache** (`plume_vulkan.cpp/.h`): `plume::SetPipelineCachePath` / `SavePipelineCache`. One `VkPipelineCache`
+  (made on first pipeline, loaded from the file; the driver ignores data from another driver or GPU) is passed to every
+  graphics and compute pipeline, written under another name and renamed, at device release and every 20 s while the
+  shader list compiles (`src/ui/shader_progress.cpp`). The game sets `cache/vulkan_pipelines.bin` in `main.cpp`.
 * **Video memory log**: `plume::GetVideoMemoryUse` reports device-local memory in use and the
   driver's budget (VK_EXT_memory_budget is enabled when the driver has it), for the `[vram]` lines
   from `src/debug/vram_log.cpp`. Failed presents and image acquires (other than out of date) are

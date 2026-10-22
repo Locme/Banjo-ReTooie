@@ -17,6 +17,11 @@ namespace RT64 {
     void GetShaderListProgress(uint32_t &done, uint32_t &total);
 }
 
+namespace plume {
+    // lib/rt64/src/contrib/plume/plume_vulkan.h (from lib-patches/plume.patch).
+    void SavePipelineCache();
+}
+
 // "Compiling shaders 42%" in the bottom-right corner while the shader list (the shaders met on earlier starts)
 // compiles in the background, on the start menu and in the game alike. It goes away when the list is through.
 namespace {
@@ -27,6 +32,9 @@ namespace {
     constexpr auto ui_wait = 500ms;
     // "100%" stays up this long before the notice goes.
     constexpr auto done_hold = 1s;
+    // While the list compiles, the driver's pipeline cache is written this often, so a crash or a quit
+    // part-way keeps what is built.
+    constexpr auto cache_save_interval = 20s;
 
     std::once_flag worker_once;
 
@@ -111,6 +119,8 @@ namespace {
         Overlay overlay;
         std::string last_text;
         auto done_since = std::chrono::steady_clock::time_point{};
+        auto last_save = std::chrono::steady_clock::now();
+        bool compiled_any = false;
         for (;;) {
             std::this_thread::sleep_for(poll_interval);
 
@@ -121,6 +131,10 @@ namespace {
             // Nothing to compile (no list, or the list is through and its 100% was shown).
             const auto now = std::chrono::steady_clock::now();
             if (total == 0 || done >= total) {
+                if (compiled_any) {
+                    plume::SavePipelineCache();
+                    compiled_any = false;
+                }
                 if (overlay.shown) {
                     if (done_since == std::chrono::steady_clock::time_point{}) {
                         done_since = now;
@@ -133,6 +147,11 @@ namespace {
                 continue;
             }
             done_since = {};
+            compiled_any = true;
+            if (now - last_save >= cache_save_interval) {
+                plume::SavePipelineCache();
+                last_save = now;
+            }
 
             if (overlay.context == recompui::ContextId::null() && !build(overlay)) {
                 std::this_thread::sleep_for(ui_wait);

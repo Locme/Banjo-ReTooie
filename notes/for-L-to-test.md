@@ -49,6 +49,15 @@
   3. Look at far shadows and light beams with the defaults
 - Look for: Traced effects lower with the defaults in open levels (headless Spiral Mountain about 197 -> 165 ms), little change indoors. Far shadows may look a little grainier; if they do, raise the distances
 - Status: waiting for L
+## T540 Shader pipeline cache (Vulkan)
+- Asked: 2026-10-22 UTC
+- Build: claude/project-thread-6bme9v (not built on a PC yet)
+- Steps:
+  1. Start on Vulkan, let "Compiling shaders N%" reach 100%; cache/vulkan_pipelines.bin appears
+  2. Quit and start again: the percentage should run through far quicker
+  3. Send console.log: it shows "[shaders] Vulkan pipeline cache: N bytes read" (0 the first time)
+  4. Delete the file: the next start is slow once and the file comes back
+  5. General tab > Shaders > Compile all shaders at start (on by default): off means only the shaders you have met compile at start. The shipped list assets/shader_list_full.bin holds 681 shaders from L's all-maps sweep (2026-10-22); the first start compiles all of them with the percentage up
 
 ## T539 Built-in ray tracing materials (texture sweep)
 - Asked: 2026-10-22 UTC

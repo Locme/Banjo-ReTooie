@@ -331,6 +331,11 @@ void tooie::init_config() {
         "Save backups to keep",
         "How many of the newest save backups to keep.",
         1, 100, 1, 0, false, 10);
+    general.add_bool_option(
+        tooie::precompile_shaders_option,
+        "Compile all shaders at start",
+        "Compiles every shader the game uses while the game starts, with a percentage on screen, so no area stutters on its first visit. Off: only the shaders you have already met compile at start. The first start takes a while; later starts reuse what was built. Takes effect on the next start.",
+        true);
     general.add_enum_option(
         tooie::timer_save_option,
         "Timer save",
@@ -542,6 +547,9 @@ void tooie::init_config() {
 
     // Section headings in the General tab (the controls and sliders above them have none).
     recompui::config::set_option_group(tooie::save_backups_option, "Saves");
+    // At the end of the section before Back-Ports, with its own heading, so the options around it keep theirs.
+    recompui::config::set_option_display_before(tooie::precompile_shaders_option, tooie::classic_sounds::option);
+    recompui::config::set_option_group(tooie::precompile_shaders_option, "Shaders");
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports and cut content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
     recompui::config::set_option_group(tooie::snout_jiggle::option, "Jiggle");

@@ -19,6 +19,7 @@ namespace RT64 {
     namespace {
         std::mutex shaderListMutex;
         std::filesystem::path shaderListPath;
+        std::filesystem::path shippedListPath;
 
         // "BTSL", then the format version and the size of a ShaderDescription; a list written by a
         // build whose descriptions differ is started over.
@@ -88,6 +89,11 @@ namespace RT64 {
     void SetShaderListPath(const std::filesystem::path &path) {
         const std::scoped_lock lock(shaderListMutex);
         shaderListPath = path;
+    }
+
+    void SetShippedShaderListPath(const std::filesystem::path &path) {
+        const std::scoped_lock lock(shaderListMutex);
+        shippedListPath = path;
     }
 
     void GetShaderListProgress(uint32_t &done, uint32_t &total) {
@@ -162,9 +168,11 @@ namespace RT64 {
 
     void RasterShaderCache::loadShaderList() {
         std::filesystem::path path;
+        std::filesystem::path shippedPath;
         {
             const std::scoped_lock lock(shaderListMutex);
             path = shaderListPath;
+            shippedPath = shippedListPath;
         }
 
         if (path.empty()) {
@@ -183,6 +191,21 @@ namespace RT64 {
                 ShaderDescription desc;
                 while ((descs.size() < ShaderListLimit) && in.read(reinterpret_cast<char *>(&desc), sizeof(desc))) {
                     descs.push_back(desc);
+                }
+            }
+        }
+
+        // The shipped list's shaders join the queue below but not the player's own list: listedHashes stays theirs.
+        std::vector<ShaderDescription> shippedDescs;
+        if (!shippedPath.empty()) {
+            std::ifstream in(shippedPath, std::ios::binary);
+            uint32_t header[3] = {};
+            if (in.read(reinterpret_cast<char *>(header), sizeof(header)) &&
+                (header[0] == ShaderListMagic) && (header[1] == ShaderListVersion) && (header[2] == sizeof(ShaderDescription)))
+            {
+                ShaderDescription desc;
+                while ((shippedDescs.size() < ShaderListLimit) && in.read(reinterpret_cast<char *>(&desc), sizeof(desc))) {
+                    shippedDescs.push_back(desc);
                 }
             }
         }
@@ -221,13 +244,15 @@ namespace RT64 {
             const std::unique_lock<std::mutex> queueLock(submissionMutex);
             const std::unique_lock<std::mutex> descLock(descQueueMutex);
             listPromoted.clear();
-            for (const ShaderDescription &desc : descs) {
-                bool &found = shaderHashes[desc.hash()];
-                if (!found) {
-                    found = true;
-                    listQueue.push(desc);
-                    listPending.insert(desc.hash());
-                    queued++;
+            for (const std::vector<ShaderDescription> *list : { &descs, &shippedDescs }) {
+                for (const ShaderDescription &desc : *list) {
+                    bool &found = shaderHashes[desc.hash()];
+                    if (!found) {
+                        found = true;
+                        listQueue.push(desc);
+                        listPending.insert(desc.hash());
+                        queued++;
+                    }
                 }
             }
         }

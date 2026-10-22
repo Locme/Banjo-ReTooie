@@ -43,6 +43,10 @@ namespace tooie {
     inline const std::string save_backups_keep_option = "save_backups_keep";
     void start_save_backups();
 
+    // Compile all shaders at start (General tab; main.cpp): queue the shipped list of every shader the game asks for
+    // (assets/shader_list_full.bin) beside the player's own list.
+    inline const std::string precompile_shaders_option = "precompile_shaders";
+
     // Quick start (quick_start.cpp): Start during the boot logos goes to the file select.
     inline const std::string qol_tab_id = "qol";
     // The Performance tab (a page of Graphics options, recompui::config::create_page_tab).
