@@ -1071,6 +1071,10 @@ bool RayCutoutSolid(uint geometry, uint primitive, float2 barycentrics) {
 // leaves) counts only where its texture is solid, so light goes through its holes (L, 2026-10-21).
 // Anything solid among the instances in mask: solid triangles end the search at once (the hardware's fast path); only
 // cut-outs and the grass are looked at one by one.
+// Set when a ray TraceAny traced met a level cut-out (instance 0), solid there or not: the sun's shadow rays that all got
+// through and met none leave SunThroughCutout nothing to find.
+static bool gSawLevelCutout = false;
+
 bool TraceAny(RayDesc ray, uint mask) {
     RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
     query.TraceRayInline(gSceneBVH, RAY_FLAG_NONE, mask, ray);
@@ -1079,6 +1083,9 @@ bool TraceAny(RayDesc ray, uint mask) {
             continue;
         }
         const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
+        if ((query.CandidateInstanceID() == 0u) && ((RayGeometryFlags(geometry) & 5u) == 1u)) {
+            gSawLevelCutout = true;
+        }
         if ((geometry == RayGrassGeometry) ? RayGrassStops(ray, query.CandidateTriangleRayT()) :
             RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics()))
         {
@@ -1490,7 +1497,8 @@ bool Enclosed(float3 worldStart) {
         // Only the level makes a room: Banjo standing over the spot doesn't, nor a model beside it (a note pedestal
         // closed the one way out for the floor round it, so its shadow there came out lit and the rest dark: a
         // reversed shadow, L 2026-10-22).
-        if (!TraceOccluded(ray, 3u)) {
+        // Grass doesn't make a room either, and its blades round the spot were each looked at.
+        if (!TraceAny(ray, RayLevelMask)) {
             return false;
         }
     }
@@ -4354,6 +4362,13 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         if ((gSunHalf != 2) && (facing < 0.0f) && Enclosed(ViewToWorldPoint(start))) {
             return (gSunHalf == 1) ? 2.0f : 1.0f;
         }
+        // Turned well away from the sun, a ray towards it goes back in through the surface itself: blocked whatever
+        // else is there, so it needn't be traced (unless Banjo lets the rays through him).
+        const bool turnedFromSun = (gSunHalf != 2) && (facing < -0.15f) && !(onBanjo && PlayerShadowsOff());
+        if (turnedFromSun) {
+            blocked = 1.0f;
+            traced = 1;
+        }
         if (gSunHalf == 2) {
             const float half = TracedHalfShadow(pixel, center, surfaceNormal);
             if (half > 1.5f) {
@@ -4362,7 +4377,8 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
             blocked = half;
             traced = 1;
         }
-        [loop] for (int k = 0; (k < Rays) && (gSunHalf != 2); k++) {
+        gSawLevelCutout = false;
+        [loop] for (int k = 0; (k < Rays) && (gSunHalf != 2) && !turnedFromSun; k++) {
             if ((k == 2) && !RayResolutionHigh() && ((blocked == 0.0f) || (blocked == 2.0f))) {
                 break;
             }
@@ -4392,7 +4408,9 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         if (gSunHalf == 1) {
             return shadow;
         }
-        if ((shadow < 1.0f) && (facing > 0.0f) && !onBanjo && SunThroughCutout(ViewToWorldPoint(start), normalize(ViewToWorldDirection(sunDirection)), shadow <= 0.0f)) {
+        if ((shadow < 1.0f) && (facing > 0.0f) && !onBanjo &&
+            ((gSunHalf == 2) || (shadow > 0.0f) || gSawLevelCutout) &&
+            SunThroughCutout(ViewToWorldPoint(start), normalize(ViewToWorldDirection(sunDirection)), shadow <= 0.0f)) {
             sunlight += float3(1.0f, 0.93f, 0.78f) * (0.9f * facing * (1.0f - shadow) * near);
         }
     }

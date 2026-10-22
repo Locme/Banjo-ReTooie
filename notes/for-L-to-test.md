@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T560 Cheaper traced sun shadows
+- Asked: 2026-10-22 23:58 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; Ray tracing on, Sun shadows on
+  2. Spiral Mountain and a grassy outdoor area; note FPS against the last build
+- Look for: FPS same or a little higher; sun shadows, rooms and light through grates look the same as before
+- Status: waiting for L
+
 ## T559 Metal less shiny (rough reflections fade, steel and rust defaults)
 - Asked: 2026-10-22 23:15 UTC
 - Build: main @ HEAD
