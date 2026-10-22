@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T548 Displaced ground in every framebuffer
+- Asked: 2026-10-22 UTC
+- Build: main
+- Steps:
+  1. Displaced ground on, HD Shadows on, in Isle o' Hags (the world is drawn in two framebuffers there) and Terrydactyland
+  2. Walk and turn the camera past the spots where parallax flickered (T547)
+- Look for: floors that jump, go flat, vanish or flicker for a frame. Each framebuffer now places its ground with its own camera.
+- Status: waiting for L
+
 ## T547 Parallax flicker (each world pass has its own camera)
 - Asked: 2026-10-22 13:20 UTC
 - Build: main

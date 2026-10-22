@@ -2109,30 +2109,24 @@ namespace RT64 {
         return effectsSettings.groundDisplacement;
     }
 
-    // (Also the camera terms displaced ground uses, GroundTess.hlsl: they are the water's.)
-    uint32_t ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
-        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId,
-        interop::FrameParams &frameParams)
+    // A world camera's map from world space to clip space as RasterVS places the vertices (row r of toClip gives clip
+    // component r), and the camera's world position. False for a projection that isn't a perspective one.
+    static bool SceneCameraToClip(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
+        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution,
+        double (&toClip)[4][4], double (&camera)[3])
     {
-        SceneEffectsSettings settings = GetSceneEffects();
-        frameParams.waterCamera.w = 0.0f;
-        frameParams.groundParams = { 0.0f, 0.0f, 0.0f, 0.0f };
-        const bool water = settings.modernWater && (settings.waterDetail > 0.0f);
-        const bool ground = settings.groundDisplacement > 0.0f;
-        if ((!water && !ground) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
-            return 0;
+        if ((resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
+            return false;
         }
-        UsePlayerFrame(settings, workloadId);
 
         // As ComputeSceneGrass: row-vector matrices told apart by the projection, and RasterVS's positions.
         const float (&m)[4][4] = projection.m;
         const bool rowVector = std::abs(m[2][3] + 1.0f) <= std::abs(m[3][2] + 1.0f);
         if ((std::abs(m[2][3] + 1.0f) > 0.01f) && (std::abs(m[3][2] + 1.0f) > 0.01f)) {
-            return 0;
+            return false;
         }
         const float halfWidth = resolution.x / 2.0f;
         const float halfHeight = resolution.y / 2.0f;
-        double toClip[4][4];
         for (int j = 0; j < 4; j++) {
             float c[4];
             for (int k = 0; k < 4; k++) {
@@ -2142,6 +2136,57 @@ namespace RT64 {
             toClip[1][j] = c[1] * (viewportScale.y / halfHeight) - c[3] * ((viewportTranslate.y - halfHeight) / halfHeight);
             toClip[2][j] = c[2] * viewportScale.z + c[3] * viewportTranslate.z;
             toClip[3][j] = c[3];
+        }
+
+        // The camera: view space's origin in the world.
+        double viewD[4][4], viewInverse[4][4];
+        for (int r = 0; r < 4; r++) {
+            for (int c = 0; c < 4; c++) {
+                viewD[r][c] = rowVector ? view.m[r][c] : view.m[c][r];
+            }
+        }
+        if (!InvertMatrix4(viewD, viewInverse)) {
+            return false;
+        }
+        // (Row vectors: a point is p * M, so the origin's place is the inverse's last row.)
+        camera[0] = viewInverse[3][0];
+        camera[1] = viewInverse[3][1];
+        camera[2] = viewInverse[3][2];
+        return true;
+    }
+
+    bool SceneGroundCamera(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
+        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::float4 *terms)
+    {
+        double toClip[4][4], camera[3];
+        if (!SceneCameraToClip(projection, view, viewProj, viewportScale, viewportTranslate, resolution, toClip, camera)) {
+            return false;
+        }
+        for (int r = 0; r < 4; r++) {
+            terms[r] = { float(toClip[r][0]), float(toClip[r][1]), float(toClip[r][2]), float(toClip[r][3]) };
+        }
+        terms[4] = { float(camera[0]), float(camera[1]), float(camera[2]), 0.0f };
+        return true;
+    }
+
+    // (Displaced ground takes each framebuffer's own camera terms, FrameParams.groundCameras.)
+    uint32_t ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
+        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId,
+        interop::FrameParams &frameParams)
+    {
+        SceneEffectsSettings settings = GetSceneEffects();
+        frameParams.waterCamera.w = 0.0f;
+        frameParams.groundParams = { 0.0f, 0.0f, 0.0f, 0.0f };
+        const bool water = settings.modernWater && (settings.waterDetail > 0.0f);
+        const bool ground = settings.groundDisplacement > 0.0f;
+        if (!water && !ground) {
+            return 0;
+        }
+        UsePlayerFrame(settings, workloadId);
+
+        double toClip[4][4], camera[3];
+        if (!SceneCameraToClip(projection, view, viewProj, viewportScale, viewportTranslate, resolution, toClip, camera)) {
+            return 0;
         }
         double inverse[4][4];
         if (!InvertMatrix4(toClip, inverse)) {
@@ -2154,25 +2199,8 @@ namespace RT64 {
             frameParams.waterWorldToClip[r] = { float(toClip[r][0]), float(toClip[r][1]), float(toClip[r][2]), float(toClip[r][3]) };
         }
 
-        // The camera: view space's origin in the world.
-        float v[4][4];
-        for (int r = 0; r < 4; r++) {
-            for (int c = 0; c < 4; c++) {
-                v[r][c] = rowVector ? view.m[r][c] : view.m[c][r];
-            }
-        }
-        double viewD[4][4], viewInverse[4][4];
-        for (int r = 0; r < 4; r++) {
-            for (int c = 0; c < 4; c++) {
-                viewD[r][c] = v[r][c];
-            }
-        }
-        if (!InvertMatrix4(viewD, viewInverse)) {
-            return 0;
-        }
-        // (Row vectors: a point is p * M, so the origin's place is the inverse's last row.)
         const float detail = settings.waterDetail;
-        frameParams.waterCamera = { float(viewInverse[3][0]), float(viewInverse[3][1]), float(viewInverse[3][2]), water ? detail : 0.0f };
+        frameParams.waterCamera = { float(camera[0]), float(camera[1]), float(camera[2]), water ? detail : 0.0f };
 
         // Displaced ground: the deepest part of a texture is pushed down by up to 16 units at the full setting, cut into at
         // most 16 pieces an edge no shorter than 12 units, fading out over 1400 to 2800 units from the camera.
