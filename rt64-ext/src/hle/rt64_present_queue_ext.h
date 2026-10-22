@@ -55,12 +55,25 @@ namespace RT64 {
         // GPU time of each of the port's extra passes (GpuSection), and how many times each ran.
         double sectionMs[uint32_t(GpuSection::Count)] = {};
         uint32_t sectionCount[uint32_t(GpuSection::Count)] = {};
+        // The renderer thread's own time on each game frame it drew (RendererCpuPart), and how many it drew.
+        uint32_t cpuFrames = 0;
+        double cpuMs[5] = {};
+        // Of the renderer thread's time, the deep snow's and tessellated sand's parts (RendererSnowPart).
+        double snowMs[4] = {};
     };
 
     FrameStats TakeFrameStats();
     // Turns the per-pass GPU timers (FrameStats::sectionMs) on or off; off by default.
     void SetGpuSectionTiming(bool wanted);
     void RecordGpuFrameTime(double ms);
+    // The renderer thread's time on a game frame, by part: going through the game's draws (addFramebuffer), the port's
+    // passes set up before them (endFramebuffers), recording the draws, waiting for the GPU to finish them, and after.
+    enum class RendererCpuPart : uint32_t { Draws, Effects, Record, GpuWait, After, Count };
+    void RecordRendererCpuTimes(const double (&ms)[uint32_t(RendererCpuPart::Count)]);
+    // The deep snow's and tessellated sand's CPU work on a game frame: the camera and trail (ComputeSceneSnow), which
+    // ground draws take it (snowShellCount), the models pressing it (snowTouchDraw), and its ground's edges.
+    enum class RendererSnowPart : uint32_t { Trail, Ground, Touch, Edges, Count };
+    void RecordRendererSnowTimes(const double (&ms)[uint32_t(RendererSnowPart::Count)]);
     void RecordShaderCompiled();
     // The game read the controller at this steady_clock time (ns). The next game frame
     // handed to RT64 takes the latest such time with it.

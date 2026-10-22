@@ -1580,7 +1580,7 @@ index 8ea27d5..50ebf26 100644
          std::vector<uint16_t> worldIndices;
          std::vector<uint16_t> fogIndices;
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..d34ce46 100644
+index 5a331aa..f90a38f 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -4,9 +4,13 @@
@@ -1621,7 +1621,22 @@ index 5a331aa..d34ce46 100644
          renderFramebufferManager = std::make_unique<RenderFramebufferManager>(ext.device);
          queryPool = ext.device->createQueryPool(2);
  
-@@ -387,7 +397,9 @@ namespace RT64 {
+@@ -301,6 +311,14 @@ namespace RT64 {
+         const bool usingMSAA = (targetManager.multisampling.sampleCount > 1);
+ 
+         rendererCPUProfiler.start();
++        // Banjo-Tooie: the renderer thread's time on this frame by part, for the frame overlay (RecordRendererCpuTimes).
++        double cpuParts[uint32_t(RendererCpuPart::Count)] = {};
++        auto cpuMark = std::chrono::steady_clock::now();
++        auto cpuPart = [&](RendererCpuPart part) {
++            const auto now = std::chrono::steady_clock::now();
++            cpuParts[uint32_t(part)] += std::chrono::duration<double, std::milli>(now - cpuMark).count();
++            cpuMark = now;
++        };
+ 
+         const bool aspectRatioAdjustment = (abs(workloadConfig.aspectRatioScale - 1.0f) > 1e-6f);
+         const bool processProjections = aspectRatioAdjustment || prevFrame.matched|| curFrame.isDebuggerCameraEnabled(*this);
+@@ -387,7 +405,9 @@ namespace RT64 {
                  rspProcessor->process(rspParams);
              }
  
@@ -1632,16 +1647,28 @@ index 5a331aa..d34ce46 100644
              if (processWorldVertices) {
                  workload.resetWorldOutputBuffers();
  
-@@ -701,6 +713,8 @@ namespace RT64 {
+@@ -645,6 +665,8 @@ namespace RT64 {
+                 gameCallCursor += fbPair.gameCallCount;
+             }
+ 
++            cpuPart(RendererCpuPart::Draws);
++
+             // Create all GPU tile mappings and upload them.
+             if (!workload.drawData.gpuTiles.empty()) {
+                 std::pair<size_t, size_t> gpuTileRange;
+@@ -701,7 +723,11 @@ namespace RT64 {
              ext.workloadGraphicsWorker->commandList->begin();
              ext.workloadGraphicsWorker->commandList->resetQueryPool(queryPool.get(), 0, 2);
              ext.workloadGraphicsWorker->commandList->writeTimestamp(queryPool.get(), 0);
 +            WorkloadGpuSections().begin(ext.device, ext.workloadGraphicsWorker->commandList.get());
 +            GpuCheckpoint(ext.workloadGraphicsWorker->commandList.get(), "game frame: start");
++            cpuPart(RendererCpuPart::Draws);
              framebufferRenderer->endFramebuffers(ext.workloadGraphicsWorker, &workload.drawBuffers, &workload.outputBuffers, workloadConfig.raytracingEnabled);
++            cpuPart(RendererCpuPart::Effects);
              framebufferRenderer->recordSetup(ext.workloadGraphicsWorker, bufferUploaders, processRSP ? rspProcessor.get() : nullptr, processWorldVertices ? vertexProcessor.get() : nullptr, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              
-@@ -789,6 +803,11 @@ namespace RT64 {
+             // Record all framebuffer pairs.
+@@ -789,6 +815,11 @@ namespace RT64 {
                          }
                      }
                      
@@ -1653,7 +1680,7 @@ index 5a331aa..d34ce46 100644
                      framebufferRenderer->recordFramebuffer(ext.workloadGraphicsWorker, framebufferIndex++);
  
                      // Transition the render targets in case the present queue will show them so it doesn't have to perform transitions.
-@@ -837,7 +856,9 @@ namespace RT64 {
+@@ -837,17 +868,23 @@ namespace RT64 {
                      fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
@@ -1662,8 +1689,13 @@ index 5a331aa..d34ce46 100644
 +            WorkloadGpuSections().finish();
              ext.workloadGraphicsWorker->commandList->end();
              framebufferRenderer->waitForUploaders();
++            cpuPart(RendererCpuPart::Record);
              ext.workloadGraphicsWorker->execute();
-@@ -848,6 +869,8 @@ namespace RT64 {
+             ext.workloadGraphicsWorker->wait();
++            cpuPart(RendererCpuPart::GpuWait);
+             workerMutex.unlock();
+ 
+             // Update the GPU profiler with the results from the timestamps of the frame.
              queryPool->queryResults();
              const uint64_t *frameTimestamps = queryPool->getResults();
              rendererGPUProfiler.log(double(frameTimestamps[1] - frameTimestamps[0]) / 1000000.0);
@@ -1672,7 +1704,16 @@ index 5a331aa..d34ce46 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -867,6 +890,7 @@ namespace RT64 {
+@@ -858,6 +895,8 @@ namespace RT64 {
+         }
+ 
+         framebufferRenderer->advanceFrame(workloadConfig.raytracingEnabled);
++        cpuPart(RendererCpuPart::After);
++        RecordRendererCpuTimes(cpuParts);
+         rendererCPUProfiler.end();
+         rendererCPUProfiler.log();
+         rendererCPUProfiler.reset();
+@@ -867,6 +906,7 @@ namespace RT64 {
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();
@@ -1923,10 +1964,10 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..89c408b 100644
+index 9fae0d4..604287e 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
-@@ -3,6 +3,19 @@
+@@ -3,6 +3,20 @@
  //
  
  #include "rt64_framebuffer_renderer.h"
@@ -1943,10 +1984,11 @@ index 9fae0d4..89c408b 100644
 +#include <cstring>
 +#include <unordered_map>
 +#include "rt64_scene_effects.h"
++#include "hle/rt64_present_queue_ext.h"
  
  #include "../include/rt64_extended_gbi.h"
  
-@@ -12,8 +25,10 @@
+@@ -12,8 +26,10 @@
  #include "gbi/rt64_f3d.h"
  #include "shared/rt64_framebuffer_params.h"
  #include "shared/rt64_raster_params.h"
@@ -1957,7 +1999,7 @@ index 9fae0d4..89c408b 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +140,543 @@ namespace RT64 {
+@@ -125,6 +141,555 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -2216,7 +2258,18 @@ index 9fae0d4..89c408b 100644
 +
 +    // Banjo-Tooie: hands deep snow the triangles of a model's draw near Banjo, in the world (SceneSnowTouch), so the
 +    // snow is pressed down wherever they reach into it.
++    // Banjo-Tooie: the deep snow's and sand's CPU time this frame by part (RendererSnowPart), for the frame overlay.
++    static double snowCpuMs[uint32_t(RendererSnowPart::Count)] = {};
++    struct SnowCpuTimer {
++        RendererSnowPart part;
++        std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
++        ~SnowCpuTimer() {
++            snowCpuMs[uint32_t(part)] += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
++        }
++    };
++
 +    static void snowTouchDraw(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams) {
++        const SnowCpuTimer timer{ RendererSnowPart::Touch };
 +        const uint32_t start = call.meshDesc.faceIndicesStart;
 +        const uint32_t end = start + call.callDesc.triangleCount * 3;
 +        if ((end > drawData.faceIndices.size()) || (frameParams.snowPlayer.w <= 0.0f)) {
@@ -2459,6 +2512,7 @@ index 9fae0d4..89c408b 100644
 +    // with none facing up within the snow's reach. Level ground has no model transform, so its positions are in the world.
 +    // (anyReach: at least 1 however far, for the tessellated snow, which reaches much further.)
 +    static uint32_t snowShellCount(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams, bool anyReach) {
++        const SnowCpuTimer timer{ RendererSnowPart::Ground };
 +        const uint32_t start = call.meshDesc.faceIndicesStart;
 +        const uint32_t end = start + call.callDesc.triangleCount * 3;
 +        if (end > drawData.faceIndices.size()) {
@@ -2501,7 +2555,7 @@ index 9fae0d4..89c408b 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -151,6 +703,7 @@ namespace RT64 {
+@@ -151,6 +716,7 @@ namespace RT64 {
  
          shaderUploader = std::make_unique<BufferUploader>(worker->device);
          descCommonSet = std::make_unique<FramebufferRendererDescriptorCommonSet>(shaderLibrary->samplerLibrary, worker->device->getCapabilities().raytracing, worker->device);
@@ -2509,7 +2563,7 @@ index 9fae0d4..89c408b 100644
  
  #   if RT_ENABLED
          if (rtSupport) {
-@@ -169,11 +722,87 @@ namespace RT64 {
+@@ -169,11 +735,87 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2597,7 +2651,7 @@ index 9fae0d4..89c408b 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +848,7 @@ namespace RT64 {
+@@ -219,6 +861,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2605,7 +2659,7 @@ index 9fae0d4..89c408b 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +880,7 @@ namespace RT64 {
+@@ -250,6 +893,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2613,7 +2667,7 @@ index 9fae0d4..89c408b 100644
                  }
              }
              else {
-@@ -272,6 +903,9 @@ namespace RT64 {
+@@ -272,6 +916,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2623,7 +2677,7 @@ index 9fae0d4..89c408b 100644
              }
          }
      }
-@@ -373,6 +1007,15 @@ namespace RT64 {
+@@ -373,6 +1020,15 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2639,7 +2693,7 @@ index 9fae0d4..89c408b 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +1086,14 @@ namespace RT64 {
+@@ -443,6 +1099,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2654,7 +2708,7 @@ index 9fae0d4..89c408b 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +1116,85 @@ namespace RT64 {
+@@ -465,12 +1129,85 @@ namespace RT64 {
          return true;
      }
      
@@ -2742,7 +2796,7 @@ index 9fae0d4..89c408b 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +1223,16 @@ namespace RT64 {
+@@ -499,6 +1236,16 @@ namespace RT64 {
              }
          };
  
@@ -2759,7 +2813,7 @@ index 9fae0d4..89c408b 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +1248,17 @@ namespace RT64 {
+@@ -514,6 +1261,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2777,7 +2831,7 @@ index 9fae0d4..89c408b 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -561,8 +1306,16 @@ namespace RT64 {
+@@ -561,8 +1319,16 @@ namespace RT64 {
                      switchToDepthWrite();
                  }
  
@@ -2796,7 +2850,7 @@ index 9fae0d4..89c408b 100644
                      previousScissor = triangles.scissor;
                  }
  
-@@ -574,12 +1327,195 @@ namespace RT64 {
+@@ -574,12 +1340,195 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2993,7 +3047,7 @@ index 9fae0d4..89c408b 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1533,7 @@ namespace RT64 {
+@@ -597,6 +1546,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -3001,7 +3055,7 @@ index 9fae0d4..89c408b 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1553,7 @@ namespace RT64 {
+@@ -616,6 +1566,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -3009,7 +3063,7 @@ index 9fae0d4..89c408b 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1246,10 +2184,76 @@ namespace RT64 {
+@@ -1246,10 +2197,76 @@ namespace RT64 {
          }
  
          startBarriers.emplace_back(RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE));
@@ -3086,7 +3140,7 @@ index 9fae0d4..89c408b 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2300,156 @@ namespace RT64 {
+@@ -1296,10 +2313,157 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3235,21 +3289,21 @@ index 9fae0d4..89c408b 100644
 +                }
              }
          }
+-    }
 +        skippingWater = false;
 +
 +        // Banjo-Tooie: the depth the blades were drawn into, as the next frame's culling pass reads it.
 +        if (grassFramebuffer) {
 +            submitGrassHiZ(worker, depthTarget);
 +        }
-     }
++    }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2501,43 @@ namespace RT64 {
+         shaderUploader->wait();
+@@ -1350,10 +2514,43 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
--        rendererPipelineLayout = rasterShaderUber->pipelineLayout.get();
--        postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
 +        // Banjo-Tooie: the pipeline for a draw's shell redraws: the material's shader built with the shell code
 +        // (RENDER_FEATURE_SHELLS, RasterPS.hlsl), asked for the first time it is needed, the ubershader meanwhile.
 +        // The same for a draw with parallax mapping (RENDER_FEATURE_PARALLAX).
@@ -3269,8 +3323,8 @@ index 9fae0d4..89c408b 100644
 +                !copyMode && desc.otherMode.zUpd(),
 +                (desc.otherMode.cvgDst() == CVG_DST_WRAP) || (desc.otherMode.cvgDst() == CVG_DST_SAVE));
 +        };
-+        rendererPipelineLayout = rasterShaderUber->pipelineLayout.get();
-+        postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
+         rendererPipelineLayout = rasterShaderUber->pipelineLayout.get();
+         postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
          postBlendDitherNoiseSubPipeline = rasterShaderUber->postBlendDitherNoiseSubPipeline.get();
          postBlendDitherNoiseSubNegativePipeline = rasterShaderUber->postBlendDitherNoiseSubNegativePipeline.get();
 +        grassBladePipeline = rasterShaderUber->grassBladePipeline.get();
@@ -3290,7 +3344,7 @@ index 9fae0d4..89c408b 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2570,11 @@ namespace RT64 {
+@@ -1386,6 +2583,11 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3302,7 +3356,7 @@ index 9fae0d4..89c408b 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2597,68 @@ namespace RT64 {
+@@ -1408,6 +2610,68 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3371,7 +3425,7 @@ index 9fae0d4..89c408b 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2682,22 @@ namespace RT64 {
+@@ -1431,6 +2695,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3394,7 +3448,7 @@ index 9fae0d4..89c408b 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2717,181 @@ namespace RT64 {
+@@ -1450,12 +2730,182 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3472,6 +3526,7 @@ index 9fae0d4..89c408b 100644
 +                                }
 +                                featherCards = (grassBladePipeline != nullptr) && SceneKazooieFeathers();
 +                                // Banjo-Tooie: deep snow, from the same camera.
++                                const SnowCpuTimer snowTimer{ RendererSnowPart::Trail };
 +                                if ((snowShells == 0) && ComputeSceneSnow(drawData.modProjTransforms[proj.transformsIndex], drawData.modViewProjTransforms[proj.transformsIndex],
 +                                    grassViewport.scale, grassViewport.translate, fbParams.resolution, p.submissionFrame, frameParams, snowTrail))
 +                                {
@@ -3576,7 +3631,7 @@ index 9fae0d4..89c408b 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3042,7 @@ namespace RT64 {
+@@ -1606,6 +3056,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3584,7 +3639,7 @@ index 9fae0d4..89c408b 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3119,20 @@ namespace RT64 {
+@@ -1682,6 +3133,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3605,7 +3660,7 @@ index 9fae0d4..89c408b 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3198,2113 @@ namespace RT64 {
+@@ -1747,25 +3212,2117 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3924,7 +3979,7 @@ index 9fae0d4..89c408b 100644
 +                else if (grassEdges) {
 +                    // Layered grass only grows on ground facing up, which grass textures cover already.
 +                    grassValue = 0;
-+                }
+                 }
 +                instanceGrassVector.resize(instanceIndex, 0);
 +                instanceGrassVector.push_back(grassValue);
 +                instanceGrassSlotVector.resize(instanceIndex, 0);
@@ -3932,7 +3987,7 @@ index 9fae0d4..89c408b 100644
 +                // Layered grass (no blades) redraws the triangles as shells: with the material's shell shader.
 +                if ((grassValue != 0) && (grassBladePipeline == nullptr) && (grassInstancePipeline == nullptr) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
 +                    instanceDrawCall.triangles.shellPipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_SHELLS);
-                 }
++                }
 +                // TOOIE_GRASS_LOG: twice a second, the grass draws of the frame and their blade passes.
 +                {
 +                    static const bool grassLog = (getenv("TOOIE_GRASS_LOG") != nullptr);
@@ -5610,6 +5665,7 @@ index 9fae0d4..89c408b 100644
 +            // (Only when the ground changed: the level's ground is the same draw after draw, and finding its edges took
 +            // most of a frame's CPU time on a big level.)
 +            const auto edgeStarted = std::chrono::steady_clock::now();
++            const SnowCpuTimer edgeTimer{ RendererSnowPart::Edges };
 +            const float snowRamp = std::max(frameParams.snowParams.x * 3.0f, 20.0f);
 +            std::vector<std::pair<uint32_t, uint32_t>> snowEdges;
 +            for (const auto &[data, range] : snowEdgeRanges) {
@@ -5702,6 +5758,9 @@ index 9fae0d4..89c408b 100644
 +                fprintf(stderr, "[grass-mask] box %.0f x %.0f cells, %zu bytes\n", frameParams.grassMask.w, frameParams.grassLook.y, grassMaskUpload.size() * sizeof(uint32_t));
 +            }
 +        }
++        // Banjo-Tooie: the snow's CPU time this frame, to the frame overlay.
++        RecordRendererSnowTimes(snowCpuMs);
++        std::fill(std::begin(snowCpuMs), std::end(snowCpuMs), 0.0);
 +        // Banjo-Tooie: instanced 3D grass's triangles, chunks and slots, and its terms in the frame's parameters.
 +        std::vector<BufferUploader::Upload> grassUploads;
 +        const auto finishStart = std::chrono::steady_clock::now();

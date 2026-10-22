@@ -123,6 +123,21 @@ namespace RT64 {
         frameStats.gpuMs += ms;
     }
 
+    void RecordRendererCpuTimes(const double (&ms)[uint32_t(RendererCpuPart::Count)]) {
+        const std::scoped_lock lock(frameStatsMutex);
+        frameStats.cpuFrames++;
+        for (uint32_t i = 0; i < uint32_t(RendererCpuPart::Count); i++) {
+            frameStats.cpuMs[i] += ms[i];
+        }
+    }
+
+    void RecordRendererSnowTimes(const double (&ms)[uint32_t(RendererSnowPart::Count)]) {
+        const std::scoped_lock lock(frameStatsMutex);
+        for (uint32_t i = 0; i < uint32_t(RendererSnowPart::Count); i++) {
+            frameStats.snowMs[i] += ms[i];
+        }
+    }
+
     void RecordGpuSectionTime(GpuSection section, double ms) {
         const std::scoped_lock lock(frameStatsMutex);
         frameStats.sectionMs[uint32_t(section)] += ms;
