@@ -4388,18 +4388,18 @@ namespace {
         RT64::SetSceneLampTextures(lamps.data(), lamps.size());
         RT64::SetSceneGrassEdgeTextures(edges.data(), value<bool>(tooie::picture_filters::grass_edges_option, true) ? edges.size() : 0);
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
+        // Light Source picks make the object itself shine (Slight Glow) and light nothing round it: a light of its own
+        // drew a ball of light round the object however it was cast (L, 2026-10-22: "Object glows only").
         std::vector<uint64_t> glow = build(nullptr, nullptr, tooie::effect_pick::effect_glow, true);
-        RT64::SetSceneGlowTextures(glow.data(), glow.size());
-        // Light Source picks: lamps with no glow in the air, reaching 900 units at 100% (as a lamp), more or less with
-        // the texture's strength.
-        std::vector<uint64_t> light_sources;
-        std::vector<float> light_reaches;
         for (const auto& [hash, picked] : picks) {
-            if (tooie::effect_pick::has(picked, tooie::effect_pick::effect_light)) {
-                light_sources.push_back(hash);
-                light_reaches.push_back(9.0f * float(tooie::effect_pick::light_strength(picked)));
+            if (tooie::effect_pick::has(picked, tooie::effect_pick::effect_light) && (std::find(glow.begin(), glow.end(), hash) == glow.end())) {
+                glow.push_back(hash);
             }
         }
+        RT64::SetSceneGlowTextures(glow.data(), glow.size());
+        // Lights for the traced scene from textures: Ray Tracing Material Pick Mode's emissive picks below.
+        std::vector<uint64_t> light_sources;
+        std::vector<float> light_reaches;
         // Ray Tracing Material Pick Mode: the materials (the built-in ones from the texture sweep, a pick over each) go to the traced pass, and an emissive pick also lights the scene as a Light
         // Source would (half the emissive's percent as its strength), unless Shader Effects pick mode has given the texture
         // a Light Source of its own.
