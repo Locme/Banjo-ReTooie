@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T527 Move Sun and Save Sun Location
+- Asked: 2026-10-22 09:29 UTC
+- Build: main (Move Sun)
+- Steps:
+  1. In Controls > Ray Trace Debug, bind Move Sun and Save Sun Location
+  2. Turn on Graphics > Ray tracing (or Sun shadows) and go to Spiral Mountain outside, Day and Night Off
+  3. Hold Move Sun and turn the mouse wheel: the sun goes round and the shadows turn with it; Ctrl + wheel raises or lowers it; Shift for fine steps. A toast shows the angles
+  4. Press Save Sun Location: a toast says it saved to sun.txt. Restart the game: the sun is where you left it
+  5. Send me Dev Files/sun.txt (next to the save files)
+- Look for: Do the shadows and the traced light follow the sun as you turn the wheel, and does the saved sun come back after a restart? Not tested headless (skipped at L's word).
+- Status: waiting for L
+
 ## T526 Fire lights and glows; likely explosion frames
 - Asked: 2026-10-22 08:51 UTC
 - Build: main (next build)
