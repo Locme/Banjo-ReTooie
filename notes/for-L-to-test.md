@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T552 Ray tracing speed-ups with the same picture (AO, bounce light, model shadows)
+- Asked: 2026-10-22 17:10 UTC
+- Build: main @ 18f8a32
+- Steps:
+  1. Pull main (18f8a32 or later) and build
+  2. Ray tracing on, Ambient occlusion and Bounce light on, overlay Full
+  3. Stand somewhere you know (Spiral Mountain, a lamp-lit room) and send the overlay
+- Look for: "AO and bounce light" and "traced effects" lower than before (headless: 53 -> 31 ms and ~200 -> ~170 ms). The picture exactly as before: AO, bounce light, Banjo's and the models' shadows, rooms.
+- Status: waiting for L
+
 ## T549 175 FPS in Terrydactyland: shown frames and renderer CPU (mailbox presenting + cheaper texture seams)
 - Asked: 2026-10-22 14:46 UTC
 - Build: main @ fdca435
