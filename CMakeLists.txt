@@ -349,6 +349,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/input/low_latency.cpp
     ${CMAKE_SOURCE_DIR}/src/display/frame_readback.cpp
     ${CMAKE_SOURCE_DIR}/src/display/fsr.cpp
+    ${CMAKE_SOURCE_DIR}/src/display/upscaler.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fast_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/display/draw_distance.cpp
     ${CMAKE_SOURCE_DIR}/src/display/gfx_budget.cpp

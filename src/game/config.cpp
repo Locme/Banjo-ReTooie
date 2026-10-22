@@ -54,6 +54,7 @@
 #include "tooie_low_latency.h"
 #include "tooie_frame_readback.h"
 #include "tooie_fsr.h"
+#include "tooie_upscaler.h"
 #include "tooie_effect_views.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_check.h"
@@ -825,6 +826,7 @@ void tooie::init_config() {
     tooie::fxaa::add_option(graphics);
     tooie::api_restart::add_prompt(graphics);
     tooie::fsr::add_option(graphics);
+    tooie::upscaler::add_option(graphics);
     tooie::game_frame_rate::add_option(graphics);
     recompui::config::graphics::add_interpolation_options(graphics);
     tooie::low_latency::add_option(graphics);
@@ -995,6 +997,7 @@ void tooie::init_config() {
     tooie::fxaa::apply();
     tooie::mirror_mode::apply();
     tooie::fsr::apply();
+    tooie::upscaler::apply();
     tooie::low_latency::apply();
     tooie::frame_readback::apply();
 }
