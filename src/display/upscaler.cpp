@@ -21,6 +21,15 @@ namespace {
     }
 
     bool created = false;
+
+    // The menu can't grey out one choice, so off Android these two say so in their name (and act as Off).
+    std::string android_only(const char* name) {
+#if defined(__ANDROID__)
+        return name;
+#else
+        return std::string(name) + " (Android only)";
+#endif
+    }
 }
 
 void tooie::upscaler::apply() {
@@ -32,6 +41,12 @@ void tooie::upscaler::apply() {
         mode = std::get<uint32_t>(graphics_config().get_option_value(option));
     } catch (...) {
     }
+#if !defined(__ANDROID__)
+    // The Android upscalers do nothing elsewhere.
+    if ((mode == (uint32_t)Mode::ArmAsr) || (mode == (uint32_t)Mode::SnapdragonGsr)) {
+        mode = (uint32_t)Mode::Off;
+    }
+#endif
     RT64::SetUpscalerMode(mode);
 }
 
@@ -41,13 +56,16 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         option,
         "Upscaler",
-        "Temporal upscaling and anti-aliasing. FSR 4 needs a Radeon RX 9000 card and DLSS an RTX card; the native modes (FSR 4 Native AA, DLAA) anti-alias without upscaling. Off leaves the picture as it is.",
+        "Temporal upscaling and anti-aliasing. FSR 3 runs on any recent graphics card. FSR 4 needs a Radeon RX 9000 card and DLSS an RTX card; Arm ASR and Snapdragon GSR are for Android phones (Mali and Adreno); the native modes (FSR 4 Native AA, DLAA) anti-alias without upscaling. Off leaves the picture as it is.",
         {
             {Mode::Off, "Off", "Off"},
+            {Mode::Fsr3, "FSR 3", "FSR 3"},
             {Mode::Fsr4, "FSR 4", "FSR 4"},
             {Mode::Fsr4NativeAA, "FSR 4 Native AA", "FSR 4 Native AA"},
             {Mode::Dlss, "DLSS", "DLSS"},
             {Mode::Dlaa, "DLAA", "DLAA"},
+            {Mode::ArmAsr, "Arm ASR", android_only("Arm ASR")},
+            {Mode::SnapdragonGsr, "Snapdragon GSR", android_only("Snapdragon GSR")},
         },
         Mode::Off);
     graphics.add_option_change_callback(option,

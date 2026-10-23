@@ -13,7 +13,7 @@ namespace RT64 {
     }
 
     void SetUpscalerMode(uint32_t mode) {
-        upscalerMode = std::min(mode, 4U);
+        upscalerMode = std::min(mode, 7U);
     }
 
     uint32_t GetUpscalerMode() {
