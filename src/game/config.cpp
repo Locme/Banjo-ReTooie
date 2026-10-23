@@ -715,11 +715,6 @@ void tooie::init_config() {
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
     recompui::config::set_open_allowed_callback(tooie::menu_pause::open_allowed);
     qol.add_bool_option(
-        tooie::menu_pause::option,
-        "Pause Special Menu",
-        "While this menu is open during play, the game is paused as if you pressed Start, without the pause menu drawn over it. The pause menu's music plays and the picture's effects keep moving. Cutscenes and the title screen carry on as before.",
-        true);
-    qol.add_bool_option(
         tooie::quick_start_option,
         "Press Start Anytime In Intro",
         "Press Start during the logos and title flight to go straight to the file select.",
@@ -891,13 +886,6 @@ void tooie::init_config() {
         "Transform Anywhere",
         "The Transform key (Controls tab, Movement; T on the keyboard, not bound on a controller) changes Banjo into the world's Humba Wumba form where he stands, and back, once you have changed in that world's Humba pool. Not in the air, swimming or in cutscenes. The submarine changes in water only.",
         true);
-    qol.add_bool_option(
-        tooie::totals_checklist::option,
-        "Totals Checklist",
-        "The pause menu's Totals pages also say how many of each item are left in a world and how many you can get with the moves you have now.",
-        true);
-    // Mouse in the game's menus moved from the WIP tab to QOL > Menu (L, 2026-10-23).
-    tooie::menu_mouse::add_options(qol);
     qol.add_enum_option(
         tooie::fine_aim::mode_option,
         "Fine Aim",
@@ -921,12 +909,22 @@ void tooie::init_config() {
         tooie::fine_aim::Speed::Medium);
     qol.add_option_hidden_dependency(tooie::fine_aim::speed_option, tooie::fine_aim::mode_option, tooie::fine_aim::Mode::Off);
     tooie::motion_aim::add_options(qol);
+    // Menu is the last section of QOL (L, 2026-10-23): Pause Special Menu, Totals Checklist, Mouse in the game's menus.
+    qol.add_bool_option(
+        tooie::menu_pause::option,
+        "Pause Special Menu",
+        "While this menu is open during play, the game is paused as if you pressed Start, without the pause menu drawn over it. The pause menu's music plays and the picture's effects keep moving. Cutscenes and the title screen carry on as before.",
+        true);
+    qol.add_bool_option(
+        tooie::totals_checklist::option,
+        "Totals Checklist",
+        "The pause menu's Totals pages also say how many of each item are left in a world and how many you can get with the moves you have now.",
+        true);
+    // Mouse in the game's menus moved from the WIP tab to QOL > Menu (L, 2026-10-23).
+    tooie::menu_mouse::add_options(qol);
 
     // Section headings in the QOL tab (the options of a group sit next to each other above).
     recompui::config::set_option_group(tooie::menu_pause::option, "Menu");
-    // Totals checklist and Mouse in the game's menus sit under Menu, after Pause Special Menu (L, 2026-10-23).
-    recompui::config::set_option_display_before(tooie::totals_checklist::option, tooie::text_speed_option);
-    recompui::config::set_option_display_before(tooie::menu_mouse::enabled_option, tooie::text_speed_option);
     recompui::config::set_option_group(tooie::text_speed_option, "Speed And Skipping");
     // Press Start Anytime In Intro sits at the bottom of Speed and skipping (L, 2026-10-16).
     recompui::config::set_option_display_before(tooie::quick_start_option, tooie::free_camera_option);
