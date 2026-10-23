@@ -52,3 +52,6 @@ Also send a screenshot or two per mode: standing still, running, and in a menu.
 
 ## Licences
 `nvngx_dlss.dll` is NVIDIA's, `amd_fidelityfx_loader_dx12.dll` and `amd_fidelityfx_upscaler_dx12.dll` are AMD's, both shipped beside the exe with their licence text. They are not covered by the GPL (README says so).
+
+## If it runs slower than no upscaler (L, 2026-10-23: DLSS on Vulkan)
+Set the Frame overlay to Full and look at the GPU lines. The upscaler's passes are listed: "upscaler objects" (the solid draws again for moving things, plus the reactive mask), "upscaler snapshot" (copy of the world before the HUD), "upscaler HUD" (HUD Full Resolution's two extra HUD draws), and at each present "photo filters" (camera motion) and "FSR" (the resolve itself, whichever upscaler is on). Then try: **Upscaler: Object Motion** off, **HUD Full Resolution** off, **HUD Outside** off. Tell me which one gets the fps back.

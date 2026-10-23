@@ -17,6 +17,7 @@
 
 #include "rt64_render_target.h"
 #include "rt64_object_velocity.h"
+#include "rt64_gpu_sections.h"
 #include "rt64_render_target_manager.h"
 
 namespace RT64 {
@@ -25,6 +26,7 @@ namespace RT64 {
         std::atomic<uint32_t> upscalerQuality{ 0 };
         std::atomic<float> upscalerSharpness{ 0.0f };
         std::atomic<bool> upscalerReactive{ true };
+        std::atomic<bool> upscalerObjectMotion{ true };
 
         struct Camera {
             float projection[16] = {};
@@ -222,6 +224,7 @@ namespace RT64 {
         if (source == nullptr) {
             return;
         }
+        GpuSectionScope timed(WorkloadGpuSections(), GpuSection::UpscalerSnapshot, worker->commandList.get());
         const std::scoped_lock lock(snapshotMutex);
         if ((snapshotTexture == nullptr) || (snapshotWidth != colorTarget->width) || (snapshotHeight != colorTarget->height) || (snapshotFormat != colorTarget->format)) {
             snapshotTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format));
@@ -265,6 +268,10 @@ namespace RT64 {
 
     void SetUpscalerSharpness(float sharpness) {
         upscalerSharpness = std::clamp(sharpness, 0.0f, 1.0f);
+    }
+
+    void SetUpscalerObjectMotion(bool enabled) {
+        upscalerObjectMotion = enabled;
     }
 
     void SetUpscalerReactive(bool enabled) {
@@ -723,7 +730,7 @@ namespace RT64 {
     }
 
     bool UpscalerObjectVelocityWanted() {
-        return UpscalerWanted() && (upscalerMode.load() != 6);
+        return UpscalerWanted() && (upscalerMode.load() != 6) && upscalerObjectMotion.load();
     }
 
     void UpscalerRecordObjectVelocity(RenderWorker *worker, uint32_t width, uint32_t height, const ShaderLibrary *shaderLibrary,
@@ -769,6 +776,7 @@ namespace RT64 {
             constants.size = { float(width), float(height), 0.9f, 0.0f };
         }
 
+        GpuSectionScope timed(WorkloadGpuSections(), GpuSection::UpscalerObjects, worker->commandList.get());
         const std::scoped_lock lock(objectVelocity.mutex);
         ObjectVelocityResources &res = objectVelocity;
         if ((res.color == nullptr) || (res.width != width) || (res.height != height)) {
@@ -852,6 +860,8 @@ namespace RT64 {
         std::atomic<uint32_t> presentOutputWidth{ 0 };
         std::atomic<uint32_t> presentOutputHeight{ 0 };
 
+        int hudSpan[2] = { -1, -1 };
+
         struct HudLayerResources {
             std::mutex mutex;
             std::unique_ptr<RenderTarget> color[2];
@@ -913,6 +923,8 @@ namespace RT64 {
         }
 
         RenderCommandList *commandList = worker->commandList.get();
+        // Timed from here to UpscalerEndHudLayer, which takes in the HUD drawn between the two.
+        hudSpan[layer] = WorkloadGpuSections().start(GpuSection::UpscalerHud, commandList);
         commandList->barriers(RenderBarrierStage::GRAPHICS, {
             RenderTextureBarrier(res.color[layer]->texture.get(), RenderTextureLayout::COLOR_WRITE),
             RenderTextureBarrier(res.depth->texture.get(), RenderTextureLayout::DEPTH_WRITE)
@@ -933,6 +945,8 @@ namespace RT64 {
             return;
         }
         worker->commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.color[layer]->texture.get(), RenderTextureLayout::SHADER_READ) });
+        WorkloadGpuSections().end(hudSpan[layer]);
+        hudSpan[layer] = -1;
         if (layer == 1) {
             res.fresh = true;
         }

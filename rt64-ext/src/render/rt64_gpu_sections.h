@@ -36,6 +36,10 @@ namespace RT64 {
         RayTracingBuild,
         IndirectLight,
         TracedEffects,
+        // The upscalers' extra passes in the game frame: objects' velocity and reactive mask, the world snapshot, the HUD layers.
+        UpscalerObjects,
+        UpscalerSnapshot,
+        UpscalerHud,
         Count
     };
 
@@ -140,10 +144,12 @@ namespace RT64 {
     inline const char *GpuSectionMarker(GpuSection section, bool end) {
         static const char *starts[] = { "water mask: start", "eye adaptation: start", "bloom: start", "scene effects: start",
             "SMAA: start", "FXAA: start", "photo filters: start", "FSR: start", "output: start", "interface: start",
-            "sun shadow map: start", "ray tracing: build", "indirect light: start", "traced effects: start" };
+            "sun shadow map: start", "ray tracing: build", "indirect light: start", "traced effects: start",
+            "upscaler objects: start", "upscaler snapshot: start", "upscaler HUD: start" };
         static const char *ends[] = { "water mask: end", "eye adaptation: end", "bloom: end", "scene effects: end",
             "SMAA: end", "FXAA: end", "photo filters: end", "FSR: end", "output: end", "interface: end",
-            "sun shadow map: end", "ray tracing: built", "indirect light: end", "traced effects: end" };
+            "sun shadow map: end", "ray tracing: built", "indirect light: end", "traced effects: end",
+            "upscaler objects: end", "upscaler snapshot: end", "upscaler HUD: end" };
         static_assert(std::size(starts) == size_t(GpuSection::Count), "one marker per section");
         return end ? ends[uint32_t(section)] : starts[uint32_t(section)];
     }
