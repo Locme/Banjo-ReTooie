@@ -100,6 +100,8 @@ namespace tooie {
     inline const std::string cheats_tab_option = "cheats_tab";
     // DEV > Hide Unnecessary Settings Entry (src/game/hide_vanilla_widescreen.cpp).
     inline const std::string hide_vanilla_widescreen_option = "hide_vanilla_widescreen";
+    // DEV: leaves the Start menu's SETTINGS entry out (pause_settings.cpp; L, 2026-10-23, on by default).
+    inline const std::string hide_pause_settings_option = "hide_pause_settings";
     // Once a frame: keeps the game's own widescreen mode off while that switch is on.
     void vanilla_widescreen_tick(uint8_t* rdram, recomp_context* ctx);
     // The pause menu's Settings page (src/gameplay/pause_settings.cpp opens it as a Totals sub page,

@@ -96,6 +96,7 @@ void tooie::menu_tree::classify() {
             { &reflections_section_option, { &ssr_option, &ssr_stochastic_option, &water_reflections_option,
                 &ice_reflections_option } },
             { &toon_section_option, { &toon_characters_option, &toon_world_option } },
+            { &colour_grading_option, { &contrast_option, &saturation_option, &vignette_option, &grain_option } },
             { &character_section_option, { &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option,
                 &kazooie_feathers_option, &npc_fur_option, &npc_feathers_option } },
         };
