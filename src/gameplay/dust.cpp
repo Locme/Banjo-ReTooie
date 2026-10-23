@@ -42,6 +42,7 @@ namespace {
     // World units of radius for one unit of the game's puff scale, and the cloud's life: tuned by eye (L's test).
     constexpr float radius_per_scale = 22.0f;
     constexpr float life_seconds = 0.9f;
+    constexpr float max_radius = 55.0f;
 
     struct Cloud {
         float pos[3];
@@ -232,6 +233,9 @@ namespace {
         const float end = std::clamp(std::max(scale_end, scale_start), 0.1f, 6.0f);
         c.radius_start = std::max(8.0f, start * radius_per_scale);
         c.radius_end = std::max(c.radius_start * 1.5f, end * radius_per_scale);
+        // The big landing puffs (the ground pound) would be a wide soft ball: capped so none reads as a circle.
+        c.radius_start = std::min(c.radius_start, max_radius * 0.6f);
+        c.radius_end = std::min(c.radius_end, max_radius);
         c.age = 0.0f;
         c.life = life_seconds * (0.8f + 0.4f * hash(n * 7 + 5));
         c.seed = hash(n * 11 + 9) * 64.0f;
