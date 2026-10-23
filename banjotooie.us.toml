@@ -1794,6 +1794,12 @@ func = "func_80800204_chklungophial"
 before_vram = 0x80800204
 text = "tooie_klungo_potion_steer(rdram, ctx);"
 
+# Curated enemies (src/gameplay/damage_mods.cpp): dynamic positioning, at the per-frame update of the shared-helper enemies.
+[[patches.hook]]
+func = "sucoaster_entrypoint_2"
+before_vram = 0x808000F0
+text = "tooie_enemy_strafe(rdram, ctx);"
+
 # Enemy attacks: the shared enemy helper sucoaster_entrypoint_14 sets a 5 to 8 second countdown byte (data +0x12) at these two stores; the hook halves it.
 [[patches.hook]]
 func = "sucoaster_entrypoint_14"

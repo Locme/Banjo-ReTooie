@@ -255,6 +255,12 @@ namespace {
 
     // Whether C Down (RB) is held, from the last camera step; read by the sound log.
     std::atomic<bool> r_held{false};
+    // C Down tap or hold (see free_camera::apply_input): held past the threshold, the fine-tune is on.
+    std::atomic<bool> fine_held{false};
+    // Whether the free camera is running the game's camera now (not first person, a cutscene or a menu).
+    std::atomic<bool> gameplay_camera{false};
+    constexpr std::chrono::milliseconds tap_limit{250};
+    constexpr int tap_pulse_reads = 4;
     // RB fine-tune: the distance range as a multiple of the game's, and the rate (per second, at a full
     // push) of the change.
     constexpr float rb_min_zoom = 0.5f;
@@ -350,15 +356,23 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     stick_y = deadzone(stick_y);
 
     // Mouse and gyro motion since the last step (drained even when unused, so it cannot pile up).
-    float orbit_x = 0.0f;
-    float orbit_y = 0.0f;
-    tooie::motion_aim::take_orbit(&orbit_x, &orbit_y);
-    const auto mouse_mode = wip_option<uint32_t>(tooie::free_camera_orbit_option, (uint32_t)tooie::FreeCameraMouse::Always);
-    if (mouse_mode == (uint32_t)tooie::FreeCameraMouse::Off ||
-        (mouse_mode == (uint32_t)tooie::FreeCameraMouse::Hold && !tooie::hotkeys::down(recompinput::GameInput::CAMERA_MOUSE_LOOK))) {
-        orbit_x = 0.0f;
-        orbit_y = 0.0f;
+    float mouse_x = 0.0f, mouse_y = 0.0f, gyro_x = 0.0f, gyro_y = 0.0f;
+    tooie::motion_aim::take_orbit(&mouse_x, &mouse_y, &gyro_x, &gyro_y);
+    const auto mouse_mode = option<uint32_t>(tooie::free_camera_mouse_option, (uint32_t)tooie::FreeCameraMouse::Always);
+    const auto gyro_mode = option<uint32_t>(tooie::free_camera_gyro_option, (uint32_t)tooie::FreeCameraMouse::Hold);
+    const bool look_key = tooie::hotkeys::down(recompinput::GameInput::CAMERA_MOUSE_LOOK);
+    auto allowed = [&](uint32_t mode) {
+        return mode == (uint32_t)tooie::FreeCameraMouse::Always ||
+            (mode == (uint32_t)tooie::FreeCameraMouse::Hold && look_key);
+    };
+    if (!allowed(mouse_mode)) {
+        mouse_x = mouse_y = 0.0f;
     }
+    if (!allowed(gyro_mode)) {
+        gyro_x = gyro_y = 0.0f;
+    }
+    const float orbit_x = mouse_x + gyro_x;
+    const float orbit_y = mouse_y + gyro_y;
     // Mouse wheel zoom and the middle button (snap behind) while the mouse is on; counts since last step.
     const int32_t wheel_now = recompinput::get_game_mouse_wheel();
     const uint32_t middle_now = recompinput::get_game_mouse_clicks(2);
@@ -380,7 +394,8 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     }
     // Holding C Down (RB) with the option on: the stick's up and down change the distance instead of tilting.
     float rb_zoom_input = 0.0f;
-    if (r_held && wip_option<bool>(tooie::free_camera_rb_distance_option, false)) {
+    gameplay_camera = on && gameplay && !paused;
+    if (fine_held && wip_option<bool>(tooie::free_camera_rb_distance_option, false)) {
         rb_zoom_input = stick_y;
         stick_y = 0.0f;
     }
@@ -632,4 +647,46 @@ extern "C" void tooie_sound_log(uint8_t* rdram, recomp_context* ctx, int which) 
     static const char* const names[] = { "func_800DA298", "func_8009DE38", "func_800DA544" };
     std::printf("[sfx-R] %s a0 %X a1 %X a2 %X\n", names[which], (unsigned)ctx->r4, (unsigned)ctx->r5, (unsigned)ctx->r6);
     std::fflush(stdout);
+}
+
+void tooie::free_camera::apply_input(uint16_t* buttons) {
+    static bool down = false;
+    static bool holding = false;
+    static int pulse = 0;
+    static std::chrono::steady_clock::time_point since;
+    const bool tune = wip_option<bool>(tooie::free_camera_rb_distance_option, false);
+    const bool physical = (*buttons & n64_r_button) != 0;
+    if (!tune || !gameplay_camera.load()) {
+        // Passed through as it is; nothing pending.
+        down = false;
+        holding = false;
+        pulse = 0;
+        fine_held = false;
+        return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (physical && !down) {
+        down = true;
+        holding = false;
+        since = now;
+    }
+    if (physical) {
+        if (!holding && now - since >= tap_limit) {
+            holding = true;
+        }
+        // Kept from the game while it may still be a hold, and for the whole hold.
+        *buttons = (uint16_t)(*buttons & ~n64_r_button);
+    }
+    else if (down) {
+        down = false;
+        if (!holding) {
+            pulse = tap_pulse_reads; // a tap: the game sees a short press now
+        }
+        holding = false;
+    }
+    if (!physical && pulse > 0) {
+        *buttons = (uint16_t)(*buttons | n64_r_button);
+        pulse--;
+    }
+    fine_held = holding;
 }

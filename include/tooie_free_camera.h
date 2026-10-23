@@ -18,7 +18,8 @@ namespace tooie {
     // WIP tab (Graphics config, graphics.json).
     inline const std::string free_camera_floor_clearance_option = "free_camera_floor_clearance";
     inline const std::string free_camera_look_up_option = "free_camera_look_up";
-    inline const std::string free_camera_orbit_option = "free_camera_orbit";
+    inline const std::string free_camera_mouse_option = "free_camera_mouse";
+    inline const std::string free_camera_gyro_option = "free_camera_gyro";
     inline const std::string free_camera_rb_distance_option = "free_camera_rb_distance";
     inline const std::string photo_mode_collision_option = "photo_mode_collision";
     enum class FreeCameraSpeed : uint32_t { Slow, Normal, Fast };
@@ -28,6 +29,12 @@ namespace tooie {
 
 namespace tooie::free_camera {
     bool enabled();
+
+    // From the pad read (src/debug/pad_script.cpp): with WIP > hold C Down to fine-tune distance on and the
+    // free camera running, C Down tells a tap from a hold. A tap goes to the game as a short C Down press
+    // when the button is let go (so the game's camera distance step works as before); a hold is kept from
+    // the game and only fine-tunes the distance.
+    void apply_input(uint16_t* buttons);
 
     // The camera controller of the last viewport stepped (func_8010FC38's argument), 0 before any.
     uint32_t last_controller();

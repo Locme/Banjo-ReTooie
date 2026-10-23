@@ -439,6 +439,45 @@ namespace {
         out << "0x" << std::hex << id << std::dec << ' ' << (enemy ? enemy->name : "?") << ": " << text << '\n';
     }
 
+    // With DEV > Aim trace on: every 2 seconds, one console.log line per object within 600 units of Banjo
+    // with its actor entry (+0x10), model (marker +0x14) and distance, to find the actor of an enemy one is looking at.
+    void nearby_log(uint8_t* rdram) {
+        using namespace tooie::rdram;
+        static auto last = std::chrono::steady_clock::now();
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last < std::chrono::seconds(2) || !tooie::aim_trace::trace_requested() || !tooie::debug::can_warp()) {
+            return;
+        }
+        last = now;
+        const uint32_t player = read_word(rdram, player_table);
+        const uint32_t pos_ptr = valid_ptr(player) ? read_word(rdram, player + player_pos_ptr) : 0;
+        const uint32_t array = read_word(rdram, object_array_pointer);
+        if (!valid_ptr(pos_ptr) || !valid_ptr(array)) {
+            return;
+        }
+        const uint32_t first = read_word(rdram, array + object_first);
+        const uint32_t last_obj = read_word(rdram, array + object_last);
+        if (!valid_ptr(first) || !valid_ptr(last_obj) || last_obj < first || (last_obj - first) / object_size >= max_objects) {
+            return;
+        }
+        const float bx = read_float(rdram, pos_ptr), bz = read_float(rdram, pos_ptr + 8);
+        const int count = (int)((last_obj - first) / object_size) + 1;
+        for (int i = 0; i < count; i++) {
+            const uint32_t object = array + object_base + (uint32_t)i * object_size;
+            const uint32_t marker = read_word(rdram, object);
+            if (!valid_ptr(marker)) {
+                continue;
+            }
+            const float dist = std::hypot(read_float(rdram, object + 4) - bx, read_float(rdram, object + 12) - bz);
+            if (dist > 600.0f) {
+                continue;
+            }
+            printf("[nearby] entry 0x%08X model 0x%04X distance %.0f\n", read_word(rdram, object + object_actor_entry),
+                (unsigned)(uint16_t)read_half(rdram, marker + 0x14), dist);
+        }
+        fflush(stdout);
+    }
+
     // Headless sweep: TOOIE_ENEMY_SWEEP=<hex id>,<hex id>,... reloads the area before each enemy, so only
     // that one is alive, spawns it in front of Banjo and watches it for a while. Pass-overs logged
     // between its "begin" and "end" lines are its own (the guard forgets the places it has seen first).
@@ -651,6 +690,7 @@ void tooie::enemy_spawner::tick(uint8_t* rdram, recomp_context* ctx) {
         read_env();
     }
     sweep_tick(rdram, ctx);
+    nearby_log(rdram);
     uint16_t id = 0;
     bool from_env = false;
     if (env_next < env_requests.size() && tooie::debug::can_warp()) {

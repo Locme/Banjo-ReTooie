@@ -105,6 +105,14 @@ std::map<std::string, uint64_t> tooie::aim_trace::capture_end() {
     return result;
 }
 
+bool tooie::aim_trace::trace_requested() {
+    try {
+        return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::aim_trace::option));
+    } catch (...) {
+        return false;
+    }
+}
+
 bool tooie::aim_trace::sweep_requested() {
     try {
         return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(sweep_option));

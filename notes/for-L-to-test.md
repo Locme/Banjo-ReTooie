@@ -34,6 +34,16 @@
 - Look for: Soft dust clouds replace the flat puffs; they drift with your speed, rise, get pushed aside as you move through them and take the ground's colour. Puffs too small, too big or gone too fast: send the [dust] raw numbers (radius_per_scale and life_seconds in src/gameplay/dust.cpp are guesses). Frame cost with dust on vs off
 - Status: waiting for L
 
+## T565 Find Bargasaurus (actor and model)
+- Asked: 2026-10-23
+- Build: main
+- Steps:
+  1. General > DEV tab: turn on Aim trace
+  2. Stand next to a Bargasaurus (the stegosaurus-like dino in Terrydactyland) for about 10 seconds, then turn Aim trace off
+  3. Send me logs/console.log
+- Look for: lines starting [nearby] (entry, model, distance); the closest one at the dino's distance is it.
+- Status: waiting for L
+
 ## T564 Upscalers: DLSS, DLAA, FSR 3, FSR 4, Temporal
 - Asked: 2026-10-23 09:37 UTC
 - Build: main @ eca73f4
@@ -43,6 +53,15 @@
   3. Try HUD Full Resolution on and off
   4. Run with the console and note the [upscaler] lines
 - Look for: Sharp picture without doubling or trails behind moving characters; no blur on menus and cuts; HUD steady (and sharp with Full Resolution); send the [upscaler] console lines and screenshots. Full guide: notes/upscaler-test-guide.md
+- Status: waiting for L
+
+## T564 Enemy dynamic positioning
+- Asked: 2026-10-23
+- Build: main
+- Steps:
+  1. General > Gameplay: turn on Enemy dynamic positioning
+  2. Fight one of Boltoid, Gruntydactyl, Hothead, Minjo, Moggy, Nutta, Soarasaur, Ugger, Washup, Zubba (spawn it with the Enemy spawner); roll toward it. Also try Lower Enemy Attack Cooldown on the same ones (T563)
+- Look for: it slides sideways as it comes at you and steps out of the line of your roll; no sliding through walls or off ledges, no jitter. If it looks wrong, say which enemy.
 - Status: waiting for L
 
 ## T563 Volumetric mist, fog and clouds (WIP tab)

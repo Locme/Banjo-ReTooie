@@ -45,6 +45,7 @@
 #include "tooie_fine_aim.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_motion_aim.h"
+#include "tooie_free_camera.h"
 #include "tooie_menu_mouse.h"
 #include "tooie_texture_sweep.h"
 #include "tooie_totals_checklist.h"
@@ -318,6 +319,7 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
         tooie::talon_trot::apply(buttons_out);
         tooie::dive::apply(buttons_out);
         tooie::motion_aim::collect();
+        tooie::free_camera::apply_input(buttons_out);
         tooie::cutscene_skip_apply(buttons_out);
         tooie::player_cheats::apply_input(buttons_out);
         tooie::texture_sweep::apply_input(buttons_out);
