@@ -1224,6 +1224,8 @@ void tooie::init_config() {
     tooie::game_frame_rate::add_dev_options(wip);
     // Debug options (under the Debug heading): they moved here from Graphics.
     tooie::effect_views::add_option(wip);
+    // Picker Save Only Current Active sits under the same Debug heading (L, 2026-10-23).
+    tooie::parallax_pick::add_dev_option(wip);
     tooie::interp_check::add_options(wip);
     tooie::texture_slide::add_option(wip);
     tooie::debug::add_heap_check_option(wip);
@@ -1250,9 +1252,6 @@ void tooie::init_config() {
             show_cheats_tab();
         });
     tooie::level_warp::add_option(wip);
-    tooie::parallax_pick::add_dev_option(wip);
-    // L, 2026-10-23: under a Debug heading in DEV.
-    recompui::config::set_option_group(tooie::parallax_pick::save_only_active_option, "Debug");
     recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
     move_saved_hud_placement();
