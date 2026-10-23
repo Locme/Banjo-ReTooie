@@ -724,7 +724,7 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         mist_option,
         "Mist",
-        "With Day and Night on, the Volumetric Mist (a real volume along the ground, see the Volumetrics section) drifts in on the days and nights Mist Time says. Used in place of the Mist setting while the cycle runs. 0 turns it off.",
+        "With Day and Night on, the Volumetric Mist (a real volume along the ground, see Volumetric Mist in the Volumetric Mist section) drifts in on the days and nights Mist Time says. Used in place of the Mist setting while the cycle runs. 0 turns it off.",
         0, 100, 5, 0, false, 50);
     graphics.add_option_hidden_dependency(mist_option, option, Mode::Off);
     graphics.add_enum_option(

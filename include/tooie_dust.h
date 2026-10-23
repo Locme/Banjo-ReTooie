@@ -14,4 +14,8 @@ namespace tooie::dust {
     void add_options(recomp::config::Config& graphics);
     // Once per game frame from tooie_warp_tick (after volumetric::tick): moves the clouds and hands them to the renderer.
     void tick(uint8_t* rdram);
+    // How much dust Banjo has been in since the last call (a puff made near him counts 1, standing in a cloud up to about
+    // 1 a second), for the character surface layer's dirt (picture_filters.cpp). Counted with the option off too: the
+    // game's own puffs dirty him just the same.
+    float take_exposure();
 }

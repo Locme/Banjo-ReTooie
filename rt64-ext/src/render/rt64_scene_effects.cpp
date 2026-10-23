@@ -539,6 +539,23 @@ namespace RT64 {
         memcpy(dustClouds, clouds, size_t(dustCount) * 8 * sizeof(float));
     }
 
+    // The volumetric extras, packed (see VolExtra in SceneEffectsPS.hlsl): [0] fog start / 25 (8 bits), fog colour (3), water
+    // height / 4 (7); [1] water mist and fall mist in hundredths (7 each), fall height / 4 (7).
+    static std::mutex volExtraMutex;
+    static float volExtra[2] = {};
+    // Whether the mist over water or at waterfalls is on (it reads the water mask).
+    static bool VolWaterMistWanted() {
+        const std::scoped_lock lock(volExtraMutex);
+        return (uint32_t(volExtra[1]) & 0x3FFFu) != 0u;
+    }
+
+    void SetSceneVolumetricExtra(float fogStart, uint32_t fogColour, float waterMist, float waterHeight, float fallMist, float fallHeight) {
+        const auto bits = [](float v, float scale, uint32_t most) { return std::min(uint32_t(std::lround(std::max(v, 0.0f) / scale)), most); };
+        const std::scoped_lock lock(volExtraMutex);
+        volExtra[0] = float(bits(fogStart, 25.0f, 255u) | (std::min(fogColour, 4u) << 8) | (bits(waterHeight, 4.0f, 127u) << 11));
+        volExtra[1] = float(bits(waterMist, 0.01f, 100u) | (bits(fallMist, 0.01f, 100u) << 7) | (bits(fallHeight, 4.0f, 127u) << 14));
+    }
+
     static std::mutex lampMutex;
     static std::unordered_set<uint64_t> lampTextures;
     static float lampLights[SceneMaxLights * 4] = {};
@@ -1168,14 +1185,14 @@ namespace RT64 {
         effectsSettings.volMistOffset = std::clamp(mistOffset, -240.0f, 240.0f);
     }
 
-    // The cloud shape (cover 0 to 1, height 0.25 to 4, thickness 0.1 to 2, speed 0 to 8) in 6 bits each, with
+    // The cloud shape (cover 0 to 1, height 0.0625 to 4, thickness 0.1 to 2, speed 0 to 8) in 6 bits each, with
     // F8 compare as the sign, so it fits in one float of the effects' push constants (CloudShape in
     // SceneEffectsPS.hlsl). Height steps in log2 and speed in its square root, as the settings do.
     static float PackSceneClouds(const float shape[4], bool compare) {
         auto bits = [](float v, float low, float high) {
             return uint32_t(std::lround(std::clamp((v - low) / (high - low), 0.0f, 1.0f) * 63.0f));
         };
-        const uint32_t packed = bits(shape[0], 0.0f, 1.0f) | (bits(std::log2(std::max(shape[1], 0.25f)), -2.0f, 2.0f) << 6) |
+        const uint32_t packed = bits(shape[0], 0.0f, 1.0f) | (bits(std::log2(std::max(shape[1], 0.0625f)), -4.0f, 2.0f) << 6) |
             (bits(shape[2], 0.1f, 2.0f) << 12) | (bits(std::sqrt(std::max(shape[3], 0.0f)), 0.0f, std::sqrt(8.0f)) << 18);
         return compare ? -(float(packed) + 1.0f) : float(packed);
     }
@@ -1183,7 +1200,7 @@ namespace RT64 {
     void SetSceneClouds(float cover, float height, float thickness, float speed) {
         const std::scoped_lock lock(effectsMutex);
         effectsSettings.dayCloudShape[0] = std::clamp(cover, 0.0f, 1.0f);
-        effectsSettings.dayCloudShape[1] = std::clamp(height, 0.25f, 4.0f);
+        effectsSettings.dayCloudShape[1] = std::clamp(height, 0.0625f, 4.0f);
         effectsSettings.dayCloudShape[2] = std::clamp(thickness, 0.1f, 2.0f);
         effectsSettings.dayCloudShape[3] = std::clamp(speed, 0.0f, 8.0f);
     }
@@ -1363,8 +1380,31 @@ namespace RT64 {
         effectsSettings.featherTransparency = std::clamp(transparency, 0.0f, 1.0f);
     }
 
-    void SetSceneCharSurface(float wet, float snow, float dirt) {
+    static std::atomic<int64_t> sandUnderfootAt{ 0 };
+
+    void NoteSandUnderfoot() {
+        sandUnderfootAt.store(std::chrono::steady_clock::now().time_since_epoch().count());
+    }
+
+    bool SceneSandUnderfoot() {
+        const int64_t at = sandUnderfootAt.load();
+        return (at != 0) && ((std::chrono::steady_clock::now().time_since_epoch().count() - at) < 300000000);
+    }
+
+    bool SceneCharFeet(float (&feet)[3]) {
         const std::scoped_lock lock(effectsMutex);
+        if (effectsSettings.player[1] < -1e8f) {
+            return false;
+        }
+        for (int i = 0; i < 3; i++) {
+            feet[i] = effectsSettings.player[i];
+        }
+        return true;
+    }
+
+    void SetSceneCharSurface(float wet, float snow, float dirt, float sand) {
+        const std::scoped_lock lock(effectsMutex);
+        effectsSettings.charSand = std::clamp(sand, 0.0f, 1.0f);
         effectsSettings.charWet = std::clamp(wet, 0.0f, 1.0f);
         effectsSettings.charSnow = std::clamp(snow, 0.0f, 1.0f);
         effectsSettings.charDirt = std::clamp(dirt, 0.0f, 1.0f);
@@ -1372,7 +1412,7 @@ namespace RT64 {
 
     bool SceneCharSurfaceOn() {
         const std::scoped_lock lock(effectsMutex);
-        return (effectsSettings.charWet > 0.0f) || (effectsSettings.charSnow > 0.0f) || (effectsSettings.charDirt > 0.0f);
+        return (effectsSettings.charWet > 0.0f) || (effectsSettings.charSnow > 0.0f) || (effectsSettings.charDirt > 0.0f) || (effectsSettings.charSand > 0.0f);
     }
 
     void SetSceneNpcFur(float amount, float length, float density, float noisiness) {
@@ -1437,7 +1477,7 @@ namespace RT64 {
         const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams)
     {
         SceneEffectsSettings settings = GetSceneEffects();
-        const bool charSurface = (settings.charWet > 0.0f) || (settings.charSnow > 0.0f) || (settings.charDirt > 0.0f);
+        const bool charSurface = (settings.charWet > 0.0f) || (settings.charSnow > 0.0f) || (settings.charDirt > 0.0f) || (settings.charSand > 0.0f);
         if (((settings.fur <= 0.0f) && (settings.npcFur <= 0.0f) && !charSurface) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
             return false;
         }
@@ -1472,7 +1512,7 @@ namespace RT64 {
         frameParams.furParams = { 2.5f * std::max(settings.furLength, 0.1f), 2.4f * settings.furDensity, 0.6f - 0.3f * amount, settings.furNoisiness };
         frameParams.furSway = { settings.furSway[0], settings.furSway[1], settings.furSway[2], 0.0f };
         const float npcAmount = std::min(settings.npcFur, 1.0f);
-        frameParams.charSurface = { settings.charWet, settings.charSnow, settings.charDirt, 0.0f };
+        frameParams.charSurface = { settings.charWet, settings.charSnow, settings.charDirt, settings.charSand };
         frameParams.npcFurParams = { 2.5f * std::max(settings.npcFurLength, 0.1f), 2.4f * settings.npcFurDensity, 0.6f - 0.3f * npcAmount, settings.npcFurNoisiness };
         return true;
     }
@@ -2474,6 +2514,9 @@ namespace RT64 {
     }
 
     bool SceneWaterWanted() {
+        if (VolWaterMistWanted()) {
+            return true;
+        }
         const std::scoped_lock lock(effectsMutex);
         return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.iceReflections > 0.0f) || (effectsSettings.screenSpaceReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) || (effectsSettings.view == SceneEffectsViewSsr) ||
             // The rain rings on water need it too.
@@ -3662,6 +3705,11 @@ namespace RT64 {
             memset(dust, 0, 16 * (1 + 2 * SceneMaxDust));
             const std::scoped_lock lock(dustMutex);
             dust[0] = float(dustCount);
+            {
+                const std::scoped_lock extraLock(volExtraMutex);
+                dust[1] = volExtra[0];
+                dust[2] = volExtra[1];
+            }
             memcpy(dust + 4, dustClouds, size_t(dustCount) * 8 * sizeof(float));
             res.dustBuffer->unmap();
         }

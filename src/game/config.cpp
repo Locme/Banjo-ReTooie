@@ -678,6 +678,11 @@ void tooie::init_config() {
         },
         tooie::FreeCameraEaseBack::Off);
     qol.add_bool_option(
+        tooie::free_camera_hover_option,
+        "Free camera: hover over small objects",
+        "A small object near the camera no longer pulls it in towards Banjo when the camera can still see him past it: the camera stays where you put it and hovers over the object. An object that is really between Banjo and the camera still pulls it in.",
+        true);
+    qol.add_bool_option(
         tooie::free_camera_floor_clearance_option,
         "Free camera: floor clearance",
         "Keeps the free camera a little above the floor under it, so tilting the camera low cannot push it into the ground.",
@@ -691,7 +696,8 @@ void tooie::init_config() {
     for (const std::string* id : { &tooie::free_camera_speed_option, &tooie::free_camera_invert_x_option,
                                    &tooie::free_camera_invert_y_option,
                                    &tooie::free_camera_smooth_walls_option, &tooie::free_camera_ease_back_option,
-                                   &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option }) {
+                                   &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option,
+                                   &tooie::free_camera_hover_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
     qol.add_enum_option(
@@ -863,10 +869,26 @@ void tooie::init_config() {
     {
         // Volumetric mist, fog and clouds are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
         namespace vol = tooie::volumetric;
-        for (const std::string* id : { &vol::mist_option, &vol::fog_option, &vol::fog_preset_option, &vol::clouds_option, &vol::file_option, &tooie::dust::option }) {
+        for (const std::string* id : { &vol::mist_option, &vol::mist_water_option, &vol::mist_water_height_option, &vol::mist_fall_option,
+                &vol::mist_fall_height_option, &vol::fog_option, &vol::fog_preset_option, &vol::fog_start_option, &vol::fog_colour_option,
+                &vol::clouds_option, &vol::cloud_amount_option, &vol::cloud_height_option, &vol::cloud_size_option, &vol::cloud_speed_option,
+                &vol::file_option, &tooie::dust::option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
-        recompui::config::set_option_group(vol::mist_option, "Volumetrics");
+        // One heading a kind, so each can be tested on its own.
+        recompui::config::set_option_group(vol::mist_option, "Volumetric Mist");
+        recompui::config::set_option_group(vol::fog_option, "Volumetric Fog");
+        recompui::config::set_option_group(vol::clouds_option, "Volumetric Clouds");
+        recompui::config::set_option_group(vol::file_option, "Volumetric Levels");
+        recompui::config::set_option_group(tooie::dust::option, "Volumetric Dust");
+    }
+    {
+        // Wet, snowy and dirty characters are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
+        namespace pf = tooie::picture_filters;
+        for (const std::string* id : { &pf::char_wet_option, &pf::char_snow_option, &pf::char_dirt_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        recompui::config::set_option_group(pf::char_wet_option, "Character surface");
     }
     graphics.add_bool_option(
         tooie::draw_distance_option,
