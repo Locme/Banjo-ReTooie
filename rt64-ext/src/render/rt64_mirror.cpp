@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <iterator>
 #include <mutex>
 #include <unordered_set>
 
@@ -32,6 +33,33 @@ namespace RT64 {
     bool MirrorTextTexture(uint64_t hash) {
         const std::scoped_lock lock(textTextureMutex);
         return textTextures.count(hash) != 0;
+    }
+
+    namespace {
+        std::mutex pictureMutex;
+        uint32_t pictureAddresses[4] = {};
+        uint32_t pictureNext = 0;
+    }
+
+    void NoteMirrorPictureAddress(uint32_t address) {
+        const std::scoped_lock lock(pictureMutex);
+        for (uint32_t known : pictureAddresses) {
+            if (known == address) {
+                return;
+            }
+        }
+        pictureAddresses[pictureNext] = address;
+        pictureNext = (pictureNext + 1) % uint32_t(std::size(pictureAddresses));
+    }
+
+    bool MirrorPictureAddress(uint32_t address) {
+        const std::scoped_lock lock(pictureMutex);
+        for (uint32_t known : pictureAddresses) {
+            if ((known != 0) && (known == address)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     void SetMirrorMode(bool on) {

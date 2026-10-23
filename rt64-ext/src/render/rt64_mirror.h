@@ -23,6 +23,11 @@ namespace RT64 {
     void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
     bool MirrorTextTexture(uint64_t hash);
 
+    // Mirror Mode: framebuffers the 3D world was drawn to lately. A copy of one (the Start menu's background, a transition's
+    // pieces) holds the picture as the present's flip wants it, so it is never drawn flipped. Render threads.
+    void NoteMirrorPictureAddress(uint32_t address);
+    bool MirrorPictureAddress(uint32_t address);
+
     struct MirrorRenderer {
         std::unique_ptr<RenderTexture> outputTexture;
         std::unique_ptr<RenderFramebuffer> outputFramebuffer;
