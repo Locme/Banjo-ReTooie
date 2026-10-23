@@ -396,6 +396,8 @@ namespace {
     std::vector<uint16_t> aim_done;
 
     std::filesystem::path aim_pending_path() {
+        std::error_code ec;
+        std::filesystem::create_directories(tooie::dev_files::folder(), ec);
         return tooie::dev_files::path("aim_sweep_pending.txt");
     }
     void aim_pending_set(uint16_t id) {
@@ -416,7 +418,7 @@ namespace {
             }
         }
         const Enemy* enemy = find_enemy(id);
-        std::ofstream out(tooie::dev_files::path("aim_sweep.txt"), (id == 0 && !aim_resumed) ? std::ios::trunc : std::ios::app);
+        std::ofstream out((aim_pending_path().parent_path() / "aim_sweep.txt"), (id == 0 && !aim_resumed) ? std::ios::trunc : std::ios::app);
         if (!out.good()) {
             return;
         }
@@ -433,7 +435,7 @@ namespace {
 
     void aim_sweep_note(uint16_t id, const char* text) {
         const Enemy* enemy = find_enemy(id);
-        std::ofstream out(tooie::dev_files::path("aim_sweep.txt"), std::ios::app);
+        std::ofstream out((aim_pending_path().parent_path() / "aim_sweep.txt"), std::ios::app);
         out << "0x" << std::hex << id << std::dec << ' ' << (enemy ? enemy->name : "?") << ": " << text << '\n';
     }
 
