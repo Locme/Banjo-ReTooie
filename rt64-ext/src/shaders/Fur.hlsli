@@ -90,10 +90,12 @@ bool FurShell(float3 anchor, float3 baseColor, float share, bool white, float ma
     // noisiness, how uneven the coat is: tufts that stand taller or lower (a coarser noise moving the threshold)
     // and strands lighter or darker than their neighbours.
     const float4 params = white ? FrParams.npcFurParams : FrParams.furParams;
-    const float3 grid = anchor * params.y;
+    // (Banjo's fur wet: the strands clump into coarser locks and the coat sits lower, FrParams.charSurface.x.)
+    const float wet = white ? 0.0f : FrParams.charSurface.x;
+    const float3 grid = anchor * params.y * (1.0f - 0.35f * wet);
     const float noise = FurNoise(grid);
     const float tufts = FurNoise(grid * 0.23f + 17.0f) - 0.5f;
-    if (noise - share * share * params.z + tufts * 0.35f * params.w < 0.55f) {
+    if (noise - share * share * (params.z + 0.45f * wet) + tufts * 0.35f * params.w < 0.55f) {
         return false;
     }
 

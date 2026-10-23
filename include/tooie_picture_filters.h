@@ -144,6 +144,11 @@ namespace tooie::picture_filters {
     inline const std::string banjo_fur_length_option = "banjo_fur_length";
     inline const std::string banjo_fur_density_option = "banjo_fur_density";
     inline const std::string banjo_fur_noisiness_option = "banjo_fur_noisiness";
+    // The character surface layer (rt64-ext/src/shaders/CharSurface.hlsli): how wet, snowy and dirty Banjo and Kazooie can
+    // get, 0 (off) to 100.
+    inline const std::string char_wet_option = "char_wet";
+    inline const std::string char_snow_option = "char_snow";
+    inline const std::string char_dirt_option = "char_dirt";
     // The Character Shaders section's switch: shows Banjo's fur and Kazooie's feathers (hiding them turns none off).
     inline const std::string character_section_option = "character_shaders_section";
     // Kazooie's feathers (rt64-ext/src/shaders/GrassGS.hlsl): how full (0 off) and how big.
@@ -172,6 +177,8 @@ namespace tooie::picture_filters {
     bool toon_characters_on();
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.
     bool banjo_fur_on();
+    // Any of the character surface layer's sliders is above 0: the model tagging marks Banjo's and Kazooie's draws.
+    bool char_surface_on();
     // Whether a texture has a Light Source pick, so the model tagging tells RT64 which model each matrix is part of.
     bool light_source_models_on();
     // Whether sun shadows are on, so the game's culling keeps what casts them from just outside the picture.
