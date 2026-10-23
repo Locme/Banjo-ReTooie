@@ -800,7 +800,7 @@ void tooie::init_config() {
     graphics.add_bool_option(
         tooie::free_camera_rb_distance_option,
         "Free camera: hold C Down to fine-tune distance",
-        "Hold C Down (RB on a controller, the game's camera distance button, which still works as it always did when you only tap it) and push the camera stick up or down to move the free camera closer or further away, in small steps, from about half to twice the game's distance.",
+        "Hold C Down (RB on a controller, the game's camera distance button) and push the camera stick up or down to move the free camera closer or further away, in small steps, from about half to twice the game's distance. A quick tap still does the game's own camera distance step; only a hold (about a quarter of a second) fine-tunes, and the game does not see it.",
         false);
     {
         namespace pf = tooie::picture_filters;
