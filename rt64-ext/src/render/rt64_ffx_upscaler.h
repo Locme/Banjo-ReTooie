@@ -20,10 +20,12 @@ namespace RT64 {
     // loaded when first needed; with them missing, or FSR 4 on a card that cannot run it, evaluate() returns false.
     struct FfxBackend {
         // Same inputs as DlssBackend::evaluate. fsr4 picks the FSR 4 provider (machine learning), else FSR 3.
-        // nearPlane, farPlane and fovY (radians) are the camera's, for the upscaler's depth tests.
+        // nearPlane, farPlane and fovY (radians) are the camera's, for the upscaler's depth tests. reactive (R8, may be null)
+        // marks the see-through draws; sharpness 0 to 1 turns on FSR's own sharpening.
         bool evaluate(RenderDevice *device, RenderCommandList *commandList, RenderTexture *color, RenderTexture *depth, RenderTexture *motion,
             RenderTexture *output, uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight,
-            float jitterX, float jitterY, bool reset, bool fsr4, bool native, bool hdr, float nearPlane, float farPlane, float fovY);
+            float jitterX, float jitterY, bool reset, bool fsr4, bool native, bool hdr, float nearPlane, float farPlane, float fovY,
+            RenderTexture *reactive, float sharpness);
 
         bool unavailable() const { return failed; }
         std::string reason;

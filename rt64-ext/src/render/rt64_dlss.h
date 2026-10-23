@@ -22,10 +22,11 @@ namespace RT64 {
         // (R32), motion the velocity (previous minus current, pixels) at the same size, output outputWidth by outputHeight
         // with unordered access. Returns false (and says why on the console, once) when it cannot: no Direct3D 12, no RTX
         // card, no nvngx_dlss.dll, an old driver. quality: 0 Quality, 1 Balanced, 2 Performance, 3 Ultra Performance;
-        // native true for DLAA.
+        // native true for DLAA. reactive (R8, may be null) marks the see-through draws.
         bool evaluate(RenderDevice *device, RenderCommandList *commandList, RenderTexture *color, RenderTexture *depth, RenderTexture *motion,
             RenderTexture *output, uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight,
-            float jitterX, float jitterY, bool reset, uint32_t quality, bool native, bool hdr);
+            float jitterX, float jitterY, bool reset, uint32_t quality, bool native, bool hdr,
+            RenderTexture *reactive);
 
         // True once DLSS has been found unusable; the caller then uses another resolve.
         bool unavailable() const { return failed; }

@@ -59,7 +59,17 @@ namespace RT64 {
     // sets the vertex and index buffers and issues the draws.
     bool UpscalerObjectVelocityWanted();
     void UpscalerRecordObjectVelocity(RenderWorker *worker, uint32_t width, uint32_t height, const ShaderLibrary *shaderLibrary,
-        const RenderBuffer *worldPos, const RenderBuffer *worldVel, const std::function<void(RenderCommandList *)> &draw);
+        const RenderBuffer *worldPos, const RenderBuffer *worldVel, const std::function<void(RenderCommandList *)> &draw,
+        const std::function<void(RenderCommandList *)> &drawReactive);
+
+    // Graphics > Upscaler > Reactive mask: the see-through draws (particles, fire, spray) marked so the upscaler trusts
+    // its history less there (drawReactive, in the call above, draws them). And Sharpness (0 to 1).
+    void SetUpscalerReactive(bool enabled);
+    void SetUpscalerSharpness(float sharpness);
+    float UpscalerSharpness();
+
+    // The present queue: the reactive mask (R8) of the frame being shown, or null. Taken once.
+    RenderTexture *UpscalerObjectReactive(uint32_t width, uint32_t height);
 
     // The present queue: the objects' velocity of the frame being shown (alpha 1 where an object was drawn), or null.
     RenderTexture *UpscalerObjectVelocity(uint32_t width, uint32_t height);

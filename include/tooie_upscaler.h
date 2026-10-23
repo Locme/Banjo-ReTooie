@@ -14,12 +14,21 @@ namespace tooie::upscaler {
     inline const std::string quality_option = "upscaler_quality";
     inline const std::string hud_option = "upscaler_hud_outside";
     inline const std::string hud_full_option = "upscaler_hud_full";
+    inline const std::string reactive_option = "upscaler_reactive";
+    inline const std::string sharpness_option = "upscaler_sharpness";
 
     enum class Quality : uint32_t {
         Quality,
         Balanced,
         Performance,
         UltraPerformance,
+    };
+
+    enum class Sharpness : uint32_t {
+        Off,
+        Low,
+        Medium,
+        High,
     };
 
     enum class Mode : uint32_t {

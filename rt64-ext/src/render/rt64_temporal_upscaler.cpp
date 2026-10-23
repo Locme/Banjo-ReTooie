@@ -23,6 +23,8 @@ namespace RT64 {
     namespace {
         std::atomic<uint32_t> upscalerMode{ 0 };
         std::atomic<uint32_t> upscalerQuality{ 0 };
+        std::atomic<float> upscalerSharpness{ 0.0f };
+        std::atomic<bool> upscalerReactive{ true };
 
         struct Camera {
             float projection[16] = {};
@@ -247,6 +249,18 @@ namespace RT64 {
 
     uint32_t GetUpscalerMode() {
         return upscalerMode.load();
+    }
+
+    void SetUpscalerSharpness(float sharpness) {
+        upscalerSharpness = std::clamp(sharpness, 0.0f, 1.0f);
+    }
+
+    void SetUpscalerReactive(bool enabled) {
+        upscalerReactive = enabled;
+    }
+
+    float UpscalerSharpness() {
+        return upscalerSharpness.load();
     }
 
     void SetUpscalerQuality(uint32_t quality) {
@@ -485,7 +499,9 @@ namespace RT64 {
                 dlssOutputHeight = outputHeight;
                 reset = true;
             }
+            RenderTexture *reactiveMask = UpscalerObjectReactive(inputWidth, inputHeight);
             RenderTextureBarrier dlssBarriers[] = {
+                RenderTextureBarrier((reactiveMask != nullptr) ? reactiveMask : input, RenderTextureLayout::SHADER_READ),
                 RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
                 RenderTextureBarrier(depthFloatTexture.get(), RenderTextureLayout::SHADER_READ),
                 RenderTextureBarrier(velocityTexture.get(), RenderTextureLayout::SHADER_READ),
@@ -503,13 +519,13 @@ namespace RT64 {
             bool ran;
             if (useDlss) {
                 ran = dlss.evaluate(device, commandList, input, depthFloatTexture.get(), velocityTexture.get(), dlssOutput.get(), inputWidth, inputHeight,
-                    outputWidth, outputHeight, jitterX, jitterY, reset || !historyValid, upscalerQuality.load(), mode == 4, shaderLibrary->usesHDR);
+                    outputWidth, outputHeight, jitterX, jitterY, reset || !historyValid, upscalerQuality.load(), mode == 4, shaderLibrary->usesHDR, reactiveMask);
             }
             else {
                 float nearPlane, farPlane, fovY;
                 UpscalerCameraRange(nearPlane, farPlane, fovY);
                 ran = ffx.evaluate(device, commandList, input, depthFloatTexture.get(), velocityTexture.get(), dlssOutput.get(), inputWidth, inputHeight,
-                    outputWidth, outputHeight, jitterX, jitterY, reset || !historyValid, mode != 7, mode == 2, shaderLibrary->usesHDR, nearPlane, farPlane, fovY);
+                    outputWidth, outputHeight, jitterX, jitterY, reset || !historyValid, mode != 7, mode == 2, shaderLibrary->usesHDR, nearPlane, farPlane, fovY, reactiveMask, upscalerSharpness.load());
             }
             if (ran)
             {
@@ -562,6 +578,7 @@ namespace RT64 {
             interop::UpscalerResolveCB gsrConstants;
             gsrConstants.sizes = { float(inputWidth), float(inputHeight), float(outputWidth), float(outputHeight) };
             gsrConstants.jitter = { 0.0f, 0.0f, 0.0f, 0.0f };
+            gsrConstants.extra = { 0.0f, 0.0f, 0.0f, 0.0f };
             RenderTextureBarrier gsrBarriers[] = {
                 RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
                 RenderTextureBarrier(resolved[gsrTarget].get(), RenderTextureLayout::COLOR_WRITE)
@@ -593,6 +610,7 @@ namespace RT64 {
         interop::UpscalerResolveCB constants;
         constants.sizes = { float(inputWidth), float(inputHeight), float(outputWidth), float(outputHeight) };
         constants.jitter = { currentJitter[0], currentJitter[1], reset ? 0.0f : 1.0f, 0.1f };
+        constants.extra = { upscalerSharpness.load(), 0.0f, 0.0f, 0.0f };
 
         RenderTextureBarrier barriers[] = {
             RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
@@ -652,6 +670,7 @@ namespace RT64 {
         interop::UpscalerResolveCB constants;
         constants.sizes = { float(inputWidth), float(inputHeight), float(outputWidth), float(outputHeight) };
         constants.jitter = { shaderLibrary->usesHDR ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+        constants.extra = { 0.0f, 0.0f, 0.0f, 0.0f };
 
         RenderTextureBarrier barriers[] = {
             RenderTextureBarrier(upscaled, RenderTextureLayout::SHADER_READ),
@@ -678,12 +697,14 @@ namespace RT64 {
         struct ObjectVelocityResources {
             std::mutex mutex;
             std::unique_ptr<RenderTexture> color;
+            std::unique_ptr<RenderTexture> reactive;
             std::unique_ptr<RenderTexture> depth;
             std::unique_ptr<RenderFramebuffer> framebuffer;
             std::unique_ptr<ObjectVelocityDescriptorSet> set;
             uint32_t width = 0;
             uint32_t height = 0;
             bool fresh = false;
+            bool reactiveFresh = false;
         };
 
         ObjectVelocityResources objectVelocity;
@@ -694,9 +715,10 @@ namespace RT64 {
     }
 
     void UpscalerRecordObjectVelocity(RenderWorker *worker, uint32_t width, uint32_t height, const ShaderLibrary *shaderLibrary,
-        const RenderBuffer *worldPos, const RenderBuffer *worldVel, const std::function<void(RenderCommandList *)> &draw)
+        const RenderBuffer *worldPos, const RenderBuffer *worldVel, const std::function<void(RenderCommandList *)> &draw,
+        const std::function<void(RenderCommandList *)> &drawReactive)
     {
-        if ((width == 0) || (height == 0) || (shaderLibrary->upscalerObjectVelocity.pipeline == nullptr)) {
+        if ((width == 0) || (height == 0) || (shaderLibrary->upscalerObjectVelocity.pipeline == nullptr) || (shaderLibrary->upscalerReactive.pipeline == nullptr)) {
             return;
         }
 
@@ -732,7 +754,7 @@ namespace RT64 {
             constants.prev1 = { prevVP[4], prevVP[5], prevVP[6], prevVP[7] };
             constants.prev2 = { prevVP[8], prevVP[9], prevVP[10], prevVP[11] };
             constants.prev3 = { prevVP[12], prevVP[13], prevVP[14], prevVP[15] };
-            constants.size = { float(width), float(height), 0.0f, 0.0f };
+            constants.size = { float(width), float(height), 0.9f, 0.0f };
         }
 
         const std::scoped_lock lock(objectVelocity.mutex);
@@ -742,10 +764,12 @@ namespace RT64 {
             res.color = worker->device->createTexture(RenderTextureDesc::ColorTarget(width, height, RenderFormat::R16G16B16A16_FLOAT));
             res.color->setName("Upscaler Object Velocity");
             RenderClearValue clearValue = RenderClearValue::Depth(RenderDepth(), RenderFormat::D32_FLOAT);
+            res.reactive = worker->device->createTexture(RenderTextureDesc::ColorTarget(width, height, RenderFormat::R8_UNORM));
+            res.reactive->setName("Upscaler Reactive Mask");
             res.depth = worker->device->createTexture(RenderTextureDesc::DepthTarget(width, height, RenderFormat::D32_FLOAT, RenderMultisampling(), &clearValue));
             res.depth->setName("Upscaler Object Velocity Depth");
-            const RenderTexture *colorTex = res.color.get();
-            res.framebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&colorTex, 1, res.depth.get()));
+            const RenderTexture *colorTex[2] = { res.color.get(), res.reactive.get() };
+            res.framebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(colorTex, 2, res.depth.get()));
             res.width = width;
             res.height = height;
         }
@@ -758,10 +782,12 @@ namespace RT64 {
         RenderCommandList *commandList = worker->commandList.get();
         commandList->barriers(RenderBarrierStage::GRAPHICS, {
             RenderTextureBarrier(res.color.get(), RenderTextureLayout::COLOR_WRITE),
+            RenderTextureBarrier(res.reactive.get(), RenderTextureLayout::COLOR_WRITE),
             RenderTextureBarrier(res.depth.get(), RenderTextureLayout::DEPTH_WRITE)
         });
         commandList->setFramebuffer(res.framebuffer.get());
         commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
+        commandList->clearColor(1, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
         commandList->clearDepth(true, 1.0f);
         commandList->setViewports(RenderViewport(0.0f, 0.0f, float(width), float(height)));
         commandList->setScissors(RenderRect(0, 0, width, height));
@@ -770,14 +796,37 @@ namespace RT64 {
         commandList->setGraphicsDescriptorSet(res.set->get(), 0);
         commandList->setGraphicsPushConstants(0, &constants);
         draw(commandList);
-        commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.color.get(), RenderTextureLayout::SHADER_READ) });
+        res.reactiveFresh = false;
+        if (drawReactive && upscalerReactive.load()) {
+            // The see-through draws over the solid ones; the same descriptors and constants, another pixel shader.
+            commandList->setPipeline(shaderLibrary->upscalerReactive.pipeline.get());
+            commandList->setGraphicsPipelineLayout(shaderLibrary->upscalerReactive.pipelineLayout.get());
+            commandList->setGraphicsDescriptorSet(res.set->get(), 0);
+            commandList->setGraphicsPushConstants(0, &constants);
+            drawReactive(commandList);
+            res.reactiveFresh = true;
+        }
+        commandList->barriers(RenderBarrierStage::GRAPHICS, {
+            RenderTextureBarrier(res.color.get(), RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(res.reactive.get(), RenderTextureLayout::SHADER_READ)
+        });
         res.fresh = true;
+    }
+
+    RenderTexture *UpscalerObjectReactive(uint32_t width, uint32_t height) {
+        const std::scoped_lock lock(objectVelocity.mutex);
+        if (!objectVelocity.reactiveFresh || (objectVelocity.reactive == nullptr) || (objectVelocity.width != width) || (objectVelocity.height != height)) {
+            return nullptr;
+        }
+        objectVelocity.reactiveFresh = false;
+        return objectVelocity.reactive.get();
     }
 
     RenderTexture *UpscalerObjectVelocity(uint32_t width, uint32_t height) {
         const std::scoped_lock lock(objectVelocity.mutex);
         if (!objectVelocity.fresh || (objectVelocity.color == nullptr) || (objectVelocity.width != width) || (objectVelocity.height != height)) {
             objectVelocity.fresh = false;
+            objectVelocity.reactiveFresh = false;
             return nullptr;
         }
         objectVelocity.fresh = false;
@@ -917,6 +966,7 @@ namespace RT64 {
         interop::UpscalerResolveCB constants;
         constants.sizes = { float(outputWidth), float(outputHeight), float(outputWidth), float(outputHeight) };
         constants.jitter = { shaderLibrary->usesHDR ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+        constants.extra = { 0.0f, 0.0f, 0.0f, 0.0f };
 
         RenderTextureBarrier barriers[] = {
             RenderTextureBarrier(upscaled, RenderTextureLayout::SHADER_READ),

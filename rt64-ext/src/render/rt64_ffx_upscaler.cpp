@@ -57,7 +57,8 @@ namespace RT64 {
 
     bool FfxBackend::evaluate(RenderDevice *device, RenderCommandList *commandList, RenderTexture *color, RenderTexture *depth, RenderTexture *motion,
         RenderTexture *output, uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight,
-        float jitterX, float jitterY, bool reset, bool fsr4, bool native, bool hdr, float nearPlane, float farPlane, float fovY)
+        float jitterX, float jitterY, bool reset, bool fsr4, bool native, bool hdr, float nearPlane, float farPlane, float fovY,
+        RenderTexture *reactive, float sharpness)
     {
         if (failed) {
             return false;
@@ -185,8 +186,11 @@ namespace RT64 {
         dispatch.motionVectorScale = { 1.0f, 1.0f };
         dispatch.renderSize = { inputWidth, inputHeight };
         dispatch.upscaleSize = { outputWidth, outputHeight };
-        dispatch.enableSharpening = false;
-        dispatch.sharpness = 0.0f;
+        dispatch.enableSharpening = sharpness > 0.0f;
+        dispatch.sharpness = sharpness;
+        if (reactive != nullptr) {
+            dispatch.reactive = ffxApiGetResourceDX12(static_cast<D3D12Texture *>(reactive)->d3d, FFX_API_RESOURCE_STATE_COMPUTE_READ);
+        }
         dispatch.frameTimeDelta = frameMs;
         dispatch.preExposure = 1.0f;
         dispatch.reset = reset;
@@ -219,7 +223,7 @@ namespace RT64 {
     }
 
     bool FfxBackend::evaluate(RenderDevice *, RenderCommandList *, RenderTexture *, RenderTexture *, RenderTexture *, RenderTexture *,
-        uint32_t, uint32_t, uint32_t, uint32_t, float, float, bool, bool, bool, bool, float, float, float)
+        uint32_t, uint32_t, uint32_t, uint32_t, float, float, bool, bool, bool, bool, float, float, float, RenderTexture *, float)
     {
         fail("this build has no FSR 3 / FSR 4 (Windows builds with the FidelityFX files only)");
         return false;

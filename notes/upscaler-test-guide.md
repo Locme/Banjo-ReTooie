@@ -8,6 +8,8 @@ Graphics > **WIP** tab > **Upscaler** section:
 - **Upscaler Quality**: Quality (about 67% of window height), Balanced (58%), Performance (50%), Ultra Performance (33%). Only used when **Resolution is Auto**; the native modes (FSR 4 Native AA, DLAA) ignore it.
 - **Upscaler: HUD Outside** (on by default): keeps the HUD out of the upscaler.
 - **Upscaler: HUD Full Resolution (Experimental)** (off by default): draws the HUD again at window resolution.
+- **Upscaler: Reactive Mask** (on by default): marks particles, fire and spray so FSR/DLSS trust their history less there.
+- **Upscaler: Sharpness** (Off/Low/Medium/High): sharpening after the upscale (Temporal and FSR; DLSS ignores it).
 
 Set **Resolution to Auto** first, otherwise the game renders at its normal size and the upscalers only anti-alias.
 
@@ -28,6 +30,8 @@ Also send a screenshot or two per mode: standing still, running, and in a menu.
 - **Menus, pause, cutscene cuts, level warps**: should not blur or show a ghost of the previous picture for more than a frame. The log's `history resets` goes up on cuts.
 - **Water, fire, particles, grass**: these can ghost (no reactive mask yet). Note which ones.
 - **HUD** (Outside on): hearts/counters/text should be steady and not ghost when they change. They are drawn at the lowered resolution, so slightly soft at Performance or lower.
+- **Reactive Mask**: stand by a fire, torch, waterfall spray or dust cloud while moving the camera with FSR or DLSS on. Toggle the option: with it on there should be fewer smeared trails behind particles. If particles look wrong (flicker, missing, noisy) or the picture breaks, say so and turn it off. The console line to send me is the usual `[upscaler]` output.
+- **Sharpness**: try Low, Medium, High with Temporal (built-in) and FSR. High may ring or look crunchy; tell me which level looks right.
 - **HUD Full Resolution on**: HUD text and icons should become sharp. Check the Start menu, the pause menu, the Jinjo/Jiggy pickup screens and text boxes. If a screen shows a wrong or missing HUD (some menus draw the 3D world inside the HUD), say which screen and turn the option off.
 - **Ray tracing / shader effects on**: the upscaler runs after them; check that reflections and sun shadows don't flicker.
 - **Performance**: note frame rate at Quality vs Off, and the quality-level differences.
@@ -38,7 +42,9 @@ Also send a screenshot or two per mode: standing still, running, and in a menu.
 - `TOOIE_DLSS_FLIP=x|y|xy`: see above.
 
 ## Known gaps (not bugs, not done)
-- Reactive mask for particles, fire and water; texture sharpness boost; sharpening after the upscale.
+- Texture sharpness boost (mip bias): N64 textures have no mip levels, so there is nothing to bias. Not done on purpose.
+- The built-in Temporal resolve does not use the reactive mask (FSR and DLSS do).
+- Jitter synced with the scene effects' noise: not done.
 - Arm ASR (Android) and FSR 3 on Android: not written, so not listed on Android. Snapdragon GSR is Android only and untested.
 - If the DLSS or FSR download failed when building (no internet at configure time) the build prints a CMake warning and the mode falls back to Temporal.
 

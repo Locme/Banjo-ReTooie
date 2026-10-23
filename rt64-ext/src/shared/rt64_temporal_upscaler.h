@@ -50,6 +50,8 @@ namespace interop {
         // x, y: the jitter the image was drawn with, in input pixels (x right, y down); z: 1 when there is a
         // history to blend with; w: how much of the new image goes into the result when there is.
         float4 jitter;
+        // x: how much to sharpen the result (0 to 1).
+        float4 extra;
     };
 #ifdef HLSL_CPU
 };

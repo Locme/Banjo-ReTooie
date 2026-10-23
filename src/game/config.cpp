@@ -877,7 +877,7 @@ void tooie::init_config() {
     {
         // The upscalers are WIP (L, 2026-10-23): their own "Upscaler" section in the WIP tab. Still Graphics
         // options, so they save to graphics.json.
-        for (const std::string* id : { &tooie::upscaler::option, &tooie::upscaler::quality_option, &tooie::upscaler::hud_option, &tooie::upscaler::hud_full_option }) {
+        for (const std::string* id : { &tooie::upscaler::option, &tooie::upscaler::quality_option, &tooie::upscaler::hud_option, &tooie::upscaler::hud_full_option, &tooie::upscaler::reactive_option, &tooie::upscaler::sharpness_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
         recompui::config::set_option_group(tooie::upscaler::option, "Upscaler");

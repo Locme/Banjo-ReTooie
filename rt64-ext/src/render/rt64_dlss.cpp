@@ -70,7 +70,7 @@ namespace RT64 {
 
     bool DlssBackend::evaluate(RenderDevice *device, RenderCommandList *commandList, RenderTexture *color, RenderTexture *depth, RenderTexture *motion,
         RenderTexture *output, uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight,
-        float jitterX, float jitterY, bool reset, uint32_t quality, bool native, bool hdr)
+        float jitterX, float jitterY, bool reset, uint32_t quality, bool native, bool hdr, RenderTexture *reactive)
     {
         if (failed) {
             return false;
@@ -173,6 +173,9 @@ namespace RT64 {
         eval.InRenderSubrectDimensions.Width = inputWidth;
         eval.InRenderSubrectDimensions.Height = inputHeight;
         eval.InReset = reset ? 1 : 0;
+        if (reactive != nullptr) {
+            eval.pInBiasCurrentColorMask = static_cast<D3D12Texture *>(reactive)->d3d;
+        }
         eval.InMVScaleX = 1.0f;
         eval.InMVScaleY = 1.0f;
         const NVSDK_NGX_Result result = NGX_D3D12_EVALUATE_DLSS_EXT(d3dCommandList->d3d, static_cast<NVSDK_NGX_Handle *>(feature), ngxParams, &eval);
@@ -196,7 +199,7 @@ namespace RT64 {
     }
 
     bool DlssBackend::evaluate(RenderDevice *, RenderCommandList *, RenderTexture *, RenderTexture *, RenderTexture *, RenderTexture *,
-        uint32_t, uint32_t, uint32_t, uint32_t, float, float, bool, uint32_t, bool, bool)
+        uint32_t, uint32_t, uint32_t, uint32_t, float, float, bool, uint32_t, bool, bool, RenderTexture *)
     {
         fail("this build has no DLSS (Windows builds with the NGX library only)");
         return false;

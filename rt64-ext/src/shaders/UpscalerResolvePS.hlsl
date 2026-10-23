@@ -29,6 +29,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     const int2 maxPixel = int2(inSize) - 1;
 
     float3 sum = 0.0f;
+    float3 sum3 = 0.0f;
     float weights = 0.0f;
     float3 lowest = 1e9f;
     float3 highest = -1e9f;
@@ -42,12 +43,19 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             // A sharper kernel when upscaling, so the output keeps the detail.
             const float w = exp(-2.3f * dot(d, d));
             sum += c * w;
+            sum3 += c;
             weights += w;
             lowest = min(lowest, c);
             highest = max(highest, c);
         }
     }
-    const float3 current = sum / max(weights, 1e-4f);
+    float3 current = sum / max(weights, 1e-4f);
+    // Sharpening (Graphics > Upscaler > Sharpness): the new samples' weighted mean pushed away from their plain mean,
+    // within what the neighbourhood holds so it cannot ring.
+    if (gConstants.extra.x > 0.0f) {
+        const float3 plain = (sum3 / 9.0f);
+        current = clamp(current + (current - plain) * gConstants.extra.x * 2.0f, lowest, highest);
+    }
 
     float3 result = current;
     if (gConstants.jitter.z > 0.5f) {

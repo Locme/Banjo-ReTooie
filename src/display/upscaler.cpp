@@ -16,6 +16,8 @@ namespace RT64 {
     void SetUpscalerQuality(uint32_t quality);
     void SetUpscalerHudSplit(bool enabled);
     void SetUpscalerHudFullResolution(bool enabled);
+    void SetUpscalerReactive(bool enabled);
+    void SetUpscalerSharpness(float sharpness);
 }
 
 namespace {
@@ -65,6 +67,19 @@ void tooie::upscaler::apply() {
     } catch (...) {
     }
     RT64::SetUpscalerHudFullResolution(hud_full);
+    bool reactive = true;
+    try {
+        reactive = std::get<bool>(graphics_config().get_option_value(reactive_option));
+    } catch (...) {
+    }
+    RT64::SetUpscalerReactive(reactive);
+    uint32_t sharpness = (uint32_t)Sharpness::Off;
+    try {
+        sharpness = std::get<uint32_t>(graphics_config().get_option_value(sharpness_option));
+    } catch (...) {
+    }
+    static const float sharpness_amounts[] = { 0.0f, 0.3f, 0.6f, 0.9f };
+    RT64::SetUpscalerSharpness(sharpness_amounts[sharpness < 4 ? sharpness : 0]);
 }
 
 void tooie::upscaler::add_option(recomp::config::Config& graphics) {
@@ -111,6 +126,32 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
         "Upscaler: HUD Full Resolution (Experimental)",
         "Draws the HUD again at your window's resolution and puts it on the upscaled picture, so it stays sharp. Needs HUD Outside and no MSAA. Screens that show the 3D world inside the HUD (some menus) may look wrong; turn it off if so.",
         false);
+    graphics.add_bool_option(
+        reactive_option,
+        "Upscaler: Reactive Mask",
+        "Marks particles, fire, spray and other see-through effects so the upscaler trusts its history less there, which cuts the trails they leave behind. Works with FSR and DLSS. Turn it off if effects look wrong.",
+        true);
+    graphics.add_enum_option(
+        sharpness_option,
+        "Upscaler: Sharpness",
+        "Sharpens the upscaled picture. Works with Temporal (built-in) and FSR; DLSS has its own and ignores this.",
+        {
+            {Sharpness::Off, "Off", "Off"},
+            {Sharpness::Low, "Low", "Low"},
+            {Sharpness::Medium, "Medium", "Medium"},
+            {Sharpness::High, "High", "High"},
+        },
+        Sharpness::Off);
+    for (const std::string* id : { &reactive_option, &sharpness_option }) {
+        graphics.add_option_change_callback(*id,
+            [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+                if (context == recomp::config::OptionChangeContext::Temporary) {
+                    graphics_config().save_config();
+                } else {
+                    apply();
+                }
+            });
+    }
     graphics.add_option_change_callback(hud_full_option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
             if (context == recomp::config::OptionChangeContext::Temporary) {
