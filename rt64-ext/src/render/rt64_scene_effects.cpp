@@ -138,6 +138,8 @@ namespace RT64 {
             bool bvhBuiltOnce = false;
             // The level's lights for the traced shadows: the count, then each one's x, y, z, range (16 bytes each).
             std::unique_ptr<RenderBuffer> lightsBuffer;
+            // The dust clouds (SceneEffectsPS.hlsl gDust): the count in the first 16 bytes, then two float4s a cloud.
+            std::unique_ptr<RenderBuffer> dustBuffer;
             // The world radiance cache: a hash table of 16-unit cells (check word, colour), 1 M entries.
             std::unique_ptr<RenderBuffer> radianceBuffer;
             // The traced scene's geometries (first index, tile, flags, 0: 16 bytes each, in the structure's order) and the
@@ -527,6 +529,33 @@ namespace RT64 {
         effectsSettings.lightCount = count;
     }
 
+    static std::mutex dustMutex;
+    static float dustClouds[SceneMaxDust * 8] = {};
+    static uint32_t dustCount = 0;
+
+    void SetSceneDust(const float *clouds, uint32_t count) {
+        const std::scoped_lock lock(dustMutex);
+        dustCount = std::min(count, SceneMaxDust);
+        memcpy(dustClouds, clouds, size_t(dustCount) * 8 * sizeof(float));
+    }
+
+    // The volumetric extras, packed (see VolExtra in SceneEffectsPS.hlsl): [0] fog start / 25 (8 bits), fog colour (3), water
+    // height / 4 (7); [1] water mist and fall mist in hundredths (7 each), fall height / 4 (7).
+    static std::mutex volExtraMutex;
+    static float volExtra[2] = {};
+    // Whether the mist over water or at waterfalls is on (it reads the water mask).
+    static bool VolWaterMistWanted() {
+        const std::scoped_lock lock(volExtraMutex);
+        return (uint32_t(volExtra[1]) & 0x3FFFu) != 0u;
+    }
+
+    void SetSceneVolumetricExtra(float fogStart, uint32_t fogColour, float waterMist, float waterHeight, float fallMist, float fallHeight) {
+        const auto bits = [](float v, float scale, uint32_t most) { return std::min(uint32_t(std::lround(std::max(v, 0.0f) / scale)), most); };
+        const std::scoped_lock lock(volExtraMutex);
+        volExtra[0] = float(bits(fogStart, 25.0f, 255u) | (std::min(fogColour, 4u) << 8) | (bits(waterHeight, 4.0f, 127u) << 11));
+        volExtra[1] = float(bits(waterMist, 0.01f, 100u) | (bits(fallMist, 0.01f, 100u) << 7) | (bits(fallHeight, 4.0f, 127u) << 14));
+    }
+
     static std::mutex lampMutex;
     static std::unordered_set<uint64_t> lampTextures;
     static float lampLights[SceneMaxLights * 4] = {};
@@ -709,6 +738,21 @@ namespace RT64 {
         effectsSettings.player[1] = valid ? y : -1e9f;
         effectsSettings.player[2] = z;
         effectsSettings.playerGrounded = grounded;
+        // The volumetric mist's floor: eases towards the ground Banjo stands on (jumps and falls don't move it), and
+        // snaps when he is somewhere else altogether (another floor, a warp).
+        if (valid) {
+            static auto last = std::chrono::steady_clock::now();
+            const auto now = std::chrono::steady_clock::now();
+            const float dt = std::min(std::chrono::duration<float>(now - last).count(), 0.25f);
+            last = now;
+            if (!effectsSettings.volAnchorValid || (std::fabs(y - effectsSettings.volAnchor) > 500.0f)) {
+                effectsSettings.volAnchor = y;
+                effectsSettings.volAnchorValid = true;
+            }
+            else if (grounded) {
+                effectsSettings.volAnchor += (y - effectsSettings.volAnchor) * std::min(1.0f, dt * 0.6f);
+            }
+        }
         if (anySubmittedWorkload) {
             PlayerFrame &frame = playerFrames[playerFrameNext];
             playerFrameNext = (playerFrameNext + 1) % std::size(playerFrames);
@@ -1132,25 +1176,23 @@ namespace RT64 {
         effectsSettings.dayMoonPhase = phase & 7u;
     }
 
-    void SetSceneMist(float strength, uint32_t when) {
+    void SetSceneVolumetric(float mist, float fog, uint32_t fogPreset, uint32_t cloudType, float mistOffset) {
         const std::scoped_lock lock(effectsMutex);
-        effectsSettings.dayMist = std::clamp(strength, 0.0f, 1.0f);
-        effectsSettings.dayMistWhen = std::min(when, 2u);
+        effectsSettings.volMist = std::clamp(mist, 0.0f, 1.0f);
+        effectsSettings.volFog = std::clamp(fog, 0.0f, 1.0f);
+        effectsSettings.volFogPreset = std::min(fogPreset, 6u);
+        effectsSettings.volCloudType = std::min(cloudType, 7u);
+        effectsSettings.volMistOffset = std::clamp(mistOffset, -240.0f, 240.0f);
     }
 
-    void SetSceneOwnMist(float strength) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.ownMist = std::clamp(strength, 0.0f, 1.0f);
-    }
-
-    // The cloud shape (cover 0 to 1, height 0.25 to 4, thickness 0.1 to 2, speed 0 to 8) in 6 bits each, with
+    // The cloud shape (cover 0 to 1, height 0.0625 to 4, thickness 0.1 to 2, speed 0 to 8) in 6 bits each, with
     // F8 compare as the sign, so it fits in one float of the effects' push constants (CloudShape in
     // SceneEffectsPS.hlsl). Height steps in log2 and speed in its square root, as the settings do.
     static float PackSceneClouds(const float shape[4], bool compare) {
         auto bits = [](float v, float low, float high) {
             return uint32_t(std::lround(std::clamp((v - low) / (high - low), 0.0f, 1.0f) * 63.0f));
         };
-        const uint32_t packed = bits(shape[0], 0.0f, 1.0f) | (bits(std::log2(std::max(shape[1], 0.25f)), -2.0f, 2.0f) << 6) |
+        const uint32_t packed = bits(shape[0], 0.0f, 1.0f) | (bits(std::log2(std::max(shape[1], 0.0625f)), -4.0f, 2.0f) << 6) |
             (bits(shape[2], 0.1f, 2.0f) << 12) | (bits(std::sqrt(std::max(shape[3], 0.0f)), 0.0f, std::sqrt(8.0f)) << 18);
         return compare ? -(float(packed) + 1.0f) : float(packed);
     }
@@ -1158,7 +1200,7 @@ namespace RT64 {
     void SetSceneClouds(float cover, float height, float thickness, float speed) {
         const std::scoped_lock lock(effectsMutex);
         effectsSettings.dayCloudShape[0] = std::clamp(cover, 0.0f, 1.0f);
-        effectsSettings.dayCloudShape[1] = std::clamp(height, 0.25f, 4.0f);
+        effectsSettings.dayCloudShape[1] = std::clamp(height, 0.0625f, 4.0f);
         effectsSettings.dayCloudShape[2] = std::clamp(thickness, 0.1f, 2.0f);
         effectsSettings.dayCloudShape[3] = std::clamp(speed, 0.0f, 8.0f);
     }
@@ -1338,6 +1380,49 @@ namespace RT64 {
         effectsSettings.featherTransparency = std::clamp(transparency, 0.0f, 1.0f);
     }
 
+    static std::atomic<int64_t> sandUnderfootAt{ 0 };
+
+    void NoteSandUnderfoot() {
+        sandUnderfootAt.store(std::chrono::steady_clock::now().time_since_epoch().count());
+    }
+
+    bool SceneSandUnderfoot() {
+        const int64_t at = sandUnderfootAt.load();
+        return (at != 0) && ((std::chrono::steady_clock::now().time_since_epoch().count() - at) < 300000000);
+    }
+
+    bool SceneCharFeet(float (&feet)[3]) {
+        const std::scoped_lock lock(effectsMutex);
+        if (effectsSettings.player[1] < -1e8f) {
+            return false;
+        }
+        for (int i = 0; i < 3; i++) {
+            feet[i] = effectsSettings.player[i];
+        }
+        return true;
+    }
+
+    void SetSceneCharSurface(float wet, float snow, float dirt, float sand) {
+        const std::scoped_lock lock(effectsMutex);
+        effectsSettings.charSand = std::clamp(sand, 0.0f, 1.0f);
+        effectsSettings.charWet = std::clamp(wet, 0.0f, 1.0f);
+        effectsSettings.charSnow = std::clamp(snow, 0.0f, 1.0f);
+        effectsSettings.charDirt = std::clamp(dirt, 0.0f, 1.0f);
+    }
+
+    void SetSceneCharDrip(float drip, float seconds, float soaked, float icy) {
+        const std::scoped_lock lock(effectsMutex);
+        effectsSettings.charSoaked = std::clamp(soaked, 0.0f, 1.0f);
+        effectsSettings.charDrip = std::clamp(drip, 0.0f, 1.0f);
+        effectsSettings.charTime = seconds;
+        effectsSettings.charIcy = std::clamp(icy, 0.0f, 1.0f);
+    }
+
+    bool SceneCharSurfaceOn() {
+        const std::scoped_lock lock(effectsMutex);
+        return (effectsSettings.charWet > 0.0f) || (effectsSettings.charSnow > 0.0f) || (effectsSettings.charDirt > 0.0f) || (effectsSettings.charSand > 0.0f);
+    }
+
     void SetSceneNpcFur(float amount, float length, float density, float noisiness) {
         const std::scoped_lock lock(effectsMutex);
         effectsSettings.npcFur = amount;
@@ -1400,7 +1485,8 @@ namespace RT64 {
         const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams)
     {
         SceneEffectsSettings settings = GetSceneEffects();
-        if (((settings.fur <= 0.0f) && (settings.npcFur <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
+        const bool charSurface = (settings.charWet > 0.0f) || (settings.charSnow > 0.0f) || (settings.charDirt > 0.0f) || (settings.charSand > 0.0f);
+        if (((settings.fur <= 0.0f) && (settings.npcFur <= 0.0f) && !charSurface) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
             return false;
         }
 
@@ -1434,6 +1520,8 @@ namespace RT64 {
         frameParams.furParams = { 2.5f * std::max(settings.furLength, 0.1f), 2.4f * settings.furDensity, 0.6f - 0.3f * amount, settings.furNoisiness };
         frameParams.furSway = { settings.furSway[0], settings.furSway[1], settings.furSway[2], 0.0f };
         const float npcAmount = std::min(settings.npcFur, 1.0f);
+        frameParams.charSurface = { settings.charWet, settings.charSnow, settings.charDirt, settings.charSand };
+        frameParams.charSurface2 = { settings.charTime, settings.charDrip, settings.charSoaked, settings.charIcy };
         frameParams.npcFurParams = { 2.5f * std::max(settings.npcFurLength, 0.1f), 2.4f * settings.npcFurDensity, 0.6f - 0.3f * npcAmount, settings.npcFurNoisiness };
         return true;
     }
@@ -2435,11 +2523,13 @@ namespace RT64 {
     }
 
     bool SceneWaterWanted() {
+        if (VolWaterMistWanted()) {
+            return true;
+        }
         const std::scoped_lock lock(effectsMutex);
         return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.iceReflections > 0.0f) || (effectsSettings.screenSpaceReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) || (effectsSettings.view == SceneEffectsViewSsr) ||
-            // The day and night cycle's mist gathers round water.
-            // and the rain rings on water need it too.
-            (effectsSettings.timeOfDay && ((effectsSettings.dayMist > 0.0f) || (effectsSettings.dayRain > 0.0f))) || (effectsSettings.ownMist > 0.0f) ||
+            // The rain rings on water need it too.
+            (effectsSettings.timeOfDay && (effectsSettings.dayRain > 0.0f)) ||
             (effectsSettings.view == SceneEffectsSoloFirst + 8) || (effectsSettings.view == SceneEffectsSoloFirst + 9);
     }
 
@@ -2515,7 +2605,7 @@ namespace RT64 {
         const SceneEffectsSettings settings = GetSceneEffects();
         return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
             (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0);
+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0) || (settings.view != 0)) && (settings.depthAddress != 0);
     }
 
     bool SceneEffectsWanted(const RenderTarget *depthTarget) {
@@ -2948,7 +3038,21 @@ namespace RT64 {
         // Heat haze only above warm surfaces is sent as 2 + its strength (see HeatHaze in SceneEffectsPS).
         const float heatPacked = (settings.heatHazeWarmOnly && (settings.heatHaze > 0.0f)) ? 2.0f + std::min(settings.heatHaze, 1.0f) : settings.heatHaze;
         constants.view = { float(settings.view), PackSceneClouds(settings.dayCloudShape, settings.compare), seconds, heatPacked };
-        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), settings.underwaterTint };
+        // The fog's start and length ride in the low 12 bits of fog.y and fog.z (steps of 4 units: an integer below 2^24 is exact
+        // in a float), the WIP volumetric effects in the 12 bits above each (VolSettings in the shader): fog.y mist (6 bits, 0 to
+        // 63) and fog (6); fog.z the fog's preset (3), the forced cloud type (3), then the mist floor's height over Banjo's feet in
+        // steps of 8 units (6 bits, 32 = level).
+        uint32_t volA = 0;
+        uint32_t volB = 0;
+        if ((settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0)) {
+            const float floorDelta = (settings.volAnchorValid && (settings.player[1] > -1e8f)) ? (settings.volAnchor - settings.player[1] + settings.volMistOffset) : settings.volMistOffset;
+            volA = uint32_t(std::lround(settings.volMist * 63.0f)) | (uint32_t(std::lround(settings.volFog * 63.0f)) << 6);
+            volB = settings.volFogPreset | (settings.volCloudType << 3) | (uint32_t(std::lround(std::clamp(floorDelta / 8.0f + 32.0f, 0.0f, 63.0f))) << 6);
+        }
+        const auto packFog = [](float distance, uint32_t vol, float least) {
+            return float(uint32_t(std::lround(std::clamp(distance, least, 16380.0f) / 4.0f)) | (vol << 12));
+        };
+        constants.fog = { settings.fog, packFog(settings.fogStart, volA, 0.0f), packFog(settings.fogLength, volB, 4.0f), settings.underwaterTint };
         // The fog darkens with the time of day as the sky does.
         const float fogTint[3] = { settings.dayTint[0] * settings.dayTint[0], settings.dayTint[1] * settings.dayTint[1], settings.dayTint[2] * settings.dayTint[2] };
         constants.fogColor = { settings.fogColor[0] * fogTint[0], settings.fogColor[1] * fogTint[1], settings.fogColor[2] * fogTint[2],
@@ -3037,12 +3141,9 @@ namespace RT64 {
             const float moonlight = 1.0f - 0.6f * std::clamp((0.97f - dayBrightest) / 0.3f, 0.0f, 1.0f);
             // Rain hides the sun: no sun shadows under it.
             const float rain = settings.timeOfDay ? settings.dayRain : 0.0f;
-            // The mist and the rain's details ride above the softness and Banjo's flag: 4 * (the mist's strength
-            // (0 to 100) + 128 * when + 512 * how wet the ground is (0 to 31) + 16384 when raindrops land on the screen).
-            // Without the cycle, Graphics > Mist on its own: always showing.
-            const float mistPacked = settings.timeOfDay ? 4.0f * (std::round(settings.dayMist * 100.0f) + 128.0f * float(settings.dayMistWhen) +
-                512.0f * std::round(settings.dayWet * 31.0f) + (settings.dayDrops ? 16384.0f : 0.0f)) :
-                ((settings.ownMist > 0.0f) ? 4.0f * (std::round(settings.ownMist * 100.0f) + 128.0f * 2.0f) : 0.0f);
+            // The rain's details ride above the softness and Banjo's flag: 4 * (512 * how wet the ground is (0 to 31) +
+            // 16384 when raindrops land on the screen).
+            const float mistPacked = settings.timeOfDay ? 4.0f * (512.0f * std::round(settings.dayWet * 31.0f) + (settings.dayDrops ? 16384.0f : 0.0f)) : 0.0f;
             constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain),
                 std::min(settings.sunShadowReach, 999.0f) + 1000.0f * std::round(settings.sunShadowDistance / SUN_SHADOW_MAP_HALF_STEP), dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f + mistPacked };
             if (sunLength > 1e-6f) {
@@ -3129,7 +3230,7 @@ namespace RT64 {
         }
 
         RenderTexture *source = nullptr;
-        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f)) {
+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0)) {
             // The scene so far, without multisampling: the target's resolve, or a copy of the target.
             const RenderTextureView *sourceView = nullptr;
             if (colorTarget->usesResolve()) {
@@ -3604,6 +3705,24 @@ namespace RT64 {
             commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::SHADER_READ) });
         }
 
+        if (res.dustBuffer == nullptr) {
+            res.dustBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (1 + 2 * SceneMaxDust)));
+            res.dustBuffer->setName("Scene Effects dust");
+        }
+        {
+            float *dust = reinterpret_cast<float *>(res.dustBuffer->map());
+            memset(dust, 0, 16 * (1 + 2 * SceneMaxDust));
+            const std::scoped_lock lock(dustMutex);
+            dust[0] = float(dustCount);
+            {
+                const std::scoped_lock extraLock(volExtraMutex);
+                dust[1] = volExtra[0];
+                dust[2] = volExtra[1];
+            }
+            memcpy(dust + 4, dustClouds, size_t(dustCount) * 8 * sizeof(float));
+            res.dustBuffer->unmap();
+        }
+
         if ((res.sceneSet == nullptr) || (res.sceneSetIndirect != res.indirectTexture.get()) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[4].get()) ||
             (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water) || (res.sceneSetWaterColor != waterColor) ||
             (res.sceneSetRipples != res.rippleTexture[0].get()) || (res.sceneSetBvh != (res.bvhReady ? res.bvhTlas.get() : nullptr)) || (res.sceneSetSunMap != res.sunMapTexture.get()) || (res.sceneSetFireflies != res.fireflyTexture.get()) || (res.sceneSetHalf != res.halfTexture.get())) {
@@ -3611,6 +3730,7 @@ namespace RT64 {
                 res.retireLater(std::move(res.sceneSet));
             }
             res.sceneSet = std::make_unique<SceneEffectsDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(), worker->device->getCapabilities().rayQuery, worker->device);
+            res.sceneSet->setBuffer(res.sceneSet->gDust, res.dustBuffer.get(), 16 * (1 + 2 * SceneMaxDust));
             res.sceneSet->setTexture(res.sceneSet->gInput, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
             res.sceneSet->setTexture(res.sceneSet->gBloom, res.bloomTexture[4].get(), RenderTextureLayout::SHADER_READ);
             res.sceneSetDepth = depthTarget->texture.get();

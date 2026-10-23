@@ -1,4 +1,6 @@
 #include <filesystem>
+#include <type_traits>
+#include <variant>
 #include <fstream>
 
 #include <json/json.hpp>
@@ -8,6 +10,8 @@
 #include "tooie_simple_menu.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_day_night.h"
+#include "tooie_dust.h"
+#include "tooie_volumetric.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_music_player.h"
 #include "tooie_mix_rate.h"
@@ -56,6 +60,7 @@
 #include "tooie_low_latency.h"
 #include "tooie_frame_readback.h"
 #include "tooie_fsr.h"
+#include "tooie_upscaler.h"
 #include "tooie_effect_views.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_check.h"
@@ -69,13 +74,13 @@
 
 namespace {
     void show_cheats_tab() {
-        bool on = true;
+        bool on = false;
         try {
             on = std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::cheats_tab_option));
         } catch (...) {
         }
         try {
-            recompui::config::set_tab_visible("cheats", on);
+            recompui::config::set_tab_visible("cheats", on || tooie::dev_file_present());
         } catch (...) {
         }
     }
@@ -89,7 +94,7 @@ namespace {
         // The Simple menu hides the DEV tab (switch it off to see it again) and the WIP page.
         const bool simple = tooie::simple_menu::on();
         try {
-            recompui::config::set_tab_visible(tooie::wip_tab_id, on && !simple);
+            recompui::config::set_tab_visible(tooie::wip_tab_id, (on && !simple) || tooie::dev_file_present());
             recompui::config::set_tab_visible(tooie::work_in_progress_tab_id, !simple);
         } catch (...) {
         }
@@ -108,7 +113,7 @@ namespace {
         } catch (...) {
         }
         try {
-            recompui::config::set_tab_visible(tooie::achievements::tab_id, on);
+            recompui::config::set_tab_visible(tooie::achievements::tab_id, on || tooie::dev_file_present());
         } catch (...) {
         }
     }
@@ -179,7 +184,7 @@ namespace {
         const nlohmann::json sources[] = { load(tooie::work_in_progress_tab_id + ".json"), load("qol.json") };
         recomp::config::Config& graphics = recompui::config::get_config(recompui::config::graphics::id);
         bool changed = false;
-        for (const std::string& option : {tooie::dive::option, tooie::menu_mouse::enabled_option}) {
+        for (const std::string& option : {tooie::dive::option}) {
             if (graphics_json.contains(option)) {
                 continue;
             }
@@ -196,6 +201,31 @@ namespace {
         }
     }
 
+    // Mouse Sensitivity starts at 5 (L, 2026-10-23) instead of off, so the mouse camera works out of the box:
+    // set it once while general.json has no saved value for it. The option's own number type is kept.
+    void default_mouse_sensitivity() {
+        const std::filesystem::path file = recomp::get_config_path() / "general.json";
+        if (std::filesystem::exists(file)) {
+            std::ifstream in(file);
+            const nlohmann::json json = nlohmann::json::parse(in, nullptr, false);
+            if (json.is_object() && json.contains("mouse_sensitivity")) {
+                return;
+            }
+        }
+        try {
+            recomp::config::Config& general = recompui::config::get_general_config();
+            const auto current = general.get_option_value("mouse_sensitivity");
+            std::visit([&](auto value) {
+                using T = decltype(value);
+                if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
+                    general.set_option_value("mouse_sensitivity", T(5));
+                    general.save_config();
+                }
+            }, current);
+        } catch (...) {
+        }
+    }
+
     // Transform anywhere became on by default (L, 2026-10-19): a saved "off" from the old default turns
     // on once; turning it off again afterwards stays.
     void turn_on_transform_anywhere_once() {
@@ -207,6 +237,21 @@ namespace {
         if (!std::get<bool>(qol.get_option_value(tooie::transform_anywhere::option))) {
             qol.set_option_value(tooie::transform_anywhere::option, true);
             qol.save_config();
+        }
+        std::ofstream{marker};
+    }
+
+    // The Cheats tab became off by default (L, 2026-10-23): turn a saved "on" off once, so it hides on
+    // PCs that saved the old default. dev.txt shows it; the switch in DEV > Additional Tabs still works.
+    void turn_off_cheats_tab_once() {
+        const std::filesystem::path marker = recomp::get_config_path() / "cheats_tab_off.done";
+        if (std::filesystem::exists(marker)) {
+            return;
+        }
+        recomp::config::Config& dev = recompui::config::get_config(tooie::wip_tab_id);
+        if (std::get<bool>(dev.get_option_value(tooie::cheats_tab_option))) {
+            dev.set_option_value(tooie::cheats_tab_option, false);
+            dev.save_config();
         }
         std::ofstream{marker};
     }
@@ -273,6 +318,61 @@ namespace {
             file << json.dump(4);
         }
         std::ofstream{marker};
+    }
+}
+
+namespace {
+    // Canary Mary races moved from the QOL tab to Gameplay, a page of General options (L, 2026-10-23): carry a
+    // value saved in qol.json into general.json once, while general.json has none. Done on the files before the
+    // configs load, so the saved enum name is copied as it is.
+    void move_saved_canary_mary() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        nlohmann::json qol_json;
+        if (std::ifstream file(dir / "qol.json"); file) {
+            qol_json = nlohmann::json::parse(file, nullptr, false);
+        }
+        if (!qol_json.is_object() || !qol_json.contains(tooie::canary_mary::mode_option) ||
+            !qol_json[tooie::canary_mary::mode_option].is_string()) {
+            return;
+        }
+        const std::filesystem::path path = dir / "general.json";
+        nlohmann::json json;
+        if (std::ifstream file(path); file) {
+            json = nlohmann::json::parse(file, nullptr, false);
+        }
+        if (!json.is_object() || json.contains(tooie::canary_mary::mode_option)) {
+            return;
+        }
+        json[tooie::canary_mary::mode_option] = qol_json[tooie::canary_mary::mode_option];
+        std::ofstream file(path, std::ios::trunc);
+        file << json.dump(4);
+    }
+}
+
+namespace {
+    // Mouse in the game's menus moved from the WIP tab (a page of Graphics options, graphics.json) to QOL
+    // (L, 2026-10-23): carry a value saved in graphics.json (or work_in_progress.json) into qol.json once,
+    // while qol.json has none. Done on the files before the configs load.
+    void move_saved_menu_mouse() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        auto load = [&](const std::string& file) {
+            std::ifstream in(dir / file);
+            nlohmann::json json = in ? nlohmann::json::parse(in, nullptr, false) : nlohmann::json();
+            return json.is_object() ? json : nlohmann::json::object();
+        };
+        nlohmann::json qol_json = load("qol.json");
+        if (qol_json.contains(tooie::menu_mouse::enabled_option)) {
+            return;
+        }
+        for (const std::string& file : { std::string("graphics.json"), tooie::work_in_progress_tab_id + ".json" }) {
+            const nlohmann::json source = load(file);
+            if (source.contains(tooie::menu_mouse::enabled_option) && source[tooie::menu_mouse::enabled_option].is_boolean()) {
+                qol_json[tooie::menu_mouse::enabled_option] = source[tooie::menu_mouse::enabled_option];
+                std::ofstream out(dir / "qol.json", std::ios::trunc);
+                out << qol_json.dump(4);
+                return;
+            }
+        }
     }
 }
 
@@ -390,10 +490,15 @@ void tooie::init_config() {
     tooie::boss_rush::add_option(general);
     tooie::mirror_mode::add_option(general);
     general.add_bool_option(
+        tooie::snout_jiggle::master_option,
+        "Jiggle",
+        "Turns every jiggle below on or off at once: Banjo's snout, nose, belly, ears, fur and backpack, Kazooie's feathers and Mumbo. Each part keeps its own switch and settings, which open under this one.",
+        false);
+    general.add_bool_option(
         tooie::snout_jiggle::option,
         "Snout jiggle",
         "Banjo's snout wobbles as he runs, turns, jumps, falls and lands: it trails behind the way he moves and folds back towards his eyes in a dive. It stays mid-wobble in Photo Mode. Works with player model mods that keep his skeleton, such as Smash Banjo.",
-        false);
+        true);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(stiffness_option, "Snout jiggle: stiffness",
@@ -411,7 +516,7 @@ void tooie::init_config() {
         general.add_number_option(squash_across_option, "Snout jiggle: max squash & stretch up and down",
             "How far the tip may swing up and down (and to the side), as a share of the snout's length.", 0, 300, 5, 0, true, 50);
         general.add_bool_option(nose_option, "Snout jiggle: nose jiggle",
-            "Banjo's black nose wobbles too, on its own jiggle bone on the end of the snout, with the same spring. Its squash and stretch stays small so it always looks like a nose.", false);
+            "Banjo's black nose wobbles too, on its own jiggle bone on the end of the snout, with the same spring. Its squash and stretch stays small so it always looks like a nose.", true);
         for (const std::string* id : { &stiffness_option, &damping_option, &mass_option, &squash_in_option, &squash_walk_option, &squash_out_option,
                                        &squash_across_option, &nose_option }) {
             general.add_option_hidden_dependency(*id, option, false);
@@ -419,7 +524,7 @@ void tooie::init_config() {
     }
     general.add_bool_option(tooie::snout_jiggle::belly_option, "Belly jiggle",
         "The front of Banjo's belly wobbles on a spring as he runs, jumps and lands, with its own settings like the snout's. On Banjo's own model (not model mods). It stays mid-wobble in Photo Mode.",
-        false);
+        true);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(belly_stiffness_option, "Belly jiggle: stiffness",
@@ -441,7 +546,7 @@ void tooie::init_config() {
     }
     general.add_bool_option(tooie::snout_jiggle::ears_option, "Ear jiggle",
         "Banjo's ears wobble on springs as he runs, turns, jumps and lands, each on its own jiggle bone, with their own settings like the snout's. On Banjo's own model (not model mods). They stay mid-wobble in Photo Mode.",
-        false);
+        true);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(ears_stiffness_option, "Ear jiggle: stiffness",
@@ -458,7 +563,7 @@ void tooie::init_config() {
     }
     general.add_bool_option(tooie::snout_jiggle::fur_option, "Fur jiggle",
         "The strands of Banjo's fur (the Banjo fur shader, in Character Shaders) lean back as he runs, turns, jumps and lands, and spring upright again when he stops. Its own settings like the snout's. It stays mid-sway in Photo Mode.",
-        false);
+        true);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(fur_stiffness_option, "Fur jiggle: stiffness",
@@ -475,7 +580,7 @@ void tooie::init_config() {
     }
     general.add_bool_option(tooie::snout_jiggle::body_option, "Backpack jiggle",
         "Banjo's backpack swings on a spring as he moves, carrying Kazooie with it, so the pack bounces when he runs, jumps and lands and settles when he stops. Separate from Snout jiggle and Kazooie jiggle, with its own settings. It stays mid-swing in Photo Mode.",
-        false);
+        true);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(body_stiffness_option, "Backpack jiggle: stiffness",
@@ -495,7 +600,7 @@ void tooie::init_config() {
     }
     general.add_bool_option(tooie::snout_jiggle::kazooie_option, "Kazooie jiggle",
         "Kazooie's crest and tail feathers wobble on springs as she moves, whether she rides in the backpack or walks alone after Split Up. Separate from Snout jiggle. They stay mid-wobble in Photo Mode.",
-        false);
+        true);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(kazooie_stiffness_option, "Kazooie jiggle: stiffness",
@@ -516,7 +621,7 @@ void tooie::init_config() {
         }
     general.add_bool_option(tooie::snout_jiggle::mumbo_option, "Mumbo jiggle",
         "The feathers on top of Mumbo's head wobble on springs as he moves, whether you play as him or meet him in his skull. Uses the Kazooie jiggle settings.",
-        false);
+        true);
     }
     general.add_bool_option(
         tooie::damage::double_damage_option,
@@ -545,6 +650,28 @@ void tooie::init_config() {
         "With Enemy aim on Better or Sharp, Klungo's potion also steers toward where you are heading while it flies, so only really changing direction dodges it.",
         true);
     general.add_option_hidden_dependency(tooie::damage::homing_option, tooie::damage::aim_option, tooie::damage::Aim::Original);
+    general.add_bool_option(
+        tooie::damage::strafe_option,
+        "Enemy dynamic positioning",
+        "A curated list of enemies (Billy Bob, Boltoid, Diggit, Flatso, Globble, Gruntydactyl, Guvnor, Hothead, Jippo Jim, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba) slide sideways while they close in, and sidestep when you roll toward them, so they are harder to roll over.",
+        false);
+    general.add_bool_option(
+        tooie::damage::faster_attacks_option,
+        "Lower Enemy Attack Cooldown",
+        "The curated list of enemies (Billy Bob, Boltoid, Diggit, Flatso, Globble, Gruntydactyl, Guvnor, Hothead, Jippo Jim, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba) wait half as long between attacks.",
+        false);
+    // Moved from QOL > Balancing to Gameplay > Difficulty (L, 2026-10-23); move_saved_canary_mary carries the
+    // value saved in qol.json.
+    general.add_enum_option(
+        tooie::canary_mary::mode_option,
+        "Canary Mary races",
+        "<recomp-color primary>Fair</recomp-color>: Canary Mary never speeds up past her normal pace to catch you when you lead. <recomp-color primary>Easy</recomp-color> is Fair with her pace at 85%. <recomp-color primary>Original</recomp-color> keeps her catch-up. She still slows down when you fall behind, as in the original.",
+        {
+            {tooie::canary_mary::Mode::Original, "Original", "Original"},
+            {tooie::canary_mary::Mode::Fair, "Fair", "Fair"},
+            {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
+        },
+        tooie::canary_mary::Mode::Fair);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(
         tooie::discord::presence_option,
@@ -554,7 +681,7 @@ void tooie::init_config() {
     general.add_bool_option(
         tooie::wip_tab_option,
         "Developer Mode",
-        "Shows the DEV tab, with features for developers and features that are still being worked on, and the switches for the Achievements, Cheats and Warp tabs.",
+        "Shows the DEV tab, with features for developers and features that are still being worked on, and the switches for the Achievements, Cheats and Warp tabs. A dev.txt file next to the game's exe shows all of these tabs whatever their switches say.",
         false);
     general.add_option_change_callback(tooie::wip_tab_option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
@@ -568,11 +695,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::precompile_shaders_option, "Shaders");
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports and cut content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
-    recompui::config::set_option_group(tooie::snout_jiggle::option, "Jiggle");
-    recompui::config::set_option_group(tooie::damage::double_damage_option, "Gameplay");
-    recompui::config::set_option_group(tooie::damage::aim_option, "Gameplay");
-    recompui::config::set_option_group(tooie::damage::aim_chance_option, "Gameplay");
-    recompui::config::set_option_group(tooie::damage::homing_option, "Gameplay");
+    recompui::config::set_option_group(tooie::snout_jiggle::master_option, "Enhancements");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
@@ -646,10 +769,63 @@ void tooie::init_config() {
         "Free camera: smooth walls",
         "The camera glides in when a wall gets between it and Banjo and glides back out afterwards, instead of jumping. Banjo fades out when the camera gets very close to him.",
         false);
+    qol.add_enum_option(
+        tooie::free_camera_ease_back_option,
+        "Free camera: ease back",
+        "A second after you let go of the right stick, the camera drifts back behind Banjo. <recomp-color primary>Flying only</recomp-color> does it while flying, <recomp-color primary>Always</recomp-color> also while running or swimming. Standing still leaves the camera where you turned it.",
+        {
+            {tooie::FreeCameraEaseBack::Off, "Off", "Off"},
+            {tooie::FreeCameraEaseBack::Flying, "Flying", "Flying only"},
+            {tooie::FreeCameraEaseBack::Always, "Always", "Always"},
+        },
+        tooie::FreeCameraEaseBack::Off);
+    qol.add_bool_option(
+        tooie::free_camera_smooth_height_option,
+        "Free camera: smooth stairs",
+        "The free camera follows Banjo's height with a gentle ease, so walking down (or up) stairs and small steps no longer bobs or jerks the camera.",
+        true);
+    qol.add_bool_option(
+        tooie::free_camera_hover_option,
+        "Free camera: hover over small objects",
+        "A small object near the camera no longer pulls it in towards Banjo when the camera can still see him past it: the camera stays where you put it and hovers over the object. An object that is really between Banjo and the camera still pulls it in.",
+        true);
+    qol.add_enum_option(
+        tooie::free_camera_mouse_option,
+        "Free camera: mouse",
+        "Moving the mouse turns and tilts the free camera, like the right stick. <recomp-color primary>Always</recomp-color>: whenever you play. <recomp-color primary>Hold a key</recomp-color>: only while the Camera Mouse Look key (Controls > Hotkeys) is held. Strength is General > Mouse Sensitivity; at 0 the mouse does nothing. Invert left/right and up/down apply too. When it is not Off, the mouse wheel zooms the camera in and out and the middle button snaps it behind Banjo.",
+        {
+            {tooie::FreeCameraMouse::Off, "Off", "Off"},
+            {tooie::FreeCameraMouse::Always, "Always", "Always"},
+            {tooie::FreeCameraMouse::Hold, "Hold", "Hold a key"},
+        },
+        tooie::FreeCameraMouse::Always);
+    qol.add_enum_option(
+        tooie::free_camera_gyro_option,
+        "Free camera: gyro",
+        "Tilting a controller that has a gyro turns and tilts the free camera. <recomp-color primary>Hold a key</recomp-color> (the default): only while the Camera Mouse Look key (Controls > Hotkeys, not bound by default) is held. <recomp-color primary>Always</recomp-color>: whenever you play. Strength is General > Gyro Sensitivity; at 0 the gyro does nothing.",
+        {
+            {tooie::FreeCameraMouse::Off, "Off", "Off"},
+            {tooie::FreeCameraMouse::Always, "Always", "Always"},
+            {tooie::FreeCameraMouse::Hold, "Hold", "Hold a key"},
+        },
+        tooie::FreeCameraMouse::Hold);
+    qol.add_bool_option(
+        tooie::free_camera_floor_clearance_option,
+        "Free camera: floor clearance",
+        "Keeps the free camera a little above the floor under it, so tilting the camera low cannot push it into the ground.",
+        true);
+    qol.add_bool_option(
+        tooie::free_camera_look_up_option,
+        "Free camera: look up",
+        "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
+        true);
     tooie::photo_mode::add_options(qol);
     for (const std::string* id : { &tooie::free_camera_speed_option, &tooie::free_camera_invert_x_option,
                                    &tooie::free_camera_invert_y_option,
-                                   &tooie::free_camera_smooth_walls_option }) {
+                                   &tooie::free_camera_smooth_walls_option, &tooie::free_camera_ease_back_option,
+                                   &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option,
+                                   &tooie::free_camera_hover_option, &tooie::free_camera_smooth_height_option,
+                                   &tooie::free_camera_mouse_option, &tooie::free_camera_gyro_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
     qol.add_enum_option(
@@ -676,6 +852,8 @@ void tooie::init_config() {
         "Totals checklist",
         "The pause menu's Totals pages also say how many of each item are left in a world and how many you can get with the moves you have now.",
         true);
+    // Mouse in the game's menus moved from the WIP tab to QOL > Menu (L, 2026-10-23).
+    tooie::menu_mouse::add_options(qol);
     qol.add_enum_option(
         tooie::fine_aim::mode_option,
         "Fine aim",
@@ -699,25 +877,27 @@ void tooie::init_config() {
         tooie::fine_aim::Speed::Medium);
     qol.add_option_hidden_dependency(tooie::fine_aim::speed_option, tooie::fine_aim::mode_option, tooie::fine_aim::Mode::Off);
     tooie::motion_aim::add_options(qol);
-    qol.add_enum_option(
-        tooie::canary_mary::mode_option,
-        "Canary Mary races",
-        "<recomp-color primary>Fair</recomp-color>: Canary Mary never speeds up past her normal pace to catch you when you lead. <recomp-color primary>Easy</recomp-color> is Fair with her pace at 85%. <recomp-color primary>Original</recomp-color> keeps her catch-up. She still slows down when you fall behind, as in the original.",
-        {
-            {tooie::canary_mary::Mode::Original, "Original", "Original"},
-            {tooie::canary_mary::Mode::Fair, "Fair", "Fair"},
-            {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
-        },
-        tooie::canary_mary::Mode::Fair);
 
     // Section headings in the QOL tab (the options of a group sit next to each other above).
     recompui::config::set_option_group(tooie::menu_pause::option, "Menu");
+    // Totals checklist and Mouse in the game's menus sit under Menu, after Pause Special Menu (L, 2026-10-23).
+    recompui::config::set_option_display_before(tooie::totals_checklist::option, tooie::text_speed_option);
+    recompui::config::set_option_display_before(tooie::menu_mouse::enabled_option, tooie::text_speed_option);
     recompui::config::set_option_group(tooie::text_speed_option, "Speed and skipping");
     // Press Start Anytime In Intro sits at the bottom of Speed and skipping (L, 2026-10-16).
     recompui::config::set_option_display_before(tooie::quick_start_option, tooie::free_camera_option);
-    recompui::config::set_option_group(tooie::canary_mary::mode_option, "Balancing");
     recompui::config::set_option_group(tooie::free_camera_option, "Camera");
     recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves and aiming");
+
+    // Gameplay tab (L, 2026-10-23): the enemy options and Canary Mary races under a Difficulty heading. A page
+    // of General options, so they stay in general.json and the code that reads them doesn't change.
+    recompui::config::create_page_tab("Gameplay", tooie::gameplay_tab_id, recompui::config::general::id);
+    for (const std::string* id : { &tooie::damage::double_damage_option, &tooie::damage::aim_option,
+            &tooie::damage::aim_chance_option, &tooie::damage::homing_option, &tooie::damage::strafe_option,
+            &tooie::damage::faster_attacks_option, &tooie::canary_mary::mode_option }) {
+        recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
+    }
+    recompui::config::set_option_group(tooie::damage::double_damage_option, "Difficulty");
 
     // Features still being worked on (L, 2026-10-21), in a section named like the tab. When one is done it
     // moves to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's menus back to QOL, the
@@ -732,32 +912,15 @@ void tooie::init_config() {
         "Dive",
         "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and lies there until you jump. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
         false);
-    tooie::menu_mouse::add_options(graphics);
-    graphics.add_enum_option(
-        tooie::free_camera_ease_back_option,
-        "Free camera: ease back",
-        "A second after you let go of the right stick, the camera drifts back behind Banjo. <recomp-color primary>Flying only</recomp-color> does it while flying, <recomp-color primary>Always</recomp-color> also while running or swimming. Standing still leaves the camera where you turned it. On by default (Always) while it is tested here.",
-        {
-            {tooie::FreeCameraEaseBack::Off, "Off", "Off"},
-            {tooie::FreeCameraEaseBack::Flying, "Flying", "Flying only"},
-            {tooie::FreeCameraEaseBack::Always, "Always", "Always"},
-        },
-        tooie::FreeCameraEaseBack::Always);
     graphics.add_bool_option(
-        tooie::free_camera_floor_clearance_option,
-        "Free camera: floor clearance",
-        "Keeps the free camera a little above the floor under it, so tilting the camera low cannot push it into the ground.",
-        false);
-    graphics.add_bool_option(
-        tooie::free_camera_look_up_option,
-        "Free camera: look up",
-        "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
+        tooie::free_camera_rb_distance_option,
+        "Free camera: hold C Down to fine-tune distance",
+        "Hold C Down (RB on a controller, the game's camera distance button) and push the camera stick up or down to move the free camera closer or further away, in small steps, from about half to twice the game's distance. A quick tap still does the game's own camera distance step; only a hold (about a quarter of a second) fine-tunes, and the game does not see it.",
         false);
     {
         namespace pf = tooie::picture_filters;
-        for (const std::string* id : { &tooie::dive::option, &tooie::menu_mouse::enabled_option,
-                &tooie::free_camera_ease_back_option, &tooie::free_camera_floor_clearance_option,
-                &tooie::free_camera_look_up_option, &pf::grass_section_option,
+        for (const std::string* id : { &tooie::dive::option,
+                &tooie::free_camera_rb_distance_option, &pf::grass_section_option,
                 &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
                 &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
                 &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
@@ -766,14 +929,14 @@ void tooie::init_config() {
                 &pf::grass_lod_option, &pf::grass_half_rate_option, &pf::grass_ray_tracing_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
-        // Dive and Mouse in the game's menus first, then the Grass toggle and its settings, all under one
+        // Dive first, then the Grass toggle and its settings, all under one
         // WIP heading.
         recompui::config::set_option_display_before(tooie::dive::option, pf::grass_section_option);
-        recompui::config::set_option_display_before(tooie::menu_mouse::enabled_option, pf::grass_section_option);
-        recompui::config::set_option_display_before(tooie::free_camera_ease_back_option, pf::grass_section_option);
-        recompui::config::set_option_display_before(tooie::free_camera_floor_clearance_option, pf::grass_section_option);
-        recompui::config::set_option_display_before(tooie::free_camera_look_up_option, pf::grass_section_option);
-        recompui::config::set_option_group(tooie::dive::option, "WIP");
+        recompui::config::set_option_display_before(tooie::free_camera_rb_distance_option, pf::grass_section_option);
+        // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
+        recompui::config::set_option_group(tooie::dive::option, "Dive");
+        recompui::config::set_option_group(tooie::free_camera_rb_distance_option, "Free camera");
+        recompui::config::set_option_group(pf::grass_section_option, "3D grass");
     }
     graphics.add_bool_option(
         tooie::high_detail_models_option,
@@ -819,6 +982,32 @@ void tooie::init_config() {
         }
         recompui::config::set_option_group(dn::option, "Day and night");
     }
+    tooie::volumetric::add_options(graphics);
+    tooie::dust::add_options(graphics);
+    {
+        // Volumetric mist, fog and clouds are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
+        namespace vol = tooie::volumetric;
+        for (const std::string* id : { &vol::mist_option, &vol::mist_water_option, &vol::mist_water_height_option, &vol::mist_fall_option,
+                &vol::mist_fall_height_option, &vol::fog_option, &vol::fog_preset_option, &vol::fog_start_option, &vol::fog_colour_option,
+                &vol::clouds_option, &vol::cloud_amount_option, &vol::cloud_height_option, &vol::cloud_size_option, &vol::cloud_speed_option,
+                &vol::file_option, &tooie::dust::option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        // One heading a kind, so each can be tested on its own.
+        recompui::config::set_option_group(vol::mist_option, "Volumetric Mist");
+        recompui::config::set_option_group(vol::fog_option, "Volumetric Fog");
+        recompui::config::set_option_group(vol::clouds_option, "Volumetric Clouds");
+        recompui::config::set_option_group(vol::file_option, "Volumetric Levels");
+        recompui::config::set_option_group(tooie::dust::option, "Volumetric Dust");
+    }
+    {
+        // Wet, snowy and dirty characters are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
+        namespace pf = tooie::picture_filters;
+        for (const std::string* id : { &pf::char_wet_option, &pf::char_snow_option, &pf::char_dirt_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        recompui::config::set_option_group(pf::char_wet_option, "Character surface");
+    }
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
@@ -856,6 +1045,15 @@ void tooie::init_config() {
     tooie::fxaa::add_option(graphics);
     tooie::api_restart::add_prompt(graphics);
     tooie::fsr::add_option(graphics);
+    tooie::upscaler::add_option(graphics);
+    {
+        // The upscalers are WIP (L, 2026-10-23): their own "Upscaler" section in the WIP tab. Still Graphics
+        // options, so they save to graphics.json.
+        for (const std::string* id : { &tooie::upscaler::option, &tooie::upscaler::quality_option, &tooie::upscaler::hud_option, &tooie::upscaler::hud_full_option, &tooie::upscaler::reactive_option, &tooie::upscaler::object_motion_option, &tooie::upscaler::sharpness_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        recompui::config::set_option_group(tooie::upscaler::option, "Upscaler");
+    }
     tooie::game_frame_rate::add_option(graphics);
     recompui::config::graphics::add_interpolation_options(graphics);
     tooie::low_latency::add_option(graphics);
@@ -996,17 +1194,22 @@ void tooie::init_config() {
     wip.add_bool_option(
         tooie::cheats_tab_option,
         "Cheats tab",
-        "Shows the Cheats tab. Turn it off to hide it; cheats that are already on stay on.",
-        true);
+        "Shows the Cheats tab. Turn it off to hide it; cheats that are already on stay on. A dev.txt file next to the game's exe shows it whatever this says.",
+        // Off by default (L, 2026-10-23); dev.txt shows it.
+        false);
     wip.add_option_change_callback(tooie::cheats_tab_option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             show_cheats_tab();
         });
     tooie::level_warp::add_option(wip);
     tooie::parallax_pick::add_dev_option(wip);
+    // L, 2026-10-23: under a Debug heading in DEV.
+    recompui::config::set_option_group(tooie::parallax_pick::save_only_active_option, "Debug");
     recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
     move_saved_hud_placement();
+    move_saved_canary_mary();
+    move_saved_menu_mouse();
     split_saved_toon_shading();
     tooie::simple_menu::classify();
     recompui::config::finalize();
@@ -1015,12 +1218,14 @@ void tooie::init_config() {
     tooie::simple_menu::apply(nullptr);
     show_wip_tab();
     move_saved_tab_options();
+    turn_off_cheats_tab_once();
     show_cheats_tab();
     show_achievements_tab();
     tooie::level_warp::refresh();
     move_saved_cutscene_skip();
     turn_on_transform_anywhere_once();
     move_saved_options_to_wip();
+    default_mouse_sensitivity();
     // The settings menu's layout (L, 2026-10-16): tabs in a sidebar on the left, descriptions along the bottom.
     recompui::config::set_sidebar_layout(true);
     tooie::picture_filters::apply();
@@ -1030,6 +1235,7 @@ void tooie::init_config() {
     tooie::fxaa::apply();
     tooie::mirror_mode::apply();
     tooie::fsr::apply();
+    tooie::upscaler::apply();
     tooie::low_latency::apply();
     tooie::frame_readback::apply();
 }

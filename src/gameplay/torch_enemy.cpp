@@ -1239,3 +1239,45 @@ void tooie::torch_enemy::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     }
 }
+
+std::vector<uint16_t> tooie::torch_enemy::maps_placing(uint8_t* rdram, recomp_context* ctx, uint16_t actor_id) {
+    std::vector<std::pair<int, uint16_t>> found;
+    std::span<const uint8_t> rom = recomp::get_rom();
+    auto word = [&](uint32_t at) -> uint32_t {
+        return at + 4 <= rom.size() ? ((uint32_t)rom[at] << 24) | ((uint32_t)rom[at + 1] << 16) | ((uint32_t)rom[at + 2] << 8) | rom[at + 3] : 0;
+    };
+    constexpr uint32_t table_rom = 0x5180;
+    constexpr uint32_t map_asset_base = 0x955;
+    const uint32_t count = word(table_rom);
+    for (uint32_t id = map_asset_base; id + 1 < count && id < 0x4000; id++) {
+        const uint32_t w = word(table_rom + 8 + id * 4);
+        const uint32_t next = word(table_rom + 8 + (id + 1) * 4);
+        if ((w & 0xF) != 10 || (next >> 6) <= (w >> 6)) {
+            continue;
+        }
+        GameCall call(rdram, ctx);
+        write_word(rdram, call.scratch, 0);
+        const uint32_t data = (uint32_t)call(_gldbDll_entrypoint_0, id, call.scratch);
+        const uint32_t size = read_word(rdram, call.scratch);
+        if (!valid_ptr(data) || size == 0 || size > 0x100000) {
+            continue;
+        }
+        int groups[0x14 / 2] = {};
+        for (uint32_t at = 0; at + 2 <= size; at += 2) {
+            if ((((uint32_t)MEM_B((int32_t)at, (int32_t)data) << 8) | MEM_B((int32_t)at + 1, (int32_t)data)) == actor_id) {
+                groups[(at % 0x14) / 2]++;
+            }
+        }
+        const int best = *std::max_element(std::begin(groups), std::end(groups));
+        if (best > 0) {
+            found.emplace_back(best, (uint16_t)(id - map_asset_base));
+        }
+        call(heap_free, data);
+    }
+    std::stable_sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    std::vector<uint16_t> maps;
+    for (const auto& [n, map] : found) {
+        maps.push_back(map);
+    }
+    return maps;
+}

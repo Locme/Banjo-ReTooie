@@ -6964,6 +6964,7 @@ RECOMP_FUNC void func_80800124_chfactorylinkgrill(uint8_t* rdram, recomp_context
 RECOMP_FUNC void func_8009DF18(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_sound_log(rdram, ctx, 2);
     // 0x8009DF18: addiu       $sp, $sp, -0x20
     ctx->r29 = ADD32(ctx->r29, -0X20);
     // 0x8009DF1C: sw          $ra, 0x1C($sp)

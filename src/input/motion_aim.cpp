@@ -50,6 +50,11 @@ namespace {
 
     std::mutex pending_mutex;
     float pending_yaw = 0.0f;
+    // The same motion, kept for the free camera's orbit (drained by take_orbit).
+    float orbit_mouse_yaw = 0.0f;
+    float orbit_mouse_pitch = 0.0f;
+    float orbit_gyro_yaw = 0.0f;
+    float orbit_gyro_pitch = 0.0f;
     float pending_pitch = 0.0f;
 
     struct Test {
@@ -131,8 +136,24 @@ void tooie::motion_aim::collect() {
     // Gyro x is the pitch (front of the controller up is positive) and y the yaw (left is positive),
     // the same senses as the view's angles.
     std::lock_guard lock{ pending_mutex };
-    pending_yaw += -mx * mouse_degrees_per_pixel + gy * gyro_scale;
-    pending_pitch += -my * mouse_degrees_per_pixel + gx * gyro_scale;
+    const float yaw = -mx * mouse_degrees_per_pixel + gy * gyro_scale;
+    const float pitch = -my * mouse_degrees_per_pixel + gx * gyro_scale;
+    pending_yaw += yaw;
+    pending_pitch += pitch;
+    auto add = [](float& total, float delta) { total = std::clamp(total + delta, -360.0f, 360.0f); };
+    add(orbit_mouse_yaw, -mx * mouse_degrees_per_pixel);
+    add(orbit_mouse_pitch, -my * mouse_degrees_per_pixel);
+    add(orbit_gyro_yaw, gy * gyro_scale);
+    add(orbit_gyro_pitch, gx * gyro_scale);
+}
+
+void tooie::motion_aim::take_orbit(float* mouse_yaw, float* mouse_pitch, float* gyro_yaw, float* gyro_pitch) {
+    std::lock_guard lock{ pending_mutex };
+    *mouse_yaw = orbit_mouse_yaw;
+    *mouse_pitch = orbit_mouse_pitch;
+    *gyro_yaw = orbit_gyro_yaw;
+    *gyro_pitch = orbit_gyro_pitch;
+    orbit_mouse_yaw = orbit_mouse_pitch = orbit_gyro_yaw = orbit_gyro_pitch = 0.0f;
 }
 
 void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {

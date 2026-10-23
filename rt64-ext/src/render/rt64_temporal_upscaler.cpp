@@ -1,0 +1,1015 @@
+//
+// RT64
+//
+
+#include "rt64_temporal_upscaler.h"
+
+#include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <mutex>
+
+#include "shared/rt64_temporal_upscaler.h"
+
+#include "rt64_render_target.h"
+#include "rt64_object_velocity.h"
+#include "rt64_gpu_sections.h"
+#include "rt64_render_target_manager.h"
+
+namespace RT64 {
+    namespace {
+        std::atomic<uint32_t> upscalerMode{ 0 };
+        std::atomic<uint32_t> upscalerQuality{ 0 };
+        std::atomic<float> upscalerSharpness{ 0.0f };
+        std::atomic<bool> upscalerReactive{ true };
+        std::atomic<bool> upscalerObjectMotion{ true };
+
+        struct Camera {
+            float projection[16] = {};
+            float view[16] = {};
+            float prevProjection[16] = {};
+            float prevView[16] = {};
+            float depthScale = 0.5f;
+            float depthTranslate = 0.5f;
+            uint32_t width = 0;
+            uint32_t height = 0;
+            bool valid = false;
+        };
+
+        std::mutex cameraMutex;
+        Camera currentCamera;
+        std::atomic<uint32_t> jitterFrame{ 0 };
+        // Frames in a row the resolve could not run for; the jitter is off from the third, so a picture the upscaler
+        // cannot work on (a menu, a cut) does not wobble. A resolve that runs puts it back.
+        std::atomic<uint32_t> unresolvedFrames{ 0 };
+        // Whether the camera was set since the last frame took it (a frame with no 3D world leaves it stale).
+        std::atomic<bool> cameraFresh{ false };
+        std::atomic<uint32_t> renderWidth{ 640 };
+        std::atomic<uint32_t> renderHeight{ 480 };
+        // 32 phases: FSR asks for 8 times the square of the upscale ratio, 18 for 1.5x and 32 for 2x.
+        constexpr uint32_t JitterPhases = 32;
+        // The camera's planes and field of view, from the last projection worked out, for FSR.
+        std::atomic<float> cameraNear{ 1.0f };
+        std::atomic<float> cameraFar{ 1000.0f };
+        std::atomic<float> cameraFov{ 1.0f };
+
+        // The Halton sequence (base b) at index i, in [0, 1).
+        float halton(uint32_t i, uint32_t b) {
+            float f = 1.0f, r = 0.0f;
+            while (i > 0) {
+                f /= float(b);
+                r += f * float(i % b);
+                i /= b;
+            }
+            return r;
+        }
+
+        // Row-major 4x4 inverse by cofactors; false if singular.
+        bool invert(const float m[16], float out[16]) {
+            float inv[16];
+            inv[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
+            inv[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
+            inv[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
+            inv[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
+            inv[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] - m[9] * m[3] * m[14] - m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
+            inv[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] + m[8] * m[3] * m[14] + m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
+            inv[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] - m[8] * m[3] * m[13] - m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
+            inv[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] + m[8] * m[2] * m[13] + m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
+            inv[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] + m[5] * m[3] * m[14] + m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
+            inv[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] - m[4] * m[3] * m[14] - m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
+            inv[10] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] + m[4] * m[3] * m[13] + m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
+            inv[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] - m[4] * m[2] * m[13] - m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
+            inv[3] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] - m[5] * m[3] * m[10] - m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
+            inv[7] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] + m[4] * m[3] * m[10] + m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
+            inv[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] - m[4] * m[3] * m[9] - m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
+            inv[15] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] + m[4] * m[2] * m[9] + m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
+            const float det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
+            if (std::abs(det) < 1e-20f) {
+                return false;
+            }
+            for (int i = 0; i < 16; i++) {
+                out[i] = inv[i] / det;
+            }
+            return true;
+        }
+
+        void multiply(const float a[16], const float b[16], float out[16]) {
+            float result[16];
+            for (int r = 0; r < 4; r++) {
+                for (int c = 0; c < 4; c++) {
+                    float sum = 0.0f;
+                    for (int k = 0; k < 4; k++) {
+                        sum += a[r * 4 + k] * b[k * 4 + c];
+                    }
+                    result[r * 4 + c] = sum;
+                }
+            }
+            std::copy(result, result + 16, out);
+        }
+
+        // The game's matrices are row-vector (clip = v * M), told apart by the projection (as the scene effects do).
+        bool rowVectorProjection(const float m[16]) {
+            return std::abs(m[2 * 4 + 3] + 1.0f) <= std::abs(m[3 * 4 + 2] + 1.0f);
+        }
+
+        void rowVectorForm(const float m[16], bool rowVector, float out[16]) {
+            for (int r = 0; r < 4; r++) {
+                for (int c = 0; c < 4; c++) {
+                    out[r * 4 + c] = rowVector ? m[r * 4 + c] : m[c * 4 + r];
+                }
+            }
+        }
+
+        // The projection with its jitter taken out (the jitter sits in row 2, columns 0 and 1, of a perspective
+        // projection with row vectors; see UpscalerJitterNdc), and the jitter itself in pixels (x right, y down).
+        void removeJitter(const float m[16], bool rowVector, uint32_t width, uint32_t height, float out[16], float &jitterX, float &jitterY) {
+            std::copy(m, m + 16, out);
+            // Row-vector form: clip.xy gains z * m[2][0..1], and w = -z, so the picture shifts by -m[2][0..1] in clip space.
+            const int a = rowVector ? (2 * 4 + 0) : (0 * 4 + 2);
+            const int b = rowVector ? (2 * 4 + 1) : (1 * 4 + 2);
+            const float shiftX = -out[a];
+            const float shiftY = -out[b];
+            jitterX = shiftX * float(width) * 0.5f;
+            jitterY = -shiftY * float(height) * 0.5f;
+            out[a] = 0.0f;
+            out[b] = 0.0f;
+        }
+
+        // Works out, for the current camera, the matrix taking a view-space position to the previous camera's clip
+        // space, the depth terms and the jitter of both frames. False when the projection is not a perspective one.
+        bool reprojection(const Camera &cur, float out[16], interop::float4 &depthTerms, float &projX, float &projY, float jitter[4]) {
+            if (!cur.valid || (cur.width == 0) || (cur.height == 0)) {
+                return false;
+            }
+            const float (&cm)[16] = cur.projection;
+            if ((std::abs(cm[2 * 4 + 3] + 1.0f) > 0.01f) && (std::abs(cm[3 * 4 + 2] + 1.0f) > 0.01f)) {
+                return false;
+            }
+            const bool curRow = rowVectorProjection(cur.projection);
+            const bool prevRow = rowVectorProjection(cur.prevProjection);
+            float curProj[16], prevProj[16];
+            removeJitter(cur.projection, curRow, cur.width, cur.height, curProj, jitter[0], jitter[1]);
+            removeJitter(cur.prevProjection, prevRow, cur.width, cur.height, prevProj, jitter[2], jitter[3]);
+
+            float curView[16], prevView[16], prevProjRow[16];
+            rowVectorForm(cur.view, curRow, curView);
+            rowVectorForm(cur.prevView, prevRow, prevView);
+            rowVectorForm(prevProj, prevRow, prevProjRow);
+            float curViewInverse[16];
+            if (!invert(curView, curViewInverse)) {
+                return false;
+            }
+            // view(cur) -> world -> view(prev) -> clip(prev).
+            float step[16], full[16];
+            multiply(curViewInverse, prevView, step);
+            multiply(step, prevProjRow, full);
+            std::copy(full, full + 16, out);
+
+            // The projection's depth terms, folded with the viewport's depth range as the scene effects do.
+            interop::float4 t = curRow ? interop::float4{ curProj[2 * 4 + 2], curProj[3 * 4 + 2], curProj[2 * 4 + 3], curProj[3 * 4 + 3] } :
+                interop::float4{ curProj[2 * 4 + 2], curProj[2 * 4 + 3], curProj[3 * 4 + 2], curProj[3 * 4 + 3] };
+            if (std::abs(cur.depthScale) >= 1e-6f) {
+                const float a = 0.5f / cur.depthScale;
+                const float b = (0.5f - cur.depthTranslate) / cur.depthScale;
+                t = interop::float4{ t.x - b * t.z, t.y - b * t.w, a * t.z, a * t.w };
+            }
+            // The near and far planes of a standard perspective projection, for the upscalers that want them.
+            {
+                const float a = curRow ? curProj[2 * 4 + 2] : curProj[2 * 4 + 2];
+                const float b = curRow ? curProj[3 * 4 + 2] : curProj[2 * 4 + 3];
+                const float nearPlane = (std::abs(a - 1.0f) > 1e-6f) ? b / (a - 1.0f) : 1.0f;
+                const float farPlane = (std::abs(a + 1.0f) > 1e-6f) ? b / (a + 1.0f) : 1000.0f;
+                if ((nearPlane > 0.0f) && (farPlane > nearPlane)) {
+                    cameraNear = nearPlane;
+                    cameraFar = farPlane;
+                }
+                cameraFov = 2.0f * std::atan(1.0f / std::max(std::abs(curProj[5]), 1e-3f));
+            }
+            depthTerms = t;
+            projX = curProj[0];
+            projY = curProj[5];
+            return true;
+        }
+    }
+
+    namespace {
+        std::atomic<bool> hudSplit{ true };
+        std::mutex snapshotMutex;
+        std::unique_ptr<RenderTexture> snapshotTexture;
+        uint32_t snapshotWidth = 0;
+        uint32_t snapshotHeight = 0;
+        RenderFormat snapshotFormat = RenderFormat::UNKNOWN;
+        bool snapshotFresh = false;
+    }
+
+    void SetUpscalerHudSplit(bool enabled) {
+        hudSplit = enabled;
+    }
+
+    bool UpscalerHudSplitWanted() {
+        return hudSplit.load() && UpscalerWanted() && (upscalerMode.load() != 6);
+    }
+
+    void UpscalerTakeWorldSnapshot(RenderWorker *worker, RenderTarget *colorTarget, const ShaderLibrary *shaderLibrary) {
+        if ((colorTarget == nullptr) || colorTarget->isEmpty() || (colorTarget->width == 0) || (colorTarget->height == 0)) {
+            return;
+        }
+        // The (resolved, if MSAA) color texture is copied as it is: a plain texture of its own size and format.
+        colorTarget->resolveTarget(worker, shaderLibrary);
+        RenderTexture *source = colorTarget->getResolvedTexture();
+        if (source == nullptr) {
+            return;
+        }
+        GpuSectionScope timed(WorkloadGpuSections(), GpuSection::UpscalerSnapshot, worker->commandList.get());
+        const std::scoped_lock lock(snapshotMutex);
+        if ((snapshotTexture == nullptr) || (snapshotWidth != colorTarget->width) || (snapshotHeight != colorTarget->height) || (snapshotFormat != colorTarget->format)) {
+            snapshotTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format));
+            snapshotTexture->setName("Upscaler World Snapshot");
+            snapshotWidth = colorTarget->width;
+            snapshotHeight = colorTarget->height;
+            snapshotFormat = colorTarget->format;
+        }
+        RenderTextureBarrier barriers[] = {
+            RenderTextureBarrier(source, RenderTextureLayout::COPY_SOURCE),
+            RenderTextureBarrier(snapshotTexture.get(), RenderTextureLayout::COPY_DEST)
+        };
+        worker->commandList->barriers(RenderBarrierStage::COPY, barriers, uint32_t(std::size(barriers)));
+        worker->commandList->copyTexture(snapshotTexture.get(), source);
+        snapshotFresh = true;
+    }
+
+    RenderTexture *UpscalerWorldSnapshot(uint32_t width, uint32_t height) {
+        const std::scoped_lock lock(snapshotMutex);
+        if (!snapshotFresh || (snapshotTexture == nullptr) || (snapshotWidth != width) || (snapshotHeight != height)) {
+            snapshotFresh = false;
+            return nullptr;
+        }
+        snapshotFresh = false;
+        return snapshotTexture.get();
+    }
+
+    void UpscalerCameraRange(float &nearPlane, float &farPlane, float &fovY) {
+        nearPlane = cameraNear.load();
+        farPlane = cameraFar.load();
+        fovY = cameraFov.load();
+    }
+
+    void SetUpscalerMode(uint32_t mode) {
+        upscalerMode = std::min(mode, 8U);
+    }
+
+    uint32_t GetUpscalerMode() {
+        return upscalerMode.load();
+    }
+
+    void SetUpscalerSharpness(float sharpness) {
+        upscalerSharpness = std::clamp(sharpness, 0.0f, 1.0f);
+    }
+
+    void SetUpscalerObjectMotion(bool enabled) {
+        upscalerObjectMotion = enabled;
+    }
+
+    void SetUpscalerReactive(bool enabled) {
+        upscalerReactive = enabled;
+    }
+
+    float UpscalerSharpness() {
+        return upscalerSharpness.load();
+    }
+
+    void SetUpscalerQuality(uint32_t quality) {
+        upscalerQuality = std::min(quality, 3U);
+    }
+
+    float UpscalerRenderFraction() {
+        // Only the built-in resolve (8) enlarges so far; the other choices have no backend yet and must not render small.
+        // (Off, FSR 4 native AA and DLAA will always keep the window's size.)
+        const uint32_t mode = upscalerMode.load();
+        if ((mode != 8) && (mode != 3) && (mode != 1) && (mode != 7) && (mode != 6)) {
+            return 1.0f;
+        }
+        static const float fractions[4] = { 0.667f, 0.58f, 0.5f, 0.333f };
+        return fractions[upscalerQuality.load()];
+    }
+
+    bool UpscalerWanted() {
+        const uint32_t mode = upscalerMode.load();
+        return (mode == 8) || (mode == 3) || (mode == 4) || (mode == 1) || (mode == 2) || (mode == 7) || (mode == 6);
+    }
+
+    bool UpscalerJitterActive() {
+        // Snapdragon GSR (6) is spatial: no jitter.
+        return UpscalerWanted() && (upscalerMode.load() != 6) && (unresolvedFrames.load() < 3);
+    }
+
+    void UpscalerNextFrame() {
+        jitterFrame++;
+    }
+
+    void UpscalerJitterNdc(uint32_t framesBack, float &x, float &y) {
+        x = 0.0f;
+        y = 0.0f;
+        if (!UpscalerJitterActive()) {
+            return;
+        }
+        const uint32_t index = (jitterFrame.load() - framesBack) % JitterPhases + 1;
+        // In pixels, -0.5 to 0.5 (x right, y down); the picture then shifts by that much, in clip space 2 / size a pixel.
+        const float pixelX = halton(index, 2) - 0.5f;
+        const float pixelY = halton(index, 3) - 0.5f;
+        x = pixelX * 2.0f / float(renderWidth.load());
+        y = -pixelY * 2.0f / float(renderHeight.load());
+    }
+
+    void SetUpscalerCamera(const float projection[16], const float view[16], const float prevProjection[16], const float prevView[16],
+        float depthScale, float depthTranslate, uint32_t width, uint32_t height)
+    {
+        if (upscalerMode.load() == 0) {
+            return;
+        }
+        renderWidth = std::max(width, 1U);
+        renderHeight = std::max(height, 1U);
+        const std::scoped_lock lock(cameraMutex);
+        std::copy(projection, projection + 16, currentCamera.projection);
+        std::copy(view, view + 16, currentCamera.view);
+        std::copy(prevProjection, prevProjection + 16, currentCamera.prevProjection);
+        std::copy(prevView, prevView + 16, currentCamera.prevView);
+        currentCamera.depthScale = depthScale;
+        currentCamera.depthTranslate = depthTranslate;
+        currentCamera.width = width;
+        currentCamera.height = height;
+        currentCamera.valid = true;
+        cameraFresh = true;
+    }
+
+    namespace {
+        // One line to the console every few seconds while an upscaler is on, for finding what went wrong in a test.
+        void logUpscaler(const char *what, uint32_t mode, uint32_t inW, uint32_t inH, uint32_t outW, uint32_t outH, bool motionKnown,
+            const float jitter[4], uint32_t resets, bool debugView)
+        {
+            static auto lastLog = std::chrono::steady_clock::now() - std::chrono::seconds(10);
+            const auto now = std::chrono::steady_clock::now();
+            if (now - lastLog < std::chrono::seconds(5)) {
+                return;
+            }
+            lastLog = now;
+            fprintf(stdout, "[upscaler] %s mode %u render %ux%u output %ux%u motion %s jitter %.3f %.3f (previous %.3f %.3f) history resets %u velocity view %s\n",
+                what, mode, inW, inH, outW, outH, motionKnown ? "known" : "unknown", jitter[0], jitter[1], jitter[2], jitter[3], resets, debugView ? "on" : "off");
+            fflush(stdout);
+        }
+    }
+
+    RenderTexture *UpscalerRenderer::velocity(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
+        RenderTexture *input, RenderFormat format, uint32_t inputWidth, uint32_t inputHeight, RenderTexture *depth)
+    {
+        velocityValid = false;
+        debugShown = false;
+        if ((GetUpscalerMode() == 0) || (GetUpscalerMode() == 6) || (input == nullptr) || (depth == nullptr) || (inputWidth == 0) || (inputHeight == 0) ||
+            (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR)))
+        {
+            return input;
+        }
+
+        interop::UpscalerVelocityCB constants;
+        float reproject[16];
+        float jitter[4] = {};
+        bool motionKnown;
+        {
+            const std::scoped_lock lock(cameraMutex);
+            float projX = 1.0f, projY = 1.0f;
+            // A camera nobody set for this frame (no 3D world in it) is stale: no motion.
+            const bool fresh = cameraFresh.exchange(false);
+            motionKnown = fresh && reprojection(currentCamera, reproject, constants.depthTerms, projX, projY, jitter);
+            constants.flags.w = motionKnown ? 0.0f : 1.0f;
+            if (!motionKnown) {
+                // No motion known: no velocity.
+                std::fill(reproject, reproject + 16, 0.0f);
+                reproject[0] = reproject[5] = reproject[10] = reproject[15] = 1.0f;
+                constants.depthTerms = { 1.0f, 0.0f, 0.0f, 1.0f };
+            }
+            constants.projection = { projX, projY, float(inputWidth), float(inputHeight) };
+        }
+        constants.reproject0 = { reproject[0], reproject[1], reproject[2], reproject[3] };
+        constants.reproject1 = { reproject[4], reproject[5], reproject[6], reproject[7] };
+        constants.reproject2 = { reproject[8], reproject[9], reproject[10], reproject[11] };
+        constants.reproject3 = { reproject[12], reproject[13], reproject[14], reproject[15] };
+        currentJitter[0] = jitter[0];
+        currentJitter[1] = jitter[1];
+        motionWasKnown = motionKnown;
+
+        static const char *viewEnv = std::getenv("TOOIE_VELOCITY_VIEW");
+        const bool debugView = (viewEnv != nullptr) && (viewEnv[0] != '0');
+        const float debugScale = (viewEnv != nullptr) && (viewEnv[0] == '2') ? 4.0f : 16.0f;
+        logUpscaler("velocity", GetUpscalerMode(), inputWidth, inputHeight, lastOutputWidth, lastOutputHeight, motionKnown, jitter, historyResets, debugView);
+
+        if ((this->width != inputWidth) || (this->height != inputHeight) || (velocityTexture == nullptr)) {
+            velocityFramebuffer.reset();
+            debugFramebuffer.reset();
+            velocityTexture = device->createTexture(RenderTextureDesc::ColorTarget(inputWidth, inputHeight, RenderFormat::R16G16B16A16_FLOAT));
+            velocityTexture->setName("Upscaler Velocity");
+            debugTexture = device->createTexture(RenderTextureDesc::ColorTarget(inputWidth, inputHeight, format));
+            debugTexture->setName("Upscaler Velocity View");
+            const RenderTexture *velocityTex = velocityTexture.get();
+            const RenderTexture *debug = debugTexture.get();
+            velocityFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&velocityTex, 1));
+            debugFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&debug, 1));
+            this->width = inputWidth;
+            this->height = inputHeight;
+        }
+
+        if (descriptorSet == nullptr) {
+            descriptorSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+                shaderLibrary->samplerLibrary.nearest.clampClamp.get(), device);
+        }
+
+        // Every slot gets a texture; the pass reads the second (the depth).
+        descriptorSet->setTexture(descriptorSet->gTexture0, input, RenderTextureLayout::SHADER_READ);
+        descriptorSet->setTexture(descriptorSet->gTexture1, depth, RenderTextureLayout::SHADER_READ);
+        RenderTexture *objectVelocity = UpscalerObjectVelocity(inputWidth, inputHeight);
+        descriptorSet->setTexture(descriptorSet->gTexture2, (objectVelocity != nullptr) ? objectVelocity : input, RenderTextureLayout::SHADER_READ);
+        constants.extra = { (objectVelocity != nullptr) ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+
+        auto drawPass = [&](const ShaderRecord &record, const RenderFramebuffer *framebuffer, float kind) {
+            constants.flags = { kind, debugScale, 1.0f, constants.flags.w };
+            commandList->setFramebuffer(framebuffer);
+            commandList->setPipeline(record.pipeline.get());
+            commandList->setGraphicsPipelineLayout(record.pipelineLayout.get());
+            commandList->setGraphicsDescriptorSet(descriptorSet->get(), 0);
+            commandList->setGraphicsPushConstants(0, &constants);
+            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
+            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(inputWidth), float(inputHeight)));
+            commandList->setScissors(RenderRect(0, 0, inputWidth, inputHeight));
+            commandList->drawInstanced(3, 1, 0, 0);
+        };
+
+        RenderTextureBarrier velocityBarriers[] = {
+            RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(depth, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier((objectVelocity != nullptr) ? objectVelocity : input, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(velocityTexture.get(), RenderTextureLayout::COLOR_WRITE)
+        };
+        commandList->barriers(RenderBarrierStage::GRAPHICS, velocityBarriers, uint32_t(std::size(velocityBarriers)));
+        drawPass(shaderLibrary->upscalerVelocity, velocityFramebuffer.get(), 0.0f);
+        velocityValid = true;
+
+        // DLSS wants a real float depth, not the packed copy.
+        depthFloatValid = false;
+        const uint32_t mode = GetUpscalerMode();
+        if ((((mode == 3) || (mode == 4)) && !dlss.unavailable()) || (((mode == 1) || (mode == 2) || (mode == 7)) && !ffx.unavailable(mode != 7))) {
+            if ((depthFloatTexture == nullptr) || (depthFloatWidth != inputWidth) || (depthFloatHeight != inputHeight)) {
+                depthFloatFramebuffer.reset();
+                depthFloatTexture = device->createTexture(RenderTextureDesc::ColorTarget(inputWidth, inputHeight, RenderFormat::R32_FLOAT));
+                depthFloatTexture->setName("Upscaler Depth Float");
+                depthFloatWidth = inputWidth;
+                depthFloatHeight = inputHeight;
+                const RenderTexture *depthTex = depthFloatTexture.get();
+                depthFloatFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&depthTex, 1));
+            }
+            RenderTextureBarrier depthBarriers[] = {
+                RenderTextureBarrier(depthFloatTexture.get(), RenderTextureLayout::COLOR_WRITE)
+            };
+            commandList->barriers(RenderBarrierStage::GRAPHICS, depthBarriers, uint32_t(std::size(depthBarriers)));
+            drawPass(shaderLibrary->upscalerDepth, depthFloatFramebuffer.get(), 2.0f);
+            depthFloatValid = true;
+        }
+
+        if (!debugView) {
+            return input;
+        }
+
+        RenderTextureBarrier debugBarriers[] = {
+            RenderTextureBarrier(debugTexture.get(), RenderTextureLayout::COLOR_WRITE)
+        };
+        commandList->barriers(RenderBarrierStage::GRAPHICS, debugBarriers, uint32_t(std::size(debugBarriers)));
+        drawPass(shaderLibrary->upscalerVelocityView, debugFramebuffer.get(), 1.0f);
+        debugShown = true;
+        return debugTexture.get();
+    }
+
+    RenderTexture *UpscalerRenderer::resolve(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
+        RenderTexture *input, RenderFormat format, uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight)
+    {
+        // Without a known camera motion the picture is not a 3D world (a menu, a cut): left as it is, with no blur.
+        const bool spatial = (GetUpscalerMode() == 6);
+        if (!UpscalerWanted() || (!spatial && (!velocityValid || debugShown || !motionWasKnown || (inputWidth != width) || (inputHeight != height))) || (input == nullptr) ||
+            (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR)) || (outputWidth < inputWidth) || (outputHeight < inputHeight) ||
+            (spatial && (shaderLibrary->upscalerGsr.pipeline == nullptr)))
+        {
+            historyValid = false;
+            unresolvedFrames++;
+            return input;
+        }
+
+        bool reset = !historyValid;
+
+        // DLSS and DLAA; if DLSS cannot run (no RTX card, no DLL) the built-in resolve below takes over.
+        const uint32_t mode = GetUpscalerMode();
+        const bool useDlss = ((mode == 3) || (mode == 4)) && !dlss.unavailable();
+        const bool useFfx = ((mode == 1) || (mode == 2) || (mode == 7)) && !ffx.unavailable(mode != 7);
+        if ((useDlss || useFfx) && depthFloatValid) {
+            if ((dlssOutput == nullptr) || (dlssOutputWidth != outputWidth) || (dlssOutputHeight != outputHeight)) {
+                dlssOutput = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format, RenderMultisampling(), nullptr, RenderTextureFlag::STORAGE | RenderTextureFlag::UNORDERED_ACCESS));
+                dlssOutput->setName("Upscaler DLSS Output");
+                dlssOutputWidth = outputWidth;
+                dlssOutputHeight = outputHeight;
+                reset = true;
+            }
+            RenderTexture *reactiveMask = UpscalerObjectReactive(inputWidth, inputHeight);
+            RenderTextureBarrier dlssBarriers[] = {
+                RenderTextureBarrier((reactiveMask != nullptr) ? reactiveMask : input, RenderTextureLayout::SHADER_READ),
+                RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
+                RenderTextureBarrier(depthFloatTexture.get(), RenderTextureLayout::SHADER_READ),
+                RenderTextureBarrier(velocityTexture.get(), RenderTextureLayout::SHADER_READ),
+                RenderTextureBarrier(dlssOutput.get(), RenderTextureLayout::GENERAL)
+            };
+            commandList->barriers(RenderBarrierStage::COMPUTE, dlssBarriers, uint32_t(std::size(dlssBarriers)));
+
+            // TOOIE_DLSS_FLIP=x, y or xy turns the jitter's sign round, if a test shows it is the other way.
+            static const char *flipEnv = std::getenv("TOOIE_DLSS_FLIP");
+            float jitterX = currentJitter[0], jitterY = currentJitter[1];
+            if (flipEnv != nullptr) {
+                if (std::strchr(flipEnv, 'x') != nullptr) jitterX = -jitterX;
+                if (std::strchr(flipEnv, 'y') != nullptr) jitterY = -jitterY;
+            }
+            bool ran;
+            if (useDlss) {
+                ran = dlss.evaluate(device, commandList, input, depthFloatTexture.get(), velocityTexture.get(), dlssOutput.get(), inputWidth, inputHeight,
+                    outputWidth, outputHeight, jitterX, jitterY, reset || !historyValid, upscalerQuality.load(), mode == 4, shaderLibrary->usesHDR, reactiveMask);
+            }
+            else {
+                float nearPlane, farPlane, fovY;
+                UpscalerCameraRange(nearPlane, farPlane, fovY);
+                ran = ffx.evaluate(device, commandList, input, depthFloatTexture.get(), velocityTexture.get(), dlssOutput.get(), inputWidth, inputHeight,
+                    outputWidth, outputHeight, jitterX, jitterY, reset || !historyValid, mode != 7, mode == 2, shaderLibrary->usesHDR, nearPlane, farPlane, fovY, reactiveMask, upscalerSharpness.load());
+            }
+            if (ran)
+            {
+                if (reset) {
+                    historyResets++;
+                }
+                historyValid = true;
+                unresolvedFrames = 0;
+                lastOutputWidth = outputWidth;
+                lastOutputHeight = outputHeight;
+                float jitterLog[4] = { jitterX, jitterY, 0.0f, 0.0f };
+                logUpscaler(useDlss ? "resolve (DLSS)" : "resolve (FSR)", mode, inputWidth, inputHeight, outputWidth, outputHeight, motionWasKnown, jitterLog, historyResets, false);
+                // The output goes on to be read as a texture.
+                RenderTextureBarrier readBarrier(dlssOutput.get(), RenderTextureLayout::SHADER_READ);
+                commandList->barriers(RenderBarrierStage::GRAPHICS, &readBarrier, 1);
+                return dlssOutput.get();
+            }
+            // The backend just failed (the reason is on the console): this frame and the rest use the built-in resolve.
+            reset = true;
+            historyValid = false;
+        }
+
+        if ((outputWidth != lastOutputWidth) || (outputHeight != lastOutputHeight) || (resolved[0] == nullptr)) {
+            for (int i = 0; i < 2; i++) {
+                resolvedFramebuffer[i].reset();
+                resolved[i] = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format));
+                resolved[i]->setName(i == 0 ? "Upscaler Resolve A" : "Upscaler Resolve B");
+                const RenderTexture *tex = resolved[i].get();
+                resolvedFramebuffer[i] = device->createFramebuffer(RenderFramebufferDesc(&tex, 1));
+            }
+            lastOutputWidth = outputWidth;
+            lastOutputHeight = outputHeight;
+            reset = true;
+        }
+
+        if (resolveDescriptorSet == nullptr) {
+            resolveDescriptorSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+                shaderLibrary->samplerLibrary.nearest.clampClamp.get(), device);
+        }
+
+        // Snapdragon GSR (Android): one spatial pass, no history.
+        if (spatial) {
+            if (outputWidth == inputWidth && outputHeight == inputHeight) {
+                return input;
+            }
+            const uint32_t gsrTarget = writeIndex;
+            resolveDescriptorSet->setTexture(resolveDescriptorSet->gTexture0, input, RenderTextureLayout::SHADER_READ);
+            resolveDescriptorSet->setTexture(resolveDescriptorSet->gTexture1, input, RenderTextureLayout::SHADER_READ);
+            resolveDescriptorSet->setTexture(resolveDescriptorSet->gTexture2, input, RenderTextureLayout::SHADER_READ);
+            interop::UpscalerResolveCB gsrConstants;
+            gsrConstants.sizes = { float(inputWidth), float(inputHeight), float(outputWidth), float(outputHeight) };
+            gsrConstants.jitter = { 0.0f, 0.0f, 0.0f, 0.0f };
+            gsrConstants.extra = { 0.0f, 0.0f, 0.0f, 0.0f };
+            RenderTextureBarrier gsrBarriers[] = {
+                RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
+                RenderTextureBarrier(resolved[gsrTarget].get(), RenderTextureLayout::COLOR_WRITE)
+            };
+            commandList->barriers(RenderBarrierStage::GRAPHICS, gsrBarriers, uint32_t(std::size(gsrBarriers)));
+            commandList->setFramebuffer(resolvedFramebuffer[gsrTarget].get());
+            commandList->setPipeline(shaderLibrary->upscalerGsr.pipeline.get());
+            commandList->setGraphicsPipelineLayout(shaderLibrary->upscalerGsr.pipelineLayout.get());
+            commandList->setGraphicsDescriptorSet(resolveDescriptorSet->get(), 0);
+            commandList->setGraphicsPushConstants(0, &gsrConstants);
+            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
+            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(outputWidth), float(outputHeight)));
+            commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));
+            commandList->drawInstanced(3, 1, 0, 0);
+            writeIndex = 1 - writeIndex;
+            unresolvedFrames = 0;
+            float gsrLog[4] = {};
+            logUpscaler("resolve (Snapdragon GSR)", GetUpscalerMode(), inputWidth, inputHeight, outputWidth, outputHeight, false, gsrLog, historyResets, false);
+            return resolved[gsrTarget].get();
+        }
+
+        // Written to one of the two textures; the other holds the last frame's result.
+        const uint32_t target = writeIndex;
+        const uint32_t source = 1 - writeIndex;
+        resolveDescriptorSet->setTexture(resolveDescriptorSet->gTexture0, input, RenderTextureLayout::SHADER_READ);
+        resolveDescriptorSet->setTexture(resolveDescriptorSet->gTexture1, velocityTexture.get(), RenderTextureLayout::SHADER_READ);
+        resolveDescriptorSet->setTexture(resolveDescriptorSet->gTexture2, resolved[source].get(), RenderTextureLayout::SHADER_READ);
+
+        interop::UpscalerResolveCB constants;
+        constants.sizes = { float(inputWidth), float(inputHeight), float(outputWidth), float(outputHeight) };
+        constants.jitter = { currentJitter[0], currentJitter[1], reset ? 0.0f : 1.0f, 0.1f };
+        constants.extra = { upscalerSharpness.load(), 0.0f, 0.0f, 0.0f };
+
+        RenderTextureBarrier barriers[] = {
+            RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(velocityTexture.get(), RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(resolved[source].get(), RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(resolved[target].get(), RenderTextureLayout::COLOR_WRITE)
+        };
+        commandList->barriers(RenderBarrierStage::GRAPHICS, barriers, uint32_t(std::size(barriers)));
+        commandList->setFramebuffer(resolvedFramebuffer[target].get());
+        commandList->setPipeline(shaderLibrary->upscalerResolve.pipeline.get());
+        commandList->setGraphicsPipelineLayout(shaderLibrary->upscalerResolve.pipelineLayout.get());
+        commandList->setGraphicsDescriptorSet(resolveDescriptorSet->get(), 0);
+        commandList->setGraphicsPushConstants(0, &constants);
+        commandList->setVertexBuffers(0, nullptr, 0, nullptr);
+        commandList->setViewports(RenderViewport(0.0f, 0.0f, float(outputWidth), float(outputHeight)));
+        commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));
+        commandList->drawInstanced(3, 1, 0, 0);
+
+        if (reset) {
+            historyResets++;
+        }
+        historyValid = true;
+        unresolvedFrames = 0;
+        writeIndex = source;
+        float jitterLog[4] = { currentJitter[0], currentJitter[1], 0.0f, 0.0f };
+        logUpscaler("resolve", GetUpscalerMode(), inputWidth, inputHeight, outputWidth, outputHeight, motionWasKnown, jitterLog, historyResets, false);
+        return resolved[target].get();
+    }
+}
+
+namespace RT64 {
+    RenderTexture *UpscalerRenderer::composeHud(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
+        RenderTexture *upscaled, RenderTexture *world, RenderTexture *finished, RenderFormat format,
+        uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight)
+    {
+        if ((upscaled == nullptr) || (world == nullptr) || (finished == nullptr) || (shaderLibrary->upscalerHud.pipeline == nullptr)) {
+            return upscaled;
+        }
+
+        if ((hudTexture == nullptr) || (hudWidth != outputWidth) || (hudHeight != outputHeight)) {
+            hudFramebuffer.reset();
+            hudTexture = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format));
+            hudTexture->setName("Upscaler HUD");
+            const RenderTexture *tex = hudTexture.get();
+            hudFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&tex, 1));
+            hudWidth = outputWidth;
+            hudHeight = outputHeight;
+        }
+        if (hudDescriptorSet == nullptr) {
+            hudDescriptorSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+                shaderLibrary->samplerLibrary.nearest.clampClamp.get(), device);
+        }
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture0, upscaled, RenderTextureLayout::SHADER_READ);
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture1, world, RenderTextureLayout::SHADER_READ);
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture2, finished, RenderTextureLayout::SHADER_READ);
+
+        interop::UpscalerResolveCB constants;
+        constants.sizes = { float(inputWidth), float(inputHeight), float(outputWidth), float(outputHeight) };
+        constants.jitter = { shaderLibrary->usesHDR ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+        constants.extra = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+        RenderTextureBarrier barriers[] = {
+            RenderTextureBarrier(upscaled, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(world, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(finished, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(hudTexture.get(), RenderTextureLayout::COLOR_WRITE)
+        };
+        commandList->barriers(RenderBarrierStage::GRAPHICS, barriers, uint32_t(std::size(barriers)));
+        commandList->setFramebuffer(hudFramebuffer.get());
+        commandList->setPipeline(shaderLibrary->upscalerHud.pipeline.get());
+        commandList->setGraphicsPipelineLayout(shaderLibrary->upscalerHud.pipelineLayout.get());
+        commandList->setGraphicsDescriptorSet(hudDescriptorSet->get(), 0);
+        commandList->setGraphicsPushConstants(0, &constants);
+        commandList->setVertexBuffers(0, nullptr, 0, nullptr);
+        commandList->setViewports(RenderViewport(0.0f, 0.0f, float(outputWidth), float(outputHeight)));
+        commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));
+        commandList->drawInstanced(3, 1, 0, 0);
+        return hudTexture.get();
+    }
+}
+
+namespace RT64 {
+    namespace {
+        struct ObjectVelocityResources {
+            std::mutex mutex;
+            std::unique_ptr<RenderTexture> color;
+            std::unique_ptr<RenderTexture> reactive;
+            std::unique_ptr<RenderTexture> depth;
+            std::unique_ptr<RenderFramebuffer> framebuffer;
+            std::unique_ptr<ObjectVelocityDescriptorSet> set;
+            uint32_t width = 0;
+            uint32_t height = 0;
+            bool fresh = false;
+            bool reactiveFresh = false;
+        };
+
+        ObjectVelocityResources objectVelocity;
+    }
+
+    bool UpscalerObjectVelocityWanted() {
+        return UpscalerWanted() && (upscalerMode.load() != 6) && upscalerObjectMotion.load();
+    }
+
+    void UpscalerRecordObjectVelocity(RenderWorker *worker, uint32_t width, uint32_t height, const ShaderLibrary *shaderLibrary,
+        const RenderBuffer *worldPos, const RenderBuffer *worldVel, const std::function<void(RenderCommandList *)> &draw,
+        const std::function<void(RenderCommandList *)> &drawReactive)
+    {
+        if ((width == 0) || (height == 0) || (shaderLibrary->upscalerObjectVelocity.pipeline == nullptr) || (shaderLibrary->upscalerReactive.pipeline == nullptr)) {
+            return;
+        }
+
+        // The camera of this frame, without jitter, as view-projection rows (clip = position * M).
+        interop::UpscalerObjectVelocityCB constants;
+        {
+            const std::scoped_lock lock(cameraMutex);
+            const Camera &cam = currentCamera;
+            if (!cam.valid || (cam.width != width) || (cam.height != height)) {
+                return;
+            }
+            const float (&cm)[16] = cam.projection;
+            if ((std::abs(cm[2 * 4 + 3] + 1.0f) > 0.01f) && (std::abs(cm[3 * 4 + 2] + 1.0f) > 0.01f)) {
+                return;
+            }
+            const bool curRow = rowVectorProjection(cam.projection);
+            const bool prevRow = rowVectorProjection(cam.prevProjection);
+            float curProj[16], prevProj[16], jx, jy;
+            removeJitter(cam.projection, curRow, cam.width, cam.height, curProj, jx, jy);
+            removeJitter(cam.prevProjection, prevRow, cam.width, cam.height, prevProj, jx, jy);
+            float curView[16], prevView[16], curProjRow[16], prevProjRow[16], curVP[16], prevVP[16];
+            rowVectorForm(cam.view, curRow, curView);
+            rowVectorForm(cam.prevView, prevRow, prevView);
+            rowVectorForm(curProj, curRow, curProjRow);
+            rowVectorForm(prevProj, prevRow, prevProjRow);
+            multiply(curView, curProjRow, curVP);
+            multiply(prevView, prevProjRow, prevVP);
+            constants.cur0 = { curVP[0], curVP[1], curVP[2], curVP[3] };
+            constants.cur1 = { curVP[4], curVP[5], curVP[6], curVP[7] };
+            constants.cur2 = { curVP[8], curVP[9], curVP[10], curVP[11] };
+            constants.cur3 = { curVP[12], curVP[13], curVP[14], curVP[15] };
+            constants.prev0 = { prevVP[0], prevVP[1], prevVP[2], prevVP[3] };
+            constants.prev1 = { prevVP[4], prevVP[5], prevVP[6], prevVP[7] };
+            constants.prev2 = { prevVP[8], prevVP[9], prevVP[10], prevVP[11] };
+            constants.prev3 = { prevVP[12], prevVP[13], prevVP[14], prevVP[15] };
+            constants.size = { float(width), float(height), 0.9f, 0.0f };
+        }
+
+        GpuSectionScope timed(WorkloadGpuSections(), GpuSection::UpscalerObjects, worker->commandList.get());
+        const std::scoped_lock lock(objectVelocity.mutex);
+        ObjectVelocityResources &res = objectVelocity;
+        if ((res.color == nullptr) || (res.width != width) || (res.height != height)) {
+            res.framebuffer.reset();
+            res.color = worker->device->createTexture(RenderTextureDesc::ColorTarget(width, height, RenderFormat::R16G16B16A16_FLOAT));
+            res.color->setName("Upscaler Object Velocity");
+            RenderClearValue clearValue = RenderClearValue::Depth(RenderDepth(), RenderFormat::D32_FLOAT);
+            res.reactive = worker->device->createTexture(RenderTextureDesc::ColorTarget(width, height, RenderFormat::R8_UNORM));
+            res.reactive->setName("Upscaler Reactive Mask");
+            res.depth = worker->device->createTexture(RenderTextureDesc::DepthTarget(width, height, RenderFormat::D32_FLOAT, RenderMultisampling(), &clearValue));
+            res.depth->setName("Upscaler Object Velocity Depth");
+            const RenderTexture *colorTex[2] = { res.color.get(), res.reactive.get() };
+            res.framebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(colorTex, 2, res.depth.get()));
+            res.width = width;
+            res.height = height;
+        }
+        if (res.set == nullptr) {
+            res.set = std::make_unique<ObjectVelocityDescriptorSet>(worker->device);
+        }
+        res.set->setBuffer(res.set->worldPos, worldPos, RenderBufferStructuredView(sizeof(float) * 4));
+        res.set->setBuffer(res.set->worldVel, worldVel, RenderBufferStructuredView(sizeof(float) * 4));
+
+        RenderCommandList *commandList = worker->commandList.get();
+        commandList->barriers(RenderBarrierStage::GRAPHICS, {
+            RenderTextureBarrier(res.color.get(), RenderTextureLayout::COLOR_WRITE),
+            RenderTextureBarrier(res.reactive.get(), RenderTextureLayout::COLOR_WRITE),
+            RenderTextureBarrier(res.depth.get(), RenderTextureLayout::DEPTH_WRITE)
+        });
+        commandList->setFramebuffer(res.framebuffer.get());
+        commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
+        commandList->clearColor(1, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
+        commandList->clearDepth(true, 1.0f);
+        commandList->setViewports(RenderViewport(0.0f, 0.0f, float(width), float(height)));
+        commandList->setScissors(RenderRect(0, 0, width, height));
+        commandList->setPipeline(shaderLibrary->upscalerObjectVelocity.pipeline.get());
+        commandList->setGraphicsPipelineLayout(shaderLibrary->upscalerObjectVelocity.pipelineLayout.get());
+        commandList->setGraphicsDescriptorSet(res.set->get(), 0);
+        commandList->setGraphicsPushConstants(0, &constants);
+        draw(commandList);
+        res.reactiveFresh = false;
+        if (drawReactive && upscalerReactive.load()) {
+            // The see-through draws over the solid ones; the same descriptors and constants, another pixel shader.
+            commandList->setPipeline(shaderLibrary->upscalerReactive.pipeline.get());
+            commandList->setGraphicsPipelineLayout(shaderLibrary->upscalerReactive.pipelineLayout.get());
+            commandList->setGraphicsDescriptorSet(res.set->get(), 0);
+            commandList->setGraphicsPushConstants(0, &constants);
+            drawReactive(commandList);
+            res.reactiveFresh = true;
+        }
+        commandList->barriers(RenderBarrierStage::GRAPHICS, {
+            RenderTextureBarrier(res.color.get(), RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(res.reactive.get(), RenderTextureLayout::SHADER_READ)
+        });
+        res.fresh = true;
+    }
+
+    RenderTexture *UpscalerObjectReactive(uint32_t width, uint32_t height) {
+        const std::scoped_lock lock(objectVelocity.mutex);
+        if (!objectVelocity.reactiveFresh || (objectVelocity.reactive == nullptr) || (objectVelocity.width != width) || (objectVelocity.height != height)) {
+            return nullptr;
+        }
+        objectVelocity.reactiveFresh = false;
+        return objectVelocity.reactive.get();
+    }
+
+    RenderTexture *UpscalerObjectVelocity(uint32_t width, uint32_t height) {
+        const std::scoped_lock lock(objectVelocity.mutex);
+        if (!objectVelocity.fresh || (objectVelocity.color == nullptr) || (objectVelocity.width != width) || (objectVelocity.height != height)) {
+            objectVelocity.fresh = false;
+            objectVelocity.reactiveFresh = false;
+            return nullptr;
+        }
+        objectVelocity.fresh = false;
+        return objectVelocity.color.get();
+    }
+}
+
+namespace RT64 {
+    namespace {
+        std::atomic<bool> hudFullResolution{ false };
+        std::atomic<uint32_t> presentOutputWidth{ 0 };
+        std::atomic<uint32_t> presentOutputHeight{ 0 };
+
+        int hudSpan[2] = { -1, -1 };
+
+        struct HudLayerResources {
+            std::mutex mutex;
+            std::unique_ptr<RenderTarget> color[2];
+            std::unique_ptr<RenderTarget> depth;
+            RenderFramebufferStorage storage[2];
+            uint32_t width = 0;
+            uint32_t height = 0;
+            bool usesHDR = false;
+            bool fresh = false;
+        };
+
+        HudLayerResources hudLayers;
+    }
+
+    void SetUpscalerHudFullResolution(bool enabled) {
+        hudFullResolution = enabled;
+    }
+
+    void SetUpscalerOutputSize(uint32_t width, uint32_t height) {
+        presentOutputWidth = width;
+        presentOutputHeight = height;
+    }
+
+    bool UpscalerHudLayersWanted(uint32_t colorWidth, uint32_t colorHeight, uint32_t sampleCount) {
+        const uint32_t outW = presentOutputWidth.load();
+        const uint32_t outH = presentOutputHeight.load();
+        // Only without multisampling, and only when the upscaler enlarges (the output is the one the present queue last used).
+        return hudFullResolution.load() && UpscalerHudSplitWanted() && (sampleCount <= 1) && (colorWidth > 0) && (colorHeight > 0) &&
+            (outW > colorWidth) && (outH > colorHeight) && (outW <= colorWidth * 4) && (outH <= colorHeight * 4);
+    }
+
+    RenderFramebufferStorage *UpscalerBeginHudLayer(RenderWorker *worker, RenderTarget *colorTarget, uint32_t layer, float &scaleX, float &scaleY) {
+        const uint32_t outW = presentOutputWidth.load();
+        const uint32_t outH = presentOutputHeight.load();
+        if ((layer > 1) || (colorTarget == nullptr) || (outW == 0) || (outH == 0)) {
+            return nullptr;
+        }
+
+        HudLayerResources &res = hudLayers;
+        const std::scoped_lock lock(res.mutex);
+        if (layer == 0) {
+            res.fresh = false;
+        }
+        if ((res.depth == nullptr) || (res.width != outW) || (res.height != outH) || (res.usesHDR != colorTarget->usesHDR)) {
+            for (int i = 0; i < 2; i++) {
+                res.storage[i].colorDepthWrite.reset();
+                res.storage[i].colorWriteDepthRead.reset();
+                res.color[i] = std::make_unique<RenderTarget>(0, Framebuffer::Type::Color, RenderMultisampling(), colorTarget->usesHDR);
+                res.color[i]->setupColor(worker, outW, outH);
+            }
+            res.depth = std::make_unique<RenderTarget>(0, Framebuffer::Type::Depth, RenderMultisampling(), colorTarget->usesHDR);
+            res.depth->setupDepth(worker, outW, outH);
+            for (int i = 0; i < 2; i++) {
+                res.storage[i].setup(worker->device, RenderFramebufferKey(), res.color[i].get(), res.depth.get());
+            }
+            res.width = outW;
+            res.height = outH;
+            res.usesHDR = colorTarget->usesHDR;
+        }
+
+        RenderCommandList *commandList = worker->commandList.get();
+        // Timed from here to UpscalerEndHudLayer, which takes in the HUD drawn between the two.
+        hudSpan[layer] = WorkloadGpuSections().start(GpuSection::UpscalerHud, commandList);
+        commandList->barriers(RenderBarrierStage::GRAPHICS, {
+            RenderTextureBarrier(res.color[layer]->texture.get(), RenderTextureLayout::COLOR_WRITE),
+            RenderTextureBarrier(res.depth->texture.get(), RenderTextureLayout::DEPTH_WRITE)
+        });
+        commandList->setFramebuffer(res.storage[layer].colorDepthWrite.get());
+        const float value = (layer == 0) ? 0.0f : 1.0f;
+        commandList->clearColor(0, RenderColor(value, value, value, 1.0f));
+        commandList->clearDepth(true, 1.0f);
+        scaleX = float(outW) / float(colorTarget->width);
+        scaleY = float(outH) / float(colorTarget->height);
+        return &res.storage[layer];
+    }
+
+    void UpscalerEndHudLayer(RenderWorker *worker, uint32_t layer) {
+        HudLayerResources &res = hudLayers;
+        const std::scoped_lock lock(res.mutex);
+        if ((layer > 1) || (res.color[layer] == nullptr)) {
+            return;
+        }
+        worker->commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.color[layer]->texture.get(), RenderTextureLayout::SHADER_READ) });
+        WorkloadGpuSections().end(hudSpan[layer]);
+        hudSpan[layer] = -1;
+        if (layer == 1) {
+            res.fresh = true;
+        }
+    }
+
+    bool UpscalerHudLayers(uint32_t width, uint32_t height, RenderTexture *&black, RenderTexture *&white) {
+        HudLayerResources &res = hudLayers;
+        const std::scoped_lock lock(res.mutex);
+        if (!res.fresh || (res.width != width) || (res.height != height) || (res.color[0] == nullptr) || (res.color[1] == nullptr)) {
+            res.fresh = false;
+            return false;
+        }
+        res.fresh = false;
+        black = res.color[0]->texture.get();
+        white = res.color[1]->texture.get();
+        return true;
+    }
+
+    RenderTexture *UpscalerRenderer::composeHudLayers(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
+        RenderTexture *upscaled, RenderTexture *black, RenderTexture *white, RenderFormat format, uint32_t outputWidth, uint32_t outputHeight)
+    {
+        if ((upscaled == nullptr) || (black == nullptr) || (white == nullptr) || (shaderLibrary->upscalerHudLayers.pipeline == nullptr)) {
+            return upscaled;
+        }
+
+        if ((hudTexture == nullptr) || (hudWidth != outputWidth) || (hudHeight != outputHeight)) {
+            hudFramebuffer.reset();
+            hudTexture = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format));
+            hudTexture->setName("Upscaler HUD");
+            const RenderTexture *tex = hudTexture.get();
+            hudFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&tex, 1));
+            hudWidth = outputWidth;
+            hudHeight = outputHeight;
+        }
+        if (hudDescriptorSet == nullptr) {
+            hudDescriptorSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+                shaderLibrary->samplerLibrary.nearest.clampClamp.get(), device);
+        }
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture0, upscaled, RenderTextureLayout::SHADER_READ);
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture1, black, RenderTextureLayout::SHADER_READ);
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture2, white, RenderTextureLayout::SHADER_READ);
+
+        interop::UpscalerResolveCB constants;
+        constants.sizes = { float(outputWidth), float(outputHeight), float(outputWidth), float(outputHeight) };
+        constants.jitter = { shaderLibrary->usesHDR ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+        constants.extra = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+        RenderTextureBarrier barriers[] = {
+            RenderTextureBarrier(upscaled, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(black, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(white, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(hudTexture.get(), RenderTextureLayout::COLOR_WRITE)
+        };
+        commandList->barriers(RenderBarrierStage::GRAPHICS, barriers, uint32_t(std::size(barriers)));
+        commandList->setFramebuffer(hudFramebuffer.get());
+        commandList->setPipeline(shaderLibrary->upscalerHudLayers.pipeline.get());
+        commandList->setGraphicsPipelineLayout(shaderLibrary->upscalerHudLayers.pipelineLayout.get());
+        commandList->setGraphicsDescriptorSet(hudDescriptorSet->get(), 0);
+        commandList->setGraphicsPushConstants(0, &constants);
+        commandList->setVertexBuffers(0, nullptr, 0, nullptr);
+        commandList->setViewports(RenderViewport(0.0f, 0.0f, float(outputWidth), float(outputHeight)));
+        commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));
+        commandList->drawInstanced(3, 1, 0, 0);
+        return hudTexture.get();
+    }
+}

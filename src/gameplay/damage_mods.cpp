@@ -37,6 +37,7 @@
 #include <unordered_map>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "recomp.h"
 #include "funcs.h"
@@ -123,6 +124,18 @@ namespace {
 // An enemy hit handler just before it takes the damage (in register reg) from the enemy's health.
 extern "C" void tooie_enemy_hit_damage(uint8_t* rdram, recomp_context* ctx, int reg) {
     hit_log_line("enemy hit, damage", (int)(reg == 2 ? ctx->r2 : ctx->r24));
+    {
+        // Which enemy: func_80800294_sucoasterhit keeps the actor (its $a0) at $sp + 0xA0; the other two handlers
+        // keep it elsewhere, so a word there is only taken for an actor when it points at a game object whose
+        // entry (+0x10) lies in the syscall stub area.
+        const uint32_t actor = tooie::rdram::read_word(rdram, (uint32_t)ctx->r29 + 0xA0);
+        const uint32_t entry = tooie::rdram::valid_ptr(actor) ? tooie::rdram::read_word(rdram, actor + 0x10) : 0;
+        const uint32_t marker = tooie::rdram::valid_ptr(actor) ? tooie::rdram::read_word(rdram, actor) : 0;
+        if (entry >= 0x80080000u && entry < 0x80090000u && tooie::rdram::valid_ptr(marker)) {
+            std::printf("[hits] hit actor entry 0x%08X model 0x%04X\n", entry, (unsigned)(uint16_t)tooie::rdram::read_half(rdram, marker + 0x14));
+            std::fflush(stdout);
+        }
+    }
     if (!tooie::cheats::is_on("cheat_one_hit")) {
         return;
     }
@@ -174,6 +187,7 @@ extern "C" void tooie_player_hit_state(uint8_t* rdram, recomp_context* ctx) {
 namespace {
     float aim_prev[3] = {};
     float aim_vel[2] = {};
+    uint32_t aim_frame = 0; // counts aim_tick calls (game frames)
     bool aim_have_prev = false;
     uint32_t aim_out = 0;
     bool aim_out_hunt = true;
@@ -208,6 +222,7 @@ namespace {
 
 // Once per frame (tooie_warp_tick).
 void tooie::damage::aim_tick(uint8_t* rdram) {
+    aim_frame++;
     const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
     {
         // The player's state (state block +0x120, current state at +4) for the hit timing log.
@@ -276,6 +291,300 @@ extern "C" void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx) {
 // flight the horizontal velocity is nudged toward the speed that would reach where the player is heading
 // (his position plus his measured movement over the time the potion has left) by then, so a potion only
 // misses when he really changes direction. The time left is the horizontal distance over the horizontal speed.
+// Curated enemies (L, 2026-10-23): the two enemy toggles only touch the enemies on L's list, not every actor
+// built on the shared sucoaster helper (many of those are objects that cannot be killed). An object is on the
+// list when its actor entry (+0x10, the pointer _gemarkersDll_entrypoint_0 returns for the actor id, as the
+// enemy spawner's guard uses) matches one of these ids. Diggit, Flatso and Globble are matched by model instead
+// (their actor ids are not known); Bargasaurus is missing.
+namespace {
+    constexpr uint16_t curated_ids[] = {
+        0x440, // Boltoid
+        0x150, // Billy Bob
+        0x327, // Jippo Jim
+        0x3C3, // Guvnor
+        0x133, 0x134, // Gruntydactyl
+        0x462, // Hothead
+        0x3C9, // Keelhaul
+        0x19C, // Minjo
+        0x112, // Moggy warrior
+        0x43E, // Nutta
+        0x46B, // Pansie
+        0x426, // S'Hard
+        0x39A, // Soarasaur
+        0x131, // Ugger
+        0x43F, // Washup
+        0x213, // Zubba
+    };
+
+    bool curated_actor(uint8_t* rdram, recomp_context* ctx, uint32_t actor) {
+        static std::unordered_map<uint32_t, bool> cache; // entry pointer -> on the list
+        static std::vector<uint32_t> entries;
+        if (entries.empty()) {
+            const recomp_context saved = *ctx;
+            for (const uint16_t id : curated_ids) {
+                ctx->r29 = saved.r29 - 0x200;
+                ctx->r4 = id;
+                _gemarkersDll_entrypoint_0(rdram, ctx);
+                entries.push_back((uint32_t)ctx->r2);
+            }
+            *ctx = saved;
+        }
+        const uint32_t entry = tooie::rdram::read_word(rdram, actor + 0x10);
+        if (entry != 0 && std::find(entries.begin(), entries.end(), entry) != entries.end()) {
+            return true;
+        }
+        // Enemies whose actor id is not known: matched by model (the object's marker +0x14, ScriptHawk's
+        // model list): Diggit, Flatso (green, blue, pink) and Globble. 0x662 is listed there as "Globble (Fly,
+        // Bovina)", so Bovina may match too.
+        const uint32_t marker = tooie::rdram::read_word(rdram, actor);
+        if (!tooie::rdram::valid_ptr(marker)) {
+            return false;
+        }
+        const uint16_t model = (uint16_t)tooie::rdram::read_half(rdram, marker + 0x14);
+        return model == 0x66F || model == 0x818 || model == 0x819 || model == 0x81A || model == 0x662;
+    }
+}
+
+// Eggs in flight (L, 2026-10-23): the marker +0x14 model ids of the egg actors (blue 0x9D7, fire 0x9C1, ice 0x9C0,
+// grenade 0x9C2, clockwork 0x9C4, golden 0x9C3, proximity 0x9C5), found by walking the object array once a frame and
+// measuring each egg's velocity from its last position (eggs are keyed by their marker pointer).
+namespace {
+    struct Egg {
+        float pos[2];
+        float vel[2];
+    };
+    std::vector<Egg> eggs;
+    uint32_t eggs_frame = ~0u;
+
+    void scan_eggs(uint8_t* rdram, float dt) {
+        using namespace tooie::rdram;
+        eggs.clear();
+        static std::unordered_map<uint32_t, std::pair<float, float>> last; // marker -> position last frame
+        std::unordered_map<uint32_t, std::pair<float, float>> now;
+        const uint32_t array = read_word(rdram, 0x80136EE0u);
+        if (!valid_ptr(array)) {
+            last.clear();
+            return;
+        }
+        const uint32_t first = read_word(rdram, array + 4);
+        const uint32_t last_obj = read_word(rdram, array + 8);
+        if (!valid_ptr(first) || !valid_ptr(last_obj) || last_obj < first || (last_obj - first) / 0x9C >= 2048) {
+            return;
+        }
+        const int count = (int)((last_obj - first) / 0x9C) + 1;
+        for (int i = 0; i < count; i++) {
+            const uint32_t object = array + 0x10 + (uint32_t)i * 0x9C;
+            const uint32_t marker = read_word(rdram, object);
+            if (!valid_ptr(marker)) {
+                continue;
+            }
+            const uint16_t model = (uint16_t)read_half(rdram, marker + 0x14);
+            if (model != 0x9D7 && model != 0x9C1 && model != 0x9C0 && model != 0x9C2 && model != 0x9C4
+                && model != 0x9C3 && model != 0x9C5) {
+                continue;
+            }
+            const float x = read_float(rdram, object + 4);
+            const float z = read_float(rdram, object + 0xC);
+            now[marker] = {x, z};
+            const auto it = last.find(marker);
+            if (it != last.end() && dt > 0.0f) {
+                const float vx = (x - it->second.first) / dt;
+                const float vz = (z - it->second.second) / dt;
+                if (std::hypot(vx, vz) < 5000.0f) {
+                    eggs.push_back({{x, z}, {vx, vz}});
+                }
+            }
+        }
+        last.swap(now);
+    }
+}
+
+// Dynamic positioning (L, 2026-10-23): hooked at the entry of sucoaster_entrypoint_2, the per-frame update of
+// the shared-helper enemies ($a0 is the actor; position floats at +4, +8, +0xC), for the curated enemies only. That
+// helper has no movement code of its own, so this adds a sideways step on top of whatever the enemy's own
+// movement does: an enemy that is moving (it displaced itself since the last frame) and is between 150 and
+// 800 units from Banjo slides perpendicular to the line between them at 55 units a second, the side picked
+// per enemy and swapped every 2 to 4 seconds. While Banjo is rolling, jumping, pecking or whacking and the enemy is within 350 to 500
+// units, the step is 350 units a second, to the side of his roll line it is already on, so it tries not to be
+// rolled on. Walls and floors are not checked; the step is a few units a frame.
+extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
+    static bool on = false;
+    static auto last_check = std::chrono::steady_clock::now() - std::chrono::seconds(2);
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last_check > std::chrono::seconds(1)) {
+        last_check = now;
+        try {
+            on = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::damage::strafe_option));
+        } catch (...) {
+            on = false;
+        }
+    }
+    const uint32_t actor = (uint32_t)ctx->r4;
+    if (!on || !aim_have_prev || !tooie::rdram::valid_ptr(actor) || !curated_actor(rdram, ctx, actor)) {
+        return;
+    }
+    const float dt = tooie::rdram::read_float(rdram, 0x8012C760u);
+    if (!(dt > 0.0f) || dt > 0.1f) {
+        return;
+    }
+    struct Track {
+        float pos[2] = {};
+        bool have = false;
+        float side = 1.0f;
+        float swap_in = 0.0f;
+        float moving_for = 0.0f; // seconds since it last moved by itself, counted down from 0.4
+        float vel = 0.0f;        // the sideways speed now, eased toward its target
+        float roll_side = 0.0f;  // the side picked for the roll in progress, 0 when none
+        float heading[2] = {};   // its own measured velocity, eased
+        float evel[2] = {};      // the dodge velocity away from an egg coming at it, eased
+    };
+    static std::unordered_map<uint32_t, Track> tracks;
+    if (tracks.size() > 512) {
+        tracks.clear();
+    }
+    Track& t = tracks[actor];
+    const float x = tooie::rdram::read_float(rdram, actor + 4);
+    const float z = tooie::rdram::read_float(rdram, actor + 0xC);
+    const float moved = t.have ? std::hypot(x - t.pos[0], z - t.pos[1]) : 0.0f;
+    if (t.have && moved > 400.0f) {
+        t.vel = 0.0f; // teleported or respawned
+    }
+    // It counts as moving for 0.4 s after its last step of its own, so a pause between hops does not stop the slide.
+    if (t.have && moved > 0.4f && moved < 400.0f) {
+        t.moving_for = 0.4f;
+    } else {
+        t.moving_for = std::max(0.0f, t.moving_for - dt);
+    }
+    if (t.have && moved < 400.0f) {
+        const float k = std::min(1.0f, dt * 8.0f);
+        t.heading[0] += ((x - t.pos[0]) / dt - t.heading[0]) * k;
+        t.heading[1] += ((z - t.pos[1]) / dt - t.heading[1]) * k;
+    } else {
+        t.heading[0] = t.heading[1] = 0.0f;
+    }
+    t.pos[0] = x;
+    t.pos[1] = z;
+    t.have = true;
+    t.swap_in -= dt;
+    if (t.swap_in <= 0.0f) {
+        t.swap_in = 2.0f + (float)((actor >> 4) % 21) / 10.0f;
+        t.side = t.side < 0.0f ? 1.0f : -1.0f;
+    }
+    const float dx = aim_prev[0] - x;
+    const float dz = aim_prev[2] - z;
+    const float dist = std::hypot(dx, dz);
+    const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
+    const uint32_t block = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0x120) : 0;
+    const uint32_t state = tooie::rdram::valid_ptr(block) ? tooie::rdram::read_word(rdram, block + 4) : 0;
+    // Banjo's attacks that an enemy should step out of (ScriptHawk's movement state names): the roll (49) from up
+    // to 500 units, the jump (5, Kazooie alone 0xBD), the peck / claw swipe (6) and Kazooie's wing whack
+    // (0xC2, 0xC4) from up to 350.
+    const bool rolling = (state == 49 && dist < 500.0f)
+        || ((state == 5 || state == 6 || state == 0xBD || state == 0xC2 || state == 0xC4) && dist < 350.0f);
+    if (!rolling) {
+        t.roll_side = 0.0f;
+    }
+    // The target sideways speed: 0 outside 150 to 800 units (fading in over 100 units at each end) or when it is
+    // not moving, 55 units a second, or 350 while Banjo rolls, on the side picked when the roll began.
+    float target = 0.0f;
+    if (t.moving_for > 0.0f && dist > 1.0f) {
+        const float fade = std::clamp(std::min(dist - 150.0f, 800.0f - dist) / 100.0f, 0.0f, 1.0f);
+        float side = t.side;
+        float speed = 55.0f;
+        if (rolling) {
+            speed = 350.0f;
+            if (t.roll_side == 0.0f) {
+                const float vlen = std::hypot(aim_vel[0], aim_vel[1]);
+                if (vlen > 1.0f) {
+                    // The side of his roll line the enemy is already on.
+                    const float cross = aim_vel[0] * (z - aim_prev[2]) - aim_vel[1] * (x - aim_prev[0]);
+                    t.roll_side = cross >= 0.0f ? 1.0f : -1.0f;
+                }
+            }
+            if (t.roll_side != 0.0f) {
+                side = t.roll_side;
+            }
+        }
+        target = side * speed * fade;
+    }
+    // Ease toward the target in about a sixth of a second instead of jumping, so starts, stops and swaps are smooth.
+    t.vel += (target - t.vel) * std::min(1.0f, dt * 6.0f);
+    // An egg coming at it: step out of the egg's line, to the side the enemy is already on, at 380 units a second.
+    if (eggs_frame != aim_frame) {
+        eggs_frame = aim_frame;
+        scan_eggs(rdram, dt);
+    }
+    float edx = 0.0f, edz = 0.0f;
+    for (const Egg& egg : eggs) {
+        const float speed2 = egg.vel[0] * egg.vel[0] + egg.vel[1] * egg.vel[1];
+        if (speed2 < 100.0f * 100.0f) {
+            continue;
+        }
+        const float rx = x - egg.pos[0], rz = z - egg.pos[1];
+        const float along = (rx * egg.vel[0] + rz * egg.vel[1]) / speed2; // seconds until it is level with the enemy
+        if (along < 0.0f || along > 1.5f) {
+            continue;
+        }
+        const float miss_x = rx - egg.vel[0] * along, miss_z = rz - egg.vel[1] * along; // enemy from the egg's closest point
+        if (std::hypot(miss_x, miss_z) > 150.0f) {
+            continue;
+        }
+        const float speed = std::sqrt(speed2);
+        const float nx = egg.vel[1] / speed, nz = -egg.vel[0] / speed; // perpendicular to the egg's path
+        const float sign = (miss_x * nx + miss_z * nz) >= 0.0f ? 1.0f : -1.0f;
+        edx = nx * sign * 380.0f;
+        edz = nz * sign * 380.0f;
+        break;
+    }
+    const float ek = std::min(1.0f, dt * 10.0f);
+    t.evel[0] += (edx - t.evel[0]) * ek;
+    t.evel[1] += (edz - t.evel[1]) * ek;
+    const bool sliding = std::fabs(t.vel) >= 0.5f && dist >= 1.0f;
+    const bool dodging = std::hypot(t.evel[0], t.evel[1]) >= 0.5f;
+    if (!sliding && !dodging) {
+        return;
+    }
+    // The slide is perpendicular to the enemy-to-Banjo line: (dz, -dx) / dist.
+    const float sx = sliding ? dz * t.vel / dist : 0.0f;
+    const float sz = sliding ? -dx * t.vel / dist : 0.0f;
+    tooie::rdram::write_float(rdram, actor + 4, x + (sx + t.evel[0]) * dt);
+    tooie::rdram::write_float(rdram, actor + 0xC, z + (sz + t.evel[1]) * dt);
+    // Face the way it is actually going (its own movement plus the slide and dodge): the game's yaw is
+    // rotation[1] at +0x48, in degrees, turned toward atan2(dx, dz) as func_800F1DF4 measures it. Turn toward it
+    // over about an eighth of a second, the short way round; below 20 units a second it has no heading and keeps
+    // its facing.
+    const float hx = t.heading[0] + sx + t.evel[0];
+    const float hz = t.heading[1] + sz + t.evel[1];
+    if (std::hypot(hx, hz) > 20.0f) {
+        float yaw = tooie::rdram::read_float(rdram, actor + 0x48);
+        const float want = std::atan2(hx, hz) * 57.29578f;
+        float diff = std::fmod(want - yaw, 360.0f);
+        if (diff > 180.0f) {
+            diff -= 360.0f;
+        } else if (diff < -180.0f) {
+            diff += 360.0f;
+        }
+        yaw += diff * std::min(1.0f, dt * 8.0f);
+        tooie::rdram::write_float(rdram, actor + 0x48, std::fmod(yaw + 360.0f, 360.0f));
+    }
+}
+
+// Faster enemy attacks (L, 2026-10-23): the shared enemy helper sucoaster_entrypoint_14 (used by every enemy
+// the Aim sweep saw reading the player through func_8080202C_sucoaster) rolls a random 5 to 8 second wait
+// (func_800DC178(5.0, 8.0), func_800D9058 turns the seconds into the byte) and stores it at data +0x12, which
+// sucoaster_entrypoint_2 counts down. With the option on the stored wait is halved (hooked before both stores,
+// $v0 holds the byte).
+extern "C" void tooie_enemy_attack_timer(uint8_t* rdram, recomp_context* ctx) {
+    bool on = false;
+    try {
+        on = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::damage::faster_attacks_option));
+    } catch (...) {
+    }
+    if (on && curated_actor(rdram, ctx, (uint32_t)ctx->r16)) { // $s0 is the actor
+        ctx->r2 = (int32_t)(((uint32_t)ctx->r2 & 0xFFu) / 2u);
+    }
+}
+
 extern "C" void tooie_klungo_potion_steer(uint8_t* rdram, recomp_context* ctx) {
     bool homing = true;
     try {

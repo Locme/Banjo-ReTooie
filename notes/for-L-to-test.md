@@ -1,15 +1,165 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T560 Simple menu (Simple / Advanced)
-- Asked: 2026-10-22 23:28 UTC
+## T570 Simple menu, openable settings, Jiggle, Boss rush button
+- Asked: 2026-10-23 21:09 UTC
 - Build: claude/project-thread-8oifqv
 - Steps:
-  1. Open the menu, General: top has Simple menu (on by default)
-  2. Check Graphics: each effect is one on/off switch, tuning sliders gone
-  3. Turn Simple menu off: all sliders and the DEV tab come back
-  4. Search for a hidden slider such as Banjo fur length
-  5. Turn a switch off then on and see the slider's old value return
-- Look for: Is Simple clear enough, and does anything you want to see go missing? Does the note about changed hidden settings show?
+  1. General: Simple menu switch is on; photo mode and free camera extras and DEV are hidden, turn it off and they return
+  2. Graphics: Fog / 3D grass / Banjo fur have a down arrow and a switch, press the arrow and the sliders open on a darker panel
+  3. Bloom stays a plain slider
+  4. Gameplay > Enhancements: Jiggle switch is off; turn it on, press its arrow, then a part's arrow
+  5. Search for Fog start distance
+  6. General Features: Boss rush is a Start boss rush button
+- Look for: Does opening a switch feel different enough? Any row misaligned because of the arrows? Does the Boss rush button start the rush and say Stop while it runs?
+- Status: waiting for L
+
+## T569 Character surface round 3: gradual build-up
+- Asked: 2026-10-23 17:45 UTC
+- Build: main after PR #22
+- Steps:
+  1. Pull main and build on Windows; WIP > Character surface: all sliders 100
+  2. Roll once on dirt: about 5% dirty, not 100%; roll again and again to build it up; wait: 1% off every 8 seconds
+  3. Run on sand and in snow: 5% a step-group; jump in water: dirt, sand and snow wash off quickly
+  4. Swim: fur goes darker, no drips; get out: drips, dry in 8 to 20 seconds (random)
+  5. At high dirt, the chest and head get spots too
+- Look for: Is 5% per trigger the right pace (a roll, a landing, a run of steps)? Does the upper body get covered at high amounts?
+- Status: waiting for L
+
+## T568 Character surface round 2: spots, feet and shorts, drips
+- Asked: 2026-10-23 16:55 UTC
+- Build: main after PR #21
+- Steps:
+  1. Pull main and build on Windows; WIP > Character surface: all sliders 100
+  2. Swim, get out: he drips (streaks running down) and dries in 5 to 10 seconds, a different time each exit
+  3. Icy Side: snow spots on his feet and legs, climbing higher the longer he stays; sand and dirt the same
+  4. Check eyes and mouths (Banjo's and Kazooie's) stay clean, feet and shorts are covered, Kazooie's wings and stomach are covered
+  5. Die: everything washes off. Leave Icy Side for the lava world: snow and sand are gone
+- Look for: Spots only near the ground and only where he touches it; eyes and mouths clean (tell me which ones still get coated); Kazooie's wings/feathers coated; drip streaks visible but not too strong
+- Status: waiting for L
+
+## T567 Character surface in WIP, dust dirt and sand
+- Asked: 2026-10-23 13:54 UTC
+- Build: main after PR #20
+- Steps:
+  1. Pull main and build on Windows; WIP tab > Character surface: set Dirty characters to 100
+  2. Run about on a sand map (Terrydactyland sand, Jolly Roger's Lagoon beach) for 20-30 seconds
+  3. Look at his legs and feet: a pale tan grainy coat; then run in dust for brown mud; swim to wash both off
+  4. TOOIE_CHAR_SAND=100 holds the sand coat fixed (headless)
+- Look for: Does sand under his feet give him a tan coat that builds in about 20 seconds and dusts off slowly? Is the tan coat visible without looking like a texture error? Sand on non-sand ground (false positives)?
+- Status: waiting for L
+
+## T566 Wet, snowy and dirty characters
+- Asked: 2026-10-23 13:22 UTC
+- Build: branch claude/project-thread-xmr3el
+- Steps:
+  1. Pull this branch and build on Windows; Graphics > Character Shaders: set Wet characters, Snowy characters and Dirty characters to 100
+  2. Spiral Mountain: swim in the moat, then get out and watch Banjo dry over about ten seconds
+  3. Hailfire Peaks Icy Side: walk about; snow settles on his head, shoulders and back
+  4. Run about on grass or sand for a couple of minutes for dirt; then swim to wash it off
+  5. Also try Banjo fur on and Kazooie feathers on with each, and Kazooie out of the backpack
+  6. Headless aid: TOOIE_CHAR_WET, TOOIE_CHAR_SNOW, TOOIE_CHAR_DIRT=100 hold one fixed
+- Look for: Wet: darker with a sheen, fur clumped. Snow: white on up-facing parts, more on fur tips. Dirt: brown on lower parts and undersides. Fur and feathers match the body underneath. Flicker where body parts meet (the up-direction is read from the vertex marks, known weak spot). Frame cost with all three on vs off. First use compiles a few extra shaders for Banjo's materials
+- Status: waiting for L
+
+## T566 Hits each enemy takes
+- Asked: 2026-10-23
+- Build: main
+- Steps:
+  1. Spawn each of Boltoid, Gruntydactyl, Hothead, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba (Enemy spawner) one at a time and hit it until it dies (note whether it flinches)
+  2. Send logs/console.log and tell me which enemies flinched
+- Look for: [hits] lines: "enemy hit, damage 100" is one hit, 50 two hits, 34 three; "hit actor entry ... model ..." says which enemy.
+- Status: waiting for L
+
+## T565 Volumetric dust
+- Asked: 2026-10-23 09:46 UTC
+- Build: main @ db815bd
+- Steps:
+  1. Pull main and build on Windows; Graphics > WIP > Volumetrics > Volumetric Dust on
+  2. Warp to Spiral Mountain; run, hold Run (sprint), Talon Trot, quick-turn, jump and land on sand, snow and grass
+  3. Run with TOOIE_DUST_LOG=1 and send the [dust] lines
+- Look for: Soft dust clouds replace the flat puffs; they drift with your speed, rise, get pushed aside as you move through them and take the ground's colour. Puffs too small, too big or gone too fast: send the [dust] raw numbers (radius_per_scale and life_seconds in src/gameplay/dust.cpp are guesses). Frame cost with dust on vs off
+- Status: waiting for L
+
+## T565 Find Bargasaurus (actor and model)
+- Asked: 2026-10-23
+- Build: main
+- Steps:
+  1. General > DEV tab: turn on Aim trace
+  2. Stand next to a Bargasaurus (the stegosaurus-like dino in Terrydactyland) for about 10 seconds, then turn Aim trace off
+  3. Send me logs/console.log
+- Look for: lines starting [nearby] (entry, model, distance); the closest one at the dino's distance is it.
+- Status: waiting for L
+
+## T564 Upscalers: DLSS, DLAA, FSR 3, FSR 4, Temporal
+- Asked: 2026-10-23 09:37 UTC
+- Build: main @ eca73f4
+- Steps:
+  1. Pull main and build on Windows; Graphics > WIP > Upscaler; set Resolution to Auto
+  2. Try Temporal (built-in) first, then FSR 3, DLSS, DLAA, FSR 4 at Quality; run, pan the camera, fight an enemy, open the pause menu
+  3. Try HUD Full Resolution on and off
+  4. Run with the console and note the [upscaler] lines
+- Look for: Sharp picture without doubling or trails behind moving characters; no blur on menus and cuts; HUD steady (and sharp with Full Resolution); send the [upscaler] console lines and screenshots. Full guide: notes/upscaler-test-guide.md
+- Status: waiting for L
+
+## T564 Enemy dynamic positioning
+- Asked: 2026-10-23
+- Build: main
+- Steps:
+  1. General > Gameplay: turn on Enemy dynamic positioning
+  2. Fight one of Boltoid, Gruntydactyl, Hothead, Minjo, Moggy, Nutta, Soarasaur, Ugger, Washup, Zubba (spawn it with the Enemy spawner); roll toward it. Also try Lower Enemy Attack Cooldown on the same ones (T563)
+- Look for: it slides sideways as it comes at you and steps out of the line of your roll; no sliding through walls or off ledges, no jitter. If it looks wrong, say which enemy.
+- Status: waiting for L
+
+## T563 Volumetric mist, fog and clouds (WIP tab)
+- Asked: 2026-10-23 06:10 UTC
+- Build: branch claude/project-thread-nmtx34
+- Steps:
+  1. Build this branch (claude/project-thread-nmtx34), Graphics > WIP > Volumetric
+  2. Spiral Mountain: Volumetric Mist 50 and Volumetric Fog 40 with each preset; walk and jump
+  3. Volumetric Clouds: each type, in a level with and without Day and Night
+  4. Dev Files/volumetric.txt: add a line such as 0xAF clouds=stormy cover=80 mist=40 and save while the game runs
+- Look for: Mist stays in the level and meets scenery with no texture-on-model look; fog presets differ clearly; clouds show on the sky of any level, Stormy is dark grey; the file's line applies within a second. Send frame rate with them on.
+  5. (2026-10-23) Volumetric Mist is finer at the low end (slider 1 to 100, squared). Try Mist Over Water and Mist at Waterfalls (strength and height each), Volumetric Fog Start Distance and Colour, and the cloud Amount, Height, Size and Speed sliders (50 is the type's own; Height 0 brings the layer down to the horizon). Volumetric Fog 40 is about a quarter as thick as before.
+  6. Run and ground pound on grass with Volumetric Dust on: the puff should be small, pale and see-through, with no outline.
+- Status: waiting for L
+
+## T563 Lower Enemy Attack Cooldown
+- Asked: 2026-10-23
+- Build: main
+- Steps:
+  1. General > Gameplay: turn on Lower Enemy Attack Cooldown
+  2. Fight a Beehive, Torch enemy, Soarasaur, Tintup or Washup (enemies that use the shared helper), then turn it off and compare how often they attack
+- Look for: they attack about twice as often; nothing else changes. Not covered: enemies the sweep found with their own code (Eyeball, Dragunda, Gobgoyle, Onion, Toxi-Gag and others).
+- Status: waiting for L
+
+## T562 Aim sweep: find the enemy chase code automatically
+- Asked: 2026-10-23 06:31 UTC
+- Build: main
+- Steps:
+  1. Play a save in an open place (Spiral Mountain is good)
+  2. General > DEV tab: turn on Aim sweep
+  3. Leave the game running about 35 minutes; each enemy appears in front of Banjo for 12 s, then the area reloads
+  4. When the toast says it is done, send me aim_sweep.txt in the Dev Files folder If the game crashes or hangs, start the game and turn Aim sweep on again: it carries on after the enemy that crashed it, and notes that one in the file.
+- Look for: Enemies spawn one at a time and the area reloads between them; the game does not freeze or crash; aim_sweep.txt in the Dev Files folder gets one line per enemy. Banjo may get hurt or die; that is fine. If the game crashes or hangs, start the game and turn Aim sweep on again: it carries on after the enemy that crashed it, and notes that one in the file.
+- Status: waiting for L
+
+## T561 PBR re-sweep with the 11 rules
+- Asked: 2026-10-23 00:45 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; Ray tracing on, Ray traced BRDF on
+  2. Grunty Industries (green and hazard-striped panels, grimy grey walls), Mayahem Temple gold, a bushy level (Jolly Roger's or Terrydactyland) with the sun behind leaves
+- Also (follow-up): the plain grey steel was re-checked by eye too: 36 more grimy panels are rust, 28 more painted signs and panels are plastic.
+- Look for: Painted panels look like painted plastic, not mirror metal; grimy grey metal is dull; gold and copper reflect in their own texture's colour, not an extra orange; bushes glow less with the sun behind, single leaves still do; icicles and ice crystals are left to Ice reflections
+- Status: waiting for L
+
+## T560 Cheaper traced sun shadows
+- Asked: 2026-10-22 23:58 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; Ray tracing on, Sun shadows on
+  2. Spiral Mountain and a grassy outdoor area; note FPS against the last build
+- Look for: FPS same or a little higher; sun shadows, rooms and light through grates look the same as before
 - Status: waiting for L
 
 ## T559 Metal less shiny (rough reflections fade, steel and rust defaults)

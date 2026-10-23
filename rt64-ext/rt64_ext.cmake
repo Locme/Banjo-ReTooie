@@ -21,6 +21,9 @@ target_sources(rt64 PRIVATE
     ${RT64_EXT_DIR}/src/render/rt64_texture_marks.cpp
     ${RT64_EXT_DIR}/src/render/rt64_texture_seams.cpp
     ${RT64_EXT_DIR}/src/render/rt64_fsr.cpp
+    ${RT64_EXT_DIR}/src/render/rt64_temporal_upscaler.cpp
+    ${RT64_EXT_DIR}/src/render/rt64_dlss.cpp
+    ${RT64_EXT_DIR}/src/render/rt64_ffx_upscaler.cpp
     ${RT64_EXT_DIR}/src/render/rt64_photo_grade.cpp
     ${RT64_EXT_DIR}/src/hle/rt64_present_queue_ext.cpp
     ${RT64_EXT_DIR}/src/render/rt64_texture_cache_ext.cpp
@@ -66,6 +69,19 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/MirrorPS.hlsl")
 # FSR 1 (RT64::SetFsrMode, src/display/fsr.cpp): EASU upscale and RCAS sharpen.
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/FsrPS.hlsl" "src/shaders/FsrEasuPS.hlsl" "-I${RT64_FSR_DIR}" "-D FSR_PASS_EASU" "-HV 2018")
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/FsrPS.hlsl" "src/shaders/FsrRcasPS.hlsl" "-I${RT64_FSR_DIR}" "-D FSR_PASS_RCAS" "-HV 2018")
+
+# Camera motion for the temporal upscalers (RT64::SetUpscalerMode, src/display/upscaler.cpp).
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerVelocityPS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerResolvePS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerHudPS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerHudLayersPS.hlsl")
+rt64_ext_shader(build_vertex_shader rt64 "src/shaders/ObjectVelocityVS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/ObjectVelocityPS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/ReactivePS.hlsl")
+# Snapdragon GSR 1 (third-party/snapdragon-gsr, Qualcomm, BSD 3-Clause): Android builds only.
+if(ANDROID)
+    rt64_ext_shader(build_pixel_shader rt64 "src/shaders/GsrPS.hlsl" "-I${RT64_EXT_DIR}/../third-party/snapdragon-gsr")
+endif()
 
 # Photo mode's filters and sharpening (RT64::SetPhotoGrade, src/gameplay/photo_mode.cpp).
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/PhotoGradePS.hlsl")
@@ -148,4 +164,39 @@ if (NOT APPLE)
     rt64_ext_traced_shader("src/shaders/SceneIndirectRT2XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_2X")
     rt64_ext_traced_shader("src/shaders/SceneIndirectRT4XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_4X")
     rt64_ext_traced_shader("src/shaders/SceneIndirectRT8XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_8X")
+endif()
+
+# NVIDIA DLSS / DLAA (rt64_dlss.cpp, Windows only): the NGX headers are in third-party/nvidia-dlss/include (NVIDIA's
+# licence, see its README.md); the import library is fetched from NVIDIA's repository at a pinned commit and checked
+# against its hash. If it cannot be fetched the backend is left out and the DLSS choices fall back to the built-in resolve.
+if(WIN32)
+    set(RT64_EXT_NGX_LIB ${CMAKE_BINARY_DIR}/nvidia-dlss/nvsdk_ngx_d.lib)
+    if(NOT EXISTS ${RT64_EXT_NGX_LIB})
+        file(DOWNLOAD
+            https://github.com/NVIDIA/DLSS/raw/9981c6350dc58c0ce21f024fd65e31e851c31689/lib/Windows_x86_64/x64/nvsdk_ngx_d.lib
+            ${RT64_EXT_NGX_LIB}
+            EXPECTED_HASH SHA256=bc43df9ec032004fde681d3e3afd01cde239e03a0125b822e88674c84287f99c
+            STATUS RT64_EXT_NGX_STATUS)
+        list(GET RT64_EXT_NGX_STATUS 0 RT64_EXT_NGX_CODE)
+        if(NOT RT64_EXT_NGX_CODE EQUAL 0)
+            message(WARNING "Could not fetch nvsdk_ngx_d.lib (${RT64_EXT_NGX_STATUS}); DLSS will not be built in.")
+            file(REMOVE ${RT64_EXT_NGX_LIB})
+        endif()
+    endif()
+    if(EXISTS ${RT64_EXT_NGX_LIB})
+        target_include_directories(rt64 PRIVATE ${RT64_EXT_DIR}/../third-party/nvidia-dlss/include)
+        target_link_libraries(rt64 ${RT64_EXT_NGX_LIB})
+        target_compile_definitions(rt64 PRIVATE TOOIE_HAS_NGX=1)
+        # Vulkan: plume asks NGX for the extensions DLSS needs (rt64-ext/src/plume_dlss/render/plume_dlss.h).
+        target_compile_definitions(plume PRIVATE DLSS_ENABLED=1)
+        target_include_directories(plume PRIVATE ${RT64_EXT_DIR}/src/plume_dlss)
+        target_include_directories(rt64 PRIVATE ${RT64_EXT_DIR}/src/plume_dlss)
+    endif()
+endif()
+
+# AMD FSR 3 / FSR 4 (rt64_ffx_upscaler.cpp, Windows only): the FidelityFX API headers are in third-party/amd-fsr (AMD's
+# licence, LICENSE.txt, which must go with the DLLs); the DLLs are loaded at run time, so nothing is linked.
+if(WIN32)
+    target_include_directories(rt64 PRIVATE ${RT64_EXT_DIR}/../third-party/amd-fsr)
+    target_compile_definitions(rt64 PRIVATE TOOIE_HAS_FFX=1)
 endif()

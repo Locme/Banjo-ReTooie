@@ -582,17 +582,18 @@ namespace {
 
     // The port's extra GPU passes, in RT64::GpuSection order. The first four and the last four are
     // recorded with the game's frame (per_game_frame), the rest at each present.
-    constexpr size_t section_count = 14;
+    constexpr size_t section_count = 17;
     constexpr const char* section_names[section_count] = {
         "water mask", "eye adaptation", "bloom", "effects", "SMAA", "FXAA", "photo filters", "FSR", "output", "UI",
-        "sun shadow map", "ray tracing build", "AO and bounce light", "traced effects"
+        "sun shadow map", "ray tracing build", "AO and bounce light", "traced effects",
+        "upscaler objects", "upscaler snapshot", "upscaler HUD"
     };
     constexpr bool per_game_frame[section_count] = {
-        true, true, true, true, false, false, false, false, false, false, true, true, true, true
+        true, true, true, true, false, false, false, false, false, false, true, true, true, true, true, true, true
     };
     // The order the overlay lists them in, a line each: the game frame's passes as the GPU runs them,
     // the ray tracing ones, then the present's.
-    constexpr size_t frame_order[] = { 10, 0, 2, 1, 12, 3 };
+    constexpr size_t frame_order[] = { 10, 0, 2, 1, 12, 3, 14, 15, 16 };
     constexpr size_t traced_order[] = { 11, 13 };
     constexpr size_t present_order[] = { 4, 5, 6, 7, 8, 9 };
 

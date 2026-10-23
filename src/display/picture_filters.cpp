@@ -29,6 +29,7 @@
 #include <variant>
 #include <vector>
 
+#include "tooie_dust.h"
 #include "tooie_game_frame_rate.h"
 #include "recompui/config.h"
 
@@ -95,7 +96,6 @@ namespace RT64 {
     int GetRayTracingSupport();
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
-    void SetSceneOwnMist(float strength);
     void SetSceneModernWater(bool enabled, bool stylised);
     void SetSceneWaterDetail(float detail);
     void SetSceneGroundDisplacement(float amount, float reach);
@@ -114,6 +114,9 @@ namespace RT64 {
     void SetSceneFur(float amount, float length, float density, float noisiness);
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
+    void SetSceneCharSurface(float wet, float snow, float dirt, float sand);
+    void SetSceneCharDrip(float drip, float seconds, float soaked, float icy);
+    bool SceneSandUnderfoot();
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand);
     void SetSceneSandTextures(const uint64_t *hashes, size_t count);
@@ -160,6 +163,13 @@ namespace {
     std::atomic<float> water_reflections_set{0.0f};
     std::atomic<bool> water_settings_changed{true};
     std::atomic<bool> banjo_fur{false};
+    // The character surface layer's sliders (0 to 1, the most of each Banjo and Kazooie can get), and set when any is above 0.
+    std::atomic<float> char_wet_max{0.0f};
+    std::atomic<float> char_snow_max{0.0f};
+    std::atomic<float> char_dirt_max{0.0f};
+    std::atomic<bool> char_surface{false};
+    // TOOIE_CHAR_WET, TOOIE_CHAR_SNOW and TOOIE_CHAR_DIRT (0 to 100) hold a value fixed instead (headless aid), -1 when not set.
+    std::atomic<float> char_forced[3] = { -1.0f, -1.0f, -1.0f };
     // A Light Source pick is set: the model tagging tells RT64 which model each matrix belongs to, so the whole model shines.
     std::atomic<bool> light_source_models{false};
     std::atomic<bool> sun_shadows{false};
@@ -4228,12 +4238,14 @@ namespace {
         { &tooie::picture_filters::ground_displacement_distance_option, 8000.0 },
         { &tooie::picture_filters::parallax_original_option, true },
         { &tooie::picture_filters::banjo_fur_option, 0.0 },
+        { &tooie::picture_filters::char_wet_option, 0.0 },
+        { &tooie::picture_filters::char_snow_option, 0.0 },
+        { &tooie::picture_filters::char_dirt_option, 0.0 },
         { &tooie::picture_filters::kazooie_feathers_option, 0.0 },
         { &tooie::picture_filters::npc_fur_option, 0.0 },
         { &tooie::picture_filters::npc_feathers_option, 0.0 },
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
         { &tooie::picture_filters::shore_foam_option, false },
-        { &tooie::picture_filters::mist_option, 0.0 },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
@@ -4657,6 +4669,25 @@ void tooie::picture_filters::apply() {
     banjo_fur = fur > 0.0;
     RT64::SetSceneFur((float)(fur / 100.0), (float)(value<double>(banjo_fur_length_option, 100.0) / 100.0),
         (float)(value<double>(banjo_fur_density_option, 100.0) / 100.0), (float)(value<double>(banjo_fur_noisiness_option, 50.0) / 100.0));
+    // The character surface layer: its sliders are the most each of wet, snow and dirt gets (tick works out how much Banjo
+    // and Kazooie have). TOOIE_CHAR_WET, TOOIE_CHAR_SNOW and TOOIE_CHAR_DIRT=<0-100> hold one fixed instead (headless).
+    {
+        static const char* const names[3] = { "TOOIE_CHAR_WET", "TOOIE_CHAR_SNOW", "TOOIE_CHAR_DIRT" };
+        const std::string* ids[3] = { &char_wet_option, &char_snow_option, &char_dirt_option };
+        std::atomic<float>* maxes[3] = { &char_wet_max, &char_snow_max, &char_dirt_max };
+        bool any = false;
+        for (int i = 0; i < 3; i++) {
+            double amount = value<double>(*ids[i], 0.0);
+            const char* forced = std::getenv(names[i]);
+            char_forced[i] = forced != nullptr ? (float)(std::atof(forced) / 100.0) : -1.0f;
+            if (forced != nullptr) {
+                amount = std::atof(forced);
+            }
+            maxes[i]->store((float)(amount / 100.0));
+            any = any || amount > 0.0;
+        }
+        char_surface = any;
+    }
     // NPCs' fur (the yetis' white fur), with its own sliders; TOOIE_NPC_FUR=<0-100> sets it instead (headless).
     double npc_fur_amount = value<double>(npc_fur_option, 0.0);
     if (const char* forced = std::getenv("TOOIE_NPC_FUR")) {
@@ -4756,12 +4787,6 @@ void tooie::picture_filters::apply() {
         shore_foam = std::atoi(forced) != 0;
     }
     RT64::SetSceneShoreFoam(shore_foam);
-    // Test aid: TOOIE_OWN_MIST=<0 to 100> whatever the setting says.
-    float own_mist = shaders ? (float)(value<double>(mist_option, 0.0) / 100.0) : 0.0f;
-    if (const char* forced = std::getenv("TOOIE_OWN_MIST")) {
-        own_mist = (float)(std::atof(forced) / 100.0);
-    }
-    RT64::SetSceneOwnMist(own_mist);
     water_waves_on = (shader(value<double>(water_waves_option, 0.0)) > 0.0) || modern_water;
     RT64::SetSceneWaterWaves((float)(shader(value<double>(water_waves_option, 0.0)) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
     water_reflections_set = (float)(shader(value<double>(water_reflections_option, 0.0)) / 100.0);
@@ -4817,6 +4842,10 @@ bool tooie::picture_filters::toon_characters_on() {
 
 bool tooie::picture_filters::banjo_fur_on() {
     return banjo_fur;
+}
+
+bool tooie::picture_filters::char_surface_on() {
+    return char_surface;
 }
 
 bool tooie::picture_filters::light_source_models_on() {
@@ -5098,6 +5127,114 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
             RT64::SetSceneSnow(snow > 0.0f, snow, strict, detail, refill, lod, map, sand);
         }
     }
+    // The character surface layer: how wet, snowy and dirty Banjo and Kazooie are now (each 0 to 1, times its slider). Wet
+    // comes in water and dries off in about ten seconds; snow gathers while he is out on a map with snow and melts away
+    // over a minute elsewhere, quickly in water; dirt builds slowly while he runs about on the ground and washes off in water.
+    {
+        static float amounts[4] = {};
+        static bool icy_water = false;
+        static std::chrono::steady_clock::time_point last{};
+        static float last_pos[3] = {};
+        static bool had_pos = false;
+        const float dt = (last.time_since_epoch().count() == 0) ? 0.0f : std::clamp(std::chrono::duration<float>(now - last).count(), 0.0f, 0.1f);
+        last = now;
+        if (char_surface.load()) {
+            const bool in_water = in_water_state(state);
+            const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
+            float pos[3];
+            const bool valid = banjo_position(rdram, pos);
+            const float speed = (valid && had_pos && dt > 0.0f) ? std::hypot(pos[0] - last_pos[0], pos[2] - last_pos[2]) / dt : 0.0f;
+            if (valid) {
+                std::copy(pos, pos + 3, last_pos);
+            }
+            had_pos = valid;
+            // Dying washes everything off (state 0x41, as the boss rush sees it); going to another map takes the snow and the
+            // sand with it (the icy world to the lava world), unless the new map has snow too.
+            static uint16_t last_map = 0xFFFF;
+            if (state == 0x41) {
+                amounts[0] = amounts[1] = amounts[2] = amounts[3] = 0.0f;
+            }
+            if (map != last_map) {
+                if (last_map != 0xFFFF) {
+                    if (!snowy_map(map)) {
+                        amounts[1] = 0.0f;
+                    }
+                    amounts[3] = 0.0f;
+                }
+                last_map = map;
+            }
+            // Wet: soaked in the water, then dry in 8 to 20 seconds, picked at random each time he gets out.
+            static bool was_wet_in_water = false;
+            static float dry_seconds = 12.0f;
+            if (was_wet_in_water && !in_water) {
+                dry_seconds = 8.0f + 12.0f * float(std::chrono::steady_clock::now().time_since_epoch().count() % 1000) / 1000.0f;
+            }
+            was_wet_in_water = in_water;
+            // Icy water leaves him ice blue until he has dried off.
+            if (in_water && snowy_map(map)) {
+                icy_water = true;
+            }
+            else if (amounts[0] <= 0.0f) {
+                icy_water = false;
+            }
+            amounts[0] = std::clamp(amounts[0] + (in_water ? 3.0f : -1.0f / dry_seconds) * dt, 0.0f, 1.0f);
+            // Dirt and sand come in little by little: 5% at each trigger, and go at 1% every 8 seconds. Water cleans all three fast.
+            // Triggers: the dust he kicks up (a roll, a landing, a run of steps: one every 0.75 s at most) gives dirt; steps on
+            // sand give sand. (Snow below.)
+            static float sand_timer = 0.0f;
+            const float dust_triggers = tooie::dust::take_exposure();
+            const bool moving = valid && banjo_grounded(rdram) && speed > 20.0f && speed < 600.0f;
+            if (in_water) {
+                for (int i = 1; i < 4; i++) {
+                    amounts[i] -= 1.5f * dt;
+                }
+                sand_timer = 0.0f;
+            }
+            else {
+                const float fade = 0.01f / 8.0f * dt;
+                amounts[2] -= fade;
+                amounts[3] -= fade;
+                // Snow is as it was at first: it gathers while he is out on a map with snow (20 seconds to full), and melts
+                // away over a minute elsewhere.
+                amounts[1] += (snowy_map(map) ? 0.05f : -0.017f) * dt;
+                // (Dust makes him dirty; on snowy maps the puffs are snow, so no dirt there.)
+                amounts[2] += snowy_map(map) ? 0.0f : 0.05f * dust_triggers;
+                if (moving && RT64::SceneSandUnderfoot()) {
+                    sand_timer += dt;
+                    if (sand_timer >= 0.75f) {
+                        sand_timer = 0.0f;
+                        amounts[3] += 0.05f;
+                    }
+                }
+            }
+            amounts[3] = std::clamp(amounts[3], 0.0f, 1.0f);
+            amounts[1] = std::clamp(amounts[1], 0.0f, 1.0f);
+            amounts[2] = std::clamp(amounts[2], 0.0f, 1.0f);
+            amounts[3] = std::clamp(amounts[3], 0.0f, 1.0f);
+        }
+        else {
+            tooie::dust::take_exposure();
+            amounts[0] = amounts[1] = amounts[2] = amounts[3] = 0.0f;
+            had_pos = false;
+        }
+        const std::atomic<float>* maxes[3] = { &char_wet_max, &char_snow_max, &char_dirt_max };
+        float out[3];
+        for (int i = 0; i < 3; i++) {
+            const float forced = char_forced[i].load();
+            out[i] = ((forced >= 0.0f) ? forced : amounts[i]) * maxes[i]->load();
+        }
+        // (Sand goes with the dirt slider: the dirty look is mud away from sand and sand on it.)
+        static const bool force_sand = std::getenv("TOOIE_CHAR_SAND") != nullptr;
+        const float sand = (force_sand ? (float)(std::atof(std::getenv("TOOIE_CHAR_SAND")) / 100.0) : amounts[3]) * char_dirt_max.load();
+        RT64::SetSceneCharSurface(out[0], out[1], out[2], sand);
+        // (He drips while he is wet and the wet slider is up.)
+        // (He drips once he is out of the water, not while he swims, where his fur goes darker instead.)
+        static bool swimming_now = false;
+        swimming_now = char_surface.load() && in_water_state(state);
+        const bool forced_wet = char_forced[0].load() > 0.0f;
+        RT64::SetSceneCharDrip(forced_wet ? 1.0f : (char_wet_max.load() > 0.0f && !swimming_now ? amounts[0] : 0.0f),
+            (float)std::fmod(std::chrono::duration<double>(now.time_since_epoch()).count(), 1000.0), swimming_now ? 1.0f : 0.0f, icy_water ? 1.0f : 0.0f);
+    }
     // The fog is measured from Banjo.
     {
         float pos[3];
@@ -5309,11 +5446,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Shore foam",
         "With Water on <recomp-color primary>Original</recomp-color>: a broken white line of foam drifts along the edges of the game's water, where it gets shallow, as in Modern water. Modern water always has it.",
         false);
-    graphics.add_number_option(
-        mist_option,
-        "Mist",
-        "Pale mist drifts in banks over low ground, hangs thickest on and round water, and rises as spray where waterfalls land. Always showing, at any time of day. While Day and Night runs in a level, its own Mist and Mist Time settings are used instead. 0 turns it off.",
-        0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         deep_snow_option,
         "Deep snow",
@@ -5498,6 +5630,21 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         banjo_fur_option,
         "Banjo fur",
         "Banjo's brown fur grows real strands: layers of short hairs stand out of his model and move with him, darker at the roots, in play and in cutscenes. Kazooie, his shorts, feet and backpack are left as they are, and so is everyone else. Higher numbers give a thicker coat. Drawn on the picture, so nothing in the game changes. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        char_wet_option,
+        "Wet characters",
+        "Banjo and Kazooie get wet: darker, with a sheen, and Banjo's fur clumps into locks, after swimming or wading. They dry off over about ten seconds. Drawn on the picture, so nothing in the game changes. The number is how wet they can get; 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        char_snow_option,
+        "Snowy characters",
+        "Banjo and Kazooie gather snow on their heads, shoulders and backs while they are out in the snow, and it melts away in a while indoors or in the water. The number is how much can settle; 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        char_dirt_option,
+        "Dirty characters",
+        "Banjo and Kazooie get dirty as they run about: mud on the legs and undersides that builds up as they run about and kick up dust (Volumetric dust or the game's own puffs), and a pale coat of sand after they walk on sand. Both wash off in water. The number is how dirty they can get; 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         banjo_fur_length_option,
@@ -5792,7 +5939,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5836,7 +5983,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(water_detail_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(shore_foam_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(mist_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_height_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_distance_option, grass_section_option, false);
@@ -5867,7 +6013,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(ground_displacement_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(ground_displacement_distance_option, lighting_section_option, false);
     // Banjo's fur and Kazooie's feathers sit in their own Character Shaders section (L, 2026-10-16).
-    for (const std::string* option : { &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option }) {
+    for (const std::string* option : { &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option }) {
         graphics.add_option_hidden_dependency(*option, character_section_option, false);
     }
     graphics.add_option_hidden_dependency(heat_haze_option, lighting_section_option, false);

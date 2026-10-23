@@ -19,6 +19,8 @@ void tooie_sound_slot_wait(uint8_t* rdram, recomp_context* ctx);
 void tooie_sound_event_pool(uint8_t* rdram, recomp_context* ctx);
 int tooie_sound_handle_wait(uint8_t* rdram, recomp_context* ctx);
 int tooie_sound_event_full(uint8_t* rdram, recomp_context* ctx);
+// While C Down is held (and 2 s after), logs a sound play call (which = index of the function).
+void tooie_sound_log(uint8_t* rdram, recomp_context* ctx, int which);
 // 1 when the sequence func_8002ABE0 is about to step has a broken track count (src/game/sound_events.cpp).
 int tooie_seq_delta_guard(uint8_t* rdram, recomp_context* ctx);
 // Heap guard (src/game/heap_guard.cpp): repairs a broken heap block link before func_8001C0A0 walks the list.
@@ -33,6 +35,10 @@ int tooie_intro_sync_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_quiz_no_player(uint8_t* rdram, recomp_context* ctx);
 // 1 (and logs once per place) when $v0 is null where the game is about to read through it.
 int tooie_null_guard(uint8_t* rdram, recomp_context* ctx, const char* where);
+
+// Volumetric dust (src/gameplay/dust.cpp): at the entry of badust_entrypoint_2; 1 takes the textured puff'"'"'s place.
+int tooie_dust_spawn(uint8_t* rdram, recomp_context* ctx);
+int tooie_dust_spawn_foot(uint8_t* rdram, recomp_context* ctx);
 
 void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx);
 // Asset replacement (src/game/asset_mods.cpp): in func_800D5B34 before it fetches an asset; 1 when a mod file was loaded instead.
@@ -101,6 +107,8 @@ void tooie_fall_damage_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_klungo_potion_steer(uint8_t* rdram, recomp_context* ctx);
+void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx);
+void tooie_enemy_attack_timer(uint8_t* rdram, recomp_context* ctx);
 void tooie_klungo_replay_potions(uint8_t* rdram, recomp_context* ctx);
 void tooie_aim_trace(uint8_t* rdram, recomp_context* ctx, const char* caller);
 void tooie_enemy_hit_damage(uint8_t* rdram, recomp_context* ctx, int reg);

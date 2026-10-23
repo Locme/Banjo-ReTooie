@@ -2266,6 +2266,7 @@ RECOMP_FUNC void sucoaster_entrypoint_14(uint8_t* rdram, recomp_context* ctx) {
     CHECK_FR(ctx, 0);
     ctx->f12.fl = ctx->f0.fl;
     after_3:
+    tooie_enemy_attack_timer(rdram, ctx);
     // 0x80801834: sb          $v0, 0x12($s1)
     MEM_B(0X12, ctx->r17) = ctx->r2;
     // 0x80801838: b           L_808018A0
@@ -2363,6 +2364,7 @@ L_8080187C:
     CHECK_FR(ctx, 0);
     ctx->f12.fl = ctx->f0.fl;
     after_8:
+    tooie_enemy_attack_timer(rdram, ctx);
     // 0x80801898: sb          $v0, 0x12($s1)
     MEM_B(0X12, ctx->r17) = ctx->r2;
     // 0x8080189C: addiu       $v0, $zero, 0x1

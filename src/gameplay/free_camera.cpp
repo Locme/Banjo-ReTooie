@@ -18,7 +18,7 @@
 // dynamic camera keeps its own position (+0x74) and rotation (+0x80), so the
 // game's camera logic is left as it was and only the picture moves.
 //
-// Ease back (WIP > Free camera: ease back, Always by default while it is tested): a second after the stick is let go while
+// Ease back (QOL > Free camera: ease back, off by default): a second after the stick is let go while
 // Banjo flies (Flying only) or flies or moves (Always), the held yaw, elevation, aim and zoom ease
 // towards the game's own camera, which keeps chasing the spot behind Banjo underneath; once they
 // meet, the game's camera takes over again.
@@ -46,6 +46,8 @@
 #include "tooie_free_camera.h"
 #include "tooie_photo_mode.h"
 #include "tooie_game.h"
+#include "tooie_hotkeys.h"
+#include "tooie_motion_aim.h"
 #include "tooie_hooks.h"
 #include "tooie_mirror_mode.h"
 #include "tooie_rdram.h"
@@ -101,6 +103,9 @@ namespace {
     // Floor clearance (WIP): the downward line test runs from this far above the camera to this far below it.
     constexpr float floor_probe_up = 40.0f;
     constexpr float floor_probe_down = 60.0f;
+    // Smooth stairs: rate (per second) the orbit height follows Banjo, and the jump (teleport) that snaps it.
+    constexpr float pivot_rate = 8.0f;
+    constexpr float pivot_snap = 300.0f;
     constexpr float stick_deadzone = 0.2f;
     // Distance, as a multiple of the game's, reached by pushing on past the tilt limits.
     constexpr float min_zoom = 0.25f;
@@ -111,6 +116,8 @@ namespace {
     // Camera line test flags and radius, as the game's camera uses them (func_80113640).
     constexpr uint32_t sweep_flags = 0x820020;
     constexpr float sweep_radius = 45.0f;
+    // Hover over small objects: the thin line test that decides whether Banjo can still be seen.
+    constexpr float hover_radius = 12.0f;
 
     // Ease back: seconds after the stick is let go, the rate (per second) of the ease, the speed
     // (units per second) Banjo counts as moving at, and how close counts as caught up.
@@ -135,6 +142,13 @@ namespace {
         float elevation = 0.0f; // held height of the camera above the pivot, in degrees
         float aim = 0.0f;       // view pitch plus elevation: how far above the pivot the camera looks
         float zoom = 1.0f;     // times the game's distance
+        bool snap = false;      // Camera Snap Behind pressed: ease back now, whatever Banjo is doing
+        bool snap_was_down = false;
+        int32_t wheel = 0;      // mouse wheel total last step
+        uint32_t middle = 0;    // middle button presses last step
+        bool has_wheel = false;
+        float pivot_y = 0.0f;   // smooth stairs: the height the camera orbits, eased towards Banjo's
+        bool has_pivot = false;
         float look = 0.0f;      // look-up tilt: degrees the view is raised past the lowest eye height
         float idle = 0.0f;      // seconds since the stick was last used
         float wall = 1.0f;      // smooth walls: the camera's distance as a fraction of the wanted one
@@ -182,7 +196,8 @@ namespace {
 
     // func_800FAB50(from, to, normal_out, flags, radius on the stack): a swept line test that moves
     // `to` back to where it first hits. Runs it on scratch space below the hook's stack frame.
-    bool sweep(uint8_t* rdram, recomp_context* ctx, const float from[3], float to[3], float* normal = nullptr) {
+    bool sweep(uint8_t* rdram, recomp_context* ctx, const float from[3], float to[3], float* normal = nullptr,
+               float radius = sweep_radius) {
         recomp_context saved = *ctx;
         const uint32_t sp = ((uint32_t)ctx->r29 - 0x80) & ~0xFu;
         const uint32_t from_addr = sp + 0x20;
@@ -193,7 +208,7 @@ namespace {
             write_float(rdram, to_addr + 4 * i, to[i]);
             write_float(rdram, normal_addr + 4 * i, 0.0f);
         }
-        write_float(rdram, sp + 0x10, sweep_radius);
+        write_float(rdram, sp + 0x10, radius);
         ctx->r29 = (int32_t)sp; // addresses are sign-extended in the registers
         ctx->r4 = (int32_t)from_addr;
         ctx->r5 = (int32_t)to_addr;
@@ -241,6 +256,25 @@ namespace {
     float ease(float rate, float dt) {
         return 1.0f - std::exp(-rate * dt);
     }
+
+    // Sound play log: until when (steady clock ms) C Down was last down plus 2 s.
+    std::atomic<int64_t> log_until_ms{0};
+    int64_t now_ms() {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+    // C Down tap or hold (see free_camera::apply_input): held past the threshold, the fine-tune is on.
+    std::atomic<bool> fine_held{false};
+    // Whether the free camera is running the game's camera now (not first person, a cutscene or a menu).
+    std::atomic<bool> gameplay_camera{false};
+    constexpr std::chrono::milliseconds tap_limit{250};
+    constexpr int tap_pulse_reads = 4;
+    // RB fine-tune: the distance range as a multiple of the game's, and the rate (per second, at a full
+    // push) of the change.
+    constexpr float rb_min_zoom = 0.5f;
+    constexpr float rb_max_zoom = 2.0f;
+    constexpr float rb_zoom_rate = 0.8f;
+    // The game's camera distance button: C Down, which a controller's RB is bound to (L, 2026-10-23).
+    constexpr uint16_t n64_r_button = 0x0004;
 
     // Scales the players' draw alpha (tooie_free_camera_player_alpha), 1 for whole.
     std::atomic<float> player_fade{1.0f};
@@ -328,6 +362,37 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     stick_x = deadzone(stick_x);
     stick_y = deadzone(stick_y);
 
+    // Mouse and gyro motion since the last step (drained even when unused, so it cannot pile up).
+    float mouse_x = 0.0f, mouse_y = 0.0f, gyro_x = 0.0f, gyro_y = 0.0f;
+    tooie::motion_aim::take_orbit(&mouse_x, &mouse_y, &gyro_x, &gyro_y);
+    const auto mouse_mode = option<uint32_t>(tooie::free_camera_mouse_option, (uint32_t)tooie::FreeCameraMouse::Always);
+    const auto gyro_mode = option<uint32_t>(tooie::free_camera_gyro_option, (uint32_t)tooie::FreeCameraMouse::Hold);
+    const bool look_key = tooie::hotkeys::down(recompinput::GameInput::CAMERA_MOUSE_LOOK);
+    auto allowed = [&](uint32_t mode) {
+        return mode == (uint32_t)tooie::FreeCameraMouse::Always ||
+            (mode == (uint32_t)tooie::FreeCameraMouse::Hold && look_key);
+    };
+    if (!allowed(mouse_mode)) {
+        mouse_x = mouse_y = 0.0f;
+    }
+    if (!allowed(gyro_mode)) {
+        gyro_x = gyro_y = 0.0f;
+    }
+    const float orbit_x = mouse_x + gyro_x;
+    const float orbit_y = mouse_y + gyro_y;
+    // Mouse wheel zoom and the middle button (snap behind) while the mouse is on; counts since last step.
+    const int32_t wheel_now = recompinput::get_game_mouse_wheel();
+    const uint32_t middle_now = recompinput::get_game_mouse_clicks(2);
+    const bool mouse_on = mouse_mode != (uint32_t)tooie::FreeCameraMouse::Off;
+    const int32_t wheel_notches = mouse_on && state.has_wheel ? wheel_now - state.wheel : 0;
+    const bool middle_clicked = mouse_on && state.has_wheel && middle_now != state.middle;
+    state.wheel = wheel_now;
+    state.middle = middle_now;
+    state.has_wheel = true;
+    const bool snap_down = tooie::hotkeys::down(recompinput::GameInput::CAMERA_SNAP_BEHIND);
+    const bool snap_pressed = (snap_down && !state.snap_was_down) || middle_clicked;
+    state.snap_was_down = snap_down;
+
     const bool on = tooie::free_camera::enabled();
     const bool gameplay = updating && mode == mode_dynamic && valid_ptr(camera) && valid_ptr(transform) && valid_ptr(dynamic);
     // First person and the like: leave the camera alone but keep the held yaw for afterwards.
@@ -336,6 +401,14 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     // While the free camera is on and the game's own camera is running, the right stick
     // is the free camera's, not C buttons.
     recompinput::set_right_analog_suppressed(on && gameplay && !paused);
+
+    // Holding C Down (RB) with the option on: the stick's up and down change the distance instead of tilting.
+    float rb_zoom_input = 0.0f;
+    gameplay_camera = on && gameplay && !paused;
+    if (fine_held && wip_option<bool>(tooie::free_camera_rb_distance_option, false)) {
+        rb_zoom_input = stick_y;
+        stick_y = 0.0f;
+    }
 
     if (!on || !gameplay || map != state.map) {
         state.active = false;
@@ -346,24 +419,32 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     bool easing = false;
     float fade = 1.0f;
     if (on && gameplay && !paused) {
-        const bool stick = stick_x != 0.0f || stick_y != 0.0f;
+        const bool stick = stick_x != 0.0f || stick_y != 0.0f || orbit_x != 0.0f || orbit_y != 0.0f ||
+            wheel_notches != 0 || rb_zoom_input != 0.0f;
         if (!state.active && stick) {
             state.active = true;
             state.yaw = rot[1];
             state.elevation = std::clamp(game_elevation(pos, banjo), min_elevation, max_elevation);
             state.aim = std::clamp(signed_degrees(rot[0]) + game_elevation(pos, banjo), min_aim, max_aim);
             state.zoom = 1.0f;
+            state.has_pivot = false;
             state.look = 0.0f;
             state.wall = 1.0f;
         }
         state.idle = stick ? 0.0f : state.idle + dt;
+        if (snap_pressed) {
+            state.snap = true;
+        }
+        if (stick) {
+            state.snap = false;
+        }
 
         // Ease back towards the game's camera, which is behind Banjo while he moves.
-        const auto ease_back = wip_option<uint32_t>(tooie::free_camera_ease_back_option, (uint32_t)tooie::FreeCameraEaseBack::Always);
+        const auto ease_back = option<uint32_t>(tooie::free_camera_ease_back_option, (uint32_t)tooie::FreeCameraEaseBack::Off);
         const bool flying = std::find(std::begin(flying_states), std::end(flying_states), player_state) != std::end(flying_states);
-        easing = state.active && state.idle >= ease_delay &&
+        easing = state.active && (state.snap || state.idle >= ease_delay &&
             ((ease_back == (uint32_t)tooie::FreeCameraEaseBack::Flying && flying) ||
-             (ease_back == (uint32_t)tooie::FreeCameraEaseBack::Always && (flying || speed >= moving_speed)));
+             (ease_back == (uint32_t)tooie::FreeCameraEaseBack::Always && (flying || speed >= moving_speed))));
         if (easing) {
             const float k = ease(ease_rate, dt);
             const float elevation = std::clamp(game_elevation(pos, banjo), min_elevation, max_elevation);
@@ -382,16 +463,41 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
                 state.active = false;
             }
         }
+        if (!state.active) {
+            state.snap = false;
+        }
         if (state.active) {
             const auto speed = std::min<uint32_t>(option<uint32_t>(tooie::free_camera_speed_option, 1), 2);
             const float sx = (option<bool>(tooie::free_camera_invert_x_option, false) != tooie::mirror_mode::active()) ? -stick_x : stick_x;
             const float sy = option<bool>(tooie::free_camera_invert_y_option, false) ? -stick_y : stick_y;
             // Right turns the view right (yaw grows to the left). Up looks up, so the camera drops.
-            state.yaw = wrap_degrees(state.yaw - sx * yaw_speeds[speed] * dt);
-            const float tilt_input = -sy * yaw_speeds[speed] * pitch_ratio * dt;
+            // C Down held, stick up: closer; down: further. Steps toward the range's limits only.
+            if (rb_zoom_input != 0.0f) {
+                const float wanted_zoom = state.zoom * std::exp(-rb_zoom_input * rb_zoom_rate * dt);
+                state.zoom = std::clamp(wanted_zoom, rb_min_zoom, rb_max_zoom);
+            }
+            // Mouse wheel: each notch changes the distance by 10%, up zooms in.
+            if (wheel_notches != 0) {
+                state.zoom = std::clamp(state.zoom * std::pow(0.9f, (float)wheel_notches), min_zoom, max_zoom);
+            }
+            const bool flip_x = option<bool>(tooie::free_camera_invert_x_option, false) != tooie::mirror_mode::active();
+            const float orbit_yaw = flip_x ? -orbit_x : orbit_x;
+            const float orbit_pitch = option<bool>(tooie::free_camera_invert_y_option, false) ? -orbit_y : orbit_y;
+            state.yaw = wrap_degrees(state.yaw - sx * yaw_speeds[speed] * dt + orbit_yaw);
+            const float tilt_input = -sy * yaw_speeds[speed] * pitch_ratio * dt - orbit_pitch;
 
             // The camera's offset from the pivot, turned about the vertical by the yaw change.
-            const float pivot[3] = { banjo[0], banjo[1] + pivot_height, banjo[2] };
+            // Smooth stairs: the orbit height follows Banjo's with an ease, so steps don't bob the camera.
+            const float pivot_target = banjo[1] + pivot_height;
+            if (!state.has_pivot || !option<bool>(tooie::free_camera_smooth_height_option, true) ||
+                std::fabs(pivot_target - state.pivot_y) > pivot_snap) {
+                state.pivot_y = pivot_target;
+            }
+            else {
+                state.pivot_y += (pivot_target - state.pivot_y) * ease(pivot_rate, dt);
+            }
+            state.has_pivot = true;
+            const float pivot[3] = { banjo[0], state.pivot_y, banjo[2] };
             const float ox = pos[0] - pivot[0];
             const float oy = pos[1] - pivot[1];
             const float oz = pos[2] - pivot[2];
@@ -409,7 +515,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             // reverses that first.
             const float horizontal = std::sqrt(rx * rx + rz * rz);
             const float distance = std::sqrt(horizontal * horizontal + oy * oy);
-            const bool look_up = wip_option<bool>(tooie::free_camera_look_up_option, false);
+            const bool look_up = option<bool>(tooie::free_camera_look_up_option, true);
             const float low_limit = look_up ? look_min_elevation : min_elevation;
             float tilt_left = tilt_input;
             // Look-up tilt: a push past the lowest eye height raises the view instead of closing in; tilting
@@ -461,6 +567,16 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             // line test (func_800FAB50(from, to_inout, normal_out, flags, radius), as func_80113640 uses it).
             float hit[3] = { want[0], want[1], want[2] };
             blocked = sweep(rdram, ctx, pivot, hit);
+            // A small object near the line stops the wide test but not the view of Banjo: if a thin line
+            // from Banjo to the wanted spot is clear, the camera stays there and hovers over it. Banjo is
+            // never hidden, because anything between him and the camera stops the thin line too.
+            if (blocked && option<bool>(tooie::free_camera_hover_option, true)) {
+                float thin[3] = { want[0], want[1], want[2] };
+                if (!sweep(rdram, ctx, pivot, thin, nullptr, hover_radius)) {
+                    std::memcpy(hit, want, sizeof(hit));
+                    blocked = false;
+                }
+            }
             const float full = std::sqrt((want[0] - pivot[0]) * (want[0] - pivot[0]) +
                 (want[1] - pivot[1]) * (want[1] - pivot[1]) + (want[2] - pivot[2]) * (want[2] - pivot[2]));
             if (option<bool>(tooie::free_camera_smooth_walls_option, false) && full > 1.0f) {
@@ -487,7 +603,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
 
             // Floor clearance (WIP): a low tilt can swing the eye into the floor, so lift it onto the floor
             // under it (the camera line test's resting point is its radius above the surface).
-            if (wip_option<bool>(tooie::free_camera_floor_clearance_option, false)) {
+            if (option<bool>(tooie::free_camera_floor_clearance_option, true)) {
                 const float from[3] = { want[0], want[1] + floor_probe_up, want[2] };
                 float down[3] = { want[0], want[1] - floor_probe_down, want[2] };
                 if (sweep(rdram, ctx, from, down) && down[1] > want[1]) {
@@ -533,4 +649,60 @@ bool tooie::free_camera::sweep_line(uint8_t* rdram, recomp_context* ctx, const f
 extern "C" int tooie_free_camera_player_alpha(int alpha) {
     const float fade = player_fade.load();
     return fade >= 1.0f ? alpha : (int)((float)alpha * fade);
+}
+
+void tooie::free_camera::apply_input(uint16_t* buttons) {
+    static bool down = false;
+    static bool holding = false;
+    static int pulse = 0;
+    static std::chrono::steady_clock::time_point since;
+    const bool tune = wip_option<bool>(tooie::free_camera_rb_distance_option, false);
+    const bool physical = (*buttons & n64_r_button) != 0;
+    if (physical) {
+        log_until_ms = now_ms() + 2000;
+    }
+    if (!tune || !gameplay_camera.load()) {
+        // Passed through as it is; nothing pending.
+        down = false;
+        holding = false;
+        pulse = 0;
+        fine_held = false;
+        return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (physical && !down) {
+        down = true;
+        holding = false;
+        since = now;
+    }
+    if (physical) {
+        if (!holding && now - since >= tap_limit) {
+            holding = true;
+        }
+        // Kept from the game while it may still be a hold, and for the whole hold.
+        *buttons = (uint16_t)(*buttons & ~n64_r_button);
+    }
+    else if (down) {
+        down = false;
+        if (!holding) {
+            pulse = tap_pulse_reads; // a tap: the game sees a short press now
+        }
+        holding = false;
+    }
+    if (!physical && pulse > 0) {
+        *buttons = (uint16_t)(*buttons | n64_r_button);
+        pulse--;
+    }
+    fine_held = holding;
+}
+
+extern "C" void tooie_sound_log(uint8_t* rdram, recomp_context* ctx, int which) {
+    (void)rdram;
+    if (now_ms() > log_until_ms.load()) {
+        return;
+    }
+    static const char* const names[] = { "func_8009DE38", "func_8009DF94", "func_8009DF18", "func_8009DF58",
+        "func_8009DBF0", "func_8009DB04", "func_800FC348", "func_8010114C" };
+    std::printf("[sfx-R] %s a0 %X a1 %X a2 %X\n", names[which], (unsigned)ctx->r4, (unsigned)ctx->r5, (unsigned)ctx->r6);
+    std::fflush(stdout);
 }

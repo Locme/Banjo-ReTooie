@@ -36,6 +36,9 @@ namespace tooie {
     // App-data root (app_data.cpp): the exe's folder when writable (migrating the old per-user
     // folder once), else the runtime's default location.
     std::filesystem::path resolve_app_folder();
+    // dev.txt next to the exe (or in the working directory, like portable.txt): every hidden tab
+    // shows (DEV, Cheats, Warp, Achievements), whatever their switches say (L, 2026-10-23).
+    bool dev_file_present();
 
     // Save backups (save_backup.cpp): at launch and every 120 s, copies the save file to
     // save_backups/<date-time>/ if it changed, keeping the newest N (General tab settings).
@@ -51,6 +54,8 @@ namespace tooie {
     inline const std::string qol_tab_id = "qol";
     // The Performance tab (a page of Graphics options, recompui::config::create_page_tab).
     inline const std::string performance_tab_id = "performance";
+    // The Gameplay tab (L, 2026-10-23): a page of General options (Difficulty), saved in general.json.
+    inline const std::string gameplay_tab_id = "gameplay";
     inline const std::string quick_start_option = "quick_start";
     void quick_start_note_input(uint16_t buttons);
     void quick_start_tick(uint8_t* rdram);

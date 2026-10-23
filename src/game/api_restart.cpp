@@ -23,6 +23,7 @@
 #include "recompui/recompui.h"
 
 #include "tooie_api_restart.h"
+#include "tooie_upscaler.h"
 
 namespace {
     std::atomic_bool restart_requested = false;
@@ -75,6 +76,9 @@ void tooie::api_restart::add_prompt(recomp::config::Config& graphics) {
     graphics.add_option_change_callback(recompui::config::graphics::options::api_option,
         [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value,
            recomp::config::OptionChangeContext change_context) {
+            if (const uint32_t* api = std::get_if<uint32_t>(&cur_value)) {
+                tooie::upscaler::api_changed(*api);
+            }
             if (change_context == recomp::config::OptionChangeContext::Load) {
                 running_api = cur_value;
                 return;

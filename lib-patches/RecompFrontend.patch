@@ -92,10 +92,10 @@ index 1961e29..e4b14fa 100644
 +    int32_t get_game_mouse_wheel();
  }
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..bbec3e9 100644
+index f5ed6c0..b6a847f 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,53 @@ namespace recompinput {
+@@ -37,10 +37,56 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
@@ -139,7 +139,10 @@ index f5ed6c0..bbec3e9 100644
 +    DEFINE_INPUT(NOCLIP_TOGGLE, 0, "Toggle Noclip") \
 +    DEFINE_INPUT(SUN_MOVE, 0, "Move Sun") \
 +    DEFINE_INPUT(SUN_SAVE, 0, "Save Sun Location") \
-+    DEFINE_INPUT(MATERIAL_PICK, 0, "Ray Tracing Material Pick Mode")
++    DEFINE_INPUT(MATERIAL_PICK, 0, "Ray Tracing Material Pick Mode") \
++    DEFINE_INPUT(CAMERA_SNAP_BEHIND, 0, "Camera Snap Behind") \
++    DEFINE_INPUT(CAMERA_MOUSE_LOOK, 0, "Camera Mouse Look") \
++    DEFINE_INPUT(VOLUMETRIC_SAVE, 0, "Save Volumetric Settings")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \
@@ -150,7 +153,7 @@ index f5ed6c0..bbec3e9 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -72,6 +115,9 @@ namespace recompinput {
+@@ -72,6 +118,9 @@ namespace recompinput {
          InputType input_type;
          // Represents a single source input. e.g. A keyboard's shift key, or a controller's R trigger
          int32_t input_id;
@@ -160,7 +163,7 @@ index f5ed6c0..bbec3e9 100644
          std::string to_string() const;
          auto operator<=>(const InputField& rhs) const = default;
  
-@@ -90,15 +136,33 @@ namespace recompinput {
+@@ -90,15 +139,33 @@ namespace recompinput {
          bool is_empty() const {
              return input_type == InputType::None;
          }
@@ -194,7 +197,7 @@ index f5ed6c0..bbec3e9 100644
      }
  
      // Represents the types of mapping/profiles that can be done.
-@@ -127,6 +191,10 @@ namespace recompinput {
+@@ -127,6 +194,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);
@@ -1602,7 +1605,7 @@ index 6c84c05..6f2e821 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("Config modal has not been initialized.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..7cf3165 100644
+index 86428c9..1a7afe5 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
 @@ -1,4 +1,7 @@
@@ -1613,7 +1616,27 @@ index 86428c9..7cf3165 100644
  
  namespace recompui {
  
-@@ -59,7 +62,11 @@ bool ConfigOptionElement::get_disabled() {
+@@ -35,6 +38,19 @@ ConfigOptionElement::ConfigOptionElement(
+     const recomp::config::ConfigOption &option = config->get_option(option_index);
+ 
+     ContextId context = recompui::get_current_context();
++    if (config->has_option_children(option_index)) {
++        auto make_expander = [&](const char* svg, bool expand) {
++            IconButton *button = context.create_element<IconButton>(this, svg, ButtonStyle::Basic, IconButtonSize::Small);
++            button->add_pressed_callback([this, expand]() {
++                const_cast<recomp::config::Config *>(this->config)->set_option_expanded(this->option_index, expand);
++                this->update_hidden();
++            });
++            button->set_flex_shrink(0.0f);
++            return button;
++        };
++        expand_button = make_expander("icons/Caret.svg", true);
++        collapse_button = make_expander("icons/CaretUp.svg", false);
++    }
+     auto name_text = option.name;
+     if (!name_text.empty()) {
+         name_label = context.create_element<Label>(this, name_text, theme::Typography::LabelMD);
+@@ -59,7 +75,11 @@ bool ConfigOptionElement::get_disabled() {
  }
  
  bool ConfigOptionElement::get_hidden() {
@@ -1626,7 +1649,7 @@ index 86428c9..7cf3165 100644
  }
  
  void ConfigOptionElement::process_event(const Event &e) {
-@@ -87,14 +94,61 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -87,14 +107,68 @@ void ConfigOptionElement::process_event(const Event &e) {
      }
  }
  
@@ -1640,7 +1663,7 @@ index 86428c9..7cf3165 100644
 +    // Room for the hover band's gold edge (set_highlighted), taken from the left padding.
 +    set_border_left_width(compact ? 4.0f : 0.0f);
 +    set_border_left_color(Color{ 0, 0, 0, 0 });
-+    set_padding_left(compact ? 8.0f : 12.0f);
++    set_padding_left((compact ? 8.0f : 12.0f) + (ignore_simple ? 0.0f : 20.0f * config->get_option_depth(option_index)));
 +    set_border_radius(compact ? 4.0f : 0.0f);
 +    if (compact) {
 +        name_label->set_margin_bottom(0.0f);
@@ -1667,8 +1690,10 @@ index 86428c9..7cf3165 100644
 +void ConfigOptionElement::set_highlighted(bool highlighted) {
 +    // An orange band with a gold edge on the left, and the name in gold, like the picked tab.
 +    // Only colours change here: a layout change relays the whole page (slow on long pages).
-+    set_background_color(highlighted ? Color{ 238, 122, 20, 96 } : Color{ 0, 0, 0, 0 });
-+    set_border_left_color(highlighted ? sidebar_style::gold : Color{ 0, 0, 0, 0 });
++    // Options under a parent sit on a darker panel with a thin gold edge, so opening one feels different.
++    const bool child = config->get_option_depth(option_index) > 0 && !ignore_simple;
++    set_background_color(highlighted ? Color{ 238, 122, 20, 96 } : (child ? Color{ 30, 14, 4, 235 } : Color{ 0, 0, 0, 0 }));
++    set_border_left_color(highlighted ? sidebar_style::gold : (child ? sidebar_style::gold_soft : Color{ 0, 0, 0, 0 }));
 +    name_label->set_color(highlighted ? sidebar_style::gold : sidebar_style::cream);
 +}
 +
@@ -1676,6 +1701,11 @@ index 86428c9..7cf3165 100644
 -    if (config->is_config_option_hidden(option_index)) {
 +    const bool hidden = config->is_config_option_hidden(option_index, ignore_simple);
 +    update_simple_control();
++    if (expand_button != nullptr) {
++        const bool open = config->is_option_expanded(option_index);
++        expand_button->set_display(open ? Display::None : Display::Flex);
++        collapse_button->set_display(open ? Display::Flex : Display::None);
++    }
 +    if (hidden) {
          set_display(Display::None);
          set_enabled(false);
@@ -1689,7 +1719,7 @@ index 86428c9..7cf3165 100644
  }
  
  // ConfigOptionEnum
-@@ -110,6 +164,7 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -110,6 +184,7 @@ ConfigOptionEnum::ConfigOptionEnum(
  {
      ContextId context = recompui::get_current_context();
      Element *wrapper = context.create_element<Element>(this, 0, "div", false);
@@ -1697,7 +1727,7 @@ index 86428c9..7cf3165 100644
      wrapper->set_display(Display::Flex);
      wrapper->set_flex_direction(FlexDirection::Row);
      wrapper->set_align_items(AlignItems::Center);
-@@ -120,25 +175,48 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -120,25 +195,48 @@ ConfigOptionEnum::ConfigOptionEnum(
      // Negates the extra padding that radio tabs automatically add.
      name_label->set_margin_bottom(4.0f);
  
@@ -1763,7 +1793,7 @@ index 86428c9..7cf3165 100644
      }
  
      update_value();
-@@ -153,12 +231,18 @@ void ConfigOptionEnum::update_value() {
+@@ -153,12 +251,18 @@ void ConfigOptionEnum::update_value() {
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(this->option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          if (enum_opt.options[i].value == option_value) {
@@ -1784,18 +1814,22 @@ index 86428c9..7cf3165 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -176,6 +260,10 @@ void ConfigOptionEnum::update_enum_details() {
- 
+@@ -177,6 +281,14 @@ void ConfigOptionEnum::update_enum_details() {
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
+     auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
 +    if (select != nullptr) {
 +        select->set_enabled(!all_disabled);
++        // Single entries can be greyed out in a drop-down list too.
++        for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
++            select->set_option_enabled(int(i), !config->get_enum_option_disabled(option_index, i));
++        }
 +        return;
 +    }
-     auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
-@@ -199,6 +287,7 @@ ConfigOptionNumber::ConfigOptionNumber(
+         auto opt_element = radio->get_option_element(i);
+@@ -199,6 +311,7 @@ ConfigOptionNumber::ConfigOptionNumber(
      auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
  
      slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
@@ -1803,7 +1837,7 @@ index 86428c9..7cf3165 100644
      slider->set_width(100.0f, Unit::Percent);
      slider->set_max_width(512.0f, Unit::Dp);
  
-@@ -214,14 +303,33 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -214,14 +327,29 @@ ConfigOptionNumber::ConfigOptionNumber(
              this->on_hover(this->option_id);
          }
      });
@@ -1812,11 +1846,7 @@ index 86428c9..7cf3165 100644
 +    simple_toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
 +    simple_toggle->set_display(Display::None);
 +    simple_toggle->add_checked_callback([this](bool checked){
-+        if (checked) {
-+            this->set_option_value(this->option_id, last_on_value);
-+        } else {
-+            this->set_option_value(this->option_id, 0.0);
-+        }
++        this->set_option_value(this->option_id, checked ? last_on_value : 0.0);
 +    });
 +
      update_value();
@@ -1837,7 +1867,7 @@ index 86428c9..7cf3165 100644
  };
  
  void ConfigOptionNumber::update_disabled() {
-@@ -229,6 +337,15 @@ void ConfigOptionNumber::update_disabled() {
+@@ -229,6 +357,15 @@ void ConfigOptionNumber::update_disabled() {
      set_enabled(!disabled);
  };
  
@@ -1845,7 +1875,7 @@ index 86428c9..7cf3165 100644
 +    if (simple_toggle == nullptr) {
 +        return;
 +    }
-+    const bool as_toggle = simple_active() && config->is_option_simple_toggle(option_index);
++    const bool as_toggle = !ignore_simple && config->has_option_children(option_index);
 +    slider->set_display(as_toggle ? Display::None : Display::Block);
 +    simple_toggle->set_display(as_toggle ? Display::Flex : Display::None);
 +};
@@ -1853,7 +1883,7 @@ index 86428c9..7cf3165 100644
  // ConfigOptionString
  ConfigOptionString::ConfigOptionString(
      ResourceId rid,
-@@ -245,6 +362,7 @@ ConfigOptionString::ConfigOptionString(
+@@ -245,6 +382,7 @@ ConfigOptionString::ConfigOptionString(
  
      ContextId context = recompui::get_current_context();
      text_input = context.create_element<TextInput>(this);
@@ -1861,20 +1891,53 @@ index 86428c9..7cf3165 100644
      text_input->set_width(100.0f, Unit::Percent);
      text_input->set_max_width(100.0f, Unit::Percent);
      update_value();
-@@ -284,6 +402,8 @@ ConfigOptionBool::ConfigOptionBool(
+@@ -284,16 +422,41 @@ ConfigOptionBool::ConfigOptionBool(
  
      ContextId context = recompui::get_current_context();
      toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
 +    control_root = toggle;
 +    control_grows = false;
++
++    if (config->is_option_button(option_index)) {
++        action_button = context.create_element<Button>(this, "", ButtonStyle::Secondary, ButtonSize::Small);
++        action_button->add_pressed_callback([this]() {
++            this->set_option_value(this->option_id, !std::get<bool>(this->get_value()));
++            this->update_value();
++        });
++        action_button->set_display(Display::None);
++    }
  
      update_value();
      toggle->add_checked_callback([this](bool checked){
+         this->set_option_value(this->option_id, checked);
+     });
++    update_simple_control();
+ };
+ 
+ void ConfigOptionBool::update_value() {
+     bool value = std::get<bool>(get_value());
+     toggle->set_checked(value);
++    if (action_button != nullptr) {
++        action_button->set_text(config->get_option_button_text(option_index, value));
++    }
++};
++
++void ConfigOptionBool::update_simple_control() {
++    if (action_button == nullptr) {
++        return;
++    }
++    // Search rows keep the plain switch.
++    const bool as_button = !ignore_simple;
++    toggle->set_display(as_button ? Display::None : Display::Flex);
++    action_button->set_display(as_button ? Display::Flex : Display::None);
+ };
+ 
+ void ConfigOptionBool::update_disabled() {
 diff --git a/recompui/src/config/ui_config_option.h b/recompui/src/config/ui_config_option.h
-index 0561657..5648172 100644
+index 0561657..0dbdef8 100644
 --- a/recompui/src/config/ui_config_option.h
 +++ b/recompui/src/config/ui_config_option.h
-@@ -4,6 +4,7 @@
+@@ -4,9 +4,12 @@
  #include "elements/ui_element.h"
  #include "elements/ui_label.h"
  #include "elements/ui_radio.h"
@@ -1882,29 +1945,37 @@ index 0561657..5648172 100644
  #include "elements/ui_text_input.h"
  #include "elements/ui_slider.h"
  #include "elements/ui_toggle.h"
-@@ -20,10 +21,17 @@ namespace recompui {
++#include "elements/ui_button.h"
++#include "elements/ui_icon_button.h"
+ 
+ namespace recompui {
+     using set_option_value_t = std::function<void(const std::string &option_id, recomp::config::ConfigValueVariant value)>;
+@@ -20,10 +23,20 @@ namespace recompui {
          set_option_value_t set_option_value;
          on_option_hover_t on_hover;
          Label *name_label = nullptr;
 +        // The option's control (row of choices, drop-down, slider, text box or switch).
 +        Element *control_root = nullptr;
 +        bool control_grows = true;
++        // Options with children (Banjo-Tooie menu): a down arrow opens them, an up arrow closes them.
++        IconButton *expand_button = nullptr;
++        IconButton *collapse_button = nullptr;
  
          recomp::config::ConfigValueVariant get_value();
          bool get_disabled();
          bool get_hidden();
 +        // True while the Simple menu is on (and this row obeys it).
 +        bool simple_active() const;
-+        // Hook for update_hidden: lets a subclass swap its control when Simple turns on or off.
++        // Hook for update_hidden: lets a subclass swap its control when the menu layers change.
 +        virtual void update_simple_control() {}
  
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "ConfigOptionElement"; }
-@@ -42,12 +50,22 @@ namespace recompui {
+@@ -42,12 +55,22 @@ namespace recompui {
          virtual void update_value() = 0;
          virtual void update_disabled() = 0;
          void update_hidden();
-+        // Search rows show an option even when the Simple menu hides it, and as its full control.
++        // Search rows show an option even when Simple mode or a closed parent hides it, as its full control.
 +        bool ignore_simple = false;
 +        // The group heading shown above this option (hidden together with it).
 +        Element *group_heading = nullptr;
@@ -1923,19 +1994,20 @@ index 0561657..5648172 100644
      Label *details_label = nullptr;
  
      std::string_view get_type_name() override { return "ConfigOptionEnum"; }
-@@ -72,6 +90,11 @@ public:
+@@ -72,7 +95,12 @@ public:
  class ConfigOptionNumber : public ConfigOptionElement {
  protected:
      Slider *slider = nullptr;
-+    // Simple menu: a main effect's slider becomes an on/off switch (off is 0, on is the last non-zero value).
++    // An effect with options under it (Fog and its start distance) shows a switch instead of its slider
++    // (off is 0, on is the last non-zero value); its sliders are under the arrow.
 +    Toggle *simple_toggle = nullptr;
 +    double last_on_value = 0.0;
-+
-+    void update_simple_control() override;
  
++    void update_simple_control() override;
      std::string_view get_type_name() override { return "ConfigOptionNumber"; }
  public:
-@@ -87,6 +110,7 @@ public:
+     ConfigOptionNumber(
+@@ -87,6 +115,7 @@ public:
  
      void update_value() override;
      void update_disabled() override;
@@ -1943,7 +2015,18 @@ index 0561657..5648172 100644
  };
  
  class ConfigOptionString : public ConfigOptionElement {
-@@ -127,6 +151,7 @@ public:
+@@ -112,7 +141,10 @@ public:
+ class ConfigOptionBool : public ConfigOptionElement {
+ protected:
+     Toggle *toggle = nullptr;
++    // A button option (Boss rush) shows this instead of the switch; pressing it flips the value.
++    Button *action_button = nullptr;
+ 
++    void update_simple_control() override;
+     std::string_view get_type_name() override { return "ConfigOptionBool"; }
+ public:
+     ConfigOptionBool(
+@@ -127,6 +159,7 @@ public:
  
      void update_value() override;
      void update_disabled() override;
@@ -3059,7 +3142,7 @@ index d065a14..0b68f37 100644
          std::string_view get_type_name() override { return "TabbedModal"; }
          void on_tab_change(int tab_index);
 diff --git a/recompui/src/elements/ui_select.cpp b/recompui/src/elements/ui_select.cpp
-index e289e9e..d79a4a1 100644
+index e289e9e..4676f73 100644
 --- a/recompui/src/elements/ui_select.cpp
 +++ b/recompui/src/elements/ui_select.cpp
 @@ -2,6 +2,7 @@
@@ -3118,7 +3201,7 @@ index e289e9e..d79a4a1 100644
              queue_update();
              break;
          }
-@@ -297,6 +321,28 @@ namespace recompui {
+@@ -297,10 +321,38 @@ namespace recompui {
          }
      }
  
@@ -3147,8 +3230,18 @@ index e289e9e..d79a4a1 100644
      void Select::add_change_callback(std::function<void(SelectOption& option, int option_index)> callback) {
          change_callbacks.emplace_back(callback);
      }
+ 
++    void Select::set_option_enabled(int option_index, bool enabled) {
++        if ((option_index >= 0) && (option_index < static_cast<int>(option_elements.size()))) {
++            option_elements[option_index]->set_enabled(enabled);
++        }
++    }
++
+     void Select::add_option_elements() {
+         clear_children();
+         option_elements.clear();
 diff --git a/recompui/src/elements/ui_select.h b/recompui/src/elements/ui_select.h
-index cc4932c..4140c08 100644
+index cc4932c..916cf04 100644
 --- a/recompui/src/elements/ui_select.h
 +++ b/recompui/src/elements/ui_select.h
 @@ -52,6 +52,11 @@ namespace recompui {
@@ -3163,6 +3256,15 @@ index cc4932c..4140c08 100644
  
          Style hover_style;
          Style focus_style;
+@@ -75,6 +80,8 @@ namespace recompui {
+         Style* get_focus_style() { return &focus_style; }
+         Style* get_disabled_style() { return &disabled_style; }
+         Style* get_hover_disabled_style() { return &hover_disabled_style; }
++        // Greys out one entry of the list (it can't be picked while disabled).
++        void set_option_enabled(int option_index, bool enabled);
+         void set_selection(std::string_view option_value) {
+             select_set_selection(option_value);
+         }
 diff --git a/recompui/src/elements/ui_sidebar_style.h b/recompui/src/elements/ui_sidebar_style.h
 new file mode 100644
 index 0000000..e5b6a0c

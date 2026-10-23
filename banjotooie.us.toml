@@ -750,6 +750,48 @@ func = "func_80026500"
 before_vram = 0x80026500
 text = "if (tooie_sound_event_full(rdram, ctx)) return;"
 
+# Sound play log (src/gameplay/free_camera.cpp): while C Down (RB) is held, and for 2 s after, prints the arguments
+# of the game's sound play functions, to find the camera distance sounds (2026-10-23).
+[[patches.hook]]
+func = "func_8009DE38"
+before_vram = 0x8009DE38
+text = "tooie_sound_log(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "func_8009DF94"
+before_vram = 0x8009DF94
+text = "tooie_sound_log(rdram, ctx, 1);"
+
+[[patches.hook]]
+func = "func_8009DF18"
+before_vram = 0x8009DF18
+text = "tooie_sound_log(rdram, ctx, 2);"
+
+[[patches.hook]]
+func = "func_8009DF58"
+before_vram = 0x8009DF58
+text = "tooie_sound_log(rdram, ctx, 3);"
+
+[[patches.hook]]
+func = "func_8009DBF0"
+before_vram = 0x8009DBF0
+text = "tooie_sound_log(rdram, ctx, 4);"
+
+[[patches.hook]]
+func = "func_8009DB04"
+before_vram = 0x8009DB04
+text = "tooie_sound_log(rdram, ctx, 5);"
+
+[[patches.hook]]
+func = "func_800FC348"
+before_vram = 0x800FC348
+text = "tooie_sound_log(rdram, ctx, 6);"
+
+[[patches.hook]]
+func = "func_8010114C"
+before_vram = 0x8010114C
+text = "tooie_sound_log(rdram, ctx, 7);"
+
 # func_8002ABE0 (a sequence's time to its next event) loops over as many tracks
 # as its first pointer's word +4 says; a broken count walked over all memory
 # above it (L's Mr. Patch crash, 2026-10-20). More than 32 answers no event.
@@ -1777,6 +1819,23 @@ func = "func_80800204_chklungophial"
 before_vram = 0x80800204
 text = "tooie_klungo_potion_steer(rdram, ctx);"
 
+# Curated enemies (src/gameplay/damage_mods.cpp): dynamic positioning, at the per-frame update of the shared-helper enemies.
+[[patches.hook]]
+func = "sucoaster_entrypoint_2"
+before_vram = 0x808000F0
+text = "tooie_enemy_strafe(rdram, ctx);"
+
+# Enemy attacks: the shared enemy helper sucoaster_entrypoint_14 sets a 5 to 8 second countdown byte (data +0x12) at these two stores; the hook halves it.
+[[patches.hook]]
+func = "sucoaster_entrypoint_14"
+before_vram = 0x80801834
+text = "tooie_enemy_attack_timer(rdram, ctx);"
+
+[[patches.hook]]
+func = "sucoaster_entrypoint_14"
+before_vram = 0x80801898
+text = "tooie_enemy_attack_timer(rdram, ctx);"
+
 # DEV > Aim trace (src/debug/aim_trace.cpp): each function that reads the player's position counts its own calls.
 
 [[patches.hook]]
@@ -2698,3 +2757,18 @@ text = "tooie_aim_trace(rdram, ctx, \"sumumbofx_entrypoint_14\");"
 func = "sumumbofx_entrypoint_9"
 before_vram = 0x80800DB0
 text = "tooie_aim_trace(rdram, ctx, \"sumumbofx_entrypoint_9\");"
+
+# --- Volumetric dust (src/gameplay/dust.cpp) ---------------------------------
+# badust_entrypoint_2 makes every textured dust puff (walking and running feet, the quick turn's skid, landings). With
+# Graphics > WIP > Volumetric Dust on, the puff is a volumetric cloud the renderer draws instead and the function returns.
+[[patches.hook]]
+func = "badust_entrypoint_2"
+before_vram = 0x80800260
+text = "if (tooie_dust_spawn(rdram, ctx)) { return; }"
+
+# badust_entrypoint_4 makes the foot dust (walking, running, the Talon Trot): hooked just before its smoke object is made
+# ($s0 holds the puff's position), and when a cloud takes its place the function returns through its own epilogue.
+[[patches.hook]]
+func = "badust_entrypoint_4"
+before_vram = 0x8080048C
+text = "if (tooie_dust_spawn_foot(rdram, ctx)) { ctx->r31 = MEM_W(0X2C, ctx->r29); ctx->r16 = MEM_W(0X28, ctx->r29); ctx->r29 = ADD32(ctx->r29, 0X58); return; }"

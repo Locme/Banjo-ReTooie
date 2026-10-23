@@ -38,6 +38,8 @@ namespace RT64 {
     constexpr uint32_t SceneEffectsViewRayScene = 22;
 
     constexpr uint32_t SceneMaxLights = 32;
+    // Banjo-Tooie: volumetric dust clouds (SetSceneDust).
+    constexpr uint32_t SceneMaxDust = 48;
 
     struct SceneEffectsSettings {
         // Banjo-Tooie: the level's lights (lamps, fires) the traced shadows cast from: world x, y, z and the outer range of each.
@@ -110,11 +112,16 @@ namespace RT64 {
         bool daySnow = false;
         bool dayAurora = false;
         uint32_t dayMoonPhase = 4;
-        // The mist's strength (0 off, 1 thickest) and when it shows (0 mornings, 1 mornings and nights, 2 always).
-        float dayMist = 0.5f;
-        uint32_t dayMistWhen = 0;
-        // Graphics > Mist (0 off, 1 thickest): the same mist on its own, always showing, used while the cycle is off.
-        float ownMist = 0.0f;
+        // WIP volumetric effects (off by default): mist and fog strength (0 off, 1 as designed), the fog's preset
+        // (0 to 6), the forced cloud type (0 none, 1 to 7) and the mist layer's extra height in world units. The layer
+        // follows a slow anchor under Banjo (volAnchor), so it doesn't bob as he jumps.
+        float volMist = 0.0f;
+        float volFog = 0.0f;
+        uint32_t volFogPreset = 0;
+        uint32_t volCloudType = 0;
+        float volMistOffset = 0.0f;
+        float volAnchor = 0.0f;
+        bool volAnchorValid = false;
         // How wet the ground is (0 dry, 1 soaked), and whether raindrops land on the screen.
         float dayWet = 0.0f;
         bool dayDrops = false;
@@ -163,6 +170,15 @@ namespace RT64 {
         // NPCs' fur and feathers (the yetis, Canary Mary): their own sliders, as Banjo's and Kazooie's.
         float npcFur = 0.0f;
         float npcFurLength = 1.0f;
+        // The character surface layer: how wet, snowy and dirty Banjo and Kazooie are, 0 to 1 (all 0: off).
+        float charWet = 0.0f;
+        float charSnow = 0.0f;
+        float charDirt = 0.0f;
+        float charSand = 0.0f;
+        float charDrip = 0.0f;
+        float charTime = 0.0f;
+        float charSoaked = 0.0f;
+        float charIcy = 0.0f;
         float npcFurDensity = 1.0f;
         float npcFurNoisiness = 0.5f;
         float npcFeathers = 0.0f;
@@ -266,8 +282,15 @@ namespace RT64 {
     // and sky, thickens the clouds and draws falling rain; flash (0 to 1) is lightning lighting everything up.
     // snow: it falls as snow.
     void SetSceneWeather(float rain, float flash, bool snow);
-    void SetSceneMist(float strength, uint32_t when);
-    void SetSceneOwnMist(float strength);
+    // Volumetric mist, fog and clouds (WIP): see SceneEffectsPS.hlsl (VolSettings) and src/gameplay/volumetric.cpp.
+    // Banjo-Tooie: Graphics > Volumetric Dust: the dust clouds this frame (count of them, up to SceneMaxDust), eight floats each:
+    // world x, y, z, radius, strength (0 to 1), a seed, then two spare. The march in VolDust draws them with the mist.
+    void SetSceneDust(const float *clouds, uint32_t count);
+    void SetSceneVolumetric(float mist, float fog, uint32_t fogPreset, uint32_t cloudType, float mistOffset);
+    // The rest of the volumetric settings, riding in the dust buffer's header (SceneEffectsPS.hlsl VolExtra): the fog's start
+    // distance (world units) and colour (0 the preset's own, 1 to 4 Haze, Mist, Dusk, Gloom), and the mist over water and at a
+    // waterfall's foot: strength (0 to 1) and how high it hangs (world units) for each.
+    void SetSceneVolumetricExtra(float fogStart, uint32_t fogColour, float waterMist, float waterHeight, float fallMist, float fallHeight);
     void SetSceneRainDetail(float wet, bool drops);
     void SetSceneClouds(float cover, float height, float thickness, float speed);
     // Banjo-Tooie: the moon's phase for the day and night cycle, 0 new, 2 first quarter, 4 full, 6 last quarter.
@@ -405,6 +428,17 @@ namespace RT64 {
     // Banjo-Tooie: Banjo's fur (0 off, 1 the thickest coat) and its length (1 normal). The game marks his
     // model's draws (G_EX_SETFURSHELLS_V1); each is drawn again as shells pushed out along its normals.
     void SetSceneFur(float amount, float length, float density, float noisiness);
+    // The character surface layer (CharSurface.hlsli): how wet, snowy and dirty Banjo and Kazooie are, 0 to 1.
+    void SetSceneCharSurface(float wet, float snow, float dirt, float sand);
+    // How strongly they drip (0 to 1) and the time in seconds, for the wet layer's drips.
+    void SetSceneCharDrip(float drip, float seconds, float soaked, float icy);
+    bool SceneCharSurfaceOn();
+    // Banjo's feet (x, y, z) as the scene effects have them, false with no player.
+    bool SceneCharFeet(float (&feet)[3]);
+    // A ground draw of a sand texture lies under Banjo's feet (the renderer notes it each frame it does; true within the last
+    // third of a second), for the character surface layer's sand.
+    void NoteSandUnderfoot();
+    bool SceneSandUnderfoot();
     // The shells drawn over each of Banjo's draws: 0 when the fur is off.
     uint32_t SceneFurShells();
     // Banjo-Tooie: which of a model's vertices get fur or feathers, told by their own colours before the game

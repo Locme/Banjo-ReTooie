@@ -3089,6 +3089,7 @@ L_808026AC:
 RECOMP_FUNC void badust_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_dust_spawn(rdram, ctx)) { return; }
     // 0x80800260: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x80800264: sw          $ra, 0x2C($sp)

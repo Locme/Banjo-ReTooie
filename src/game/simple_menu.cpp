@@ -15,8 +15,8 @@
 #include "tooie_simple_menu.h"
 
 namespace {
-    // Number options that stay visible in Simple as a plain slider: effects that are only a slider
-    // (nothing else to tune), and settings that are not effects.
+    // Number options that stay visible as a plain slider: effects that are only a slider (nothing else to
+    // tune), and settings that are not effects.
     const std::unordered_set<std::string> kept_sliders = {
         "Brightness", "Field of View", "Cutscene Field of View", "Day Length", "Sharpening",
         "Ambient occlusion", "SSGI", "Bounce light", "Rim light", "Toon shading: Characters",
@@ -26,12 +26,38 @@ namespace {
         "Vignette", "Film grain", "Contrast", "Colour saturation",
     };
 
-    // Effects with sliders of their own to tune: Simple shows the main slider as a switch (off is 0,
-    // on is the last non-zero value; the first "on" is the default, or half the range when the default
-    // is 0) and hides the rest.
-    const std::unordered_set<std::string> toggle_names = {
-        "Toon outlines", "Water waves", "Underwater tint", "Displaced ground", "Banjo fur",
-        "Kazooie feathers", "NPC fur", "NPC feathers", "Sun shadows", "Fog", "3D grass",
+    // Options with options under them. A parent number option shows as an on/off switch (off is 0, on is the
+    // last non-zero value; the first "on" is the default, or half the range when the default is 0) with an
+    // arrow that opens its children, which are hidden until then.
+    struct Family {
+        const char* parent;
+        std::vector<const char*> children;
+    };
+    const std::vector<Family> effect_families = {
+        { "Toon outlines", { "Toon outline thickness" } },
+        { "Water waves", { "Water wave speed", "Water detail" } },
+        { "Underwater tint", { "Underwater haze", "Underwater distortion" } },
+        { "Displaced ground", { "Displaced ground distance" } },
+        { "Banjo fur", { "Banjo fur length", "Banjo fur density", "Banjo fur noisiness" } },
+        { "Kazooie feathers", { "Kazooie feather size", "Kazooie feather length", "Kazooie feather density",
+            "Kazooie feather noisiness", "Kazooie feather transparency" } },
+        { "NPC fur", { "NPC fur length", "NPC fur density", "NPC fur noisiness" } },
+        { "NPC feathers", { "NPC feather size", "NPC feather length", "NPC feather density",
+            "NPC feather noisiness", "NPC feather transparency" } },
+        { "Sun shadows", { "Sun shadow softness", "Sun shadow distance" } },
+        { "Fog", { "Fog start distance", "Fog colour" } },
+        { "3D grass", { "3D grass height", "3D grass distance", "3D grass density", "3D grass patches",
+            "3D grass thickness", "3D grass random length", "3D grass blending", "Chunky 3D grass",
+            "Chunking",
+            "3D grass LOD", "3D grass in ray tracing" } },
+        { { "Chunk size" } },
+        { "Pixelated 3D grass", { "Pixel size" } },
+    };
+
+    // The jiggle switches under the Jiggle switch; each owns the options named "<name>: ...".
+    const char* const jiggle_master = "Jiggle";
+    const char* const jiggle_parts[] = {
+        "Snout jiggle", "Belly jiggle", "Ear jiggle", "Fur jiggle", "Backpack jiggle", "Kazooie jiggle", "Mumbo jiggle",
     };
 
     // Options (any type) hidden in Simple, whatever tab they are in.
@@ -39,9 +65,8 @@ namespace {
         // Graphics: tuning and debugging.
         "Brightness test pattern", "Ray tracing hit colours", "Ray tracing uses Parallax materials",
         "Parallax on original textures", "Traced shadows of the player", "Ray tracing resolution",
-        "Sun shadow on Banjo", "Fog colour", "Mist Time", "Chunky 3D grass", "Pixelated 3D grass",
-        "3D grass on edges", "Frustum culling", "Occlusion culling", "Chunking", "30 FPS 3D grass",
-        "3D grass in ray tracing", "HD Shadows: Enemies", "HD Shadows: Banjo",
+        "Mist Time",
+        "HD Shadows: Enemies", "HD Shadows: Banjo",
         "Interpolation check", "Interpolation blend mode", "Effect debug view", "Effect compare",
         "Frame Read-Back", "Frame rate overlay",
         "Free camera: ease back", "Free camera: floor clearance", "Free camera: look up",
@@ -55,10 +80,7 @@ namespace {
     };
 
     // Name prefixes of number options that are tuning sliders.
-    const char* const advanced_number_prefixes[] = {
-        "Snout jiggle:", "Belly jiggle:", "Ear jiggle:", "Fur jiggle:", "Backpack jiggle:",
-        "Kazooie jiggle:", "Photo ",
-    };
+    const char* const advanced_number_prefixes[] = { "Photo " };
 
     // Options found by id rather than name (their names are not worth repeating here).
     std::vector<std::string> advanced_graphics_ids() {
@@ -136,24 +158,73 @@ bool tooie::simple_menu::on() {
 
 void tooie::simple_menu::classify() {
     std::unordered_set<std::string> used;
+    auto id_of = [](recomp::config::Config* config, const std::string& name) -> std::string {
+        for (const auto& opt : config->get_config_schema().options) {
+            if (opt.name == name) {
+                return opt.id;
+            }
+        }
+        return std::string();
+    };
+    auto parent_of = [&](recomp::config::Config* config, const std::string& child, const std::string& parent) {
+        const std::string child_id = id_of(config, child);
+        const std::string parent_id = id_of(config, parent);
+        if (child_id.empty() || parent_id.empty()) {
+            printf("[simple-menu] no option to put \"%s\" under \"%s\"\n", child.c_str(), parent.c_str());
+            return;
+        }
+        config->set_option_parent(child_id, parent_id);
+        used.insert(child);
+        used.insert(parent);
+    };
+
+    // Names that sit under a parent: not tuning clutter, shown when their parent is open.
+    std::unordered_set<std::string> under_parent;
+    recomp::config::Config* graphics = &recompui::config::get_graphics_config();
+    for (const Family& family : effect_families) {
+        for (const char* child : family.children) {
+            parent_of(graphics, child, family.parent);
+            under_parent.insert(child);
+        }
+        under_parent.insert(family.parent);
+    }
+
+    // Jiggle: one switch (off by default) over the seven body parts (on by default), each over its sliders.
+    recomp::config::Config* general = &recompui::config::get_general_config();
+    std::vector<std::string> jiggle_ids;
+    for (const char* part : jiggle_parts) {
+        parent_of(general, part, jiggle_master);
+        jiggle_ids.push_back(id_of(general, part));
+        const std::string prefix = std::string(part) + ":";
+        for (const auto& opt : general->get_config_schema().options) {
+            if (starts_with(opt.name, prefix.c_str())) {
+                parent_of(general, opt.name, part);
+                jiggle_ids.push_back(opt.id);
+            }
+        }
+    }
+    jiggle_ids.push_back(id_of(general, jiggle_master));
+    for (const std::string& id : jiggle_ids) {
+        if (!id.empty()) {
+            recompui::config::set_option_page(id, tooie::gameplay_tab_id);
+        }
+    }
+
     for (recomp::config::Config* config : all_configs()) {
         const auto& options = config->get_config_schema().options;
         for (const auto& opt : options) {
             const bool is_number = opt.type == recomp::config::ConfigOptionType::Number;
-            if (is_number && toggle_names.contains(opt.name)) {
-                config->set_option_simple_toggle(opt.id);
+            if (is_number && kept_sliders.contains(opt.name)) {
                 used.insert(opt.name);
-            } else if (is_number && !kept_sliders.contains(opt.name)) {
+            } else if (is_number && !under_parent.contains(opt.name)) {
                 // Every other graphics slider is tuning; in the other tabs only the listed prefixes are.
-                bool advanced = config == &recompui::config::get_graphics_config();
+                bool advanced = config == graphics;
                 for (const char* prefix : advanced_number_prefixes) {
                     advanced = advanced || starts_with(opt.name, prefix);
                 }
                 if (advanced) {
                     config->set_option_advanced(opt.id);
                 }
-            } else if (is_number) {
-                used.insert(opt.name);
             }
             if (advanced_names.contains(opt.name)) {
                 config->set_option_advanced(opt.id);
@@ -163,11 +234,11 @@ void tooie::simple_menu::classify() {
     }
     try {
         for (const std::string& id : advanced_graphics_ids()) {
-            recompui::config::get_graphics_config().set_option_advanced(id);
+            graphics->set_option_advanced(id);
         }
     } catch (...) {
     }
-    for (const auto* names : { &toggle_names, &kept_sliders, &advanced_names }) {
+    for (const auto* names : { &kept_sliders, &advanced_names }) {
         for (const std::string& name : *names) {
             if (!used.contains(name)) {
                 printf("[simple-menu] no option is named \"%s\"\n", name.c_str());

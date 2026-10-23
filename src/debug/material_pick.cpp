@@ -81,7 +81,7 @@ namespace {
         { 120, 220, 70, 70, 0, 0, 90 },
     };
     // The classes the sweep of the texture dump sorted textures into (see ray_material_defaults.inc), and the material each gets.
-    enum MaterialClass : uint8_t { c_chrome, c_gold, c_copper, c_steel, c_rust, c_glass, c_gem, c_glaze, c_plastic, c_leaf, c_petal, c_wax, c_glow, c_plain };
+    enum MaterialClass : uint8_t { c_chrome, c_gold, c_copper, c_steel, c_rust, c_glass, c_gem, c_glaze, c_plastic, c_leaf, c_petal, c_wax, c_glow, c_plain, c_thin_leaf };
     const Material class_materials[] = {
         // chrome: polished metal, a sharp reflection.
         { 255, 255, 255, 12, 100, 0, 0, false },
@@ -102,8 +102,9 @@ namespace {
         { 255, 255, 255, 18, 0, 0, 0, false },
         // plastic.
         { 255, 255, 255, 30, 0, 0, 0, false },
-        // leaf: rough, light through it.
-        { 255, 255, 255, 75, 0, 0, 70, false },
+        // leaf: foliage in bulk (bushes, canopies, hedges), rough, a little light through it: thick, so not much gets
+        // through (L, 2026-10-22: subsurface only on thin things).
+        { 255, 255, 255, 75, 0, 0, 30, false },
         // petal and soft fruit.
         { 255, 255, 255, 60, 0, 0, 85, false },
         // wax, jelly and slime.
@@ -112,10 +113,16 @@ namespace {
         { 255, 255, 255, 50, 0, 150, 0, false },
         // plain: the Default preset (a plain dielectric, half rough), as L picked it on 2026-10-22.
         { 255, 255, 255, 50, 0, 0, 0, false },
+        // thin leaf: a single leaf or a cut-out card of them, the sun behind shows through.
+        { 255, 255, 255, 75, 0, 0, 70, false },
     };
+    // tint: a metal's colour (0xRRGGBB, what it tints its reflection with) from its texture's average, 0 for the class's;
+    // rougher: added to the class's roughness for a noisy texture (L's re-sweep rules, 2026-10-22).
     struct BuiltIn {
         uint64_t hash;
         MaterialClass material;
+        uint32_t tint = 0;
+        uint8_t rougher = 0;
     };
     const BuiltIn built_ins[] = {
 #include "ray_material_defaults.inc"
@@ -137,7 +144,14 @@ namespace {
         static const std::unordered_map<uint64_t, Material> map = [] {
             std::unordered_map<uint64_t, Material> built;
             for (const BuiltIn& entry : built_ins) {
-                built[entry.hash] = class_materials[entry.material];
+                Material material = class_materials[entry.material];
+                if (entry.tint != 0) {
+                    material.red = uint8_t(entry.tint >> 16);
+                    material.green = uint8_t(entry.tint >> 8);
+                    material.blue = uint8_t(entry.tint);
+                }
+                material.roughness = uint8_t(std::min(100, material.roughness + entry.rougher));
+                built[entry.hash] = material;
             }
             for (const ShippedMaterial& shipped : shipped_materials) {
                 built[shipped.hash] = shipped.material;

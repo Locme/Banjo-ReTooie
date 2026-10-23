@@ -1580,6 +1580,7 @@ L_8080007C:
 RECOMP_FUNC void func_8009DB04(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_sound_log(rdram, ctx, 5);
     // 0x8009DB04: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x8009DB08: sw          $ra, 0x1C($sp)
