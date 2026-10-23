@@ -700,15 +700,13 @@ void tooie::init_config() {
         });
 
     // Section headings in the General tab (the controls and sliders above them have none).
-    recompui::config::set_option_group(tooie::save_backups_option, "Saves");
+    // One section in General for the saves and the other switches (L, 2026-10-23).
+    recompui::config::set_option_group(tooie::save_backups_option, "Saves And Others");
     // At the end of the section before Back-Ports, with its own heading, so the options around it keep theirs.
     recompui::config::set_option_display_before(tooie::precompile_shaders_option, tooie::classic_sounds::option);
-    recompui::config::set_option_group(tooie::precompile_shaders_option, "Others");
-    recompui::config::set_option_group(tooie::timer_save_option, "Saves");
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports And Cut Content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
     recompui::config::set_option_group(tooie::snout_jiggle::master_option, "Enhancements");
-    recompui::config::set_option_group(tooie::discord::presence_option, "Others");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
