@@ -12,6 +12,7 @@ float3 CharSurface(float3 color, float4 anchor, float share) {
     const float wet = FrParams.charSurface.x;
     const float snow = FrParams.charSurface.y;
     const float dirt = FrParams.charSurface.z;
+    const float sand = FrParams.charSurface.w;
     const float up = saturate((anchor.w - floor(anchor.w + 0.05f)) / 0.45f);
     const float3 grid = anchor.xyz * 0.35f;
     const float noise = FurNoise(grid);
@@ -22,6 +23,14 @@ float3 CharSurface(float3 color, float4 anchor, float share) {
         const float cover = saturate((1.0f - up) * 0.8f + 0.25f) * smoothstep(0.35f, 0.7f, patches * 0.7f + noise * 0.5f - 0.15f + dirt * 0.5f) * dirt;
         const float3 mud = float3(0.30f, 0.21f, 0.12f) * (0.6f + 0.4f * noise);
         color = lerp(color, mud, saturate(cover * (0.55f + 0.45f * share)));
+    }
+
+    // Sand: a pale, grainy tan coat, thickest on the feet and legs and the undersides, with a dusting everywhere.
+    if (sand > 0.0f) {
+        const float grain = FurNoise(anchor.xyz * 2.1f + 40.0f);
+        const float cover = saturate((1.0f - up) * 0.7f + 0.3f) * smoothstep(0.2f, 0.65f, patches * 0.6f + grain * 0.5f - 0.1f + sand * 0.45f) * sand;
+        const float3 grains = float3(0.80f, 0.68f, 0.45f) * (0.8f + 0.3f * grain);
+        color = lerp(color, grains, saturate(cover * (0.6f + 0.4f * share)));
     }
 
     // Snow: on the surfaces facing up, in clumps, brightest at the tips of fur.

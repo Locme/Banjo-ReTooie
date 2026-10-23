@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T567 Character surface in WIP, dust dirt and sand
+- Asked: 2026-10-23 13:54 UTC
+- Build: main after PR #20
+- Steps:
+  1. Pull main and build on Windows; WIP tab > Character surface: set Dirty characters to 100
+  2. Run about on a sand map (Terrydactyland sand, Jolly Roger's Lagoon beach) for 20-30 seconds
+  3. Look at his legs and feet: a pale tan grainy coat; then run in dust for brown mud; swim to wash both off
+  4. TOOIE_CHAR_SAND=100 holds the sand coat fixed (headless)
+- Look for: Does sand under his feet give him a tan coat that builds in about 20 seconds and dusts off slowly? Is the tan coat visible without looking like a texture error? Sand on non-sand ground (false positives)?
+- Status: waiting for L
+
 ## T566 Wet, snowy and dirty characters
 - Asked: 2026-10-23 13:22 UTC
 - Build: branch claude/project-thread-xmr3el
