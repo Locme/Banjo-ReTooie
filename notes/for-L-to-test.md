@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T564 Upscalers: DLSS, DLAA, FSR 3, FSR 4, Temporal
+- Asked: 2026-10-23 09:37 UTC
+- Build: main @ eca73f4
+- Steps:
+  1. Pull main and build on Windows; Graphics > WIP > Upscaler; set Resolution to Auto
+  2. Try Temporal (built-in) first, then FSR 3, DLSS, DLAA, FSR 4 at Quality; run, pan the camera, fight an enemy, open the pause menu
+  3. Try HUD Full Resolution on and off
+  4. Run with the console and note the [upscaler] lines
+- Look for: Sharp picture without doubling or trails behind moving characters; no blur on menus and cuts; HUD steady (and sharp with Full Resolution); send the [upscaler] console lines and screenshots. Full guide: notes/upscaler-test-guide.md
+- Status: waiting for L
+
 ## T563 Volumetric mist, fog and clouds (WIP tab)
 - Asked: 2026-10-23 06:10 UTC
 - Build: branch claude/project-thread-nmtx34
