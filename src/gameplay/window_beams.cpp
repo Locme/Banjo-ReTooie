@@ -470,7 +470,7 @@ bool tooie::window_beams::enabled() {
     // On with ray tracing too: the traced light beams didn't show in these rooms (L, 2026-10-21), so they step
     // aside here instead (picture_filters.cpp).
     try {
-        return std::get<bool>(recompui::config::get_graphics_config().get_option_value(option));
+        return std::get<bool>(recompui::config::get_general_config().get_option_value(option));
     } catch (...) {
         return false;
     }

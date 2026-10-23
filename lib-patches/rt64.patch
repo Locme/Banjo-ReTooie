@@ -632,7 +632,7 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..4c8b1b4 100644
+index 3227ab1..aa8bc42 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,10 +4,18 @@
@@ -923,7 +923,7 @@ index 3227ab1..4c8b1b4 100644
 +                    const uint32_t outputHeight = (scale > 1.05f) ? uint32_t(std::lround(renderParams.textureHeight * scale)) : renderParams.textureHeight;
 +                    GpuSectionScope timed(presentSections, GpuSection::Fsr, commandList);
 +                    // With the HUD kept out of the upscale, the upscaler is given the 3D world alone and the HUD is added after.
-+                    RenderTexture *worldSnapshot = UpscalerWorldSnapshot(renderParams.textureWidth, renderParams.textureHeight);
++                    RenderTexture *worldSnapshot = UpscalerWorldSnapshot(colorTarget, renderParams.textureWidth, renderParams.textureHeight);
 +                    RenderTexture *resolveInput = (worldSnapshot != nullptr) ? worldSnapshot : renderParams.texture;
 +                    RenderTexture *resolved = upscalerRenderer->resolve(ext.device, commandList, ext.shaderLibrary, resolveInput,
 +                        renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight, outputWidth, outputHeight);

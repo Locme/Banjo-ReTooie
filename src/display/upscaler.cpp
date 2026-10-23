@@ -43,9 +43,9 @@ void tooie::upscaler::api_changed(uint32_t api) {
         return;
     }
 #if !defined(__ANDROID__)
-    // FSR 3, FSR 4, FSR 4 Native AA (DLSS and DLAA have a Vulkan path).
-    for (uint32_t index = 2; index <= 4; index++) {
-        graphics_config().update_enum_option_disabled(option, index, vulkan_selected);
+    // FSR 4, FSR 4 Native AA and FSR 3 (DLSS and DLAA have a Vulkan path). Indexed by the Mode values.
+    for (uint32_t mode : { (uint32_t)Mode::Fsr4, (uint32_t)Mode::Fsr4NativeAA, (uint32_t)Mode::Fsr3 }) {
+        graphics_config().update_enum_option_disabled(option, mode, vulkan_selected);
     }
     apply();
 #endif

@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T570 Openable settings, Jiggle, Boss rush button
+- Asked: 2026-10-23 21:09 UTC
+- Build: claude/project-thread-8oifqv
+- Steps:
+  2. Graphics: Fog / 3D grass / Banjo fur have a down arrow and a switch, press the arrow and the sliders open on a darker panel
+  3. Bloom stays a plain slider
+  4. Gameplay > Enhancements: Jiggle switch is off; turn it on, press its arrow, then a part's arrow
+  5. Search for Fog start distance
+  6. General Features: Boss rush is a Start boss rush button
+- Look for: Does opening a switch feel different enough? Any row misaligned because of the arrows? Does the Boss rush button start the rush and say Stop while it runs?
+- Status: waiting for L
+
 ## T569 Character surface round 3: gradual build-up
 - Asked: 2026-10-23 17:45 UTC
 - Build: main after PR #22

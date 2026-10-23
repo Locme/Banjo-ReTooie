@@ -149,8 +149,8 @@ namespace {
         bool has_wheel = false;
         float pivot_y = 0.0f;   // smooth stairs: the height the camera orbits, eased towards Banjo's
         bool has_pivot = false;
-        float sound_travel = 0.0f; // fine-tune: distance changed since the last step sound
-        float sound_wait = 0.0f;
+        int fine_dir = 0;         // fine-tune: the way the push goes now (-1 closer, 1 further, 0 none)
+        bool fine_max_played = false;
         float look = 0.0f;      // look-up tilt: degrees the view is raised past the lowest eye height
         float idle = 0.0f;      // seconds since the stick was last used
         float wall = 1.0f;      // smooth walls: the camera's distance as a fraction of the wanted one
@@ -264,7 +264,8 @@ namespace {
     // Whether the free camera is running the game's camera now (not first person, a cutscene or a menu).
     std::atomic<bool> gameplay_camera{false};
     constexpr std::chrono::milliseconds tap_limit{250};
-    constexpr int tap_pulse_reads = 4;
+    // A tap reaches the game as a press this long (real time; the game reads the pad on its own tick).
+    constexpr std::chrono::milliseconds tap_pulse{150};
     // RB fine-tune: the distance range as a multiple of the game's, and the rate (per second, at a full
     // push) of the change.
     constexpr float rb_min_zoom = 0.5f;
@@ -278,11 +279,11 @@ namespace {
     constexpr uint32_t sound_closer = 0x487;
     constexpr uint32_t sound_further = 0x488;
     constexpr int32_t sound_volume = 0x6000;
-    // The change in distance that makes one step sound, and the least time between two.
-    constexpr float sound_step = 0.08f;
-    constexpr float sound_gap = 0.12f;
+    // Pitch of the sound as a push starts (the game's own) and at the limit (higher, so it sounds different).
+    constexpr float sound_pitch_start = 1.0f;
+    constexpr float sound_pitch_max = 1.2f;
 
-    void play_step_sound(uint8_t* rdram, recomp_context* ctx, uint32_t id) {
+    void play_step_sound(uint8_t* rdram, recomp_context* ctx, uint32_t id, float pitch) {
         const uint32_t player = read_word(rdram, player_table);
         if (!valid_ptr(player)) {
             return;
@@ -291,7 +292,9 @@ namespace {
         ctx->r29 = (int32_t)(((uint32_t)ctx->r29 - 0x100) & ~0xFu);
         ctx->r4 = (int32_t)player;
         ctx->r5 = (int32_t)id;
-        ctx->r6 = (int32_t)0x3F800000; // pitch 1.0
+        uint32_t pitch_bits;
+        std::memcpy(&pitch_bits, &pitch, sizeof(pitch_bits));
+        ctx->r6 = (int32_t)pitch_bits; // the float argument travels in $a2
         ctx->r7 = sound_volume;
         func_8009DB04(rdram, ctx);
         *ctx = saved;
@@ -497,18 +500,24 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
                 const float before = state.zoom;
                 const float wanted_zoom = before * std::exp(-rb_zoom_input * rb_zoom_rate * dt);
                 state.zoom = std::clamp(wanted_zoom, rb_min_zoom, rb_max_zoom);
-                // A sound for each step of distance, the one for the way it went.
-                state.sound_travel += state.zoom - before;
-                state.sound_wait = std::max(0.0f, state.sound_wait - dt);
-                if (std::fabs(state.sound_travel) >= sound_step && state.sound_wait <= 0.0f) {
-                    play_step_sound(rdram, ctx, state.sound_travel < 0.0f ? sound_closer : sound_further);
-                    state.sound_travel = 0.0f;
-                    state.sound_wait = sound_gap;
+                // Two sounds for each way: one as the push starts that way, one as the distance reaches its limit.
+                const int dir = rb_zoom_input > 0.0f ? -1 : 1; // -1 closer, 1 further
+                if (state.fine_dir != dir) {
+                    state.fine_dir = dir;
+                    state.fine_max_played = false;
+                    if (state.zoom != before) {
+                        play_step_sound(rdram, ctx, dir < 0 ? sound_closer : sound_further, sound_pitch_start);
+                    }
+                }
+                const bool at_limit = dir < 0 ? state.zoom <= rb_min_zoom : state.zoom >= rb_max_zoom;
+                if (at_limit && !state.fine_max_played) {
+                    state.fine_max_played = true;
+                    play_step_sound(rdram, ctx, dir < 0 ? sound_closer : sound_further, sound_pitch_max);
                 }
             }
             else {
-                state.sound_travel = 0.0f;
-                state.sound_wait = std::max(0.0f, state.sound_wait - dt);
+                state.fine_dir = 0;
+                state.fine_max_played = false;
             }
             // Mouse wheel: each notch changes the distance by 10%, up zooms in.
             if (wheel_notches != 0) {
@@ -688,7 +697,7 @@ extern "C" int tooie_free_camera_player_alpha(int alpha) {
 void tooie::free_camera::apply_input(uint16_t* buttons) {
     static bool down = false;
     static bool holding = false;
-    static int pulse = 0;
+    static std::chrono::steady_clock::time_point pulse_until{};
     static std::chrono::steady_clock::time_point since;
     const bool tune = wip_option<bool>(tooie::free_camera_rb_distance_option, false);
     const bool physical = (*buttons & n64_r_button) != 0;
@@ -696,7 +705,7 @@ void tooie::free_camera::apply_input(uint16_t* buttons) {
         // Passed through as it is; nothing pending.
         down = false;
         holding = false;
-        pulse = 0;
+        pulse_until = {};
         fine_held = false;
         return;
     }
@@ -716,13 +725,12 @@ void tooie::free_camera::apply_input(uint16_t* buttons) {
     else if (down) {
         down = false;
         if (!holding) {
-            pulse = tap_pulse_reads; // a tap: the game sees a short press now
+            pulse_until = now + tap_pulse; // a tap: the game sees a press now
         }
         holding = false;
     }
-    if (!physical && pulse > 0) {
+    if (!physical && now < pulse_until) {
         *buttons = (uint16_t)(*buttons | n64_r_button);
-        pulse--;
     }
     fine_held = holding;
 }
