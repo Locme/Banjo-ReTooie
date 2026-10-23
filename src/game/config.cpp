@@ -472,28 +472,7 @@ void tooie::init_config() {
             {tooie::TimerSave::Minutes120, "120", "120 min"},
         },
         tooie::TimerSave::Off);
-    general.add_bool_option(
-        tooie::classic_sounds::option,
-        "Back-Port: Old Banjo Sounds",
-        "Banjo-Kazooie's jump sounds instead of Banjo-Tooie's.",
-        false);
-    general.add_bool_option(
-        tooie::honeycomb_glitter::option,
-        "Back-Port: Glittering Honeycombs",
-        "Health honeycombs sparkle like they did in Banjo-Kazooie.",
-        false);
-    general.add_bool_option(
-        tooie::original_honeycomb::option,
-        "Back-Port: Original Honeycomb",
-        "Health honeycombs use Banjo-Kazooie's honeycomb model, which is still in Banjo-Tooie's files. Switching it in a level reloads the area.",
-        false);
-    general.add_bool_option(
-        tooie::jiggy_dance::option,
-        "Back-Port: Get Jiggy Animation",
-        "Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy.",
-        false);
     tooie::bottles_revenge::add_option(general);
-    tooie::torch_enemy::add_option(general);
     tooie::boss_rush::add_option(general);
     tooie::mirror_mode::add_option(general);
     general.add_bool_option(
@@ -674,6 +653,27 @@ void tooie::init_config() {
             {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
         },
         tooie::canary_mary::Mode::Fair);
+    general.add_bool_option(
+        tooie::classic_sounds::option,
+        "Back-Port: Old Banjo Sounds",
+        "Banjo-Kazooie's jump sounds instead of Banjo-Tooie's.",
+        false);
+    general.add_bool_option(
+        tooie::honeycomb_glitter::option,
+        "Back-Port: Glittering Honeycombs",
+        "Health honeycombs sparkle like they did in Banjo-Kazooie.",
+        false);
+    general.add_bool_option(
+        tooie::original_honeycomb::option,
+        "Back-Port: Original Honeycomb",
+        "Health honeycombs use Banjo-Kazooie's honeycomb model, which is still in Banjo-Tooie's files. Switching it in a level reloads the area.",
+        false);
+    general.add_bool_option(
+        tooie::jiggy_dance::option,
+        "Back-Port: Get Jiggy Animation",
+        "Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy.",
+        false);
+    tooie::torch_enemy::add_option(general);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(
         tooie::discord::presence_option,
