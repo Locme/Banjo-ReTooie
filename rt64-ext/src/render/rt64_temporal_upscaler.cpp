@@ -44,7 +44,12 @@ namespace RT64 {
         std::atomic<bool> cameraFresh{ false };
         std::atomic<uint32_t> renderWidth{ 640 };
         std::atomic<uint32_t> renderHeight{ 480 };
-        constexpr uint32_t JitterPhases = 16;
+        // 32 phases: FSR asks for 8 times the square of the upscale ratio, 18 for 1.5x and 32 for 2x.
+        constexpr uint32_t JitterPhases = 32;
+        // The camera's planes and field of view, from the last projection worked out, for FSR.
+        std::atomic<float> cameraNear{ 1.0f };
+        std::atomic<float> cameraFar{ 1000.0f };
+        std::atomic<float> cameraFov{ 1.0f };
 
         // The Halton sequence (base b) at index i, in [0, 1).
         float halton(uint32_t i, uint32_t b) {
@@ -166,11 +171,29 @@ namespace RT64 {
                 const float b = (0.5f - cur.depthTranslate) / cur.depthScale;
                 t = interop::float4{ t.x - b * t.z, t.y - b * t.w, a * t.z, a * t.w };
             }
+            // The near and far planes of a standard perspective projection, for the upscalers that want them.
+            {
+                const float a = curRow ? curProj[2 * 4 + 2] : curProj[2 * 4 + 2];
+                const float b = curRow ? curProj[3 * 4 + 2] : curProj[2 * 4 + 3];
+                const float nearPlane = (std::abs(a - 1.0f) > 1e-6f) ? b / (a - 1.0f) : 1.0f;
+                const float farPlane = (std::abs(a + 1.0f) > 1e-6f) ? b / (a + 1.0f) : 1000.0f;
+                if ((nearPlane > 0.0f) && (farPlane > nearPlane)) {
+                    cameraNear = nearPlane;
+                    cameraFar = farPlane;
+                }
+                cameraFov = 2.0f * std::atan(1.0f / std::max(std::abs(curProj[5]), 1e-3f));
+            }
             depthTerms = t;
             projX = curProj[0];
             projY = curProj[5];
             return true;
         }
+    }
+
+    void UpscalerCameraRange(float &nearPlane, float &farPlane, float &fovY) {
+        nearPlane = cameraNear.load();
+        farPlane = cameraFar.load();
+        fovY = cameraFov.load();
     }
 
     void SetUpscalerMode(uint32_t mode) {
@@ -189,7 +212,7 @@ namespace RT64 {
         // Only the built-in resolve (8) enlarges so far; the other choices have no backend yet and must not render small.
         // (Off, FSR 4 native AA and DLAA will always keep the window's size.)
         const uint32_t mode = upscalerMode.load();
-        if ((mode != 8) && (mode != 3)) {
+        if ((mode != 8) && (mode != 3) && (mode != 1) && (mode != 7)) {
             return 1.0f;
         }
         static const float fractions[4] = { 0.667f, 0.58f, 0.5f, 0.333f };
@@ -198,7 +221,7 @@ namespace RT64 {
 
     bool UpscalerWanted() {
         const uint32_t mode = upscalerMode.load();
-        return (mode == 8) || (mode == 3) || (mode == 4);
+        return (mode == 8) || (mode == 3) || (mode == 4) || (mode == 1) || (mode == 2) || (mode == 7);
     }
 
     bool UpscalerJitterActive() {
@@ -354,7 +377,7 @@ namespace RT64 {
         // DLSS wants a real float depth, not the packed copy.
         depthFloatValid = false;
         const uint32_t mode = GetUpscalerMode();
-        if (((mode == 3) || (mode == 4)) && !dlss.unavailable()) {
+        if ((((mode == 3) || (mode == 4)) && !dlss.unavailable()) || (((mode == 1) || (mode == 2) || (mode == 7)) && !ffx.unavailable())) {
             if ((depthFloatTexture == nullptr) || (depthFloatWidth != inputWidth) || (depthFloatHeight != inputHeight)) {
                 depthFloatFramebuffer.reset();
                 depthFloatTexture = device->createTexture(RenderTextureDesc::ColorTarget(inputWidth, inputHeight, RenderFormat::R32_FLOAT));
@@ -401,7 +424,9 @@ namespace RT64 {
 
         // DLSS and DLAA; if DLSS cannot run (no RTX card, no DLL) the built-in resolve below takes over.
         const uint32_t mode = GetUpscalerMode();
-        if (((mode == 3) || (mode == 4)) && depthFloatValid && !dlss.unavailable()) {
+        const bool useDlss = ((mode == 3) || (mode == 4)) && !dlss.unavailable();
+        const bool useFfx = ((mode == 1) || (mode == 2) || (mode == 7)) && !ffx.unavailable();
+        if ((useDlss || useFfx) && depthFloatValid) {
             if ((dlssOutput == nullptr) || (dlssOutputWidth != outputWidth) || (dlssOutputHeight != outputHeight)) {
                 dlssOutput = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format, RenderMultisampling(), nullptr, RenderTextureFlag::UNORDERED_ACCESS));
                 dlssOutput->setName("Upscaler DLSS Output");
@@ -424,8 +449,18 @@ namespace RT64 {
                 if (std::strchr(flipEnv, 'x') != nullptr) jitterX = -jitterX;
                 if (std::strchr(flipEnv, 'y') != nullptr) jitterY = -jitterY;
             }
-            if (dlss.evaluate(device, commandList, input, depthFloatTexture.get(), velocityTexture.get(), dlssOutput.get(), inputWidth, inputHeight,
-                outputWidth, outputHeight, jitterX, jitterY, reset || !historyValid, upscalerQuality.load(), mode == 4, shaderLibrary->usesHDR))
+            bool ran;
+            if (useDlss) {
+                ran = dlss.evaluate(device, commandList, input, depthFloatTexture.get(), velocityTexture.get(), dlssOutput.get(), inputWidth, inputHeight,
+                    outputWidth, outputHeight, jitterX, jitterY, reset || !historyValid, upscalerQuality.load(), mode == 4, shaderLibrary->usesHDR);
+            }
+            else {
+                float nearPlane, farPlane, fovY;
+                UpscalerCameraRange(nearPlane, farPlane, fovY);
+                ran = ffx.evaluate(device, commandList, input, depthFloatTexture.get(), velocityTexture.get(), dlssOutput.get(), inputWidth, inputHeight,
+                    outputWidth, outputHeight, jitterX, jitterY, reset || !historyValid, mode != 7, mode == 2, shaderLibrary->usesHDR, nearPlane, farPlane, fovY);
+            }
+            if (ran)
             {
                 if (reset) {
                     historyResets++;
@@ -435,13 +470,13 @@ namespace RT64 {
                 lastOutputWidth = outputWidth;
                 lastOutputHeight = outputHeight;
                 float jitterLog[4] = { jitterX, jitterY, 0.0f, 0.0f };
-                logUpscaler("resolve (DLSS)", mode, inputWidth, inputHeight, outputWidth, outputHeight, motionWasKnown, jitterLog, historyResets, false);
+                logUpscaler(useDlss ? "resolve (DLSS)" : "resolve (FSR)", mode, inputWidth, inputHeight, outputWidth, outputHeight, motionWasKnown, jitterLog, historyResets, false);
                 // The output goes on to be read as a texture.
                 RenderTextureBarrier readBarrier(dlssOutput.get(), RenderTextureLayout::SHADER_READ);
                 commandList->barriers(RenderBarrierStage::GRAPHICS, &readBarrier, 1);
                 return dlssOutput.get();
             }
-            // DLSS just failed (the reason is on the console): this frame and the rest use the built-in resolve.
+            // The backend just failed (the reason is on the console): this frame and the rest use the built-in resolve.
             reset = true;
             historyValid = false;
         }

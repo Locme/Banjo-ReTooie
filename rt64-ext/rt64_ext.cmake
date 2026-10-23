@@ -22,6 +22,7 @@ target_sources(rt64 PRIVATE
     ${RT64_EXT_DIR}/src/render/rt64_fsr.cpp
     ${RT64_EXT_DIR}/src/render/rt64_temporal_upscaler.cpp
     ${RT64_EXT_DIR}/src/render/rt64_dlss.cpp
+    ${RT64_EXT_DIR}/src/render/rt64_ffx_upscaler.cpp
     ${RT64_EXT_DIR}/src/render/rt64_photo_grade.cpp
     ${RT64_EXT_DIR}/src/hle/rt64_present_queue_ext.cpp
     ${RT64_EXT_DIR}/src/render/rt64_texture_cache_ext.cpp
@@ -177,4 +178,11 @@ if(WIN32)
         target_link_libraries(rt64 PUBLIC ${RT64_EXT_NGX_LIB})
         target_compile_definitions(rt64 PRIVATE TOOIE_HAS_NGX=1)
     endif()
+endif()
+
+# AMD FSR 3 / FSR 4 (rt64_ffx_upscaler.cpp, Windows only): the FidelityFX API headers are in third-party/amd-fsr (AMD's
+# licence, LICENSE.txt, which must go with the DLLs); the DLLs are loaded at run time, so nothing is linked.
+if(WIN32)
+    target_include_directories(rt64 PRIVATE ${PROJECT_SOURCE_DIR}/third-party/amd-fsr)
+    target_compile_definitions(rt64 PRIVATE TOOIE_HAS_FFX=1)
 endif()

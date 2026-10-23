@@ -11,10 +11,12 @@
 #include "rt64_descriptor_sets.h"
 #include "rt64_shader_library.h"
 #include "rt64_dlss.h"
+#include "rt64_ffx_upscaler.h"
 
 namespace RT64 {
     // Banjo-Tooie: the temporal upscaler chosen in Graphics (src/display/upscaler.cpp).
     // Mode: 0 off, 1 FSR 4, 2 FSR 4 native AA, 3 DLSS, 4 DLAA, 5 Arm ASR, 6 Snapdragon GSR (Android), 7 FSR 3, 8 the built-in temporal resolve.
+    // 1 to 4 and 7 run in AMD's and NVIDIA's DLLs (Windows) and fall back to 8 when the DLL or card cannot do it.
     void SetUpscalerMode(uint32_t mode);
     uint32_t GetUpscalerMode();
 
@@ -43,6 +45,9 @@ namespace RT64 {
     void SetUpscalerCamera(const float projection[16], const float view[16], const float prevProjection[16], const float prevView[16],
         float depthScale, float depthTranslate, uint32_t width, uint32_t height);
 
+    // The camera's near and far planes and vertical field of view (radians), from the last projection seen.
+    void UpscalerCameraRange(float &nearPlane, float &farPlane, float &fovY);
+
     struct UpscalerRenderer {
         std::unique_ptr<RenderTexture> velocityTexture;
         std::unique_ptr<RenderFramebuffer> velocityFramebuffer;
@@ -69,6 +74,7 @@ namespace RT64 {
         std::unique_ptr<RenderFramebuffer> depthFloatFramebuffer;
         std::unique_ptr<RenderTexture> dlssOutput;
         DlssBackend dlss;
+        FfxBackend ffx;
         bool depthFloatValid = false;
         uint32_t depthFloatWidth = 0;
         uint32_t depthFloatHeight = 0;
