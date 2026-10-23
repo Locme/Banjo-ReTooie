@@ -402,6 +402,18 @@ index c20fb51..d9e9256 100644
      }
  
      hlslpp::float4x4 matrixTranslation(const hlslpp::float3 &t) {
+diff --git a/src/contrib/plume b/src/contrib/plume
+--- a/src/contrib/plume
++++ b/src/contrib/plume
+@@ -1 +1 @@
+-Subproject commit d890ac899e505fb30040e037a4037cdeca68f033
++Subproject commit d890ac899e505fb30040e037a4037cdeca68f033-dirty
+diff --git a/src/contrib/re-spirv b/src/contrib/re-spirv
+--- a/src/contrib/re-spirv
++++ b/src/contrib/re-spirv
+@@ -1 +1 @@
+-Subproject commit 5d6b756ee62760f71b65d37e41a0b5a3dab90507
++Subproject commit 5d6b756ee62760f71b65d37e41a0b5a3dab90507-dirty
 diff --git a/src/gbi/rt64_gbi_extended.cpp b/src/gbi/rt64_gbi_extended.cpp
 index 20c0d4d..c1f4899 100644
 --- a/src/gbi/rt64_gbi_extended.cpp
@@ -620,10 +632,10 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..7afa390 100644
+index 3227ab1..c16ee7e 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
-@@ -4,10 +4,17 @@
+@@ -4,10 +4,18 @@
  
  #include "rt64_present_queue.h"
  
@@ -638,10 +650,11 @@ index 3227ab1..7afa390 100644
  
  #include "rt64_workload_queue.h"
 +#include "rt64_vi.h"
++#include "render/rt64_scene_effects.h"
  
  namespace RT64 {
      // PresentQueue
-@@ -40,9 +47,14 @@ namespace RT64 {
+@@ -40,9 +48,14 @@ namespace RT64 {
  
          // Stall the thread until the barrier is lifted if we're trying to write on a present being used by the GPU.
          bool waitForBarrier;
@@ -657,7 +670,7 @@ index 3227ab1..7afa390 100644
          } while (waitForBarrier);
  
          // Modify the cursor and notify anything waiting on the queue.
-@@ -51,6 +63,11 @@ namespace RT64 {
+@@ -51,6 +64,11 @@ namespace RT64 {
              writeCursor = nextWriteCursor;
          }
  
@@ -669,7 +682,7 @@ index 3227ab1..7afa390 100644
          cursorCondition.notify_all();
      }
  
-@@ -87,6 +104,11 @@ namespace RT64 {
+@@ -87,6 +105,12 @@ namespace RT64 {
          this->ext = ext;
  
          viRenderer = std::make_unique<VIRenderer>();
@@ -678,10 +691,11 @@ index 3227ab1..7afa390 100644
 +        mirrorRenderer = std::make_unique<MirrorRenderer>();
 +        fsrRenderer = std::make_unique<FsrRenderer>();
 +        photoGradeRenderer = std::make_unique<PhotoGradeRenderer>();
++        upscalerRenderer = std::make_unique<UpscalerRenderer>();
  
          presentThreadRunning = true;
          presentThread = new std::thread(&PresentQueue::threadLoop, this);
-@@ -115,6 +137,7 @@ namespace RT64 {
+@@ -115,6 +139,7 @@ namespace RT64 {
          }
  
          RenderTarget *colorTarget = nullptr;
@@ -689,7 +703,7 @@ index 3227ab1..7afa390 100644
          int32_t framesToPresent = 1;
          bool lockedWorkloadMutex = false;
          InterpolatedFrameCounters &frameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
-@@ -135,10 +158,18 @@ namespace RT64 {
+@@ -135,10 +160,18 @@ namespace RT64 {
              }
          }
  
@@ -709,7 +723,7 @@ index 3227ab1..7afa390 100644
              Framebuffer *viFb = nullptr;
              if (!viewRDRAM) {
                  viFb = fbManager.find(present.screenVI.fbAddress());
-@@ -155,7 +186,13 @@ namespace RT64 {
+@@ -155,7 +188,13 @@ namespace RT64 {
              }
              
              if ((presentFb != nullptr) && (viFb != nullptr)) {
@@ -723,7 +737,7 @@ index 3227ab1..7afa390 100644
                      Framebuffer *colorFb = fbManager.find(colorAddress);
                      if (colorFb == nullptr) {
                          continue;
-@@ -186,10 +223,10 @@ namespace RT64 {
+@@ -186,10 +225,10 @@ namespace RT64 {
                      }
                  }
  
@@ -736,7 +750,7 @@ index 3227ab1..7afa390 100644
                      lockedWorkloadMutex = true;
                      ext.sharedResources->workloadMutex.lock();
                  }
-@@ -212,11 +249,36 @@ namespace RT64 {
+@@ -212,11 +251,39 @@ namespace RT64 {
                      colorTarget = nullptr;
                  }
  
@@ -744,14 +758,17 @@ index 3227ab1..7afa390 100644
 +                // game's depth buffer, copied to a color target with RT64's own depth-to-color copy (which
 +                // also takes the closest of an MSAA pixel's samples).
 +                const PhotoGradeSettings photoSettings = GetPhotoGrade();
-+                if ((colorTarget != nullptr) && photoSettings.enabled && (photoSettings.dofStrength > 0.0f) && (photoSettings.depthAddress != 0)) {
-+                    Framebuffer *depthFb = fbManager.find(photoSettings.depthAddress);
++                // Banjo-Tooie: the temporal upscalers need it too (the scene effects know the game's depth buffer's address).
++                const uint32_t depthAddress = (photoSettings.enabled && (photoSettings.dofStrength > 0.0f) && (photoSettings.depthAddress != 0)) ? photoSettings.depthAddress :
++                    ((GetUpscalerMode() > 0) ? GetSceneEffects().depthAddress : 0);
++                if ((colorTarget != nullptr) && (depthAddress != 0)) {
++                    Framebuffer *depthFb = fbManager.find(depthAddress);
 +                    if (depthFb != nullptr) {
 +                        RenderTargetKey depthTargetKey(depthFb->addressStart, depthFb->width, depthFb->siz, Framebuffer::Type::Depth);
 +                        RenderTarget &depthTarget = targetManager.get(depthTargetKey, true);
 +                        if (!depthTarget.isEmpty() && (depthTarget.width == colorTarget->width) && (depthTarget.height == colorTarget->height)) {
 +                            if ((photoDepthTarget == nullptr) || (photoDepthTarget->multisampling.sampleCount != targetManager.multisampling.sampleCount)) {
-+                                photoDepthTarget = std::make_unique<RenderTarget>(photoSettings.depthAddress, Framebuffer::Type::Color, targetManager.multisampling, targetManager.usesHDR);
++                                photoDepthTarget = std::make_unique<RenderTarget>(depthAddress, Framebuffer::Type::Color, targetManager.multisampling, targetManager.usesHDR);
 +                            }
 +
 +                            RenderWorkerExecution workerExecution(ext.presentGraphicsWorker);
@@ -774,7 +791,7 @@ index 3227ab1..7afa390 100644
                  uint32_t fbAddress = present.screenVI.fbAddress();
  
                  // Use a scratch framebuffer to upload the RAM to the render target.
-@@ -266,6 +328,8 @@ namespace RT64 {
+@@ -266,6 +333,8 @@ namespace RT64 {
              }
          }
          
@@ -783,7 +800,7 @@ index 3227ab1..7afa390 100644
          for (int32_t i = 0; i < framesToPresent; i++) {
              uint32_t frameCountersNextPresented = 0;
              if ((framesToPresent > 1) && (usingMSAA || (i > 0))) {
-@@ -293,7 +357,7 @@ namespace RT64 {
+@@ -293,7 +362,7 @@ namespace RT64 {
                      colorTarget = nullptr;
                  }
              }
@@ -792,7 +809,7 @@ index 3227ab1..7afa390 100644
                  frameCountersNextPresented = frameCounters.count;
              }
  
-@@ -310,6 +374,8 @@ namespace RT64 {
+@@ -310,6 +379,8 @@ namespace RT64 {
                  RenderCommandList *commandList = ext.presentGraphicsWorker->commandList.get();
                  commandList->begin();
                  commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::COLOR_WRITE));
@@ -801,7 +818,7 @@ index 3227ab1..7afa390 100644
                  
                  VIRenderer::RenderParams renderParams;
                  if (colorTarget != nullptr) {
-@@ -339,17 +405,115 @@ namespace RT64 {
+@@ -339,17 +410,161 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -832,6 +849,13 @@ index 3227ab1..7afa390 100644
 +                if (renderParams.texture != nullptr) {
 +                    renderParams.texture = mirrorRenderer->apply(ext.device, commandList, ext.shaderLibrary, renderParams.texture,
 +                        renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight);
++                }
++
++                // Banjo-Tooie: the temporal upscalers' camera motion, from the depth, at the game's resolution.
++                if ((renderParams.texture != nullptr) && (GetUpscalerMode() > 0) && (colorTarget != nullptr) && (renderParams.textureWidth == colorTarget->width) && (photoDepthTexture != nullptr)) {
++                    GpuSectionScope timed(presentSections, GpuSection::PhotoFilters, commandList);
++                    renderParams.texture = upscalerRenderer->velocity(ext.device, commandList, ext.shaderLibrary, renderParams.texture,
++                        renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight, photoDepthTexture);
 +                }
 +
 +                // Banjo-Tooie: photo mode's filters, so screenshots show them (without the grid).
@@ -880,8 +904,47 @@ index 3227ab1..7afa390 100644
 +
 +                // Banjo-Tooie: FSR 1, when it's on and the game renders below the window's resolution, upscales
 +                // the image to it (after screenshots and photo effects, which stay at the game's resolution).
++                // Banjo-Tooie: the built-in temporal resolve, in FSR 1's place: the jittered game image made into the window's size
++                // (or the same size, as anti-aliasing) from this frame and the ones before.
++                if ((renderParams.texture != nullptr) && UpscalerWanted() && (renderParams.vi != nullptr)) {
++                    const float hdHeight = 240.0f * renderParams.resolutionScale.y / float(std::max(renderParams.downsamplingScale, 1U));
++                    const float scale = std::clamp(float(ext.swapChain->getHeight()) / std::max(hdHeight, 1.0f), 1.0f, 4.0f);
++                    const uint32_t outputWidth = (scale > 1.05f) ? uint32_t(std::lround(renderParams.textureWidth * scale)) : renderParams.textureWidth;
++                    const uint32_t outputHeight = (scale > 1.05f) ? uint32_t(std::lround(renderParams.textureHeight * scale)) : renderParams.textureHeight;
++                    GpuSectionScope timed(presentSections, GpuSection::Fsr, commandList);
++                    // With the HUD kept out of the upscale, the upscaler is given the 3D world alone and the HUD is added after.
++                    RenderTexture *worldSnapshot = UpscalerWorldSnapshot(renderParams.textureWidth, renderParams.textureHeight);
++                    RenderTexture *resolveInput = (worldSnapshot != nullptr) ? worldSnapshot : renderParams.texture;
++                    RenderTexture *resolved = upscalerRenderer->resolve(ext.device, commandList, ext.shaderLibrary, resolveInput,
++                        renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight, outputWidth, outputHeight);
++                    SetUpscalerOutputSize(outputWidth, outputHeight);
++                    RenderTexture *hudBlack = nullptr;
++                    RenderTexture *hudWhite = nullptr;
++                    const bool hudLayers = (worldSnapshot != nullptr) && UpscalerHudLayers(outputWidth, outputHeight, hudBlack, hudWhite);
++                    if ((resolved != resolveInput) && hudLayers) {
++                        resolved = upscalerRenderer->composeHudLayers(ext.device, commandList, ext.shaderLibrary, resolved, hudBlack, hudWhite,
++                            renderParams.textureFormat, outputWidth, outputHeight);
++                    }
++                    else if ((resolved != resolveInput) && (worldSnapshot != nullptr)) {
++                        resolved = upscalerRenderer->composeHud(ext.device, commandList, ext.shaderLibrary, resolved, worldSnapshot, renderParams.texture,
++                            renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight, outputWidth, outputHeight);
++                    }
++                    else if (resolved == resolveInput) {
++                        resolved = renderParams.texture;
++                    }
++                    if (resolved == renderParams.texture) {
++                        timed.drop();
++                    }
++                    else {
++                        renderParams.texture = resolved;
++                        renderParams.resolutionScale *= hlslpp::float2(float(outputWidth) / float(renderParams.textureWidth), float(outputHeight) / float(renderParams.textureHeight));
++                        renderParams.textureWidth = outputWidth;
++                        renderParams.textureHeight = outputHeight;
++                    }
++                }
++
 +                // The VI then sees a larger image with a matching resolution scale.
-+                if ((renderParams.texture != nullptr) && (GetFsrMode() > 0) && (renderParams.vi != nullptr)) {
++                if ((renderParams.texture != nullptr) && (GetFsrMode() > 0) && !UpscalerWanted() && (renderParams.vi != nullptr)) {
 +                    const float hdHeight = 240.0f * renderParams.resolutionScale.y / float(std::max(renderParams.downsamplingScale, 1U));
 +                    const float scale = std::min(float(ext.swapChain->getHeight()) / std::max(hdHeight, 1.0f), 4.0f);
 +                    if (scale > 1.05f) {
@@ -917,7 +980,7 @@ index 3227ab1..7afa390 100644
                      drawHook(commandList, swapChainFramebuffer);
                  }
  
-@@ -360,12 +524,18 @@ namespace RT64 {
+@@ -360,12 +575,18 @@ namespace RT64 {
                      }
                      
                      commandList->barriers(RenderBarrierStage::NONE, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::PRESENT));
@@ -936,7 +999,7 @@ index 3227ab1..7afa390 100644
                  }
              }
  
-@@ -384,14 +554,16 @@ namespace RT64 {
+@@ -384,14 +605,16 @@ namespace RT64 {
              }
  
              // As soon as we're done with the first render target, we notify the workload queue it can proceed.
@@ -954,7 +1017,7 @@ index 3227ab1..7afa390 100644
                  }
  
                  if (presentWaitEnabled) {
-@@ -400,8 +572,48 @@ namespace RT64 {
+@@ -400,8 +623,48 @@ namespace RT64 {
  
                  RenderCommandSemaphore *waitSemaphore = drawSemaphores[swapChainIndex].get();
                  presentTimestamp = Timer::current();
@@ -1004,7 +1067,7 @@ index 3227ab1..7afa390 100644
              }
          }
      }
-@@ -428,6 +640,7 @@ namespace RT64 {
+@@ -428,6 +691,7 @@ namespace RT64 {
      void PresentQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % presents.size();
@@ -1012,7 +1075,7 @@ index 3227ab1..7afa390 100644
      }
  
      void PresentQueue::threadLoop() {
-@@ -449,22 +662,61 @@ namespace RT64 {
+@@ -449,22 +713,61 @@ namespace RT64 {
          uint32_t displayTimingRate = UINT32_MAX;
          const bool displayTiming = ext.device->getCapabilities().displayTiming;
          bool swapChainValid = !ext.swapChain->needsResize();
@@ -1078,7 +1141,7 @@ index 3227ab1..7afa390 100644
                  const bool needsResize = ext.swapChain->needsResize() || !swapChainValid;
                  if (needsResize) {
                      ext.presentGraphicsWorker->commandList->begin();
-@@ -504,13 +756,16 @@ namespace RT64 {
+@@ -504,13 +807,16 @@ namespace RT64 {
                  skipPresent = skipPresent || ext.swapChain->isEmpty();
  
                  Present &present = presents[processCursor];
@@ -1095,7 +1158,7 @@ index 3227ab1..7afa390 100644
                      skipInterpolation();
                      notifyPresentId(present);
                  }
-@@ -518,6 +773,15 @@ namespace RT64 {
+@@ -518,6 +824,15 @@ namespace RT64 {
                      threadPresent(present, swapChainValid);
                  }
  
@@ -1111,7 +1174,7 @@ index 3227ab1..7afa390 100644
                  if (!present.paused) {
                      if (!present.fbOperations.empty()) {
                          const std::scoped_lock lock(screenFbChangePoolMutex);
-@@ -528,6 +792,7 @@ namespace RT64 {
+@@ -528,6 +843,7 @@ namespace RT64 {
                      threadAdvanceBarrier();
                  }
  
@@ -1120,7 +1183,7 @@ index 3227ab1..7afa390 100644
              }
          }
 diff --git a/src/hle/rt64_present_queue.h b/src/hle/rt64_present_queue.h
-index e08b02c..b8b2a67 100644
+index e08b02c..28a114b 100644
 --- a/src/hle/rt64_present_queue.h
 +++ b/src/hle/rt64_present_queue.h
 @@ -4,9 +4,13 @@
@@ -1145,7 +1208,7 @@ index e08b02c..b8b2a67 100644
          uint64_t presentId;
          std::mutex presentIdMutex;
          std::condition_variable presentIdCondition;
-@@ -52,10 +57,23 @@ namespace RT64 {
+@@ -52,10 +57,24 @@ namespace RT64 {
          std::unique_ptr<RenderCommandSemaphore> acquiredSemaphore;
          std::vector<std::unique_ptr<RenderCommandSemaphore>> drawSemaphores;
          std::unique_ptr<VIRenderer> viRenderer;
@@ -1154,6 +1217,7 @@ index e08b02c..b8b2a67 100644
 +        std::unique_ptr<MirrorRenderer> mirrorRenderer;
 +        std::unique_ptr<FsrRenderer> fsrRenderer;
 +        std::unique_ptr<PhotoGradeRenderer> photoGradeRenderer;
++        std::unique_ptr<UpscalerRenderer> upscalerRenderer;
 +        // Banjo-Tooie: the scene's depth copied to a color target for photo mode's depth of field.
 +        std::unique_ptr<RenderTarget> photoDepthTarget;
          std::unique_ptr<Inspector> inspector;
@@ -1169,7 +1233,7 @@ index e08b02c..b8b2a67 100644
          bool presentWaitEnabled = false;
  
          PresentQueue();
-@@ -68,6 +86,7 @@ namespace RT64 {
+@@ -68,6 +87,7 @@ namespace RT64 {
          void waitForPresentId(uint64_t waitId);
          void setup(const External &ext);
          void threadPresent(const Present &present, bool &swapChainValid);
@@ -1617,10 +1681,10 @@ index 8ea27d5..50ebf26 100644
          std::vector<uint16_t> worldIndices;
          std::vector<uint16_t> fogIndices;
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..f90a38f 100644
+index 5a331aa..d35b544 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
-@@ -4,9 +4,13 @@
+@@ -4,9 +4,14 @@
  
  #include "rt64_workload_queue.h"
  
@@ -1631,10 +1695,11 @@ index 5a331aa..f90a38f 100644
  #include "rt64_present_queue.h"
 +#include "render/rt64_gpu_sections.h"
 +#include "render/rt64_scene_effects.h"
++#include "render/rt64_temporal_upscaler.h"
  
  #define ENABLE_HIGH_RESOLUTION_RENDERER 1
  
-@@ -52,9 +56,14 @@ namespace RT64 {
+@@ -52,9 +57,14 @@ namespace RT64 {
  
          // Stall the thread until the barrier is lifted if we're trying to write on a workload being used by the GPU.
          bool waitForBarrier;
@@ -1650,7 +1715,7 @@ index 5a331aa..f90a38f 100644
          } while (waitForBarrier);
  
          // Modify the cursor and notify anything waiting on the queue.
-@@ -101,6 +110,7 @@ namespace RT64 {
+@@ -101,6 +111,7 @@ namespace RT64 {
          rspProcessor = std::make_unique<RSPProcessor>(ext.device);
          vertexProcessor = std::make_unique<VertexProcessor>(ext.device);
          framebufferRenderer = std::make_unique<FramebufferRenderer>(ext.workloadGraphicsWorker, true, ext.createdGraphicsAPI, ext.shaderLibrary);
@@ -1658,7 +1723,19 @@ index 5a331aa..f90a38f 100644
          renderFramebufferManager = std::make_unique<RenderFramebufferManager>(ext.device);
          queryPool = ext.device->createQueryPool(2);
  
-@@ -301,6 +311,14 @@ namespace RT64 {
+@@ -189,6 +200,11 @@ namespace RT64 {
+         case UserConfiguration::Resolution::WindowIntegerScale:
+             if (ext.sharedResources->swapChainHeight > 0) {
+                 resolutionMultiplier = std::max(float((ext.sharedResources->swapChainHeight + referenceHeight - 1) / referenceHeight), 1.0f);
++                // Banjo-Tooie: with a temporal upscaler on, Auto renders at a fraction of the window and the upscaler makes up the rest.
++                const float renderFraction = UpscalerRenderFraction();
++                if (renderFraction < 1.0f) {
++                    resolutionMultiplier = std::max(float(ext.sharedResources->swapChainHeight) * renderFraction / float(referenceHeight), 1.0f);
++                }
+             }
+             else {
+                 resolutionMultiplier = 1.0f;
+@@ -301,6 +317,14 @@ namespace RT64 {
          const bool usingMSAA = (targetManager.multisampling.sampleCount > 1);
  
          rendererCPUProfiler.start();
@@ -1673,7 +1750,7 @@ index 5a331aa..f90a38f 100644
  
          const bool aspectRatioAdjustment = (abs(workloadConfig.aspectRatioScale - 1.0f) > 1e-6f);
          const bool processProjections = aspectRatioAdjustment || prevFrame.matched|| curFrame.isDebuggerCameraEnabled(*this);
-@@ -387,7 +405,9 @@ namespace RT64 {
+@@ -387,7 +411,9 @@ namespace RT64 {
                  rspProcessor->process(rspParams);
              }
  
@@ -1684,7 +1761,7 @@ index 5a331aa..f90a38f 100644
              if (processWorldVertices) {
                  workload.resetWorldOutputBuffers();
  
-@@ -645,6 +665,8 @@ namespace RT64 {
+@@ -645,6 +671,8 @@ namespace RT64 {
                  gameCallCursor += fbPair.gameCallCount;
              }
  
@@ -1693,7 +1770,7 @@ index 5a331aa..f90a38f 100644
              // Create all GPU tile mappings and upload them.
              if (!workload.drawData.gpuTiles.empty()) {
                  std::pair<size_t, size_t> gpuTileRange;
-@@ -701,7 +723,11 @@ namespace RT64 {
+@@ -701,7 +729,11 @@ namespace RT64 {
              ext.workloadGraphicsWorker->commandList->begin();
              ext.workloadGraphicsWorker->commandList->resetQueryPool(queryPool.get(), 0, 2);
              ext.workloadGraphicsWorker->commandList->writeTimestamp(queryPool.get(), 0);
@@ -1705,7 +1782,7 @@ index 5a331aa..f90a38f 100644
              framebufferRenderer->recordSetup(ext.workloadGraphicsWorker, bufferUploaders, processRSP ? rspProcessor.get() : nullptr, processWorldVertices ? vertexProcessor.get() : nullptr, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              
              // Record all framebuffer pairs.
-@@ -789,6 +815,11 @@ namespace RT64 {
+@@ -789,6 +821,11 @@ namespace RT64 {
                          }
                      }
                      
@@ -1717,7 +1794,7 @@ index 5a331aa..f90a38f 100644
                      framebufferRenderer->recordFramebuffer(ext.workloadGraphicsWorker, framebufferIndex++);
  
                      // Transition the render targets in case the present queue will show them so it doesn't have to perform transitions.
-@@ -837,17 +868,23 @@ namespace RT64 {
+@@ -837,17 +874,23 @@ namespace RT64 {
                      fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
@@ -1741,7 +1818,7 @@ index 5a331aa..f90a38f 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -858,6 +895,8 @@ namespace RT64 {
+@@ -858,6 +901,8 @@ namespace RT64 {
          }
  
          framebufferRenderer->advanceFrame(workloadConfig.raytracingEnabled);
@@ -1750,7 +1827,7 @@ index 5a331aa..f90a38f 100644
          rendererCPUProfiler.end();
          rendererCPUProfiler.log();
          rendererCPUProfiler.reset();
-@@ -867,6 +906,7 @@ namespace RT64 {
+@@ -867,6 +912,7 @@ namespace RT64 {
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();
@@ -1771,7 +1848,7 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..68a2610 100644
+index 69a82ac..d17896a 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
 @@ -212,6 +212,13 @@ namespace RT64 {
@@ -1807,7 +1884,7 @@ index 69a82ac..68a2610 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +678,192 @@ namespace RT64 {
+@@ -659,6 +678,195 @@ namespace RT64 {
          }
      };
  
@@ -1869,6 +1946,8 @@ index 69a82ac..68a2610 100644
 +        uint32_t gLights = 0;
 +        // The world radiance cache the traced effects remember colours in (SceneEffectsPS.hlsl gRadianceCache).
 +        uint32_t gRadianceCache = 0;
++        // The dust clouds (SceneEffectsPS.hlsl gDust, Graphics > Volumetric Dust), bound with or without ray queries.
++        uint32_t gDust = 0;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, bool rayQuery, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -1883,6 +1962,7 @@ index 69a82ac..68a2610 100644
 +            gFireflies = builder.addTexture(10);
 +            gColorHalf = builder.addTexture(11);
 +            gIndirect = builder.addTexture(12);
++            gDust = builder.addByteAddressBuffer(16);
 +            if (rayQuery) {
 +                gSceneBVH = builder.addAccelerationStructure(13);
 +                gLights = builder.addByteAddressBuffer(14);
@@ -2001,10 +2081,10 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..786f61c 100644
+index 9fae0d4..b1c9c43 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
-@@ -3,6 +3,21 @@
+@@ -3,6 +3,22 @@
  //
  
  #include "rt64_framebuffer_renderer.h"
@@ -2022,11 +2102,12 @@ index 9fae0d4..786f61c 100644
 +#include <cstring>
 +#include <unordered_map>
 +#include "rt64_scene_effects.h"
++#include "rt64_temporal_upscaler.h"
 +#include "hle/rt64_present_queue_ext.h"
  
  #include "../include/rt64_extended_gbi.h"
  
-@@ -12,8 +27,10 @@
+@@ -12,8 +28,10 @@
  #include "gbi/rt64_f3d.h"
  #include "shared/rt64_framebuffer_params.h"
  #include "shared/rt64_raster_params.h"
@@ -2037,7 +2118,7 @@ index 9fae0d4..786f61c 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +142,626 @@ namespace RT64 {
+@@ -125,6 +143,626 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -2664,7 +2745,7 @@ index 9fae0d4..786f61c 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -151,6 +788,7 @@ namespace RT64 {
+@@ -151,6 +789,7 @@ namespace RT64 {
  
          shaderUploader = std::make_unique<BufferUploader>(worker->device);
          descCommonSet = std::make_unique<FramebufferRendererDescriptorCommonSet>(shaderLibrary->samplerLibrary, worker->device->getCapabilities().raytracing, worker->device);
@@ -2672,7 +2753,7 @@ index 9fae0d4..786f61c 100644
  
  #   if RT_ENABLED
          if (rtSupport) {
-@@ -169,11 +807,91 @@ namespace RT64 {
+@@ -169,11 +808,91 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2764,7 +2845,7 @@ index 9fae0d4..786f61c 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +937,7 @@ namespace RT64 {
+@@ -219,6 +938,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2772,7 +2853,7 @@ index 9fae0d4..786f61c 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +969,7 @@ namespace RT64 {
+@@ -250,6 +970,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2780,7 +2861,7 @@ index 9fae0d4..786f61c 100644
                  }
              }
              else {
-@@ -272,6 +992,9 @@ namespace RT64 {
+@@ -272,6 +993,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2790,7 +2871,7 @@ index 9fae0d4..786f61c 100644
              }
          }
      }
-@@ -373,6 +1096,15 @@ namespace RT64 {
+@@ -373,6 +1097,15 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2806,7 +2887,7 @@ index 9fae0d4..786f61c 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +1175,14 @@ namespace RT64 {
+@@ -443,6 +1176,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2821,7 +2902,7 @@ index 9fae0d4..786f61c 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +1205,85 @@ namespace RT64 {
+@@ -465,12 +1206,85 @@ namespace RT64 {
          return true;
      }
      
@@ -2909,7 +2990,30 @@ index 9fae0d4..786f61c 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +1312,16 @@ namespace RT64 {
+@@ -484,7 +1298,21 @@ namespace RT64 {
+             worker->commandList->setGraphicsDescriptorSet(descTextureSet->get(), 1);
+             worker->commandList->setGraphicsDescriptorSet(descTextureSet->get(), 2);
+             worker->commandList->setGraphicsDescriptorSet(depthState ? descRealFbSet : descDummyFbSet, 3);
+-            worker->commandList->setViewports(framebuffer.viewport);
++            RenderViewport viewport = framebuffer.viewport;
++            viewport.x *= hudScaleX;
++            viewport.y *= hudScaleY;
++            viewport.width *= hudScaleX;
++            viewport.height *= hudScaleY;
++            worker->commandList->setViewports(viewport);
++        };
++
++        // Banjo-Tooie: a rectangle of the game's target in the larger HUD target's pixels.
++        auto hudScaled = [&](const RenderRect &r) {
++            if ((hudScaleX == 1.0f) && (hudScaleY == 1.0f)) {
++                return r;
++            }
++            return RenderRect(int32_t(std::floor(float(r.left) * hudScaleX)), int32_t(std::floor(float(r.top) * hudScaleY)),
++                int32_t(std::ceil(float(r.right) * hudScaleX)), int32_t(std::ceil(float(r.bottom) * hudScaleY)));
+         };
+ 
+         auto switchToDepthRead = [&]() {
+@@ -499,6 +1327,16 @@ namespace RT64 {
              }
          };
  
@@ -2926,7 +3030,7 @@ index 9fae0d4..786f61c 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +1337,17 @@ namespace RT64 {
+@@ -514,6 +1352,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2944,7 +3048,7 @@ index 9fae0d4..786f61c 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -561,8 +1395,16 @@ namespace RT64 {
+@@ -561,8 +1410,17 @@ namespace RT64 {
                      switchToDepthWrite();
                  }
  
@@ -2953,17 +3057,18 @@ index 9fae0d4..786f61c 100644
 +                mirrorWidth = (mirrorTargetWidth > 0) && (mirrorHud || ((i < instanceMirrorHudVector.size()) && (instanceMirrorHudVector[i] != 0))) ? mirrorTargetWidth : 0;
 +                if ((previousScissor != triangles.scissor) || (previousFlip != (mirrorWidth > 0))) {
 +                    previousFlip = (mirrorWidth > 0);
++                    const RenderRect scissor = hudScaled(triangles.scissor);
 +                    if (mirrorWidth > 0) {
 +                        const int32_t width = int32_t(mirrorWidth);
-+                        worker->commandList->setScissors(RenderRect(std::max(width - triangles.scissor.right, 0), triangles.scissor.top, std::max(width - triangles.scissor.left, 0), triangles.scissor.bottom));
++                        worker->commandList->setScissors(RenderRect(std::max(width - scissor.right, 0), scissor.top, std::max(width - scissor.left, 0), scissor.bottom));
 +                    }
 +                    else {
-+                        worker->commandList->setScissors(triangles.scissor);
++                        worker->commandList->setScissors(scissor);
 +                    }
                      previousScissor = triangles.scissor;
                  }
  
-@@ -574,12 +1416,200 @@ namespace RT64 {
+@@ -574,12 +1432,200 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -3165,15 +3270,22 @@ index 9fae0d4..786f61c 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1627,7 @@ namespace RT64 {
+@@ -597,10 +1643,12 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
 +                mark("game draws: fill");
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
-                 bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1647,7 @@ namespace RT64 {
+-                bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
+-                const RenderRect *clearRects = rectCoversWholeTarget ? nullptr : &clearRect.rect;
++                const RenderRect scaledClearRect = hudScaled(clearRect.rect);
++                bool rectCoversWholeTarget = (scaledClearRect.left == 0) && (scaledClearRect.top == 0) && (uint32_t(scaledClearRect.right) >= chosenTarget->width) && (uint32_t(scaledClearRect.bottom) >= chosenTarget->height);
++                const RenderRect *clearRects = rectCoversWholeTarget ? nullptr : &scaledClearRect;
+                 uint32_t clearRectCount = rectCoversWholeTarget ? 0 : 1;
+                 if (fbStorage->colorTarget != nullptr) {
+                     worker->commandList->clearColor(0, clearRect.color, clearRects, clearRectCount);
+@@ -616,6 +1664,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -3181,7 +3293,7 @@ index 9fae0d4..786f61c 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1246,10 +2278,76 @@ namespace RT64 {
+@@ -1246,23 +2295,119 @@ namespace RT64 {
          }
  
          startBarriers.emplace_back(RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE));
@@ -3194,6 +3306,49 @@ index 9fae0d4..786f61c 100644
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
+-        for (const auto &pair : targetDrawCall.sceneIndices) {
+-#       if RT_ENABLED
+-            if (pair.second) {
+-                const auto &rtScene = targetDrawCall.rtScenes[pair.first];
+-
+-                // Draw all the interleaved rasterized buffers that will be used in the render target.
+-                thread_local std::vector<RenderTextureBarrier> interleavedBarriers;
+-                interleavedBarriers.clear();
+-                for (uint32_t i = 0; i < interleavedRastersCount; i++) {
+-                    bool interleavedDepthState = false;
+-                    const uint32_t sceneIndex = rtScene.interleavedRasters[i].rasterSceneIndex;
+-                    RenderTarget *colorRenderTarget = rtResources->interleavedColorTargetVector[i].get();
+-                    RenderTarget *depthRenderTarget = rtResources->interleavedDepthTargetVector[i].get();
++        // Banjo-Tooie: the temporal upscalers want to know how the camera moved, whether or not the scene effects are on.
++        if ((GetUpscalerMode() > 0) && (colorTarget != nullptr) && (targetDrawCall.sceneEffectsAfter > 0) && (targetDrawCall.sceneEffectsDrawData != nullptr)) {
++            const DrawData *cameraData = targetDrawCall.sceneEffectsDrawData;
++            const uint32_t cameraIndex = targetDrawCall.sceneEffectsTransformsIndex;
++            if (cameraIndex < cameraData->viewTransforms.size()) {
++                const interop::float4x4 &cameraProjection = (cameraIndex < cameraData->modProjTransforms.size()) ? cameraData->modProjTransforms[cameraIndex] : cameraData->projTransforms[cameraIndex];
++                const interop::float4x4 &cameraView = (cameraIndex < cameraData->modViewTransforms.size()) ? cameraData->modViewTransforms[cameraIndex] : cameraData->viewTransforms[cameraIndex];
++                const bool cameraViewport = (cameraIndex < cameraData->rspViewports.size());
++                // The frame before's matrices are the ones the projection processor kept (the same as these when the camera cut).
++                const bool cameraHasPrev = (cameraIndex < cameraData->prevViewTransforms.size()) && (cameraIndex < cameraData->prevProjTransforms.size());
++                const interop::float4x4 &cameraPrevProjection = cameraHasPrev ? cameraData->prevProjTransforms[cameraIndex] : cameraProjection;
++                const interop::float4x4 &cameraPrevView = cameraHasPrev ? cameraData->prevViewTransforms[cameraIndex] : cameraView;
++                // Letterboxed cutscenes draw the world in a viewport shorter than the target: the projection's y scale is
++                // narrowed to what it is over the whole target, as the scene effects do (see effectsProjection below).
++                interop::float4x4 cameraProjectionFull = cameraProjection;
++                interop::float4x4 cameraPrevProjectionFull = cameraPrevProjection;
++                if (cameraViewport && (colorTarget->height > 0)) {
++                    const float halfHeight = std::abs(cameraData->rspViewports[cameraIndex].scale.y) * targetDrawCall.sceneEffectsResScaleY;
++                    const float ratio = halfHeight / (float(colorTarget->height) * 0.5f);
++                    if ((ratio > 0.3f) && (ratio < 0.98f)) {
++                        for (int r = 0; r < 4; r++) {
++                            cameraProjectionFull.m[r][1] *= ratio;
++                            cameraPrevProjectionFull.m[r][1] *= ratio;
++                        }
++                    }
++                }
++                SetUpscalerCamera(&cameraProjectionFull.m[0][0], &cameraView.m[0][0], &cameraPrevProjectionFull.m[0][0], &cameraPrevView.m[0][0], cameraViewport ? cameraData->rspViewports[cameraIndex].scale.z : 0.5f,
++                    cameraViewport ? cameraData->rspViewports[cameraIndex].translate.z : 0.5f, colorTarget->width, colorTarget->height);
++            }
++        }
 +        const bool drawSceneEffects = sceneEffectsEnabled && (colorTarget != nullptr) && (targetDrawCall.sceneEffectsAfter > 0) && SceneEffectsWanted(depthTarget);
 +        // TOOIE_FX_LOG: on the frame buffer the effects read the depth of, why the effects were or weren't drawn.
 +        {
@@ -3255,17 +3410,27 @@ index 9fae0d4..786f61c 100644
 +                lastLog = now;
 +            }
 +        }
-         for (const auto &pair : targetDrawCall.sceneIndices) {
- #       if RT_ENABLED
-             if (pair.second) {
-@@ -1296,12 +2394,159 @@ namespace RT64 {
++        for (const auto &pair : targetDrawCall.sceneIndices) {
++#       if RT_ENABLED
++            if (pair.second) {
++                const auto &rtScene = targetDrawCall.rtScenes[pair.first];
++
++                // Draw all the interleaved rasterized buffers that will be used in the render target.
++                thread_local std::vector<RenderTextureBarrier> interleavedBarriers;
++                interleavedBarriers.clear();
++                for (uint32_t i = 0; i < interleavedRastersCount; i++) {
++                    bool interleavedDepthState = false;
++                    const uint32_t sceneIndex = rtScene.interleavedRasters[i].rasterSceneIndex;
++                    RenderTarget *colorRenderTarget = rtResources->interleavedColorTargetVector[i].get();
++                    RenderTarget *depthRenderTarget = rtResources->interleavedDepthTargetVector[i].get();
+                     worker->commandList->barriers(RenderBarrierStage::GRAPHICS, {
+                         RenderTextureBarrier(colorRenderTarget->texture.get(), RenderTextureLayout::COLOR_WRITE),
+                         RenderTextureBarrier(depthRenderTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE)
+@@ -1296,9 +2441,229 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
 -                submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState);
--            }
--        }
--    }
 +                // Mirror Mode: what comes after the 3D world of a frame that has one is the HUD.
 +                // A frame with no 3D world at all (a transition's black screen, menus) is all HUD: it is drawn unflipped.
 +                const bool mirrorHud = GetMirrorMode() && ((targetDrawCall.sceneEffectsAfter <= 0) || (int32_t(pair.first) >= targetDrawCall.sceneEffectsAfter));
@@ -3273,8 +3438,7 @@ index 9fae0d4..786f61c 100644
 +                if (beforeEffects) {
 +                    scenesBeforeEffects.push_back(pair.first);
 +                }
- 
--    void FramebufferRenderer::waitForUploaders() {
++
 +                submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState, beforeEffects ? ExcludedDraws::Skip : ExcludedDraws::All, mirrorHud);
 +
 +                // Banjo-Tooie: the screen-space effects, once the 3D world is drawn and before the HUD.
@@ -3344,6 +3508,19 @@ index 9fae0d4..786f61c 100644
 +                                casterRuns.emplace_back(triangles.indexStart, triangles.faceCount * 3);
 +                            }
 +                        }
++                        std::vector<std::pair<uint32_t, uint32_t>> reactiveRuns;
++                        for (uint32_t i : targetDrawCall.reactiveInstances) {
++                            const auto &triangles = instanceDrawCallVector[i].triangles;
++                            if (triangles.faceCount == 0) {
++                                continue;
++                            }
++                            if (!reactiveRuns.empty() && (reactiveRuns.back().first + reactiveRuns.back().second == triangles.indexStart)) {
++                                reactiveRuns.back().second += triangles.faceCount * 3;
++                            }
++                            else {
++                                reactiveRuns.emplace_back(triangles.indexStart, triangles.faceCount * 3);
++                            }
++                        }
 +                        auto drawSunCasters = [&](RenderCommandList *commandList) {
 +                            commandList->setGraphicsDescriptorSet(sunShadowSet->get(), 0);
 +                            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
@@ -3402,6 +3579,30 @@ index 9fae0d4..786f61c 100644
 +                        BuildSceneBVH(worker, worldPosBufferRef, worldPosVertexCount, indexBufferView.buffer.ref, rayDraws.data(), rayDraws.size(), rayTextures, rayGrass, targetDrawCall.rayLevelKey);
 +                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsView, shaderLibrary, targetDrawCall.sceneEffectsArea,
 +                            depthScale, depthTranslate, sunCasters ? std::function<void(RenderCommandList *)>(drawSunCasters) : std::function<void(RenderCommandList *)>());
++                        // Banjo-Tooie: the velocity of things that move on their own, for the temporal upscalers: the solid draws again
++                        // (the sun's casters are the same draws), into a velocity target.
++                        if (UpscalerObjectVelocityWanted() && !casterRuns.empty() && (worldPosBufferRef != nullptr) && (worldVelBufferRef != nullptr) && (colorTarget != nullptr)) {
++                            UpscalerRecordObjectVelocity(worker, colorTarget->width, colorTarget->height, shaderLibrary, worldPosBufferRef, worldVelBufferRef,
++                                [&](RenderCommandList *commandList) {
++                                    commandList->setVertexBuffers(0, nullptr, 0, nullptr);
++                                    commandList->setIndexBuffer(&indexBufferView);
++                                    for (const auto &run : casterRuns) {
++                                        commandList->drawIndexedInstanced(run.second, 1, run.first, 0, 0);
++                                    }
++                                },
++                                reactiveRuns.empty() ? std::function<void(RenderCommandList *)>() : std::function<void(RenderCommandList *)>([&](RenderCommandList *commandList) {
++                                    commandList->setVertexBuffers(0, nullptr, 0, nullptr);
++                                    commandList->setIndexBuffer(&indexBufferView);
++                                    for (const auto &run : reactiveRuns) {
++                                        commandList->drawIndexedInstanced(run.second, 1, run.first, 0, 0);
++                                    }
++                                }));
++                        }
++                        // Banjo-Tooie: a copy of the 3D world before the HUD, for the temporal upscalers (the HUD is added to the upscaled picture).
++                        if (UpscalerHudSplitWanted() && (colorTarget != nullptr)) {
++                            UpscalerTakeWorldSnapshot(worker, colorTarget, shaderLibrary);
++                            worker->commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(colorTarget->texture.get(), RenderTextureLayout::COLOR_WRITE));
++                        }
 +                    }
 +                    worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
 +                    for (uint32_t sceneIndex : scenesBeforeEffects) {
@@ -3411,19 +3612,52 @@ index 9fae0d4..786f61c 100644
 +                }
 +            }
 +        }
++        // Banjo-Tooie: the HUD again, at the upscaler's output resolution, over black and over white (the HUD's part is
++        // then what the two differ by), for putting it on the upscaled picture sharp.
++        if (drawSceneEffects && (colorTarget != nullptr) && (rasterScenesDrawn >= targetDrawCall.sceneEffectsAfter)) {
++            thread_local std::vector<uint32_t> hudScenes;
++            hudScenes.clear();
++            bool onlyRaster = true;
++            int32_t counted = 0;
++            for (const auto &pair : targetDrawCall.sceneIndices) {
++                if (pair.second) {
++                    onlyRaster = false;
++                    break;
++                }
++                if (++counted > targetDrawCall.sceneEffectsAfter) {
++                    hudScenes.push_back(pair.first);
++                }
++            }
++            if (onlyRaster && !hudScenes.empty() && UpscalerHudLayersWanted(colorTarget->width, colorTarget->height, colorTarget->multisampling.sampleCount)) {
++                for (uint32_t layer = 0; layer < 2; layer++) {
++                    float scaleX, scaleY;
++                    RenderFramebufferStorage *layerStorage = UpscalerBeginHudLayer(worker, colorTarget, layer, scaleX, scaleY);
++                    if (layerStorage == nullptr) {
++                        break;
++                    }
++                    hudScaleX = scaleX;
++                    hudScaleY = scaleY;
++                    bool layerDepthState = false;
++                    for (uint32_t sceneIndex : hudScenes) {
++                        submitRasterScene(worker, framebuffer, layerStorage, targetDrawCall.rasterScenes[sceneIndex], layerDepthState);
++                    }
++                    hudScaleX = 1.0f;
++                    hudScaleY = 1.0f;
++                    UpscalerEndHudLayer(worker, layer);
++                }
+             }
+         }
++
 +        skippingWater = false;
 +
 +        // Banjo-Tooie: the depth the blades were drawn into, as the next frame's culling pass reads it.
 +        if (grassFramebuffer) {
 +            submitGrassHiZ(worker, depthTarget);
 +        }
-+    }
-+
-+    void FramebufferRenderer::waitForUploaders() {
-         shaderUploader->wait();
+     }
  
-         for (BufferUploader *uploader : pendingUploaders) {
-@@ -1350,10 +2595,48 @@ namespace RT64 {
+     void FramebufferRenderer::waitForUploaders() {
+@@ -1350,10 +2715,48 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3472,11 +3706,12 @@ index 9fae0d4..786f61c 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2669,11 @@ namespace RT64 {
+@@ -1386,6 +2789,12 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
 +        worldPosBufferRef = worldPosRes;
++        worldVelBufferRef = worldVelRes;
 +        rayTexcoordBufferRef = tcRes;
 +        rayRDPTilesBufferRef = drawBuffers.rdpTilesBuffer.get();
 +        rayGPUTilesBufferRef = drawBuffers.gpuTilesBuffer.get();
@@ -3484,7 +3719,7 @@ index 9fae0d4..786f61c 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2696,69 @@ namespace RT64 {
+@@ -1408,6 +2817,70 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3497,6 +3732,7 @@ index 9fae0d4..786f61c 100644
 +        targetDrawCall.characterInstances.clear();
 +        targetDrawCall.waterHandedOn.clear();
 +        targetDrawCall.sunCasterInstances.clear();
++        targetDrawCall.reactiveInstances.clear();
 +        targetDrawCall.rayDraws.clear();
 +        targetDrawCall.rayLevelKey = 0;
 +        targetDrawCall.lampLights.clear();
@@ -3554,7 +3790,7 @@ index 9fae0d4..786f61c 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2782,22 @@ namespace RT64 {
+@@ -1431,6 +2904,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3577,7 +3813,7 @@ index 9fae0d4..786f61c 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2817,165 @@ namespace RT64 {
+@@ -1450,12 +2939,165 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3743,7 +3979,7 @@ index 9fae0d4..786f61c 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3126,7 @@ namespace RT64 {
+@@ -1606,6 +3248,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3751,7 +3987,7 @@ index 9fae0d4..786f61c 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3203,20 @@ namespace RT64 {
+@@ -1682,6 +3325,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3772,7 +4008,7 @@ index 9fae0d4..786f61c 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3282,2187 @@ namespace RT64 {
+@@ -1747,25 +3404,2199 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3958,6 +4194,16 @@ index 9fae0d4..786f61c 100644
 +                            rayLevelMix(targetDrawCall.rayLevelKey, drawData, call, modelFlag);
 +                        }
 +                    }
++                }
++
++                // Banjo-Tooie: the see-through draws of the 3D world (particles, fire, spray, glass: alpha blended, no depth
++                // written), for the temporal upscalers' reactive mask.
++                if (!excluded && worldOpen && UpscalerObjectVelocityWanted() && (proj.type == Projection::Type::Perspective) &&
++                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.triangleCount > 0) &&
++                    (call.shaderDesc.otherMode.cycleType() != G_CYC_COPY) && interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode) &&
++                    !call.shaderDesc.otherMode.zUpd())
++                {
++                    targetDrawCall.reactiveInstances.push_back(instanceIndex);
 +                }
 +
 +                // Banjo-Tooie: a lit lamp (a lamp texture) lights the traced scene from where it hangs.
@@ -4637,6 +4883,7 @@ index 9fae0d4..786f61c 100644
 +                    targetDrawCall.shinyInstances.insert(targetDrawCall.shinyInstances.begin(), earlier.shinyInstances.begin(), earlier.shinyInstances.end());
 +                    targetDrawCall.characterInstances.insert(targetDrawCall.characterInstances.begin(), earlier.characterInstances.begin(), earlier.characterInstances.end());
 +                    targetDrawCall.sunCasterInstances.insert(targetDrawCall.sunCasterInstances.begin(), earlier.sunCasterInstances.begin(), earlier.sunCasterInstances.end());
++                    targetDrawCall.reactiveInstances.insert(targetDrawCall.reactiveInstances.begin(), earlier.reactiveInstances.begin(), earlier.reactiveInstances.end());
 +                    targetDrawCall.rayDraws.insert(targetDrawCall.rayDraws.begin(), earlier.rayDraws.begin(), earlier.rayDraws.end());
 +                    if (earlier.rayLevelKey != 0) {
 +                        targetDrawCall.rayLevelKey = (targetDrawCall.rayLevelKey == 0) ? earlier.rayLevelKey : ((earlier.rayLevelKey * 0x9E3779B97F4A7C15ull) ^ targetDrawCall.rayLevelKey);
@@ -4645,6 +4892,7 @@ index 9fae0d4..786f61c 100644
 +                    targetDrawCall.lampLights.insert(targetDrawCall.lampLights.begin(), earlier.lampLights.begin(), earlier.lampLights.end());
 +                    earlier.lampLights.clear();
 +                    earlier.sunCasterInstances.clear();
++                    earlier.reactiveInstances.clear();
 +                    earlier.rayDraws.clear();
 +                    targetDrawCall.waterLeftOutClosed += earlier.waterLeftOutClosed;
 +                    targetDrawCall.waterLeftOutSmall += earlier.waterLeftOutSmall;
@@ -5972,7 +6220,7 @@ index 9fae0d4..786f61c 100644
  
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
-@@ -1816,8 +5513,12 @@ namespace RT64 {
+@@ -1816,8 +5647,12 @@ namespace RT64 {
          }
  #   endif
  
@@ -5986,7 +6234,7 @@ index 9fae0d4..786f61c 100644
  
      void FramebufferRenderer::advanceFrame(bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..88a1d98 100644
+index 3add9c3..f475b5f 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,13 @@
@@ -6019,7 +6267,7 @@ index 3add9c3..88a1d98 100644
  #include "rt64_vertex_processor.h"
  
  #if RT_ENABLED
-@@ -48,6 +56,56 @@ namespace RT64 {
+@@ -48,6 +56,58 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -6045,6 +6293,8 @@ index 3add9c3..88a1d98 100644
 +        std::vector<uint32_t> waterHandedOn;
 +        // Banjo-Tooie: the 3D world's solid draws, drawn again from the sun into the sun shadow map.
 +        std::vector<uint32_t> sunCasterInstances;
++        // Banjo-Tooie: the 3D world's see-through draws, for the temporal upscalers' reactive mask.
++        std::vector<uint32_t> reactiveInstances;
 +        // Banjo-Tooie: the draws the ray traced effects trace through (Graphics > Ray tracing): the sun's casters and
 +        // the cut-outs and see-through draws that write depth, with their first texture tile, so the rays can read
 +        // the texture they meet (a grate's holes, a lantern's bars). flags: SceneRayDrawCutout, SceneRayDrawTextured.
@@ -6076,7 +6326,7 @@ index 3add9c3..88a1d98 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +120,253 @@ namespace RT64 {
+@@ -62,11 +122,256 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -6095,6 +6345,9 @@ index 3add9c3..88a1d98 100644
 +        // Banjo-Tooie: Modern water: the game's water draws left out of the framebuffer being recorded (1 each).
 +        std::vector<uint8_t> instanceWaterSkipVector;
 +        bool skippingWater = false;
++        // Banjo-Tooie: HUD at full resolution: the draws go into a target this many times larger (1 otherwise).
++        float hudScaleX = 1.0f;
++        float hudScaleY = 1.0f;
 +        // The shells over each of them this frame (0 none: off, or no 3D world's camera yet).
 +        uint32_t grassShells = 0;
 +        // Banjo-Tooie: for each instance, 0, or the shells of deep snow drawn over it.
@@ -6330,12 +6583,13 @@ index 3add9c3..88a1d98 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +377,13 @@ namespace RT64 {
+@@ -77,6 +382,14 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
 +        // Banjo-Tooie: the world positions and how many vertices there are, for the traced reflections' structures.
 +        const RenderBuffer *worldPosBufferRef = nullptr;
++        const RenderBuffer *worldVelBufferRef = nullptr;
 +        // Banjo-Tooie: what the traced effects read the textures of what they meet from (SceneRayTextures).
 +        const RenderBuffer *rayTexcoordBufferRef = nullptr;
 +        const RenderBuffer *rayRDPTilesBufferRef = nullptr;
@@ -6344,7 +6598,7 @@ index 3add9c3..88a1d98 100644
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +394,14 @@ namespace RT64 {
+@@ -87,6 +400,14 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -6359,7 +6613,7 @@ index 3add9c3..88a1d98 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +415,7 @@ namespace RT64 {
+@@ -100,6 +421,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -6367,7 +6621,7 @@ index 3add9c3..88a1d98 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +439,10 @@ namespace RT64 {
+@@ -123,6 +445,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -6378,7 +6632,7 @@ index 3add9c3..88a1d98 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +484,15 @@ namespace RT64 {
+@@ -164,7 +490,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -6409,6 +6663,47 @@ index f2eee70..dde55dd 100644
                  interop::float2 screenScale;
                  interop::float2 screenOffset;
                  RenderRect scissor;
+diff --git a/src/render/rt64_projection_processor.cpp b/src/render/rt64_projection_processor.cpp
+index e842dcc..8b8c63a 100644
+--- a/src/render/rt64_projection_processor.cpp
++++ b/src/render/rt64_projection_processor.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include "common/rt64_math.h"
+ #include "hle/rt64_workload_queue.h"
++#include "rt64_temporal_upscaler.h"
+ 
+ namespace RT64 {
+     inline void adjustProjectionMatrix(interop::float4x4 &matrix, const float aspectRatioScale) {
+@@ -28,6 +29,9 @@ namespace RT64 {
+     }
+ 
+     void ProjectionProcessor::process(const ProcessParams &p) {
++        // Banjo-Tooie: the temporal upscaler's jitter changes every frame.
++        UpscalerNextFrame();
++
+         for (uint32_t w : p.curFrame->workloads) {
+             Workload &workload = p.workloadQueue->workloads[w];
+             DrawData &drawData = workload.drawData;
+@@ -140,6 +144,18 @@ namespace RT64 {
+                 prevProjTransform = projMatrix;
+             }
+ 
++            // Banjo-Tooie: the temporal upscaler's camera jitter, in a perspective projection (the HUD is not): a shift of the
++            // picture by a fraction of a pixel, different every frame. The frame before keeps its own, for the velocity.
++            if (UpscalerJitterActive() && (proj.type == Projection::Type::Perspective)) {
++                float jitterX, jitterY;
++                UpscalerJitterNdc(0, jitterX, jitterY);
++                projMatrix.m[2][0] -= jitterX;
++                projMatrix.m[2][1] -= jitterY;
++                UpscalerJitterNdc(1, jitterX, jitterY);
++                prevProjTransform.m[2][0] -= jitterX;
++                prevProjTransform.m[2][1] -= jitterY;
++            }
++
+             viewProjMatrix = hlslpp::mul(viewMatrix, projMatrix);
+ 
+             interop::float4x4 &prevViewProjTransform = drawData.prevViewProjTransforms[proj.transformsIndex];
 diff --git a/src/render/rt64_raster_shader.cpp b/src/render/rt64_raster_shader.cpp
 index 721a01e..d5cb970 100644
 --- a/src/render/rt64_raster_shader.cpp
@@ -7265,10 +7560,18 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..66d146b 100644
+index d1c5273..38cd73e 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
-@@ -17,6 +17,23 @@
+@@ -3,6 +3,7 @@
+ //
+ 
+ #include "rt64_shader_library.h"
++#include "rt64_object_velocity.h"
+ 
+ #include "common/rt64_common.h"
+ #include "shared/rt64_render_target_copy.h"
+@@ -17,6 +18,23 @@
  #include "shaders/FbWriteColorCS.hlsl.spirv.h"
  #include "shaders/FbWriteDepthCS.hlsl.spirv.h"
  #include "shaders/FbWriteDepthCSMS.hlsl.spirv.h"
@@ -7292,7 +7595,7 @@ index d1c5273..66d146b 100644
  #include "shaders/GaussianFilterRGB3x3CS.hlsl.spirv.h"
  #include "shaders/BoxFilterCS.hlsl.spirv.h"
  #include "shaders/BicubicScalingCS.hlsl.spirv.h"
-@@ -40,7 +57,46 @@
+@@ -40,7 +58,53 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -7311,6 +7614,13 @@ index d1c5273..66d146b 100644
 +#include "shaders/FsrEasuPS.hlsl.spirv.h"
 +#include "shaders/FsrRcasPS.hlsl.spirv.h"
 +#include "shaders/PhotoGradePS.hlsl.spirv.h"
++#include "shaders/UpscalerVelocityPS.hlsl.spirv.h"
++#include "shaders/UpscalerResolvePS.hlsl.spirv.h"
++#include "shaders/UpscalerHudPS.hlsl.spirv.h"
++#include "shaders/UpscalerHudLayersPS.hlsl.spirv.h"
++#ifdef __ANDROID__
++#include "shaders/GsrPS.hlsl.spirv.h"
++#endif
 +#include "shaders/SceneEffectsPS.hlsl.spirv.h"
 +#include "shaders/BloomPS.hlsl.spirv.h"
 +#include "shaders/SceneEffects2XPS.hlsl.spirv.h"
@@ -7339,16 +7649,19 @@ index d1c5273..66d146b 100644
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
-@@ -48,6 +104,8 @@
+@@ -48,6 +112,11 @@
  #include "shaders/VideoInterfacePSPixel.hlsl.spirv.h"
  #include "shaders/FullScreenVS.hlsl.spirv.h"
  #include "shaders/Im3DVS.hlsl.spirv.h"
 +#include "shaders/SunShadowMapVS.hlsl.spirv.h"
 +#include "shaders/SunShadowMapPS.hlsl.spirv.h"
++#include "shaders/ObjectVelocityVS.hlsl.spirv.h"
++#include "shaders/ObjectVelocityPS.hlsl.spirv.h"
++#include "shaders/ReactivePS.hlsl.spirv.h"
  #include "shaders/ComposePS.hlsl.spirv.h"
  #include "shaders/DebugPS.hlsl.spirv.h"
  #include "shaders/Im3DPS.hlsl.spirv.h"
-@@ -86,7 +144,36 @@
+@@ -86,7 +155,40 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -7367,6 +7680,10 @@ index d1c5273..66d146b 100644
 +#   include "shaders/FsrEasuPS.hlsl.dxil.h"
 +#   include "shaders/FsrRcasPS.hlsl.dxil.h"
 +#   include "shaders/PhotoGradePS.hlsl.dxil.h"
++#   include "shaders/UpscalerVelocityPS.hlsl.dxil.h"
++#   include "shaders/UpscalerResolvePS.hlsl.dxil.h"
++#   include "shaders/UpscalerHudPS.hlsl.dxil.h"
++#   include "shaders/UpscalerHudLayersPS.hlsl.dxil.h"
 +#   include "shaders/SceneEffectsPS.hlsl.dxil.h"
 +#   include "shaders/BloomPS.hlsl.dxil.h"
 +#   include "shaders/SceneEffects2XPS.hlsl.dxil.h"
@@ -7385,16 +7702,19 @@ index d1c5273..66d146b 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
-@@ -94,6 +181,8 @@
+@@ -94,6 +196,11 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.dxil.h"
  #   include "shaders/FullScreenVS.hlsl.dxil.h"
  #   include "shaders/Im3DVS.hlsl.dxil.h"
 +#   include "shaders/SunShadowMapVS.hlsl.dxil.h"
 +#   include "shaders/SunShadowMapPS.hlsl.dxil.h"
++#   include "shaders/ObjectVelocityVS.hlsl.dxil.h"
++#   include "shaders/ObjectVelocityPS.hlsl.dxil.h"
++#   include "shaders/ReactivePS.hlsl.dxil.h"
  #   include "shaders/ComposePS.hlsl.dxil.h"
  #   include "shaders/DebugPS.hlsl.dxil.h"
  #   include "shaders/Im3DPS.hlsl.dxil.h"
-@@ -131,7 +220,36 @@
+@@ -131,7 +238,40 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -7413,6 +7733,10 @@ index d1c5273..66d146b 100644
 +#   include "shaders/FsrEasuPS.hlsl.metal.h"
 +#   include "shaders/FsrRcasPS.hlsl.metal.h"
 +#   include "shaders/PhotoGradePS.hlsl.metal.h"
++#   include "shaders/UpscalerVelocityPS.hlsl.metal.h"
++#   include "shaders/UpscalerResolvePS.hlsl.metal.h"
++#   include "shaders/UpscalerHudPS.hlsl.metal.h"
++#   include "shaders/UpscalerHudLayersPS.hlsl.metal.h"
 +#   include "shaders/SceneEffectsPS.hlsl.metal.h"
 +#   include "shaders/BloomPS.hlsl.metal.h"
 +#   include "shaders/SceneEffects2XPS.hlsl.metal.h"
@@ -7431,28 +7755,32 @@ index d1c5273..66d146b 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
-@@ -139,6 +257,8 @@
+@@ -139,6 +279,11 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.metal.h"
  #   include "shaders/FullScreenVS.hlsl.metal.h"
  #   include "shaders/Im3DVS.hlsl.metal.h"
 +#   include "shaders/SunShadowMapVS.hlsl.metal.h"
 +#   include "shaders/SunShadowMapPS.hlsl.metal.h"
++#   include "shaders/ObjectVelocityVS.hlsl.metal.h"
++#   include "shaders/ObjectVelocityPS.hlsl.metal.h"
++#   include "shaders/ReactivePS.hlsl.metal.h"
  #   include "shaders/ComposePS.hlsl.metal.h"
  #   include "shaders/DebugPS.hlsl.metal.h"
  #   include "shaders/Im3DPS.hlsl.metal.h"
-@@ -148,6 +268,11 @@
+@@ -148,6 +293,12 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
 +#include "shared/rt64_smaa.h"
 +#include "shared/rt64_fsr.h"
 +#include "shared/rt64_photo_grade.h"
++#include "shared/rt64_temporal_upscaler.h"
 +#include "shared/rt64_scene_effects.h"
 +#include "shared/rt64_grass_instances.h"
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -204,7 +329,7 @@ namespace RT64 {
+@@ -204,7 +355,7 @@ namespace RT64 {
              samplerDesc.addressW = RenderTextureAddressMode::CLAMP;
  
              // This matches the bias used in the shader when native samplers are not used.
@@ -7461,7 +7789,7 @@ index d1c5273..66d146b 100644
  
              // WRAP.
              samplerDesc.addressU = RenderTextureAddressMode::WRAP;
-@@ -549,6 +674,38 @@ namespace RT64 {
+@@ -549,6 +700,38 @@ namespace RT64 {
              rspWorld.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -7500,7 +7828,7 @@ index d1c5273..66d146b 100644
          // Texture Copy.
          {
              TextureCopyDescriptorSet descriptorSet;
-@@ -569,6 +726,79 @@ namespace RT64 {
+@@ -569,6 +752,98 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -7566,6 +7894,25 @@ index d1c5273..66d146b 100644
 +            layoutBuilder.end();
 +            createPass(photoGrade, SMAA_BLOBS(PhotoGradePS), RenderTarget::colorBufferFormat(usesHDR));
 +
++            // Banjo-Tooie: the temporal upscalers' camera motion, with the same textures and samplers and its own constants.
++            layoutBuilder.begin();
++            layoutBuilder.addPushConstant(0, 0, sizeof(interop::UpscalerVelocityCB), RenderShaderStageFlag::PIXEL);
++            layoutBuilder.addDescriptorSet(descriptorSet);
++            layoutBuilder.end();
++            createPass(upscalerVelocity, SMAA_BLOBS(UpscalerVelocityPS), RenderFormat::R16G16_FLOAT);
++            createPass(upscalerVelocityView, SMAA_BLOBS(UpscalerVelocityPS), RenderTarget::colorBufferFormat(usesHDR));
++            createPass(upscalerDepth, SMAA_BLOBS(UpscalerVelocityPS), RenderFormat::R32_FLOAT);
++            layoutBuilder.begin();
++            layoutBuilder.addPushConstant(0, 0, sizeof(interop::UpscalerResolveCB), RenderShaderStageFlag::PIXEL);
++            layoutBuilder.addDescriptorSet(descriptorSet);
++            layoutBuilder.end();
++            createPass(upscalerResolve, SMAA_BLOBS(UpscalerResolvePS), RenderTarget::colorBufferFormat(usesHDR));
++            createPass(upscalerHud, SMAA_BLOBS(UpscalerHudPS), RenderTarget::colorBufferFormat(usesHDR));
++            createPass(upscalerHudLayers, SMAA_BLOBS(UpscalerHudLayersPS), RenderTarget::colorBufferFormat(usesHDR));
++#           ifdef __ANDROID__
++            createPass(upscalerGsr, SMAA_BLOBS(GsrPS), RenderTarget::colorBufferFormat(usesHDR));
++#           endif
++
 +            // Banjo-Tooie: the scene effects' bloom passes.
 +            layoutBuilder.begin();
 +            layoutBuilder.addPushConstant(0, 0, sizeof(interop::BloomCB), RenderShaderStageFlag::PIXEL);
@@ -7580,7 +7927,7 @@ index d1c5273..66d146b 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +813,20 @@ namespace RT64 {
+@@ -583,6 +858,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -7601,7 +7948,7 @@ index d1c5273..66d146b 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +1076,201 @@ namespace RT64 {
+@@ -832,6 +1121,240 @@ namespace RT64 {
              }
          }
  
@@ -7800,14 +8147,53 @@ index d1c5273..66d146b 100644
 +            sunShadowMap.pipeline = device->createGraphicsPipeline(pipelineDesc);
 +        }
 +
++        // Banjo-Tooie: the temporal upscalers' objects velocity pass (ObjectVelocityVS.hlsl): the 3D world's solid
++        // triangles drawn again into a velocity target with a depth buffer of its own.
++        {
++            ObjectVelocityDescriptorSet descriptorSet;
++            layoutBuilder.begin();
++            layoutBuilder.addDescriptorSet(descriptorSet);
++            layoutBuilder.addPushConstant(0, 0, sizeof(interop::UpscalerObjectVelocityCB), RenderShaderStageFlag::VERTEX | RenderShaderStageFlag::PIXEL);
++            layoutBuilder.end();
++            upscalerObjectVelocity.pipelineLayout = layoutBuilder.create(device);
++
++            std::unique_ptr<RenderShader> vertexShader = device->createShader(CREATE_SHADER_INPUTS(ObjectVelocityVSBlobDXIL, ObjectVelocityVSBlobSPIRV, ObjectVelocityVSBlobMSL, "VSMain", shaderFormat));
++            std::unique_ptr<RenderShader> pixelShader = device->createShader(CREATE_SHADER_INPUTS(ObjectVelocityPSBlobDXIL, ObjectVelocityPSBlobSPIRV, ObjectVelocityPSBlobMSL, "PSMain", shaderFormat));
++            RenderGraphicsPipelineDesc pipelineDesc;
++            pipelineDesc.pipelineLayout = upscalerObjectVelocity.pipelineLayout.get();
++            pipelineDesc.vertexShader = vertexShader.get();
++            pipelineDesc.pixelShader = pixelShader.get();
++            // The velocity, and the reactive mask (the see-through draws mark it, below).
++            pipelineDesc.renderTargetCount = 2;
++            pipelineDesc.renderTargetFormat[0] = RenderFormat::R16G16B16A16_FLOAT;
++            pipelineDesc.renderTargetBlend[0] = RenderBlendDesc::Copy();
++            pipelineDesc.renderTargetFormat[1] = RenderFormat::R8_UNORM;
++            pipelineDesc.renderTargetBlend[1] = RenderBlendDesc::Copy();
++            pipelineDesc.depthEnabled = true;
++            pipelineDesc.depthWriteEnabled = true;
++            pipelineDesc.depthFunction = RenderComparisonFunction::LESS;
++            pipelineDesc.depthTargetFormat = RenderFormat::D32_FLOAT;
++            upscalerObjectVelocity.pipeline = device->createGraphicsPipeline(pipelineDesc);
++
++            // The see-through draws again over the solid ones: depth tested, no depth written, only the reactive mask written.
++            std::unique_ptr<RenderShader> reactiveShader = device->createShader(CREATE_SHADER_INPUTS(ReactivePSBlobDXIL, ReactivePSBlobSPIRV, ReactivePSBlobMSL, "PSMain", shaderFormat));
++            pipelineDesc.pixelShader = reactiveShader.get();
++            pipelineDesc.renderTargetBlend[0].renderTargetWriteMask = 0;
++            pipelineDesc.depthWriteEnabled = false;
++            pipelineDesc.depthFunction = RenderComparisonFunction::LESS_EQUAL;
++            upscalerReactive.pipelineLayout = layoutBuilder.create(device);
++            pipelineDesc.pipelineLayout = upscalerReactive.pipelineLayout.get();
++            upscalerReactive.pipeline = device->createGraphicsPipeline(pipelineDesc);
++        }
++
          // Post process.
          {
              PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..3e93392 100644
+index 641f3ec..2022694 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -47,12 +47,46 @@ namespace RT64 {
+@@ -47,12 +47,55 @@ namespace RT64 {
          ShaderRecord rspVertexTestZ;
          ShaderRecord rspVertexTestZMS;
          ShaderRecord rspWorld;
@@ -7834,6 +8220,8 @@ index 641f3ec..3e93392 100644
 +        ShaderRecord sceneIndirectTraced;
 +        // Banjo-Tooie: the sun shadow map's depth-only pass (SunShadowMapVS.hlsl).
 +        ShaderRecord sunShadowMap;
++        ShaderRecord upscalerObjectVelocity;
++        ShaderRecord upscalerReactive;
 +        // Banjo-Tooie: the scene effects' bloom passes (bright parts, blur across, blur down).
 +        ShaderRecord bloom;
 +        // Banjo-Tooie: eye adaptation's brightness passes (BloomPS.hlsl passes 3 and 4), to R32_FLOAT.
@@ -7851,6 +8239,13 @@ index 641f3ec..3e93392 100644
 +        ShaderRecord fsrRcas;
 +        // Banjo-Tooie: photo mode's filters.
 +        ShaderRecord photoGrade;
++        ShaderRecord upscalerVelocity;
++        ShaderRecord upscalerVelocityView;
++        ShaderRecord upscalerDepth;
++        ShaderRecord upscalerResolve;
++        ShaderRecord upscalerGsr;
++        ShaderRecord upscalerHud;
++        ShaderRecord upscalerHudLayers;
          ShaderRecord textureResolve;
          ShaderRecord videoInterfaceLinear;
          ShaderRecord videoInterfaceNearest;

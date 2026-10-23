@@ -1,5 +1,37 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T565 Volumetric dust
+- Asked: 2026-10-23 09:46 UTC
+- Build: main @ db815bd
+- Steps:
+  1. Pull main and build on Windows; Graphics > WIP > Volumetrics > Volumetric Dust on
+  2. Warp to Spiral Mountain; run, hold Run (sprint), Talon Trot, quick-turn, jump and land on sand, snow and grass
+  3. Run with TOOIE_DUST_LOG=1 and send the [dust] lines
+- Look for: Soft dust clouds replace the flat puffs; they drift with your speed, rise, get pushed aside as you move through them and take the ground's colour. Puffs too small, too big or gone too fast: send the [dust] raw numbers (radius_per_scale and life_seconds in src/gameplay/dust.cpp are guesses). Frame cost with dust on vs off
+- Status: waiting for L
+
+## T564 Upscalers: DLSS, DLAA, FSR 3, FSR 4, Temporal
+- Asked: 2026-10-23 09:37 UTC
+- Build: main @ eca73f4
+- Steps:
+  1. Pull main and build on Windows; Graphics > WIP > Upscaler; set Resolution to Auto
+  2. Try Temporal (built-in) first, then FSR 3, DLSS, DLAA, FSR 4 at Quality; run, pan the camera, fight an enemy, open the pause menu
+  3. Try HUD Full Resolution on and off
+  4. Run with the console and note the [upscaler] lines
+- Look for: Sharp picture without doubling or trails behind moving characters; no blur on menus and cuts; HUD steady (and sharp with Full Resolution); send the [upscaler] console lines and screenshots. Full guide: notes/upscaler-test-guide.md
+- Status: waiting for L
+
+## T563 Volumetric mist, fog and clouds (WIP tab)
+- Asked: 2026-10-23 06:10 UTC
+- Build: branch claude/project-thread-nmtx34
+- Steps:
+  1. Build this branch (claude/project-thread-nmtx34), Graphics > WIP > Volumetric
+  2. Spiral Mountain: Volumetric Mist 50 and Volumetric Fog 40 with each preset; walk and jump
+  3. Volumetric Clouds: each type, in a level with and without Day and Night
+  4. Dev Files/volumetric.txt: add a line such as 0xAF clouds=stormy cover=80 mist=40 and save while the game runs
+- Look for: Mist stays in the level and meets scenery with no texture-on-model look; fog presets differ clearly; clouds show on the sky of any level, Stormy is dark grey; the file's line applies within a second. Send frame rate with them on.
+- Status: waiting for L
+
 ## T562 Aim sweep: find the enemy chase code automatically
 - Asked: 2026-10-23 06:31 UTC
 - Build: main

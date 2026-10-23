@@ -35,6 +35,7 @@
 #include "tooie_material_pick.h"
 #include "tooie_parallax_pick.h"
 #include "tooie_toast.h"
+#include "tooie_volumetric.h"
 
 namespace RT64 {
     void SetScenePick(bool on, float x, float y, uint32_t layer);
@@ -776,6 +777,135 @@ namespace {
         }
     };
 
+    // The Save Volumetric Settings key's panel (mode_volumetric): a title and a button for each volumetric setting and Save
+    // All, down the left side where the pick modes' Save All sits, as fractions of the window. A left click on one writes
+    // that setting, as showing now, into this level's line of volumetric.txt.
+    constexpr int vol_buttons = tooie::volumetric::setting_count + 1;
+    constexpr float vol_width = 0.16f;
+
+    float vol_button_top(int button) {
+        return panel_top + count_height + panel_gap + float(button) * (button_height + panel_gap);
+    }
+
+    // The button under the cursor: 0 to setting_count - 1 a setting, setting_count Save All, -1 none.
+    int vol_button_at(float x, float y) {
+        if ((x < panel_left) || (x > panel_left + vol_width)) {
+            return -1;
+        }
+        for (int k = 0; k < vol_buttons; k++) {
+            if ((y >= vol_button_top(k)) && (y <= vol_button_top(k) + button_height)) {
+                return k;
+            }
+        }
+        return -1;
+    }
+
+    struct VolumetricPanel {
+        recompui::ContextId context = recompui::ContextId::null();
+        recompui::Element* buttons[vol_buttons] = {};
+        recompui::Label* texts[vol_buttons] = {};
+        bool shown = false;
+        int shown_hover = -2;
+        int shown_unsaved = -1;
+
+        bool build() {
+            auto lifetime = recompui::lock_context_lifetime();
+            if (!recompui::contexts_alive()) {
+                return false;
+            }
+            try {
+                recompui::ContextId ctx = recompui::create_context();
+                ctx.open();
+                recompui::Element* root = ctx.create_element<recompui::Element>(ctx.get_root_element());
+                root->set_display(recompui::Display::Flex);
+                root->set_background_color(recompui::theme::color::Transparent);
+                root->set_pointer_events(recompui::PointerEvents::None);
+                recompui::Element* title = ctx.create_element<recompui::Element>(root);
+                title->set_display(recompui::Display::Flex);
+                title->set_position(recompui::Position::Absolute);
+                title->set_left(panel_left * 100.0f, recompui::Unit::Percent);
+                title->set_top(panel_top * 100.0f, recompui::Unit::Percent);
+                title->set_width(vol_width * 100.0f, recompui::Unit::Percent);
+                title->set_height(count_height * 100.0f, recompui::Unit::Percent);
+                title->set_justify_content(recompui::JustifyContent::Center);
+                title->set_align_items(recompui::AlignItems::Center);
+                title->set_border_radius(recompui::theme::border::radius_md);
+                title->set_background_color(recompui::theme::color::ModalOverlay);
+                title->set_pointer_events(recompui::PointerEvents::None);
+                ctx.create_element<recompui::Label>(title, "Save for this level", recompui::LabelStyle::Small)->set_pointer_events(recompui::PointerEvents::None);
+                for (int k = 0; k < vol_buttons; k++) {
+                    recompui::Element* button = ctx.create_element<recompui::Element>(root);
+                    button->set_display(recompui::Display::Flex);
+                    button->set_position(recompui::Position::Absolute);
+                    button->set_left(panel_left * 100.0f, recompui::Unit::Percent);
+                    button->set_top(vol_button_top(k) * 100.0f, recompui::Unit::Percent);
+                    button->set_width(vol_width * 100.0f, recompui::Unit::Percent);
+                    button->set_height(button_height * 100.0f, recompui::Unit::Percent);
+                    button->set_justify_content(recompui::JustifyContent::Center);
+                    button->set_align_items(recompui::AlignItems::Center);
+                    button->set_border_radius(recompui::theme::border::radius_md);
+                    button->set_background_color(recompui::theme::color::ModalOverlay);
+                    button->set_pointer_events(recompui::PointerEvents::None);
+                    texts[k] = ctx.create_element<recompui::Label>(button, "", recompui::LabelStyle::Small);
+                    texts[k]->set_pointer_events(recompui::PointerEvents::None);
+                    buttons[k] = button;
+                }
+                ctx.close();
+                ctx.set_captures_input(false);
+                ctx.set_captures_mouse(false);
+                context = ctx;
+                return true;
+            } catch (...) {
+                return false;
+            }
+        }
+
+        // Shows the panel (hover: the button under the cursor), refreshing a button's text and highlight only when it changes.
+        void update(bool show, int hover) {
+            if (!show && !shown) {
+                return;
+            }
+            if ((context == recompui::ContextId::null()) && (!show || !build())) {
+                return;
+            }
+            auto lifetime = recompui::lock_context_lifetime();
+            if (!recompui::contexts_alive()) {
+                return;
+            }
+            if (show) {
+                int unsaved_bits = 0;
+                for (int k = 0; k < tooie::volumetric::setting_count; k++) {
+                    unsaved_bits |= tooie::volumetric::setting_unsaved(k) ? (1 << k) : 0;
+                }
+                if (!shown || (hover != shown_hover) || (unsaved_bits != shown_unsaved)) {
+                    context.open();
+                    for (int k = 0; k < vol_buttons; k++) {
+                        if (k < tooie::volumetric::setting_count) {
+                            texts[k]->set_text(std::string(tooie::volumetric::setting_name(k)) + (((unsaved_bits >> k) & 1) ? "" : " (saved)"));
+                        } else {
+                            texts[k]->set_text("Save All");
+                        }
+                        buttons[k]->set_background_color((hover == k) ? recompui::theme::color::PrimaryA80 : recompui::theme::color::ModalOverlay);
+                    }
+                    context.close();
+                    shown_hover = hover;
+                    shown_unsaved = unsaved_bits;
+                }
+                if (!recompui::is_context_shown(context)) {
+                    recompui::show_context(context, "");
+                }
+                shown = true;
+            } else if (shown) {
+                if (recompui::is_context_shown(context)) {
+                    recompui::hide_context(context);
+                }
+                shown = false;
+                shown_hover = -2;
+                shown_unsaved = -1;
+            }
+        }
+    };
+
     // Headless: TOOIE_PICK="<x>,<y>" (fractions of the window) turns pick mode on with the cursor there, and
     // TOOIE_PICK_CLICKS="<ms>:left|right|middle|reset|deeper;..." clicks that long after start.
     struct Click {
@@ -808,14 +938,15 @@ namespace {
         const auto start = std::chrono::steady_clock::now();
         Label label;
         // One pick mode at a time. TOOIE_PICK_MODE=effects or interp: the headless pick is that mode's.
-        enum Mode { mode_off, mode_parallax, mode_effects, mode_interp, mode_material };
+        enum Mode { mode_off, mode_parallax, mode_effects, mode_interp, mode_material, mode_volumetric };
         Mode mode = mode_off;
         if (forced_x >= 0.0f) {
             const char* forced = std::getenv("TOOIE_PICK_MODE");
             const std::string name = forced != nullptr ? forced : "";
             mode = name == "effects" ? mode_effects : (name == "interp" ? mode_interp : (name == "material" ? mode_material : mode_parallax));
         }
-        bool key_was_down[4] = {};
+        bool key_was_down[5] = {};
+        VolumetricPanel volumetric_panel;
         bool save_was_down = false, delete_was_down = false;
         bool copy_was_down = false, paste_was_down = false, undo_was_down = false;
         // Shader Effects pick mode: the number keys held last poll, and a left click held down to paint: whether it
@@ -898,16 +1029,18 @@ namespace {
         int64_t last_log = 0;
         for (;;) {
             std::this_thread::sleep_for(10ms);
-            static const recompinput::GameInput keys[4] = { recompinput::GameInput::PARALLAX_PICK, recompinput::GameInput::EFFECTS_PICK,
-                recompinput::GameInput::INTERP_PICK, recompinput::GameInput::MATERIAL_PICK };
-            static const char* on_toasts[4] = {
+            static const recompinput::GameInput keys[5] = { recompinput::GameInput::PARALLAX_PICK, recompinput::GameInput::EFFECTS_PICK,
+                recompinput::GameInput::INTERP_PICK, recompinput::GameInput::MATERIAL_PICK, recompinput::GameInput::VOLUMETRIC_SAVE };
+            static const char* on_toasts[5] = {
                 "Parallax pick mode: left click shape, right click depth, middle click shadows, Shift + left click built-in, wheel deeper",
                 "Shader Effects pick mode: right click or keys 1-9 choose an effect, left click turns it on or off (hold to paint), middle click Show All, Shift + wheel Light Source strength, Shift + left click built-in, wheel deeper",
                 "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
                     "Shift + left click default, wheel deeper",
-                "Ray Tracing Material pick mode: left click gives or switches off a material, middle click steps a preset, Shift + wheel changes albedo, roughness, metalness or emissive (right click or keys 1-7 choose which, Ctrl fine), key 9 Show All, wheel deeper" };
-            static const char* off_toasts[4] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off", "Ray Tracing Material pick mode off" };
-            for (int k = 0; k < 4; k++) {
+                "Ray Tracing Material pick mode: left click gives or switches off a material, middle click steps a preset, Shift + wheel changes albedo, roughness, metalness or emissive (right click or keys 1-7 choose which, Ctrl fine), key 9 Show All, wheel deeper",
+                "Save Volumetric Settings: click a button to save that setting for this level, or Save All (press the key again to close)" };
+            static const char* off_toasts[5] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off", "Ray Tracing Material pick mode off",
+                "Save Volumetric Settings closed" };
+            for (int k = 0; k < 5; k++) {
                 const bool down = tooie::hotkeys::down(keys[k]);
                 if (down && !key_was_down[k]) {
                     // The newer mode wins.
@@ -944,6 +1077,34 @@ namespace {
                     RT64::SetScenePickMarkedTextures(marked.data(), marked.size());
                 }
             }
+            // The Save Volumetric Settings panel: the mouse is free, a left click on a button saves that setting.
+            if (mode == mode_volumetric) {
+                painting = false;
+                RT64::SetScenePick(false, 0.0f, 0.0f, 0);
+                label.update(false, "", 0.0f, 0.0f);
+                float vx = 0.0f, vy = 0.0f;
+                int vw = 1, vh = 1, mx = 0, my = 0;
+                SDL_Window* vwindow = SDL_GetMouseFocus();
+                if (vwindow == nullptr) {
+                    vwindow = SDL_GetKeyboardFocus();
+                }
+                const uint32_t vbuttons = SDL_GetMouseState(&mx, &my);
+                if (vwindow != nullptr) {
+                    SDL_GetWindowSize(vwindow, &vw, &vh);
+                }
+                vx = float(mx) / float(std::max(vw, 1));
+                vy = float(my) / float(std::max(vh, 1));
+                const uint32_t vpressed = vbuttons & ~buttons_were;
+                buttons_were = vbuttons;
+                wheel_was = recompinput::get_mouse_wheel_pos();
+                const int hover = vol_button_at(vx, vy);
+                if (((vpressed & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0) && (hover >= 0)) {
+                    tooie::volumetric::save_setting((hover == tooie::volumetric::setting_count) ? -1 : hover);
+                }
+                volumetric_panel.update(true, hover);
+                continue;
+            }
+            volumetric_panel.update(false, -1);
             if (mode == mode_off) {
                 painting = false;
                 RT64::SetScenePick(false, 0.0f, 0.0f, 0);

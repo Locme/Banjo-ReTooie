@@ -76,6 +76,12 @@ What changed, newest first, is in [`notes/changelog.md`](notes/changelog.md).
 
 ## Licence
 
+The DLSS runtime `nvngx_dlss.dll` that Windows builds fetch and ship beside the game is NVIDIA's, under NVIDIA's own
+licence (`third-party/nvidia-dlss/LICENSE.txt`), not the GPL.
+The FSR 3 / FSR 4 DLLs (`amd_fidelityfx_loader_dx12.dll`, `amd_fidelityfx_upscaler_dx12.dll`) that Windows builds fetch and ship are
+AMD's, redistributed in binary form under AMD's licence (`third-party/amd-fsr/LICENSE.txt`), not the GPL.
+Android builds include Qualcomm's Snapdragon GSR 1 shader (`third-party/snapdragon-gsr`, BSD 3-Clause).
+
 GPL-3.0, see [`COPYING`](COPYING). N64ModernRuntime is GPL-3.0; N64Recomp and
 RT64 are MIT; RecompFrontend ships no licence file and is used only as a
 submodule. Inter and Noto Emoji are under the SIL Open Font License; PromptFont
@@ -92,6 +98,13 @@ the BRDF) is ported from Simeon Radivoev's ComputeStochasticReflections, MIT (li
 `SceneEffectsPS.hlsl`). The ambient occlusion is Ground Truth Ambient
 Occlusion written from Jimenez et al.'s 2016 paper; no code is copied from
 MaxwellGengYF's Unity GTAO, which has no licence.
+
+The volumetric fog's presets (Default, Bright, Hell, Murky, Poison, Sponza, Pillar) use the settings (albedo,
+extinction, emissive, ambient light) of the presets in Arthur Brussee's
+[Vapor](https://github.com/ArthurBrussee/Vapor), MIT (licence text beside that code in `SceneEffectsPS.hlsl`);
+the march itself is our own, written from Wronski's 2014 and Hillaire's 2015 volumetric scattering papers. The
+Unity Asset Store package "Aero - Volumetric Fog and Mist" is under Unity's Asset Store EULA, which does not let its
+source go into another project, so none of it is used.
 
 ## Credits
 

@@ -44,6 +44,10 @@ Texture2D<float4> gFireflies : register(t10);
 Texture2D<float4> gColorHalf : register(t11);
 // The indirect pass (INDIRECT_PASS) at half size: SSGI's light (rgb) and GTAO's visibility (a), for IndirectAt.
 Texture2D<float4> gIndirect : register(t12);
+// Banjo-Tooie: Graphics > Volumetric Dust's clouds this frame (rt64_scene_effects.cpp SetSceneDust): the count as a float
+// in the first 16 bytes, then two float4s a cloud: x, y, z (world), radius; strength, seed, 0, 0. Bound whether or not
+// the device has ray queries.
+ByteAddressBuffer gDust : register(t16);
 #ifdef RAY_TRACED
 // Banjo-Tooie: the 3D world's solid triangles in world space (Graphics > Ray tracing), rebuilt each frame; only in
 // the RAY_TRACED variant of the pass, which is used while the device has ray queries and the structure is built.
@@ -361,6 +365,17 @@ float3 HeldSun(int2 pixel) {
     return sunColor * (disc * 1.1f + pow(toward, 600.0f) * 0.6f + pow(toward, 60.0f) * 0.15f);
 }
 
+// The cloud types' darkness (used as the rain's: greys and darkens the clouds and spreads them over the sky) and how
+// warm the light on them is (0 to 1), by type: 1 Fair, 2 Scattered, 3 Overcast, 4 Stormy, 5 Wispy, 6 Sunset, 7 Thunderstorm.
+float VolCloudDarkness(uint type) {
+    const float table[8] = { 0.0f, 0.0f, 0.0f, 0.45f, 0.92f, 0.0f, 0.0f, 1.0f };
+    return table[type & 7u];
+}
+
+float VolCloudWarmth(uint type) {
+    return (type == 6u) ? 0.9f : 0.0f;
+}
+
 float3 DaySky(float3 color, int2 pixel, float3 tint) {
     const float2 ndc = float2((pixel.x + 0.5f) / gConstants.projection.z * 2.0f - 1.0f, 1.0f - (pixel.y + 0.5f) / gConstants.projection.w * 2.0f);
     const float3 look = normalize(float3(ndc.x / gConstants.projection.x, ndc.y / gConstants.projection.y, -1.0f));
@@ -471,9 +486,13 @@ float3 DaySky(float3 color, int2 pixel, float3 tint) {
     }
 
     // Clouds in front of all of it.
-    if ((DayPacked() & 2u) != 0u) {
+    // Also forced clouds (the WIP Volumetric Clouds option): their type's darkness stands in for rain, their warmth for glow.
+    const uint forcedClouds = (uint(gConstants.fog.z) >> 12 >> 3) & 7u;
+    if (((DayPacked() & 2u) != 0u) || (forcedClouds != 0u)) {
         const float3 sunWorld = normalize(float3(dot(gConstants.sun.xyz, gConstants.worldX.xyz), dot(gConstants.sun.xyz, gConstants.worldY.xyz), dot(gConstants.sun.xyz, gConstants.worldZ.xyz)));
-        const float4 clouds = DayClouds(world, sunWorld, tint, glow, pixel, weather);
+        float3 cloudWeather = weather;
+        cloudWeather.x = max(cloudWeather.x, VolCloudDarkness(forcedClouds));
+        const float4 clouds = DayClouds(world, sunWorld, tint, max(glow, VolCloudWarmth(forcedClouds)), pixel, cloudWeather);
         sky = sky * (1.0f - clouds.a) + clouds.rgb;
     }
     return DayWeatherLight(sky, 0.0f, weather.z, 0.0f);
@@ -3709,9 +3728,8 @@ float DayMorning(float3 tint) {
         (1.0f - DayNight(tint)) * (1.0f - DayWeather().x);
 }
 
-// The mist and rain settings, from the sun shadows' constant (shadows.w = 4 * (strength (0 to 100) + 128 * when +
-// 512 * wet (0 to 31) + 16384 for raindrops) + 2 to leave Banjo out + softness): x the mist's strength (0 to 1),
-// y when (0 mornings, 1 mornings and nights, 2 always), z how wet the ground is (0 to 1), w 1 for raindrops on the
+// The rain settings, from the sun shadows' constant (shadows.w = 4 * (512 * wet (0 to 31) + 16384 for raindrops) +
+// 2 to leave Banjo out + softness; the first 9 bits once held the removed mist): x and y unused (0), z how wet the ground is (0 to 1), w 1 for raindrops on the
 // screen.
 float4 DayMistAndRain() {
     float packed = floor(gConstants.shadows.w / 4.0f);
@@ -3721,10 +3739,6 @@ float4 DayMistAndRain() {
     packed -= wet * 512.0f;
     const float when = floor(packed / 128.0f);
     return float4((packed - when * 128.0f) / 100.0f, when, wet / 31.0f, drops);
-}
-
-float2 DayMistSetting() {
-    return DayMistAndRain().xy;
 }
 
 // Wet ground in and after the rain: everything darkens a little, and what faces up darkens more, in patches
@@ -3755,89 +3769,228 @@ float3 DayWet(float3 scene, int2 pixel, float depth) {
     return scene * (1.0f - wet * (0.12f + 0.2f * level * patches));
 }
 
-// Mist: pale banks drifting slowly through the whole level (fixed to the level, not to Banjo), thicker with
-// distance, and thickest on and around water, where it hangs just over the surface even close by, with spray
-// billowing up where a waterfall lands. Lit warm towards the sun. Separate from the Fog setting. Also drawn
-// without the cycle for Graphics > Mist (always showing, tint 1).
-float3 DayMist(float3 color, int2 pixel, float depth, float3 tint) {
-    const float2 setting = DayMistSetting();
-    const float morning = DayMorning(tint);
-    const float night = DayNight(tint) * (1.0f - DayWeather().x * 0.5f);
-    const float when = (setting.y > 1.5f) ? 1.0f : ((setting.y > 0.5f) ? max(morning, night * 0.8f) : morning);
-    if ((setting.x <= 0.0f) || (when <= 0.0f) || (gConstants.rippleAge.w < -1e8f)) {
+// WIP volumetric mist, fog and clouds (Graphics options in the WIP tab, all off by default; src/gameplay/volumetric.cpp).
+// The settings ride in the 12 bits above the fog's start (fog.y) and length (fog.z), which hold those in steps of 4 units
+// in their low 12 bits: fog.y mist (6 bits, 0 to 63) and fog (6); fog.z the fog's preset (3), the forced cloud type (3,
+// 0 none) and the mist floor's height over Banjo's feet (6 bits, steps of 8 units, 32 = level).
+uint VolBits() {
+    return (uint(gConstants.fog.y) >> 12) | ((uint(gConstants.fog.z) >> 12) << 12);
+}
+
+float VolMistStrength() {
+    return float(VolBits() & 63u) / 63.0f;
+}
+
+float VolFogStrength() {
+    return float((VolBits() >> 6) & 63u) / 63.0f;
+}
+
+uint VolFogPreset() {
+    return (VolBits() >> 12) & 7u;
+}
+
+uint VolCloudType() {
+    return (VolBits() >> 15) & 7u;
+}
+
+float VolFloorDelta() {
+    return (float((VolBits() >> 18) & 63u) - 32.0f) * 8.0f;
+}
+
+// The fog presets (Graphics > Volumetric Fog Preset): the settings of the presets in Arthur Brussee's Vapor
+// (https://github.com/ArthurBrussee/Vapor, VaporSettings/*.asset, Resources/DefaultVaporSetting.asset and
+// Examples/SponzaScene/SponzaFog.asset, Examples/PillarTest/PillarSetting.asset), MIT licence:
+//
+//   MIT License
+//   Copyright (c) 2017 Arthur Brussee
+//   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+//   documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+//   the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
+//   to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+//   The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+//   the Software.
+//   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+//   TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+//   THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+//   CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+//   DEALINGS IN THE SOFTWARE.
+//
+// Only these numbers are taken (no Vapor shader or C# code is copied): albedo (the colour it scatters), extinction (how thick it is),
+// emissive (its own glow) and the ambient light it scatters. The fog itself is our own ray march (Wronski-style
+// scattering along each pixel's ray), not Vapor's code. 0 Default, 1 Bright, 2 Hell, 3 Murky, 4 Poison, 5 Sponza, 6 Pillar.
+// Bright's extinction is 1 here, not Vapor's 0.05: Vapor's lights are far brighter than the game's sun.
+static const float3 kVolAlbedo[7] = {
+    float3(0.4477f, 0.7303f, 0.8456f), float3(0.4191f, 0.4191f, 0.3820f), float3(0.1160f, 0.0f, 0.0f), float3(0.0515f, 0.0515f, 0.0515f),
+    float3(0.3447f, 0.5294f, 0.0973f), float3(0.7777f, 0.8785f, 0.9118f), float3(1.0f, 1.0f, 1.0f) };
+static const float kVolExtinction[7] = { 4.0f, 1.0f, 15.45f, 7.0f, 5.0f, 10.0f, 5.0f };
+static const float3 kVolEmissive[7] = {
+    float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), float3(0.4044f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f),
+    float3(0.6366f, 1.42f, 0.0f), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f) };
+static const float3 kVolAmbient[7] = {
+    float3(0.1604f, 0.1604f, 0.1604f), float3(0.6871f, 1.2361f, 1.46f), float3(0.4485f, 0.4485f, 0.4485f), float3(4.378f, 4.378f, 4.378f),
+    float3(1.0f, 1.0f, 1.0f), float3(0.2353f, 0.2353f, 0.2353f), float3(0.2353f, 0.2353f, 0.2353f) };
+
+// The sun's direction in view space: towards it, or straight up when the game has none set.
+float3 VolSunView() {
+    const float3 sun = gConstants.sun.xyz;
+    return (dot(sun, sun) > 0.25f) ? normalize(sun) : normalize(gConstants.worldY.xyz);
+}
+
+float3 VolLookView(int2 pixel) {
+    const float2 ndc = float2((pixel.x + 0.5f) / gConstants.projection.z * 2.0f - 1.0f, 1.0f - (pixel.y + 0.5f) / gConstants.projection.w * 2.0f);
+    return normalize(float3(ndc.x / gConstants.projection.x, ndc.y / gConstants.projection.y, -1.0f));
+}
+
+uint VolDustCount() {
+    return min(uint(asfloat(gDust.Load(0)) + 0.5f), 24u);
+}
+
+// The dust clouds along the pixel's ray (Graphics > Volumetric Dust): each is a soft sphere of dust, thickest through its
+// middle and eaten into by drifting noise, so a ray through it takes light by the chord it crosses; the clouds' thickness
+// along the ray is summed and the picture lost to them by Beer's law. They are lit from the sun's side, and take the colour
+// of the ground behind them (the picture's own colour here, lifted towards dust) so sand, snow and grass kick up their own.
+float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
+    const uint count = VolDustCount();
+    if (count == 0u) {
         return color;
     }
-    const float3 center = ViewPosition(pixel, depth);
-    const float3 world = WorldPosition(center);
     const float scale = length(gConstants.worldX.xyz);
-    const float distance = length(center) * scale;
+    const float3 look = VolLookView(pixel);
+    const float3 origin = float3(gConstants.worldX.w, gConstants.worldY.w, gConstants.worldZ.w);
+    const float3 direction = float3(dot(look, gConstants.worldX.xyz), dot(look, gConstants.worldY.xyz), dot(look, gConstants.worldZ.xyz)) / scale;
+    const float far = min(worldDistance, 6000.0f);
+    const float time = gConstants.view.z;
+    float3 sunWorld = float3(0.3f, 0.8f, 0.5f);
+    if (dot(gConstants.sun.xyz, gConstants.sun.xyz) > 0.25f) {
+        sunWorld = float3(dot(gConstants.sun.xyz, gConstants.worldX.xyz), dot(gConstants.sun.xyz, gConstants.worldY.xyz), dot(gConstants.sun.xyz, gConstants.worldZ.xyz));
+    }
+    sunWorld = normalize(sunWorld);
+    const float3 ground = saturate(color * 1.35f + 0.12f);
+    const float3 base = lerp(float3(0.74f, 0.68f, 0.6f), ground, 0.55f) * tint;
+    float opticalDepth = 0.0f;
+    float3 lightSum = 0.0f;
+    [loop]
+    for (uint i = 0u; i < count; i++) {
+        const float4 cloud = asfloat(gDust.Load4(16u + i * 32u));
+        const float2 extra = asfloat(gDust.Load2(32u + i * 32u));
+        const float radius = max(cloud.w, 1.0f);
+        const float3 toCloud = cloud.xyz - origin;
+        const float along = dot(toCloud, direction);
+        const float distanceSquared = dot(toCloud, toCloud) - along * along;
+        if (distanceSquared >= radius * radius) {
+            continue;
+        }
+        const float half = sqrt(radius * radius - distanceSquared);
+        const float t0 = max(along - half, 0.0f);
+        const float t1 = min(along + half, far);
+        if (t1 <= t0) {
+            continue;
+        }
+        const float3 middle = origin + direction * (0.5f * (t0 + t1));
+        const float falloff = 1.0f - distanceSquared / (radius * radius);
+        const float noise = CloudNoise(middle * (60.0f / radius) * 0.045f + extra.y + float3(0.0f, time * 0.35f, 0.0f));
+        const float body = saturate(1.35f * falloff + (noise - 0.5f) * 0.9f);
+        const float thickness = extra.x * body * (t1 - t0) / radius * 2.2f;
+        // The side facing the sun is the brighter.
+        const float side = dot(normalize(middle - cloud.xyz + 1e-3f), sunWorld);
+        lightSum += base * (0.62f + 0.38f * saturate(0.5f + 0.5f * side)) * thickness;
+        opticalDepth += thickness;
+    }
+    if (opticalDepth <= 0.0f) {
+        return color;
+    }
+    const float seen = 1.0f - exp(-opticalDepth);
+    return color * (1.0f - seen) + (lightSum / opticalDepth) * seen;
+}
+
+// Volumetric mist and fog along the pixel's ray from the camera to the surface (worldDistance in world units; the
+// sky passes a long one): the ray is marched in steps that are short near the camera, and at each the thickness
+// of a ground-hugging mist layer and of an even fog (both broken up by drifting noise) takes light from the
+// picture, and the light they scatter (ambient, and the sun, more when looking towards it) is added, as in
+// Wronski's and Hillaire's volumetric scattering: colour = colour * transmittance + in-scattered light.
+// The mist layer stands at Banjo's ground (a slow anchor, so it does not bob as he jumps) and thins out above it.
+// tint: the day and night cycle's tint of the light (1 without it).
+float3 VolScatter(float3 color, int2 pixel, float worldDistance, float3 tint) {
+    const float mist = VolMistStrength();
+    const float fogAmount = VolFogStrength();
+    if ((mist <= 0.0f) && (fogAmount <= 0.0f)) {
+        return VolDust(color, pixel, worldDistance, tint);
+    }
+    const float scale = length(gConstants.worldX.xyz);
+    const float3 look = VolLookView(pixel);
+    const float3 origin = float3(gConstants.worldX.w, gConstants.worldY.w, gConstants.worldZ.w);
+    const float3 direction = float3(dot(look, gConstants.worldX.xyz), dot(look, gConstants.worldY.xyz), dot(look, gConstants.worldZ.xyz)) / scale;
+    const float far = min(worldDistance, 6000.0f);
+    const float floorY = (gConstants.rippleAge.w > -1e8f) ? (gConstants.rippleAge.w + VolFloorDelta()) : (origin.y - 100.0f);
     const float time = gConstants.view.z;
 
-    // Water nearby: a ring of looks into the water mask, about 260 world units round the point (on screen),
-    // and the point itself. The mist settles at the water's height.
-    float nearWater = 0.0f;
-    float waterY = 0.0f;
-    // How far across (in the world, along the ground) the nearest water look is from the point, so the layer over the
-    // water fades out smoothly rather than stopping where the looks on screen stop finding it.
-    float waterAcross = 1e9f;
-    // Waterfalls nearby (steep watery draws): how far across the nearest look that found one is, and the lowest
-    // point found (the fall's foot).
-    float fallAcross = 1e9f;
-    float fallFoot = 1e9f;
-    if (gConstants.water.y > 0.5f) {
-        const float height = gConstants.projection.w;
-        const float radius = clamp((260.0f / scale) * gConstants.projection.y * 0.5f * height / max(-center.z, 1e-3f), 3.0f, height * 0.2f);
-        float found = 0.0f;
-        for (int i = 0; i < 9; i++) {
-            const float angle = float(i) * 0.6981317f;
-            const float2 offset = (i == 8) ? float2(0.0f, 0.0f) : float2(cos(angle), sin(angle)) * radius * ((i & 1) ? 1.0f : 0.5f);
-            const int2 at = pixel + int2(offset);
-            float waterDepth;
-            float3 fallTint;
-            if (LoadWater(at, waterDepth) && (SteepAt(at) < 0.5f)) {
-                const float3 waterWorld = WorldPosition(ViewPosition(at, waterDepth));
-                found += 1.0f;
-                waterY += waterWorld.y;
-                waterAcross = min(waterAcross, length(waterWorld.xz - world.xz));
-            }
-            else if (LoadAnyWater(at, waterDepth) && (FallWatery(at, fallTint) > 0.3f)) {
-                const float3 fallWorld = WorldPosition(ViewPosition(at, waterDepth));
-                fallFoot = min(fallFoot, fallWorld.y);
-                fallAcross = min(fallAcross, length(fallWorld.xz - world.xz));
-            }
+    const uint preset = min(VolFogPreset(), 6u);
+    // Per world unit: Vapor's extinction is per metre; this is tuned so a level's far side is lost to the thickest.
+    const float fogSigma = fogAmount * kVolExtinction[preset] * 0.00012f;
+    const float3 fogAlbedo = kVolAlbedo[preset];
+    const float3 sunView = VolSunView();
+    const float cosine = dot(look, sunView);
+    // Henyey-Greenstein, mostly forward: brighter looking towards the sun.
+    const float g = 0.45f;
+    const float phase = 0.55f * (1.0f - g * g) / pow(max(1.0f + g * g - 2.0f * g * cosine, 0.05f), 1.5f);
+    const float3 sunLight = float3(1.0f, 0.95f, 0.85f) * (phase + 0.25f) * 1.4f;
+    const float3 fogLight = (fogAlbedo * (kVolAmbient[preset] + sunLight) + kVolEmissive[preset] * 0.6f) * tint;
+    const float3 mistLight = lerp(float3(0.78f, 0.82f, 0.88f), float3(1.0f, 0.9f, 0.76f), saturate(phase * 0.4f)) * tint * 0.9f;
+
+    const int steps = 20;
+    const float jitter = DayHash(float3(pixel, 3.0f));
+    const float3 wind = float3(time * 6.0f, 0.0f, time * 2.5f);
+    float transmittance = 1.0f;
+    float3 light = 0.0f;
+    [loop]
+    for (int i = 0; i < steps; i++) {
+        // Steps grow with distance (squared spacing): fine detail near the camera, the far reach still covered.
+        const float e0 = far * float(i) * float(i) / float(steps * steps);
+        const float e1 = far * float(i + 1) * float(i + 1) / float(steps * steps);
+        const float ds = e1 - e0;
+        const float t = e0 + ds * jitter;
+        const float3 p = origin + direction * t;
+        const float height = p.y - floorY;
+        // The mist: thickest at and under the floor, thinning to nothing about 300 units up, in drifting banks.
+        float mistSigma = 0.0f;
+        if (mist > 0.0f) {
+            const float banks = saturate(0.25f + 1.6f * CloudNoise(p * 0.0045f + wind * 0.004f));
+            mistSigma = mist * 0.0026f * exp(-max(height, 0.0f) / 130.0f) * banks;
         }
-        if (found > 0.0f) {
-            waterY /= found;
-            nearWater = saturate(found / 4.0f) * saturate(1.5f - waterAcross / 200.0f);
+        float fogHere = 0.0f;
+        if (fogAmount > 0.0f) {
+            // An even fog with slow patches, and a little less far above the floor.
+            fogHere = fogSigma * (0.7f + 0.6f * CloudNoise(p * 0.0016f + wind * 0.002f + 5.0f)) * exp(-max(height, 0.0f) / 7000.0f);
+        }
+        const float sigma = mistSigma + fogHere;
+        if (sigma > 1e-7f) {
+            const float3 mistLit = mistLight * lerp(0.75f, 1.0f, saturate(height / 160.0f));
+            const float3 source = (mistSigma * mistLit + fogHere * fogLight) / sigma;
+            const float step = exp(-sigma * ds);
+            light += transmittance * (1.0f - step) * source;
+            transmittance *= step;
         }
     }
+    return VolDust(color * transmittance + light, pixel, worldDistance, tint);
+}
 
-    // Slowly drifting banks, so the mist lies in patches rather than as an even haze. Laid out in the level's own
-    // space (height too), so they stay put whatever Banjo does.
-    const float2 drift = float2(0.012f, 0.005f) * time;
-    const float2 slant = float2(world.x + world.y * 0.6f, world.z - world.y * 0.6f);
-    const float banks = smoothstep(0.3f, 0.75f, WaterNoise(slant / 900.0f + drift) * 0.65f + WaterNoise(slant / 260.0f - drift * 1.7f) * 0.35f);
-    // Two layers: one through the whole level, and a denser, shallower one just over the water. Each thickens with
-    // how far the view runs through it: across the water it builds up, looking down through it from above it stays
-    // thin.
-    const float cameraY = gConstants.worldY.w;
-    const float groundRun = distance;
-    const float waterTop = waterY + 70.0f;
-    const float waterRun = (nearWater > 0.0f) ? distance * saturate((waterTop - world.y) / max(cameraY - world.y, 60.0f)) : 0.0f;
-    // Spray where a fall lands: thick close by (it doesn't need distance to build up), round the fall's foot (within
-    // about 150 units across) and from there to about 120 units up, billowing and rising.
-    const float footY = (nearWater > 0.0f) ? min(waterY, fallFoot) : fallFoot;
-    const float sprayNear = saturate(1.0f - fallAcross / 150.0f);
-    const float sprayRise = (sprayNear > 0.0f) ? saturate((footY + 120.0f - world.y) / 120.0f) * saturate((world.y - footY + 30.0f) / 30.0f) : 0.0f;
-    const float billow = WaterNoise(float2(world.x + world.z, world.y) / 40.0f - float2(0.0f, time * 0.5f)) * 0.6f + WaterNoise((world.xz - world.y) / 17.0f + time * 0.2f) * 0.4f;
-    const float spray = sprayNear * sprayNear * sprayRise * (0.3f + 0.7f * billow) * 0.7f;
-    const float thickness = groundRun * (0.2f + 0.8f * banks) / 1600.0f + waterRun * nearWater * (0.45f + 0.55f * banks) / 1400.0f + spray;
-    const float amount = (1.0f - exp(-thickness * when * setting.x * 2.0f)) * 0.85f;
-    const float toward = saturate(dot(normalize(center), gConstants.sun.xyz)) * morning;
-    // Mist in shade (a cave mouth, under trees) is lit less: dimmer where the scene behind it is dark.
-    const float shade = saturate(0.5f + dot(color, float3(0.299f, 0.587f, 0.114f)) * 1.4f);
-    const float3 mist = lerp(float3(0.82f, 0.86f, 0.9f), float3(1.0f, 0.88f, 0.72f), toward * toward) * max(tint, 0.5f) * shade;
-    return lerp(color, mist, amount);
+// Forced clouds (WIP): the cycle's clouds on any level without the cycle, over the sky. The cloud's shape comes
+// from the cloud constant (view.y); the type's darkness and warmth from the tables above.
+float3 VolSky(float3 color, int2 pixel) {
+    const uint type = VolCloudType();
+    const float3 look = VolLookView(pixel);
+    const float3 world = normalize(float3(dot(look, gConstants.worldX.xyz), dot(look, gConstants.worldY.xyz), dot(look, gConstants.worldZ.xyz)));
+    float3 sunWorld = float3(0.3f, 0.8f, 0.5f);
+    if (dot(gConstants.sun.xyz, gConstants.sun.xyz) > 0.25f) {
+        sunWorld = float3(dot(gConstants.sun.xyz, gConstants.worldX.xyz), dot(gConstants.sun.xyz, gConstants.worldY.xyz), dot(gConstants.sun.xyz, gConstants.worldZ.xyz));
+    }
+    sunWorld = normalize(sunWorld);
+    const float dark = VolCloudDarkness(type);
+    // A stormy sky greys and darkens too.
+    const float grey = dot(color, float3(0.3f, 0.59f, 0.11f));
+    float3 sky = lerp(color, grey.xxx * float3(0.8f, 0.84f, 0.9f), dark * 0.55f) * (1.0f - dark * 0.35f);
+    const float4 clouds = DayClouds(world, sunWorld, float3(1.0f, 1.0f, 1.0f), VolCloudWarmth(type), pixel, float3(dark, 0.0f, 0.0f));
+    return sky * (1.0f - clouds.a) + clouds.rgb;
 }
 
 // Raindrops on the screen in the rain, more when looking up: each lands, holds a while, then runs down leaving
@@ -4884,7 +5037,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
     const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
     // Eye adaptation also draws the scene itself.
-    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (DayMistSetting().x > 0.0f) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (VolBits() != 0u) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
 
     if (depth >= 0.99999f) {
         // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -4897,6 +5050,12 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             if (daytime) {
                 scene = DaySky(scene, pixel, dayTint);
                 scene = DayLensDrops(scene, pixel, dayTint, DayWeather().x);
+            }
+            else if (VolCloudType() > 0u) {
+                scene = VolSky(scene, pixel);
+            }
+            if ((VolBits() != 0u) || (VolDustCount() > 0u)) {
+                scene = VolScatter(scene, pixel, 6000.0f, daytime ? dayTint : float3(1.0f, 1.0f, 1.0f));
             }
             if (gConstants.bloom.z > 0.0f) {
                 scene = Adapt(scene);
@@ -5097,7 +5256,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
                 dot(position, gConstants.worldY.xyz) + gConstants.worldY.w, dot(position, gConstants.worldZ.xyz) + gConstants.worldZ.w);
             distance = length(world - float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w));
         }
-        fog = gConstants.fog.x * (1.0f - exp(-max(distance - gConstants.fog.y, 0.0f) / gConstants.fog.z));
+        fog = gConstants.fog.x * (1.0f - exp(-max(distance - float(uint(gConstants.fog.y) & 4095u) * 4.0f, 0.0f) / max(float(uint(gConstants.fog.z) & 4095u) * 4.0f, 1.0f)));
     }
 
     if (gConstants.view.x > 0.5f) {
@@ -5274,16 +5433,14 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             const float3 weather = DayWeather();
             scene = DayWeatherLight(scene, weather.x, weather.z, 0.3f);
         }
-        // The mist lies in front of the nearest thing at the pixel: the game's water and falls don't write depth,
-        // so behind a waterfall the depth is the cave beyond it, and the mist would show through the fall.
-        // Without the cycle this is Graphics > Mist on its own.
-        if (DayMistSetting().x > 0.0f) {
-            float mistDepth = depth;
-            float frontWater;
-            if ((gConstants.water.y > 0.5f) && LoadAnyWater(pixel, frontWater)) {
-                mistDepth = min(mistDepth, frontWater);
+        // WIP volumetric mist and fog along the ray to the nearest thing at the pixel (the water and falls write no depth).
+        if ((VolBits() != 0u) || (VolDustCount() > 0u)) {
+            float volDepth = depth;
+            float volWater;
+            if ((gConstants.water.y > 0.5f) && LoadAnyWater(pixel, volWater)) {
+                volDepth = min(volDepth, volWater);
             }
-            scene = DayMist(scene, pixel, mistDepth, daytime ? dayTint : float3(1.0f, 1.0f, 1.0f));
+            scene = VolScatter(scene, pixel, length(ViewPosition(pixel, volDepth)) * length(gConstants.worldX.xyz), daytime ? dayTint : float3(1.0f, 1.0f, 1.0f));
         }
         if (daytime) {
             scene = DayLensDrops(scene, pixel, dayTint, DayWeather().x);

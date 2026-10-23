@@ -349,6 +349,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/input/low_latency.cpp
     ${CMAKE_SOURCE_DIR}/src/display/frame_readback.cpp
     ${CMAKE_SOURCE_DIR}/src/display/fsr.cpp
+    ${CMAKE_SOURCE_DIR}/src/display/upscaler.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fast_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/display/draw_distance.cpp
     ${CMAKE_SOURCE_DIR}/src/display/gfx_budget.cpp
@@ -356,6 +357,8 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/high_detail_models.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/day_night.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/sun_control.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/dust.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/volumetric.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/night_sounds.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/hd_shadows.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/field_of_view.cpp
@@ -485,6 +488,61 @@ if (WIN32)
             "${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxil.dll"
             "${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxcompiler.dll"
             $<TARGET_FILE_DIR:BanjoTooieN64Recomp>)
+
+    # NVIDIA DLSS runtime (third-party/nvidia-dlss/README.md): fetched from NVIDIA's own repository at a pinned
+    # commit, checked against its hash and copied beside the executable. It is NVIDIA's file under NVIDIA's licence.
+    set(TOOIE_DLSS_COMMIT 9981c6350dc58c0ce21f024fd65e31e851c31689)
+    set(TOOIE_DLSS_DLL ${CMAKE_BINARY_DIR}/nvidia-dlss/nvngx_dlss.dll)
+    if(NOT EXISTS ${TOOIE_DLSS_DLL})
+        file(DOWNLOAD
+            https://github.com/NVIDIA/DLSS/raw/${TOOIE_DLSS_COMMIT}/lib/Windows_x86_64/rel/nvngx_dlss.dll
+            ${TOOIE_DLSS_DLL}
+            EXPECTED_HASH SHA256=d00b5b0ab29c3ca101b70c3a5ecb3a01b7ef33766a3383a28a18623083e6123e
+            STATUS TOOIE_DLSS_STATUS)
+        list(GET TOOIE_DLSS_STATUS 0 TOOIE_DLSS_CODE)
+        if(NOT TOOIE_DLSS_CODE EQUAL 0)
+            message(WARNING "Could not fetch nvngx_dlss.dll (${TOOIE_DLSS_STATUS}); DLSS will be unavailable.")
+            file(REMOVE ${TOOIE_DLSS_DLL})
+        endif()
+    endif()
+    if(EXISTS ${TOOIE_DLSS_DLL})
+        add_custom_command(TARGET BanjoTooieN64Recomp POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TOOIE_DLSS_DLL}
+                "${CMAKE_SOURCE_DIR}/third-party/nvidia-dlss/LICENSE.txt"
+                $<TARGET_FILE_DIR:BanjoTooieN64Recomp>)
+    endif()
+
+    # AMD FSR 3 / FSR 4 (third-party/amd-fsr/LICENSE.txt): AMD's signed FidelityFX DLLs, fetched from AMD's SDK
+    # repository at a pinned commit, checked against their hashes and copied beside the executable with the licence.
+    set(TOOIE_FFX_COMMIT 60f4ea81909200d8542eca14dccb2628b763a9a3)
+    set(TOOIE_FFX_FILES
+        amd_fidelityfx_loader_dx12.dll:e2d85aa05a9bd9ed8b38935fdf5199372cca6f74c12015143bb6f945ee1608aa
+        amd_fidelityfx_upscaler_dx12.dll:d0dcccc74a43c44ba435b7a369b456e0970d8a4464e4bd683119b374f2c9fb46)
+    foreach(TOOIE_FFX_ENTRY ${TOOIE_FFX_FILES})
+        string(REPLACE ":" ";" TOOIE_FFX_PARTS ${TOOIE_FFX_ENTRY})
+        list(GET TOOIE_FFX_PARTS 0 TOOIE_FFX_NAME)
+        list(GET TOOIE_FFX_PARTS 1 TOOIE_FFX_HASH)
+        set(TOOIE_FFX_DLL ${CMAKE_BINARY_DIR}/amd-fsr/${TOOIE_FFX_NAME})
+        if(NOT EXISTS ${TOOIE_FFX_DLL})
+            file(DOWNLOAD
+                https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/raw/${TOOIE_FFX_COMMIT}/Kits/FidelityFX/signedbin/${TOOIE_FFX_NAME}
+                ${TOOIE_FFX_DLL}
+                EXPECTED_HASH SHA256=${TOOIE_FFX_HASH}
+                STATUS TOOIE_FFX_STATUS)
+            list(GET TOOIE_FFX_STATUS 0 TOOIE_FFX_CODE)
+            if(NOT TOOIE_FFX_CODE EQUAL 0)
+                message(WARNING "Could not fetch ${TOOIE_FFX_NAME} (${TOOIE_FFX_STATUS}); FSR 3 and FSR 4 will be unavailable.")
+                file(REMOVE ${TOOIE_FFX_DLL})
+            endif()
+        endif()
+        if(EXISTS ${TOOIE_FFX_DLL})
+            add_custom_command(TARGET BanjoTooieN64Recomp POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TOOIE_FFX_DLL} $<TARGET_FILE_DIR:BanjoTooieN64Recomp>)
+        endif()
+    endforeach()
+    add_custom_command(TARGET BanjoTooieN64Recomp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/third-party/amd-fsr/LICENSE.txt"
+            "$<TARGET_FILE_DIR:BanjoTooieN64Recomp>/amd-fsr-LICENSE.txt")
 
     set_target_properties(
         BanjoTooieN64Recomp

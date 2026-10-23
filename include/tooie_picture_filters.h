@@ -104,9 +104,6 @@ namespace tooie::picture_filters {
     inline const std::string water_option = "water_style";
     // Graphics > Shore foam: Modern water's broken white line along the shores, on the game's own water (Original).
     inline const std::string shore_foam_option = "water_shore_foam";
-    // Graphics > Mist: the day and night cycle's mist (over low ground, on water, spray at waterfalls) on its own, always
-    // showing. While the cycle runs in a level, its own Mist and Mist Time settings are used instead.
-    inline const std::string mist_option = "mist";
     inline const std::string grass_height_option = "grass_3d_height";
     inline const std::string grass_distance_option = "grass_3d_distance";
     inline const std::string grass_density_option = "grass_3d_density";
