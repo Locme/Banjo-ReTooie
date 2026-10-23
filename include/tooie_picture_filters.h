@@ -26,7 +26,6 @@ namespace tooie::picture_filters {
 
     inline const std::string preset_option = "effects_preset";
     // Lighting, Water, Fog (Experimental) toggle: hides the effect options below it (they keep their values).
-    inline const std::string lighting_section_option = "lighting_water_fog";
     inline const std::string grass_section_option = "grass_section";
     inline const std::string reflections_section_option = "reflections_section";
     inline const std::string brightness_option = "brightness";

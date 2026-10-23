@@ -1114,7 +1114,6 @@ void tooie::init_config() {
     // heading hides with its option.
     recompui::config::set_option_group(recompui::config::graphics::options::res_option, "Display");
     recompui::config::set_option_group(tooie::picture_filters::preset_option, "Picture And Effects");
-    recompui::config::set_option_group(tooie::picture_filters::lighting_section_option, "Shaders");
     // HD Shadows sits in the Sun shadows part of the Shaders group, with its own toggle (L, 2026-10-16).
     recompui::config::set_option_display_before(tooie::hd_shadows_option, tooie::picture_filters::sun_shadows_option);
     recompui::config::set_option_display_before(tooie::hd_shadows::enemy_direction_option, tooie::picture_filters::sun_shadows_option);
