@@ -12,6 +12,7 @@
 [[vk::push_constant]] ConstantBuffer<UpscalerObjectVelocityCB> gConstants : register(b0);
 
 void PSMain(in float4 pos : SV_Position, in float3 previous : TEXCOORD0, out float4 outVelocity : SV_TARGET0, out float outReactive : SV_TARGET1) {
-    outVelocity = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // Only the blue channel of the velocity target is written (the pipeline's write mask): the built-in resolve reads it from there.
+    outVelocity = float4(0.0f, 0.0f, gConstants.size.z, 0.0f);
     outReactive = gConstants.size.z;
 }

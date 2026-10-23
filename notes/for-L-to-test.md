@@ -1,5 +1,18 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T566 Wet, snowy and dirty characters
+- Asked: 2026-10-23 13:22 UTC
+- Build: branch claude/project-thread-xmr3el
+- Steps:
+  1. Pull this branch and build on Windows; Graphics > Character Shaders: set Wet characters, Snowy characters and Dirty characters to 100
+  2. Spiral Mountain: swim in the moat, then get out and watch Banjo dry over about ten seconds
+  3. Hailfire Peaks Icy Side: walk about; snow settles on his head, shoulders and back
+  4. Run about on grass or sand for a couple of minutes for dirt; then swim to wash it off
+  5. Also try Banjo fur on and Kazooie feathers on with each, and Kazooie out of the backpack
+  6. Headless aid: TOOIE_CHAR_WET, TOOIE_CHAR_SNOW, TOOIE_CHAR_DIRT=100 hold one fixed
+- Look for: Wet: darker with a sheen, fur clumped. Snow: white on up-facing parts, more on fur tips. Dirt: brown on lower parts and undersides. Fur and feathers match the body underneath. Flicker where body parts meet (the up-direction is read from the vertex marks, known weak spot). Frame cost with all three on vs off. First use compiles a few extra shaders for Banjo's materials
+- Status: waiting for L
+
 ## T565 Volumetric dust
 - Asked: 2026-10-23 09:46 UTC
 - Build: main @ db815bd

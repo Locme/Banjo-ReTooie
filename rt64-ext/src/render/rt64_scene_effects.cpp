@@ -1363,6 +1363,18 @@ namespace RT64 {
         effectsSettings.featherTransparency = std::clamp(transparency, 0.0f, 1.0f);
     }
 
+    void SetSceneCharSurface(float wet, float snow, float dirt) {
+        const std::scoped_lock lock(effectsMutex);
+        effectsSettings.charWet = std::clamp(wet, 0.0f, 1.0f);
+        effectsSettings.charSnow = std::clamp(snow, 0.0f, 1.0f);
+        effectsSettings.charDirt = std::clamp(dirt, 0.0f, 1.0f);
+    }
+
+    bool SceneCharSurfaceOn() {
+        const std::scoped_lock lock(effectsMutex);
+        return (effectsSettings.charWet > 0.0f) || (effectsSettings.charSnow > 0.0f) || (effectsSettings.charDirt > 0.0f);
+    }
+
     void SetSceneNpcFur(float amount, float length, float density, float noisiness) {
         const std::scoped_lock lock(effectsMutex);
         effectsSettings.npcFur = amount;
@@ -1425,7 +1437,8 @@ namespace RT64 {
         const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams)
     {
         SceneEffectsSettings settings = GetSceneEffects();
-        if (((settings.fur <= 0.0f) && (settings.npcFur <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
+        const bool charSurface = (settings.charWet > 0.0f) || (settings.charSnow > 0.0f) || (settings.charDirt > 0.0f);
+        if (((settings.fur <= 0.0f) && (settings.npcFur <= 0.0f) && !charSurface) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
             return false;
         }
 
@@ -1459,6 +1472,7 @@ namespace RT64 {
         frameParams.furParams = { 2.5f * std::max(settings.furLength, 0.1f), 2.4f * settings.furDensity, 0.6f - 0.3f * amount, settings.furNoisiness };
         frameParams.furSway = { settings.furSway[0], settings.furSway[1], settings.furSway[2], 0.0f };
         const float npcAmount = std::min(settings.npcFur, 1.0f);
+        frameParams.charSurface = { settings.charWet, settings.charSnow, settings.charDirt, 0.0f };
         frameParams.npcFurParams = { 2.5f * std::max(settings.npcFurLength, 0.1f), 2.4f * settings.npcFurDensity, 0.6f - 0.3f * npcAmount, settings.npcFurNoisiness };
         return true;
     }

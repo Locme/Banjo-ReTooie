@@ -45,7 +45,7 @@ Also send a screenshot or two per mode: standing still, running, and in a menu.
 
 ## Known gaps (not bugs, not done)
 - Texture sharpness boost (mip bias): N64 textures have no mip levels, so there is nothing to bias. Not done on purpose.
-- The built-in Temporal resolve does not use the reactive mask (FSR and DLSS do).
+- The built-in Temporal resolve uses the reactive mask too (it blends in more of the new picture there).
 - Jitter synced with the scene effects' noise: not done.
 - Arm ASR (Android) and FSR 3 on Android: not written, so not listed on Android. Snapdragon GSR is Android only and untested.
 - If the DLSS or FSR download failed when building (no internet at configure time) the build prints a CMake warning and the mode falls back to Temporal.

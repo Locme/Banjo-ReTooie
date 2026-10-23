@@ -33,6 +33,7 @@ resets `lib/rt64` doesn't touch it.
 | `src/shaders/GroundTess.hlsl` | Displaced ground |
 | `src/shaders/WaterTess.hlsl`, `WaterTess.hlsli` | Tessellated water |
 | `src/shaders/Fur.hlsli` | Banjo's fur (included by RasterPS) |
+| `src/shaders/CharSurface.hlsli` | Wet, snowy and dirty Banjo and Kazooie (included by RasterPS) |
 | `src/shaders/Snow.hlsli`, `SnowTess.hlsl` | Deep snow and tessellated sand (Snow.hlsli is included by RasterPS) |
 | `src/hle/rt64_present_queue_ext.cpp`, `.h` (new) | The present queue's additions: present backlog (`WaitForPresentBacklog`), menu repaint (`SetIdleRepaint`, `PresentQueue::threadRepaint`), screenshots' state and read-back, frame statistics and input latency. `rt64_present_queue.cpp` keeps the calls in its present loop and reaches the shared state through `RT64::presentext` |
 | `src/render/rt64_texture_seams.cpp`, `.h` (new) | Blend texture seams: the neighbour search (`FindTextureSeams`) and the `SeamPiece`/`SeamPoint` structs. `rt64_framebuffer_renderer.cpp` keeps the collection of pieces in its draw loop and the call |
