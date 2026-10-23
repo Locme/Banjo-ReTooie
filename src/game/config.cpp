@@ -766,6 +766,12 @@ void tooie::init_config() {
         "Free Camera",
         "The right stick turns the camera smoothly around Banjo and tilts it, instead of the game's stepped camera swings. The camera stays where you turned it until a cutscene or another area.",
         true);
+    // Only shows or hides the rows below in this menu (L, 2026-10-23); the options keep working either way.
+    qol.add_bool_option(
+        tooie::free_camera_advanced_option,
+        "Advanced Free Camera Settings",
+        "Shows the rest of the free camera settings below: speed, inverting, walls, ease back, stairs, small objects, mouse, gyro, floor clearance and look up. This only shows or hides them here; they keep working as set either way.",
+        false);
     qol.add_enum_option(
         tooie::free_camera_speed_option,
         "Free Camera Speed",
@@ -776,12 +782,6 @@ void tooie::init_config() {
             {tooie::FreeCameraSpeed::Fast, "Fast", "Fast"},
         },
         tooie::FreeCameraSpeed::Normal);
-    // Only shows or hides the rows below in this menu (L, 2026-10-23); the options keep working either way.
-    qol.add_bool_option(
-        tooie::free_camera_advanced_option,
-        "Advanced Free Camera Settings",
-        "Shows the rest of the free camera settings below: inverting, walls, ease back, stairs, small objects, mouse, gyro, floor clearance and look up. This only shows or hides them here; they keep working as set either way.",
-        false);
     qol.add_bool_option(
         tooie::free_camera_invert_x_option,
         "Invert Left/Right",
@@ -848,7 +848,7 @@ void tooie::init_config() {
         "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
         true);
     tooie::photo_mode::add_options(qol);
-    for (const std::string* id : { &tooie::free_camera_speed_option, &tooie::free_camera_advanced_option }) {
+    for (const std::string* id : { &tooie::free_camera_advanced_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
     // The advanced rows show only while Free camera and Advanced Free Camera Settings are both on. A hidden
@@ -858,7 +858,7 @@ void tooie::init_config() {
         static const std::string* const advanced_rows[] = {
             &tooie::free_camera_invert_x_option, &tooie::free_camera_invert_y_option,
             &tooie::free_camera_smooth_walls_option, &tooie::free_camera_ease_back_option,
-            &tooie::free_camera_smooth_height_option, &tooie::free_camera_hover_option,
+            &tooie::free_camera_smooth_height_option, &tooie::free_camera_hover_option, &tooie::free_camera_speed_option,
             &tooie::free_camera_mouse_option, &tooie::free_camera_gyro_option,
             &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option };
         auto update_advanced_rows = [](bool free_camera, bool advanced) {
