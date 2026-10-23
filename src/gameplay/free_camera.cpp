@@ -349,7 +349,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     float orbit_x = 0.0f;
     float orbit_y = 0.0f;
     tooie::motion_aim::take_orbit(&orbit_x, &orbit_y);
-    const auto mouse_mode = wip_option<uint32_t>(tooie::free_camera_orbit_option, (uint32_t)tooie::FreeCameraMouse::Off);
+    const auto mouse_mode = wip_option<uint32_t>(tooie::free_camera_orbit_option, (uint32_t)tooie::FreeCameraMouse::Always);
     if (mouse_mode == (uint32_t)tooie::FreeCameraMouse::Off ||
         (mouse_mode == (uint32_t)tooie::FreeCameraMouse::Hold && !tooie::hotkeys::down(recompinput::GameInput::CAMERA_MOUSE_LOOK))) {
         orbit_x = 0.0f;
