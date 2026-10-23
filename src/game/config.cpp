@@ -10,7 +10,6 @@
 #include "tooie_menu_tree.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_day_night.h"
-#include "tooie_dust.h"
 #include "tooie_volumetric.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_music_player.h"
@@ -1040,14 +1039,13 @@ void tooie::init_config() {
         recompui::config::set_option_group(dn::option, "Day And Night");
     }
     tooie::volumetric::add_options(graphics);
-    tooie::dust::add_options(graphics);
     {
         // Volumetric mist, fog and clouds are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
         namespace vol = tooie::volumetric;
         for (const std::string* id : { &vol::mist_option, &vol::mist_water_option, &vol::mist_water_height_option, &vol::mist_fall_option,
                 &vol::mist_fall_height_option, &vol::fog_option, &vol::fog_preset_option, &vol::fog_start_option, &vol::fog_colour_option,
                 &vol::clouds_option, &vol::cloud_amount_option, &vol::cloud_height_option, &vol::cloud_size_option, &vol::cloud_speed_option,
-                &vol::file_option, &tooie::dust::option }) {
+                &vol::file_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
         // One heading a kind, so each can be tested on its own.
@@ -1055,7 +1053,6 @@ void tooie::init_config() {
         recompui::config::set_option_group(vol::fog_option, "Volumetric Fog");
         recompui::config::set_option_group(vol::clouds_option, "Volumetric Clouds");
         recompui::config::set_option_group(vol::file_option, "Volumetric Levels");
-        recompui::config::set_option_group(tooie::dust::option, "Volumetric Dust");
     }
     {
         // Wet, snowy and dirty characters are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.

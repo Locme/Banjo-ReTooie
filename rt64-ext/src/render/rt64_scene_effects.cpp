@@ -138,7 +138,7 @@ namespace RT64 {
             bool bvhBuiltOnce = false;
             // The level's lights for the traced shadows: the count, then each one's x, y, z, range (16 bytes each).
             std::unique_ptr<RenderBuffer> lightsBuffer;
-            // The dust clouds (SceneEffectsPS.hlsl gDust): the count in the first 16 bytes, then two float4s a cloud.
+            // The volumetric settings buffer (SceneEffectsPS.hlsl gDust): the extras in its first 16 bytes.
             std::unique_ptr<RenderBuffer> dustBuffer;
             // The world radiance cache: a hash table of 16-unit cells (check word, colour), 1 M entries.
             std::unique_ptr<RenderBuffer> radianceBuffer;
@@ -527,23 +527,6 @@ namespace RT64 {
         count = std::min(count, SceneMaxLights);
         memcpy(effectsSettings.lights, xyzr, size_t(count) * 4 * sizeof(float));
         effectsSettings.lightCount = count;
-    }
-
-    static std::mutex dustMutex;
-    static float dustClouds[SceneMaxDust * 8] = {};
-    static uint32_t dustCount = 0;
-
-    // Debug (TOOIE_DUST_DEBUG): 1 the shader draws no dust, 2 flat magenta clouds (no ground colour, no noise).
-    static std::atomic<uint32_t> dustDebug{ 0 };
-
-    void SetSceneDustDebug(uint32_t mode) {
-        dustDebug = mode;
-    }
-
-    void SetSceneDust(const float *clouds, uint32_t count) {
-        const std::scoped_lock lock(dustMutex);
-        dustCount = std::min(count, SceneMaxDust);
-        memcpy(dustClouds, clouds, size_t(dustCount) * 8 * sizeof(float));
     }
 
     // The volumetric extras, packed (see VolExtra in SceneEffectsPS.hlsl): [0] fog start / 25 (8 bits), fog colour (3), water
@@ -3713,21 +3696,17 @@ namespace RT64 {
         }
 
         if (res.dustBuffer == nullptr) {
-            res.dustBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (1 + 2 * SceneMaxDust)));
+            res.dustBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16));
             res.dustBuffer->setName("Scene Effects dust");
         }
         {
             float *dust = reinterpret_cast<float *>(res.dustBuffer->map());
-            memset(dust, 0, 16 * (1 + 2 * SceneMaxDust));
-            const std::scoped_lock lock(dustMutex);
-            dust[0] = float(dustCount);
-            dust[3] = float(dustDebug.load());
+            memset(dust, 0, 16);
             {
                 const std::scoped_lock extraLock(volExtraMutex);
                 dust[1] = volExtra[0];
                 dust[2] = volExtra[1];
             }
-            memcpy(dust + 4, dustClouds, size_t(dustCount) * 8 * sizeof(float));
             res.dustBuffer->unmap();
         }
 
@@ -3738,7 +3717,7 @@ namespace RT64 {
                 res.retireLater(std::move(res.sceneSet));
             }
             res.sceneSet = std::make_unique<SceneEffectsDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(), worker->device->getCapabilities().rayQuery, worker->device);
-            res.sceneSet->setBuffer(res.sceneSet->gDust, res.dustBuffer.get(), 16 * (1 + 2 * SceneMaxDust));
+            res.sceneSet->setBuffer(res.sceneSet->gDust, res.dustBuffer.get(), 16);
             res.sceneSet->setTexture(res.sceneSet->gInput, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
             res.sceneSet->setTexture(res.sceneSet->gBloom, res.bloomTexture[4].get(), RenderTextureLayout::SHADER_READ);
             res.sceneSetDepth = depthTarget->texture.get();
