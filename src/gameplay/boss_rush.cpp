@@ -262,7 +262,7 @@ namespace {
 }
 
 void tooie::boss_rush::add_option(recomp::config::Config& general) {
-    general.add_bool_option(option, "Boss rush",
+    general.add_bool_option(option, "Boss Rush",
         "Fight all 13 bosses one after another, from Klungo to Hag 1, with the moves each fight needs, whatever "
         "your save file has reached (the game's own Boss Replay, chained). Your file is saved first and the fights "
         "don't change it. If you lose, Yes tries that boss again and No ends the rush. Turns itself off when the "

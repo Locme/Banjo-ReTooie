@@ -1303,7 +1303,7 @@ void tooie::frame_overlay::add_option(recomp::config::Config& graphics) {
     created = true;
     graphics.add_enum_option(
         option,
-        "Frame rate overlay",
+        "Frame Rate Overlay",
         "<recomp-color primary>Compact</recomp-color> shows the frame rate and frame time. <recomp-color primary>Full</recomp-color> adds stutter, shader compiles, GPU time with each effect's share, the game's own frame rate and CPU time, frame interpolation, the map and Banjo's position, the renderer, speed-up, cheats and mods, audio, the build and a frame time graph. F3 steps through them while you play.",
         {
             {Mode::Off, "Off", "Off"},

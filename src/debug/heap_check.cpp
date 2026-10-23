@@ -50,7 +50,7 @@ namespace {
 void tooie::debug::add_heap_check_option(recomp::config::Config& wip) {
     wip.add_bool_option(
         heap_check_option,
-        "Heap check",
+        "Heap Check",
         "For testing. Checks the game's memory once per frame and writes the first damage it finds to the log, "
         "to help track down crashes. It costs almost nothing; turn it off only to rule it out.",
         true);

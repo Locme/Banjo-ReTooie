@@ -505,7 +505,7 @@ namespace {
 }
 
 void tooie::menu_mouse::add_options(recomp::config::Config& qol) {
-    qol.add_bool_option(enabled_option, "Mouse in the game's menus",
+    qol.add_bool_option(enabled_option, "Mouse In The Game's Menus",
         "The pause menu follows the mouse: the row under the cursor is picked as the cursor moves over it and "
         "a left click presses A on it. A right click is B (back). The cursor shows once the mouse is used.", true);
 }

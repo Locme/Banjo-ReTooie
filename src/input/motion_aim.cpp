@@ -104,7 +104,7 @@ namespace {
 }
 
 void tooie::motion_aim::add_options(recomp::config::Config& qol) {
-    qol.add_bool_option(invert_y_option, "Mouse and gyro aim: invert up/down",
+    qol.add_bool_option(invert_y_option, "Mouse And Gyro Aim: Invert Up/Down",
         "In first person, moving the mouse or tilting the controller up looks down instead. "
         "The strength of each is General > Mouse Sensitivity and Gyro Sensitivity.", false);
 }
