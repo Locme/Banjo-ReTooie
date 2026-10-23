@@ -697,6 +697,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::precompile_shaders_option, "Shaders");
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports And Cut Content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
+    recompui::config::set_option_group(tooie::mirror_mode::option, "Features");
     recompui::config::set_option_group(tooie::snout_jiggle::option, "Jiggle");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
@@ -933,7 +934,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Difficulty");
     // Features and Back-Ports from General (L, 2026-10-23), with their headings. Saves, shaders, Discord and the
     // Developer switch stay in General.
-    for (const std::string* id : { &tooie::boss_rush::option, &tooie::classic_sounds::option,
+    for (const std::string* id : { &tooie::boss_rush::option, &tooie::mirror_mode::option, &tooie::classic_sounds::option,
             &tooie::honeycomb_glitter::option, &tooie::original_honeycomb::option, &tooie::jiggy_dance::option,
             &tooie::torch_enemy::option }) {
         recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
