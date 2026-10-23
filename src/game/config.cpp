@@ -1160,12 +1160,18 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::game_frame_rate::option, "Frame Rate And Overlay");
     recompui::config::set_option_group(tooie::effect_views::option, "Debug");
 
-    // Performance tab under Graphics (L, 2026-10-16): the frame rate and latency options. They stay in the
-    // graphics config (graphics.json), so saving and the code that reads them don't change.
-    recompui::config::create_page_tab("Performance", tooie::performance_tab_id, recompui::config::graphics::id);
+    // Display tab under Graphics (L, 2026-10-23; was Performance, L 2026-10-16): the Display section, Anti-Aliasing
+    // and Scaling, and the frame rate and latency options. They stay in the graphics config (graphics.json), so
+    // saving and the code that reads them don't change.
+    recompui::config::create_page_tab("Display", tooie::performance_tab_id, recompui::config::graphics::id);
     for (const std::string* id : { &tooie::game_frame_rate::option, &recompui::config::graphics::options::rr_option,
             &recompui::config::graphics::options::rr_manual_value, &tooie::low_latency::option,
-            &tooie::frame_readback::option, &tooie::frame_overlay::option }) {
+            &tooie::frame_readback::option, &tooie::frame_overlay::option,
+            &recompui::config::graphics::options::res_option, &recompui::config::graphics::options::ds_option,
+            &recompui::config::graphics::options::ar_option, &recompui::config::graphics::options::wm_option,
+            &recompui::config::graphics::options::hr_option, &recompui::config::graphics::options::api_option,
+            &recompui::config::graphics::options::msaa_option, &tooie::smaa::option, &tooie::fxaa::option,
+            &tooie::fsr::option }) {
         recompui::config::set_option_page(*id, tooie::performance_tab_id);
     }
 
