@@ -185,8 +185,6 @@ namespace RT64 {
             const NVSDK_NGX_Result result = useVulkan ? NGX_VULKAN_CREATE_DLSS_EXT(vkCommandList->vk, 1, 1, &handle, ngxParams, &create) :
                 NGX_D3D12_CREATE_DLSS_EXT(d3dCommandList->d3d, 1, 1, &handle, ngxParams, &create);
             if (!useVulkan) {
-                // NGX sets its own descriptor heaps on the command list: plume must set its own again before its next draw.
-                d3dCommandList->notifyDescriptorHeapWasChangedExternally();
             }
             if (NVSDK_NGX_FAILED(result)) {
                 fail("could not create the DLSS feature: " + narrow(GetNGXResultAsString(result)));
@@ -264,8 +262,6 @@ namespace RT64 {
         eval.InMVScaleX = 1.0f;
         eval.InMVScaleY = 1.0f;
         const NVSDK_NGX_Result result = NGX_D3D12_EVALUATE_DLSS_EXT(d3dCommandList->d3d, static_cast<NVSDK_NGX_Handle *>(feature), ngxParams, &eval);
-        // NGX sets its own descriptor heaps on the command list: plume must set its own again before its next draw.
-        d3dCommandList->notifyDescriptorHeapWasChangedExternally();
         if (NVSDK_NGX_FAILED(result)) {
             fail("DLSS failed to run: " + narrow(GetNGXResultAsString(result)));
             return false;
