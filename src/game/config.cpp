@@ -745,6 +745,11 @@ void tooie::init_config() {
         },
         tooie::FreeCameraMouse::Off);
     graphics.add_bool_option(
+        tooie::free_camera_rb_distance_option,
+        "Free camera: hold RB to fine-tune distance",
+        "Hold RB (the game's camera distance button, which still works as it always did when you only tap it) and push the camera stick up or down to move the free camera closer or further away, in small steps, from about half to twice the game's distance.",
+        false);
+    graphics.add_bool_option(
         tooie::free_camera_look_up_option,
         "Free camera: look up",
         "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
@@ -753,7 +758,7 @@ void tooie::init_config() {
         namespace pf = tooie::picture_filters;
         for (const std::string* id : { &tooie::dive::option, &tooie::menu_mouse::enabled_option,
                 &tooie::free_camera_ease_back_option, &tooie::free_camera_floor_clearance_option,
-                &tooie::free_camera_look_up_option, &tooie::free_camera_orbit_option, &pf::grass_section_option,
+                &tooie::free_camera_look_up_option, &tooie::free_camera_orbit_option, &tooie::free_camera_rb_distance_option, &pf::grass_section_option,
                 &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
                 &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
                 &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
@@ -770,6 +775,7 @@ void tooie::init_config() {
         recompui::config::set_option_display_before(tooie::free_camera_floor_clearance_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_look_up_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_orbit_option, pf::grass_section_option);
+        recompui::config::set_option_display_before(tooie::free_camera_rb_distance_option, pf::grass_section_option);
         // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
         recompui::config::set_option_group(tooie::dive::option, "Dive");
         recompui::config::set_option_group(tooie::menu_mouse::enabled_option, "Menu mouse");

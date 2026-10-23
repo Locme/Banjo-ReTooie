@@ -42,6 +42,7 @@
 #include "funcs.h"
 #include "recompui/config.h"
 #include "recompinput/input_state.h"
+#include "recompinput/profiles.h"
 #include "tooie_debug.h"
 #include "tooie_free_camera.h"
 #include "tooie_photo_mode.h"
@@ -249,6 +250,15 @@ namespace {
         return 1.0f - std::exp(-rate * dt);
     }
 
+    // Whether the R button (RB) is held, from the last camera step; read by the sound log.
+    std::atomic<bool> r_held{false};
+    // RB fine-tune: the distance range as a multiple of the game's, and the rate (per second, at a full
+    // push) of the change.
+    constexpr float rb_min_zoom = 0.5f;
+    constexpr float rb_max_zoom = 2.0f;
+    constexpr float rb_zoom_rate = 0.8f;
+    constexpr uint16_t n64_r_button = 0x0010;
+
     // Scales the players' draw alpha (tooie_free_camera_player_alpha), 1 for whole.
     std::atomic<float> player_fade{1.0f};
 }
@@ -358,6 +368,19 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     const bool snap_pressed = (snap_down && !state.snap_was_down) || middle_clicked;
     state.snap_was_down = snap_down;
 
+    {
+        uint16_t buttons = 0;
+        float bx = 0.0f, by = 0.0f;
+        recompinput::profiles::get_n64_input(0, &buttons, &bx, &by);
+        r_held = (buttons & n64_r_button) != 0;
+    }
+    // Holding RB with the option on: the stick's up and down change the distance instead of tilting.
+    float rb_zoom_input = 0.0f;
+    if (r_held && wip_option<bool>(tooie::free_camera_rb_distance_option, false)) {
+        rb_zoom_input = stick_y;
+        stick_y = 0.0f;
+    }
+
     const bool on = tooie::free_camera::enabled();
     const bool gameplay = updating && mode == mode_dynamic && valid_ptr(camera) && valid_ptr(transform) && valid_ptr(dynamic);
     // First person and the like: leave the camera alone but keep the held yaw for afterwards.
@@ -377,7 +400,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     float fade = 1.0f;
     if (on && gameplay && !paused) {
         const bool stick = stick_x != 0.0f || stick_y != 0.0f || orbit_x != 0.0f || orbit_y != 0.0f ||
-            wheel_notches != 0;
+            wheel_notches != 0 || rb_zoom_input != 0.0f;
         if (!state.active && stick) {
             state.active = true;
             state.yaw = rot[1];
@@ -427,6 +450,11 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             const float sx = (option<bool>(tooie::free_camera_invert_x_option, false) != tooie::mirror_mode::active()) ? -stick_x : stick_x;
             const float sy = option<bool>(tooie::free_camera_invert_y_option, false) ? -stick_y : stick_y;
             // Right turns the view right (yaw grows to the left). Up looks up, so the camera drops.
+            // RB held, stick up: closer; down: further. Steps toward the range's limits only.
+            if (rb_zoom_input != 0.0f) {
+                const float wanted_zoom = state.zoom * std::exp(-rb_zoom_input * rb_zoom_rate * dt);
+                state.zoom = std::clamp(wanted_zoom, rb_min_zoom, rb_max_zoom);
+            }
             // Mouse wheel: each notch changes the distance by 10%, up zooms in.
             if (wheel_notches != 0) {
                 state.zoom = std::clamp(state.zoom * std::pow(0.9f, (float)wheel_notches), min_zoom, max_zoom);
@@ -580,4 +608,14 @@ bool tooie::free_camera::sweep_line(uint8_t* rdram, recomp_context* ctx, const f
 extern "C" int tooie_free_camera_player_alpha(int alpha) {
     const float fade = player_fade.load();
     return fade >= 1.0f ? alpha : (int)((float)alpha * fade);
+}
+
+extern "C" void tooie_sound_log(uint8_t* rdram, recomp_context* ctx, int which) {
+    (void)rdram;
+    if (!r_held.load()) {
+        return;
+    }
+    static const char* const names[] = { "func_800DA298", "func_8009DE38", "func_800DA544" };
+    std::printf("[sfx-R] %s a0 %X a1 %X a2 %X\n", names[which], (unsigned)ctx->r4, (unsigned)ctx->r5, (unsigned)ctx->r6);
+    std::fflush(stdout);
 }
