@@ -153,10 +153,6 @@ framework, not from this port's code, so it is not described here.
   submarine is the other way round: it changes in water only). Golden Goliath
   and Dragon Kazooie are not part of it. Default: On (since 2026-10-19; a
   saved Off turns on once).
-- **Canary Mary races**: Fair, Easy or Original. In the original she speeds up
-  past her normal pace whenever you lead; Fair removes that catch-up, Easy is
-  Fair with her pace at 85%. She still slows down when you fall behind.
-  Default: Fair.
 - **Fine aim**: Off, Hold key or Always. In first person (C-up) the left stick
   turns the view slower, for aiming eggs. The key is Fine Aim in Controls >
   Hotkeys (R or right trigger by default). **Fine aim speed**: 25%, 40% or 60%
@@ -175,6 +171,27 @@ framework, not from this port's code, so it is not described here.
   - **Free camera: smooth walls**: the camera glides in when a wall gets
     between it and Banjo and glides back out afterwards, instead of jumping,
     and Banjo fades out when the camera comes very close to him. Default: off.
+
+## Gameplay
+
+The Gameplay tab's Difficulty section. These are General options shown on their
+own tab, so they are saved in general.json and apply as soon as they change.
+
+- **Enemies do double damage**: every hit from an enemy or hazard takes twice the
+  honeycombs. Falls hurt as they always do. Default: off.
+- **Enemy aim**: Original, Better or Sharp. Enemies and shots that aim ahead of
+  you aim half a second (Better) or a full second (Sharp) of your running ahead.
+  **Enemy aim: aimed shots** (percent of shots aimed ahead, default 75) and
+  **Enemy aim: homing shots** (Klungo's potion steers while it flies, default
+  on) show when it is not Original. Default: Original.
+- **Enemy dynamic positioning**: a curated list of enemies slide sideways while
+  they close in and sidestep your roll. Default: off.
+- **Lower Enemy Attack Cooldown**: the same enemies wait half as long between
+  attacks. Default: off.
+- **Canary Mary races** (was in QOL > Balancing until 2026-10-23): Fair, Easy or Original. In the original she speeds up
+  past her normal pace whenever you lead; Fair removes that catch-up, Easy is
+  Fair with her pace at 85%. She still slows down when you fall behind.
+  Default: Fair.
 
 ## WIP
 

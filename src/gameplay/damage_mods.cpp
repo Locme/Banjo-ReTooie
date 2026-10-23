@@ -364,6 +364,9 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
         bool have = false;
         float side = 1.0f;
         float swap_in = 0.0f;
+        float moving_for = 0.0f; // seconds since it last moved by itself, counted down from 0.4
+        float vel = 0.0f;        // the sideways speed now, eased toward its target
+        float roll_side = 0.0f;  // the side picked for the roll in progress, 0 when none
     };
     static std::unordered_map<uint32_t, Track> tracks;
     if (tracks.size() > 512) {
@@ -373,7 +376,15 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
     const float x = tooie::rdram::read_float(rdram, actor + 4);
     const float z = tooie::rdram::read_float(rdram, actor + 0xC);
     const float moved = t.have ? std::hypot(x - t.pos[0], z - t.pos[1]) : 0.0f;
-    const bool was_moving = t.have && moved > 0.4f && moved < 400.0f;
+    if (t.have && moved > 400.0f) {
+        t.vel = 0.0f; // teleported or respawned
+    }
+    // It counts as moving for 0.4 s after its last step of its own, so a pause between hops does not stop the slide.
+    if (t.have && moved > 0.4f && moved < 400.0f) {
+        t.moving_for = 0.4f;
+    } else {
+        t.moving_for = std::max(0.0f, t.moving_for - dt);
+    }
     t.pos[0] = x;
     t.pos[1] = z;
     t.have = true;
@@ -385,24 +396,43 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
     const float dx = aim_prev[0] - x;
     const float dz = aim_prev[2] - z;
     const float dist = std::hypot(dx, dz);
-    if (!was_moving || dist < 150.0f || dist > 800.0f) {
-        return;
-    }
     const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
     const uint32_t block = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0x120) : 0;
     const uint32_t state = tooie::rdram::valid_ptr(block) ? tooie::rdram::read_word(rdram, block + 4) : 0;
-    float speed = 120.0f;
-    float side = t.side;
-    if (state == 49 && dist < 500.0f) {
-        speed = 350.0f;
-        const float vlen = std::hypot(aim_vel[0], aim_vel[1]);
-        if (vlen > 1.0f) {
-            const float cross = aim_vel[0] * (z - aim_prev[2]) - aim_vel[1] * (x - aim_prev[0]);
-            side = cross >= 0.0f ? 1.0f : -1.0f;
+    const bool rolling = state == 49 && dist < 500.0f;
+    if (!rolling) {
+        t.roll_side = 0.0f;
+    }
+    // The target sideways speed: 0 outside 150 to 800 units (fading in over 100 units at each end) or when it is
+    // not moving, 120 units a second, or 350 while Banjo rolls, on the side picked when the roll began.
+    float target = 0.0f;
+    if (t.moving_for > 0.0f && dist > 1.0f) {
+        const float fade = std::clamp(std::min(dist - 150.0f, 800.0f - dist) / 100.0f, 0.0f, 1.0f);
+        float side = t.side;
+        float speed = 120.0f;
+        if (rolling) {
+            speed = 350.0f;
+            if (t.roll_side == 0.0f) {
+                const float vlen = std::hypot(aim_vel[0], aim_vel[1]);
+                if (vlen > 1.0f) {
+                    // The side of his roll line the enemy is already on.
+                    const float cross = aim_vel[0] * (z - aim_prev[2]) - aim_vel[1] * (x - aim_prev[0]);
+                    t.roll_side = cross >= 0.0f ? 1.0f : -1.0f;
+                }
+            }
+            if (t.roll_side != 0.0f) {
+                side = t.roll_side;
+            }
         }
+        target = side * speed * fade;
+    }
+    // Ease toward the target in about a sixth of a second instead of jumping, so starts, stops and swaps are smooth.
+    t.vel += (target - t.vel) * std::min(1.0f, dt * 6.0f);
+    if (std::fabs(t.vel) < 0.5f || dist < 1.0f) {
+        return;
     }
     // Perpendicular to the enemy-to-Banjo line: (dz, -dx) / dist.
-    const float step = speed * dt * side / dist;
+    const float step = t.vel * dt / dist;
     tooie::rdram::write_float(rdram, actor + 4, x + dz * step);
     tooie::rdram::write_float(rdram, actor + 0xC, z - dx * step);
 }
