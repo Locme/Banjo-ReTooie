@@ -511,13 +511,13 @@ void tooie::init_config() {
             "How heavy the snout is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
         general.add_number_option(squash_in_option, "Snout Jiggle: Max Squash & Stretch Inwards",
             "How far the tip may be pushed back into his face and eyes, as a share of the snout's length.", 0, 95, 5, 0, true, 50);
-        general.add_number_option(squash_walk_option, "Snout Jiggle: Squash & Stretch While Walking",
+        general.add_number_option(squash_walk_option, "Squash & Stretch While Walking",
             "The inwards limit while Banjo walks or runs along the ground, so walking forward doesn't squash his face. Jumps, falls, stops and turns use the inwards setting above. It can only be gentler than that.", 0, 95, 5, 0, true, 15);
         general.add_number_option(squash_out_option, "Snout Jiggle: Max Squash & Stretch Outwards",
             "How far the tip may stretch out, as a share of the snout's length.", 0, 300, 5, 0, true, 50);
         general.add_number_option(squash_across_option, "Snout Jiggle: Max Squash & Stretch Up And Down",
             "How far the tip may swing up and down (and to the side), as a share of the snout's length.", 0, 300, 5, 0, true, 50);
-        general.add_bool_option(nose_option, "Snout Jiggle: Nose Jiggle",
+        general.add_bool_option(nose_option, "Nose Jiggle",
             "Banjo's black nose wobbles too, on its own jiggle bone on the end of the snout, with the same spring. Its squash and stretch stays small so it always looks like a nose.", false);
         for (const std::string* id : { &stiffness_option, &damping_option, &mass_option, &squash_in_option, &squash_walk_option, &squash_out_option,
                                        &squash_across_option, &nose_option }) {
@@ -557,7 +557,7 @@ void tooie::init_config() {
             "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 10);
         general.add_number_option(ears_mass_option, "Ear Jiggle: Mass",
             "How heavy the ears are: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
-        general.add_number_option(ears_squash_option, "Ear Jiggle: Max Squash & Stretch",
+        general.add_number_option(ears_squash_option, "Max Squash & Stretch",
             "How far an ear may squash down, stretch up and flop forwards, backwards and to the side, as a share of its height (squashing stops at 95%).", 0, 300, 5, 0, true, 60);
         for (const std::string* id : { &ears_stiffness_option, &ears_damping_option, &ears_mass_option, &ears_squash_option }) {
             general.add_option_hidden_dependency(*id, ears_option, false);
@@ -574,7 +574,7 @@ void tooie::init_config() {
             "How quickly the swaying dies out. 0 sways for ages.", 0, 90, 1, 0, false, 8);
         general.add_number_option(fur_mass_option, "Fur Jiggle: Mass",
             "How heavy the fur is: heavier lags further behind and sways slower.", 0.1, 7.5, 0.1, 1, false, 1);
-        general.add_number_option(fur_sway_option, "Fur Jiggle: Max Sway",
+        general.add_number_option(fur_sway_option, "Max Sway",
             "How far the tips may lean, as a share of the strands' length.", 0, 300, 5, 0, true, 100);
         for (const std::string* id : { &fur_stiffness_option, &fur_damping_option, &fur_mass_option, &fur_sway_option }) {
             general.add_option_hidden_dependency(*id, fur_option, false);
@@ -591,9 +591,9 @@ void tooie::init_config() {
             "How quickly the bouncing dies out. 0 bounces for ages.", 0, 90, 1, 0, false, 10);
         general.add_number_option(body_mass_option, "Backpack Jiggle: Mass",
             "How heavy the backpack is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1.5);
-        general.add_number_option(body_squash_option, "Backpack Jiggle: Squash & Stretch",
+        general.add_number_option(body_squash_option, "Squash & Stretch",
             "How far the pack may swing, squash and stretch from where it rests, as a share of its size.", 0, 300, 5, 0, true, 25);
-        general.add_number_option(body_tilt_option, "Backpack Jiggle: Tilt",
+        general.add_number_option(body_tilt_option, "Tilt",
             "How the pack leans while Banjo walks or runs: positive leans its top forward towards his head, negative leans it back, in degrees. It eases back upright when he stops or leaves the ground.", -60, 60, 5, 0, false, 0);
         for (const std::string* id : { &body_stiffness_option, &body_damping_option, &body_mass_option, &body_squash_option,
                                        &body_tilt_option }) {
@@ -642,13 +642,13 @@ void tooie::init_config() {
         tooie::damage::Aim::Original);
     general.add_number_option(
         tooie::damage::aim_chance_option,
-        "Enemy Aim: Aimed Shots",
+        "Aimed Shots",
         "With Enemy aim on Better or Sharp, how many shots are aimed ahead of you and steered, in percent. The others fly as in the game, so the boss cannot be read as always aiming ahead.",
         0, 100, 5, 0, false, 75);
     general.add_option_hidden_dependency(tooie::damage::aim_chance_option, tooie::damage::aim_option, tooie::damage::Aim::Original);
     general.add_bool_option(
         tooie::damage::homing_option,
-        "Enemy Aim: Homing Shots",
+        "Homing Shots",
         "With Enemy aim on Better or Sharp, Klungo's potion also steers toward where you are heading while it flies, so only really changing direction dodges it.",
         true);
     general.add_option_hidden_dependency(tooie::damage::homing_option, tooie::damage::aim_option, tooie::damage::Aim::Original);
