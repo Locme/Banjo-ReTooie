@@ -26,4 +26,15 @@ namespace tooie::volumetric {
     void add_options(recomp::config::Config& graphics);
     // Once per game frame from tooie_warp_tick (after day_night::tick, which sets its own clouds first).
     void tick(uint8_t* rdram);
+
+    // The Save Volumetric Settings key opens a panel of buttons in the pick worker (src/debug/parallax_pick.cpp), one
+    // per setting and Save All, each writing that setting (as showing now) into this level's line of volumetric.txt.
+    // 0 cloud type, 1 cloud shape (cover, height, thickness, speed), 2 mist (strength and floor height), 3 fog
+    // strength, 4 fog preset.
+    constexpr int setting_count = 5;
+    const char* setting_name(int setting);
+    // Whether this level's line lacks the setting as it is showing now.
+    bool setting_unsaved(int setting);
+    // Saves one setting, or all of them for -1. False when it could not be written.
+    bool save_setting(int setting);
 }

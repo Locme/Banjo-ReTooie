@@ -17,6 +17,7 @@
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <variant>
@@ -28,7 +29,6 @@
 
 #include "tooie_debug.h"
 #include "tooie_dev_files.h"
-#include "tooie_hotkeys.h"
 #include "tooie_toast.h"
 #include "tooie_volumetric.h"
 
@@ -77,6 +77,19 @@ namespace {
     std::filesystem::file_time_type file_time{};
     bool file_seen = false;
     int frames = 0;
+    // Guards levels and current: tick() runs on the game thread, the save buttons on the pick worker's.
+    std::mutex data_mutex;
+    // What is showing now (the options with this level's line over them), for the save buttons.
+    struct Current {
+        bool valid = false;
+        uint16_t map = 0;
+        uint32_t cloud_type = 0;
+        Shape shape{};
+        float mist = 0.0f;
+        float fog = 0.0f;
+        uint32_t preset = 0;
+        float offset = 0.0f;
+    } current;
 
     const char* const cloud_names[] = { "off", "fair", "scattered", "overcast", "stormy", "wispy", "sunset", "thunderstorm" };
     const char* const preset_names[] = { "default", "bright", "hell", "murky", "poison", "sponza", "pillar" };
@@ -338,6 +351,7 @@ void tooie::volumetric::add_options(recomp::config::Config& graphics) {
 }
 
 void tooie::volumetric::tick(uint8_t* rdram) {
+    std::lock_guard lock{ data_mutex };
     float mist = number(mist_option, 0.0f) / 100.0f;
     float fog = number(fog_option, 0.0f) / 100.0f;
     uint32_t preset = choice(fog_preset_option);
@@ -376,29 +390,75 @@ void tooie::volumetric::tick(uint8_t* rdram) {
             if (l.speed >= 0.0f) { shape.speed = (l.speed * 2.0f) * (l.speed * 2.0f); }
         }
     }
-    // Save Volumetric Settings (Controls > Volumetric): everything showing now becomes this level's line.
-    static bool save_was_down = false;
-    const bool save_down = tooie::hotkeys::down(recompinput::GameInput::VOLUMETRIC_SAVE);
-    if (save_down && !save_was_down) {
-        const uint16_t map = tooie::debug::current_map(rdram);
-        const Level now = level_of(cloud_type, shape, mist, fog, preset, offset);
-        char text[128];
-        if (save(map, now)) {
-            levels[map] = now;
-            std::error_code ec;
-            file_time = std::filesystem::last_write_time(tooie::dev_files::read_path(file_name), ec);
-            fprintf(stderr, "[volumetric] saved map 0x%X: %s\n", map, line_of(map, now).c_str());
-            std::snprintf(text, sizeof(text), "Volumetric settings saved to volumetric.txt for map 0x%X", map);
-        }
-        else {
-            std::snprintf(text, sizeof(text), "Could not write volumetric.txt in the Dev Files folder");
-        }
-        tooie::toast::show(text);
-    }
-    save_was_down = save_down;
+    current = { true, tooie::debug::current_map(rdram), cloud_type, shape, mist, fog, preset, offset };
     RT64::SetSceneVolumetric(mist, fog, preset, cloud_type, offset);
     // Forced clouds take the shape over from the Day and Night cycle's (whose tick has already run this frame).
     if (cloud_type > 0) {
         RT64::SetSceneClouds(shape.cover, shape.height, shape.thickness, shape.speed);
     }
+}
+
+const char* tooie::volumetric::setting_name(int setting) {
+    static const char* names[setting_count] = { "Cloud Type", "Cloud Shape", "Mist", "Fog", "Fog Preset" };
+    return (setting >= 0 && setting < setting_count) ? names[setting] : "";
+}
+
+namespace {
+    // Whether this level's line already has the setting as it is showing.
+    bool saved_locked(int setting) {
+        const auto found = levels.find(current.map);
+        if (found == levels.end()) {
+            return false;
+        }
+        const Level& have = found->second;
+        const Level now = level_of(current.cloud_type, current.shape, current.mist, current.fog, current.preset, current.offset);
+        const auto same = [](float a, float b) { return (a >= 0.0f) && (std::fabs(a - b) < 0.011f); };
+        switch (setting) {
+        case 0: return have.clouds == now.clouds;
+        case 1: return same(have.cover, now.cover) && same(have.height, now.height) && same(have.thickness, now.thickness) && same(have.speed, now.speed);
+        case 2: return same(have.mist, now.mist) && (std::fabs(have.mist_offset - now.mist_offset) < 0.5f);
+        case 3: return same(have.fog, now.fog);
+        case 4: return have.preset == now.preset;
+        }
+        return false;
+    }
+}
+
+bool tooie::volumetric::setting_unsaved(int setting) {
+    std::lock_guard lock{ data_mutex };
+    return current.valid && !saved_locked(setting);
+}
+
+bool tooie::volumetric::save_setting(int setting) {
+    std::lock_guard lock{ data_mutex };
+    if (!current.valid) {
+        return false;
+    }
+    const Level now = level_of(current.cloud_type, current.shape, current.mist, current.fog, current.preset, current.offset);
+    Level l = now;
+    if (setting >= 0) {
+        // Only this setting: the rest of the level's line stays as it was (or unset).
+        const auto found = levels.find(current.map);
+        l = (found != levels.end()) ? found->second : Level();
+        switch (setting) {
+        case 0: l.clouds = now.clouds; break;
+        case 1: l.cover = now.cover; l.height = now.height; l.thickness = now.thickness; l.speed = now.speed; break;
+        case 2: l.mist = now.mist; l.mist_offset = now.mist_offset; break;
+        case 3: l.fog = now.fog; break;
+        case 4: l.preset = now.preset; break;
+        default: return false;
+        }
+    }
+    char text[160];
+    if (save(current.map, l)) {
+        levels[current.map] = l;
+        std::error_code ec;
+        file_time = std::filesystem::last_write_time(tooie::dev_files::read_path(file_name), ec);
+        fprintf(stderr, "[volumetric] saved %s for map 0x%X: %s\n", setting < 0 ? "all" : setting_name(setting), current.map, line_of(current.map, l).c_str());
+        std::snprintf(text, sizeof(text), "Saved %s for map 0x%X to volumetric.txt", setting < 0 ? "all volumetric settings" : setting_name(setting), current.map);
+        tooie::toast::show(text);
+        return true;
+    }
+    tooie::toast::show("Could not write volumetric.txt in the Dev Files folder");
+    return false;
 }
