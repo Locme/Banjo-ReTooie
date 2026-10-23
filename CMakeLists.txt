@@ -300,7 +300,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/game/cic.cpp
     ${CMAKE_SOURCE_DIR}/src/game/config.cpp
-    ${CMAKE_SOURCE_DIR}/src/game/simple_menu.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/menu_tree.cpp
     ${CMAKE_SOURCE_DIR}/src/game/more_memory.cpp
     ${CMAKE_SOURCE_DIR}/src/game/heap_guard.cpp
     ${CMAKE_SOURCE_DIR}/src/game/cutscene_guards.cpp
