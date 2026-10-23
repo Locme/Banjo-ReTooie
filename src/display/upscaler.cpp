@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "recompui/config.h"
-#include "ultramodern/ultramodern.hpp"
 
 #include "tooie_upscaler.h"
 
@@ -36,19 +35,8 @@ void tooie::upscaler::apply() {
         return;
     }
     uint32_t mode = (uint32_t)Mode::Off;
-#if !defined(__ANDROID__)
-    // On Vulkan the Vulkan list is the one shown (the other is hidden), so it is the one read.
-    bool vulkan = false;
     try {
-        vulkan = std::get<uint32_t>(graphics_config().get_option_value(recompui::config::graphics::options::api_option)) == (uint32_t)ultramodern::renderer::GraphicsApi::Vulkan;
-    } catch (...) {
-    }
-    const std::string& mode_option = vulkan ? vulkan_option : option;
-#else
-    const std::string& mode_option = option;
-#endif
-    try {
-        mode = std::get<uint32_t>(graphics_config().get_option_value(mode_option));
+        mode = std::get<uint32_t>(graphics_config().get_option_value(option));
     } catch (...) {
     }
     // A saved choice this platform doesn't list (a settings file from another device) acts as Off.
@@ -117,29 +105,6 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
         "Temporal upscaling and anti-aliasing. Temporal (built-in) is the game's own temporal upscaler and works on any card. FSR 3 runs on any recent Windows graphics card. FSR 4 needs a Radeon RX 9000 card and DLSS an RTX card; On Android phones, Snapdragon GSR (a fast spatial upscaler, best on Adreno) is listed instead. The native modes (FSR 4 Native AA, DLAA) anti-alias without upscaling. Off leaves the picture as it is.",
         choices,
         Mode::Off);
-#if !defined(__ANDROID__)
-    // FSR 3 and FSR 4 are Direct3D 12 only, and DLSS is not on Vulkan yet: on Vulkan this shorter list replaces the one above.
-    graphics.add_enum_option(
-        vulkan_option,
-        "Upscaler",
-        "Temporal upscaling and anti-aliasing. Temporal (built-in) is the game's own temporal upscaler and works on any card. FSR and DLSS need the Direct3D 12 graphics API. Off leaves the picture as it is.",
-        {
-            {Mode::Off, "Off", "Off"},
-            {Mode::Temporal, "Temporal (built-in)", "Temporal (built-in)"},
-        },
-        Mode::Off);
-    graphics.add_option_hidden_dependency(option, recompui::config::graphics::options::api_option, ultramodern::renderer::GraphicsApi::Vulkan);
-    graphics.add_option_hidden_dependency(vulkan_option, recompui::config::graphics::options::api_option,
-        ultramodern::renderer::GraphicsApi::Auto, ultramodern::renderer::GraphicsApi::D3D12, ultramodern::renderer::GraphicsApi::Metal);
-    graphics.add_option_change_callback(vulkan_option,
-        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
-            if (context == recomp::config::OptionChangeContext::Temporary) {
-                graphics_config().save_config();
-            } else {
-                apply();
-            }
-        });
-#endif
     graphics.add_enum_option(
         quality_option,
         "Upscaler Quality",
