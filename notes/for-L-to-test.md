@@ -45,6 +45,15 @@
 - Look for: Mist stays in the level and meets scenery with no texture-on-model look; fog presets differ clearly; clouds show on the sky of any level, Stormy is dark grey; the file's line applies within a second. Send frame rate with them on.
 - Status: waiting for L
 
+## T563 Enemy faster attacks
+- Asked: 2026-10-23
+- Build: main
+- Steps:
+  1. General > Gameplay: turn on Enemy faster attacks
+  2. Fight a Beehive, Torch enemy, Soarasaur, Tintup or Washup (enemies that use the shared helper), then turn it off and compare how often they attack
+- Look for: they attack about twice as often; nothing else changes. Not covered: enemies the sweep found with their own code (Eyeball, Dragunda, Gobgoyle, Onion, Toxi-Gag and others).
+- Status: waiting for L
+
 ## T562 Aim sweep: find the enemy chase code automatically
 - Asked: 2026-10-23 06:31 UTC
 - Build: main

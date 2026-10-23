@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Enemy faster attacks (Gameplay, off): enemies using the shared attack wait (the 5 to 8 second pause in the common enemy helper, seen in the Aim sweep on about 40 enemies) wait half as long. Untested on PC (T563).
 - DEV > Aim sweep (for testing, off): spawns about 60 enemies one after another next to Banjo, reloading the area between them, and writes aim_sweep.txt in the Dev Files folder listing which player-position readers run with each. About 25 minutes; it turns itself off. Untested on PC (T562). The 16 "(only where it lives)" enemies are included: Banjo is warped to a map whose setup places each one first, so the sweep takes a bit longer.
 - Pick modes: Save Pick and Paste Pick now act on the texture under the cursor in all three texture pick modes at once (Parallax, Shader Effects, Ray Tracing Material). DEV > Picker Save Only Current Active (off by default) brings back saving only in the mode that is on (L).
 - Shader Effects pick mode's **Light Source** now only makes the object itself shine (as Slight Glow does) and lights nothing round it, so no ball of light at all; this goes for the built-in ones too (fire, explosions). Its strength (Shift + mouse wheel) no longer changes anything (L's pick). Untested on PC (T532).

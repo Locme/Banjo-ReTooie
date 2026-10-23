@@ -560,6 +560,11 @@ void tooie::init_config() {
         "With Enemy aim on Better or Sharp, Klungo's potion also steers toward where you are heading while it flies, so only really changing direction dodges it.",
         true);
     general.add_option_hidden_dependency(tooie::damage::homing_option, tooie::damage::aim_option, tooie::damage::Aim::Original);
+    general.add_bool_option(
+        tooie::damage::faster_attacks_option,
+        "Enemy faster attacks",
+        "Enemies that use the game's shared attack wait (the ones that pause 5 to 8 seconds between attacks) wait half as long.",
+        false);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(
         tooie::discord::presence_option,
@@ -588,6 +593,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::damage::aim_option, "Gameplay");
     recompui::config::set_option_group(tooie::damage::aim_chance_option, "Gameplay");
     recompui::config::set_option_group(tooie::damage::homing_option, "Gameplay");
+    recompui::config::set_option_group(tooie::damage::faster_attacks_option, "Gameplay");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
