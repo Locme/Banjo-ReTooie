@@ -1091,6 +1091,8 @@ void tooie::init_config() {
     tooie::api_restart::add_prompt(graphics);
     tooie::fsr::add_option(graphics);
     tooie::upscaler::add_option(graphics);
+    // The Water entry (Original, Modern, Stylised) is WIP (L, 2026-10-23): it sits in the WIP tab.
+    recompui::config::set_option_page(tooie::picture_filters::water_option, tooie::work_in_progress_tab_id);
     {
         // The upscalers are WIP (L, 2026-10-23): their own "Upscaler" section in the WIP tab. Still Graphics
         // options, so they save to graphics.json.
