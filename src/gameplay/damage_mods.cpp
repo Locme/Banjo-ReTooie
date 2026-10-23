@@ -280,8 +280,8 @@ extern "C" void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx) {
 // Curated enemies (L, 2026-10-23): the two enemy toggles only touch the enemies on L's list, not every actor
 // built on the shared sucoaster helper (many of those are objects that cannot be killed). An object is on the
 // list when its actor entry (+0x10, the pointer _gemarkersDll_entrypoint_0 returns for the actor id, as the
-// enemy spawner's guard uses) matches one of these ids. Ids not yet known (Bargasaurus, Diggit, Flatso,
-// Globble) are missing from the list.
+// enemy spawner's guard uses) matches one of these ids. Diggit, Flatso and Globble are matched by model instead
+// (their actor ids are not known); Bargasaurus is missing.
 namespace {
     constexpr uint16_t curated_ids[] = {
         0x440, // Boltoid
@@ -316,7 +316,18 @@ namespace {
             *ctx = saved;
         }
         const uint32_t entry = tooie::rdram::read_word(rdram, actor + 0x10);
-        return std::find(entries.begin(), entries.end(), entry) != entries.end() && entry != 0;
+        if (entry != 0 && std::find(entries.begin(), entries.end(), entry) != entries.end()) {
+            return true;
+        }
+        // Enemies whose actor id is not known: matched by model (the object's marker +0x14, ScriptHawk's
+        // model list): Diggit, Flatso (green, blue, pink) and Globble. 0x662 is listed there as "Globble (Fly,
+        // Bovina)", so Bovina may match too.
+        const uint32_t marker = tooie::rdram::read_word(rdram, actor);
+        if (!tooie::rdram::valid_ptr(marker)) {
+            return false;
+        }
+        const uint16_t model = (uint16_t)tooie::rdram::read_half(rdram, marker + 0x14);
+        return model == 0x66F || model == 0x818 || model == 0x819 || model == 0x81A || model == 0x662;
     }
 }
 
