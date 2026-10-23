@@ -115,7 +115,7 @@ namespace RT64 {
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
     void SetSceneCharSurface(float wet, float snow, float dirt, float sand);
-    void SetSceneCharDrip(float drip, float seconds);
+    void SetSceneCharDrip(float drip, float seconds, float soaked);
     bool SceneSandUnderfoot();
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand);
@@ -5162,40 +5162,49 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
                 }
                 last_map = map;
             }
-            // Wet: soaked in the water, then dry in 5 to 10 seconds, picked at random each time he gets out.
+            // Wet: soaked in the water, then dry in 8 to 20 seconds, picked at random each time he gets out.
             static bool was_wet_in_water = false;
-            static float dry_seconds = 8.0f;
+            static float dry_seconds = 12.0f;
             if (was_wet_in_water && !in_water) {
-                dry_seconds = 5.0f + 5.0f * float(std::chrono::steady_clock::now().time_since_epoch().count() % 1000) / 1000.0f;
+                dry_seconds = 8.0f + 12.0f * float(std::chrono::steady_clock::now().time_since_epoch().count() % 1000) / 1000.0f;
             }
             was_wet_in_water = in_water;
             amounts[0] = std::clamp(amounts[0] + (in_water ? 3.0f : -1.0f / dry_seconds) * dt, 0.0f, 1.0f);
+            // The rest comes in little by little: 5% at each trigger, and goes at 1% every 8 seconds. Water cleans it fast.
+            // Triggers: the dust he kicks up (a roll, a landing, a run of steps: one every 0.75 s at most), a step on sand, a
+            // step in snow.
+            static float sand_timer = 0.0f, snow_timer = 0.0f;
+            const float dust_triggers = tooie::dust::take_exposure();
+            const bool moving = valid && banjo_grounded(rdram) && speed > 20.0f && speed < 600.0f;
             if (in_water) {
-                amounts[1] -= 0.5f * dt;
-                amounts[2] -= 0.35f * dt;
-                tooie::dust::take_exposure();
-            }
-            else {
-                amounts[1] += (snowy_map(map) ? 0.05f : -0.017f) * dt;
-                // (Walking on the ground, not in a jump or a lift: speed alone is enough, 150 units a second is a run.)
-                if (valid && banjo_grounded(rdram) && speed > 20.0f && speed < 600.0f) {
-                    amounts[2] += (snowy_map(map) ? 0.0007f : 0.003f) * dt;
+                for (int i = 1; i < 4; i++) {
+                    amounts[i] -= 1.5f * dt;
                 }
-                // The dust he kicks up and stands in (Volumetric dust's clouds, or the game's own puffs): about 80 puffs make
-                // him filthy. Not on snow, where the puffs are snow.
-                amounts[2] += tooie::dust::take_exposure() * (snowy_map(map) ? 0.0f : 0.012f);
-            }
-            // Sand: gathers while he is on sand textures (found by the renderer), a little faster moving, and dusts off slowly;
-            // water washes it off.
-            if (in_water) {
-                amounts[3] -= 0.4f * dt;
-            }
-            else if (RT64::SceneSandUnderfoot()) {
-                amounts[3] += (speed > 20.0f ? 0.06f : 0.025f) * dt;
+                sand_timer = snow_timer = 0.0f;
             }
             else {
-                amounts[3] -= 0.008f * dt;
+                const float fade = 0.01f / 8.0f * dt;
+                for (int i = 1; i < 4; i++) {
+                    amounts[i] -= fade;
+                }
+                // (Not on snow, where the puffs are snow.)
+                amounts[2] += snowy_map(map) ? 0.0f : 0.05f * dust_triggers;
+                if (moving && snowy_map(map)) {
+                    snow_timer += dt;
+                    if (snow_timer >= 1.5f) {
+                        snow_timer = 0.0f;
+                        amounts[1] += 0.05f;
+                    }
+                }
+                if (moving && RT64::SceneSandUnderfoot()) {
+                    sand_timer += dt;
+                    if (sand_timer >= 0.75f) {
+                        sand_timer = 0.0f;
+                        amounts[3] += 0.05f;
+                    }
+                }
             }
+            amounts[3] = std::clamp(amounts[3], 0.0f, 1.0f);
             amounts[1] = std::clamp(amounts[1], 0.0f, 1.0f);
             amounts[2] = std::clamp(amounts[2], 0.0f, 1.0f);
             amounts[3] = std::clamp(amounts[3], 0.0f, 1.0f);
@@ -5216,8 +5225,12 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         const float sand = (force_sand ? (float)(std::atof(std::getenv("TOOIE_CHAR_SAND")) / 100.0) : amounts[3]) * char_dirt_max.load();
         RT64::SetSceneCharSurface(out[0], out[1], out[2], sand);
         // (He drips while he is wet and the wet slider is up.)
-        RT64::SetSceneCharDrip((char_wet_max.load() > 0.0f && char_forced[0].load() < 0.0f) ? amounts[0] : (char_forced[0].load() > 0.0f ? 1.0f : 0.0f),
-            (float)std::fmod(std::chrono::duration<double>(now.time_since_epoch()).count(), 1000.0));
+        // (He drips once he is out of the water, not while he swims, where his fur goes darker instead.)
+        static bool swimming_now = false;
+        swimming_now = char_surface.load() && in_water_state(state);
+        const bool forced_wet = char_forced[0].load() > 0.0f;
+        RT64::SetSceneCharDrip(forced_wet ? 1.0f : (char_wet_max.load() > 0.0f && !swimming_now ? amounts[0] : 0.0f),
+            (float)std::fmod(std::chrono::duration<double>(now.time_since_epoch()).count(), 1000.0), swimming_now ? 1.0f : 0.0f);
     }
     // The fog is measured from Banjo.
     {
