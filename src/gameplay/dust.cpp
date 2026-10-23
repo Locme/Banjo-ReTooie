@@ -118,8 +118,8 @@ void tooie::dust::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         option,
         "Volumetric Dust",
-        "WIP. The dust Banjo kicks up when he runs, sprints, Talon Trots, turns quickly and lands is a real volume instead of a flat textured puff: soft clouds that take some of his speed, rise and thin out, are pushed aside as he moves through them, are lit by the sun and take the colour of the ground. Replaces the game's puffs while on. Needs the scene effects, as the other volumetric options do.",
-        false);
+        "WIP. The dust Banjo kicks up when he runs, sprints, Talon Trots, turns quickly and lands is a real volume instead of a flat textured puff: soft clouds that take some of his speed, rise and thin out, are pushed aside as he moves through them, are lit by the sun and take the colour of the ground. The grass, dirt, sand and snow under his feet change the colour and the kind of dust. Replaces the game's puffs while on.",
+        true);
     graphics.add_option_change_callback(option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
             if (context == recomp::config::OptionChangeContext::Temporary) {
@@ -200,48 +200,55 @@ void tooie::dust::tick(uint8_t* rdram) {
     RT64::SetSceneDust(packed, uint32_t(cloud_count));
 }
 
-// Hooked at the entry of badust_entrypoint_2 ($a0 object, $a1 smoke definition, $a2 position (3 floats), $a3 start scale;
-// the caller's stack holds the end scale at 0x10 and a rate at 0x14). 1 takes the puff's place: the function is skipped.
+namespace {
+    // Takes the puff's place: a cloud at the position (3 floats at `at`) growing from one scale of the game's puff to the other.
+    bool spawn(uint8_t* rdram, uint32_t at, float scale_start, float scale_end) {
+        if (!enabled.load() || !valid_ptr(at)) {
+            return false;
+        }
+        if (log_puffs) {
+            std::fprintf(stderr, "[dust] puff at %.1f %.1f %.1f scale %.3f -> %.3f\n",
+                read_float(rdram, at), read_float(rdram, at + 4), read_float(rdram, at + 8), scale_start, scale_end);
+        }
+        float position[3], velocity[3];
+        const bool have_banjo = banjo(rdram, position, velocity);
+        std::lock_guard lock{ cloud_mutex };
+        if (cloud_count >= max_clouds) {
+            // Full: the oldest makes way.
+            std::memmove(clouds, clouds + 1, sizeof(Cloud) * (max_clouds - 1));
+            cloud_count = max_clouds - 1;
+        }
+        Cloud& c = clouds[cloud_count++];
+        const uint32_t n = ++spawned;
+        for (int i = 0; i < 3; i++) {
+            c.pos[i] = read_float(rdram, at + 4 * i);
+        }
+        // Part of Banjo's speed, a sideways scatter and a lift.
+        const float scatter = 14.0f;
+        c.vel[0] = (have_banjo ? velocity[0] * 0.3f : 0.0f) + (hash(n * 3 + 1) - 0.5f) * 2.0f * scatter;
+        c.vel[1] = 18.0f + hash(n * 3 + 2) * 14.0f;
+        c.vel[2] = (have_banjo ? velocity[2] * 0.3f : 0.0f) + (hash(n * 3 + 3) - 0.5f) * 2.0f * scatter;
+        const float start = std::clamp(scale_start, 0.05f, 4.0f);
+        const float end = std::clamp(std::max(scale_end, scale_start), 0.1f, 6.0f);
+        c.radius_start = std::max(8.0f, start * radius_per_scale);
+        c.radius_end = std::max(c.radius_start * 1.5f, end * radius_per_scale);
+        c.age = 0.0f;
+        c.life = life_seconds * (0.8f + 0.4f * hash(n * 7 + 5));
+        c.seed = hash(n * 11 + 9) * 64.0f;
+        return true;
+    }
+}
+
+// Hooked at the entry of badust_entrypoint_2 ($a0 object, $a1 the puff's position (3 floats, handed on to the smoke
+// object's creation), $a2 its velocity, $a3 the start scale; the caller's stack holds the end scale at 0x10 and a rate at
+// 0x14): used by the quick turn and a few other moves. 1 takes the puff's place: the function is skipped.
 extern "C" int tooie_dust_spawn(uint8_t* rdram, recomp_context* ctx) {
-    if (!enabled.load()) {
-        return 0;
-    }
-    const uint32_t at = uint32_t(ctx->r6);
-    if (!valid_ptr(at)) {
-        return 0;
-    }
     const uint32_t sp = uint32_t(ctx->r29);
-    const float scale_start = as_float(uint32_t(ctx->r7));
-    const float scale_end = read_float(rdram, sp + 0x10);
-    const float rate = read_float(rdram, sp + 0x14);
-    if (log_puffs) {
-        std::fprintf(stderr, "[dust] puff at %.1f %.1f %.1f scale %.3f -> %.3f rate %.3f\n",
-            read_float(rdram, at), read_float(rdram, at + 4), read_float(rdram, at + 8), scale_start, scale_end, rate);
-    }
-    float position[3], velocity[3];
-    const bool have_banjo = banjo(rdram, position, velocity);
-    std::lock_guard lock{ cloud_mutex };
-    if (cloud_count >= max_clouds) {
-        // Full: the oldest makes way.
-        std::memmove(clouds, clouds + 1, sizeof(Cloud) * (max_clouds - 1));
-        cloud_count = max_clouds - 1;
-    }
-    Cloud& c = clouds[cloud_count++];
-    const uint32_t n = ++spawned;
-    for (int i = 0; i < 3; i++) {
-        c.pos[i] = read_float(rdram, at + 4 * i);
-    }
-    // Part of Banjo's speed, a sideways scatter and a lift.
-    const float scatter = 14.0f;
-    c.vel[0] = (have_banjo ? velocity[0] * 0.3f : 0.0f) + (hash(n * 3 + 1) - 0.5f) * 2.0f * scatter;
-    c.vel[1] = 18.0f + hash(n * 3 + 2) * 14.0f;
-    c.vel[2] = (have_banjo ? velocity[2] * 0.3f : 0.0f) + (hash(n * 3 + 3) - 0.5f) * 2.0f * scatter;
-    const float start = std::clamp(scale_start, 0.05f, 4.0f);
-    const float end = std::clamp(std::max(scale_end, scale_start), 0.1f, 6.0f);
-    c.radius_start = std::max(8.0f, start * radius_per_scale);
-    c.radius_end = std::max(c.radius_start * 1.5f, end * radius_per_scale);
-    c.age = 0.0f;
-    c.life = life_seconds * (0.8f + 0.4f * hash(n * 7 + 5));
-    c.seed = hash(n * 11 + 9) * 64.0f;
-    return 1;
+    return spawn(rdram, uint32_t(ctx->r5), as_float(uint32_t(ctx->r7)), read_float(rdram, sp + 0x10)) ? 1 : 0;
+}
+
+// Hooked in badust_entrypoint_4 (the foot dust of walking, running and the Talon Trot, and others) just before it creates
+// its smoke object: $s0 points at the puff's position, the scales are fixed in the function (about 0.35 growing to 0.7).
+extern "C" int tooie_dust_spawn_foot(uint8_t* rdram, recomp_context* ctx) {
+    return spawn(rdram, uint32_t(ctx->r16), 0.35f, 0.7f) ? 1 : 0;
 }

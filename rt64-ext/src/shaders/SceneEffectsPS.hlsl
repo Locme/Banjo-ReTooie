@@ -3847,8 +3847,10 @@ uint VolDustCount() {
 
 // The dust clouds along the pixel's ray (Graphics > Volumetric Dust): each is a soft sphere of dust, thickest through its
 // middle and eaten into by drifting noise, so a ray through it takes light by the chord it crosses; the clouds' thickness
-// along the ray is summed and the picture lost to them by Beer's law. They are lit from the sun's side, and take the colour
-// of the ground behind them (the picture's own colour here, lifted towards dust) so sand, snow and grass kick up their own.
+// along the ray is summed and the picture lost to them by Beer's law. They are lit from the sun's side. What kind of dust a
+// cloud is comes from the ground it sits over (the picture's own colour just under it, found where that spot is on screen):
+// grass throws green flecks and shards, snow a pale powder, sand a warm tan haze, dark earth brown clumps, anything else
+// a plain grey-tan dust.
 float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
     const uint count = VolDustCount();
     if (count == 0u) {
@@ -3865,8 +3867,7 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
         sunWorld = float3(dot(gConstants.sun.xyz, gConstants.worldX.xyz), dot(gConstants.sun.xyz, gConstants.worldY.xyz), dot(gConstants.sun.xyz, gConstants.worldZ.xyz));
     }
     sunWorld = normalize(sunWorld);
-    const float3 ground = saturate(color * 1.35f + 0.12f);
-    const float3 base = lerp(float3(0.74f, 0.68f, 0.6f), ground, 0.55f) * tint;
+    const float2 size = gConstants.projection.zw;
     float opticalDepth = 0.0f;
     float3 lightSum = 0.0f;
     [loop]
@@ -3886,11 +3887,47 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
         if (t1 <= t0) {
             continue;
         }
+        // The ground under the cloud: its spot on screen (the world point to view space, then the projection).
+        float3 ground = color;
+        {
+            const float3 w = cloud.xyz - float3(0.0f, radius * 0.7f, 0.0f) - origin;
+            const float3 v = float3(dot(w, float3(gConstants.worldX.x, gConstants.worldY.x, gConstants.worldZ.x)),
+                dot(w, float3(gConstants.worldX.y, gConstants.worldY.y, gConstants.worldZ.y)),
+                dot(w, float3(gConstants.worldX.z, gConstants.worldY.z, gConstants.worldZ.z))) / (scale * scale);
+            if (v.z < -0.01f) {
+                const float2 ndc = float2(v.x * gConstants.projection.x, v.y * gConstants.projection.y) / -v.z;
+                const float2 uv = float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f);
+                if (all(uv > 0.0f) && all(uv < 1.0f)) {
+                    ground = gColor.SampleLevel(LinearSampler, uv, 0).rgb;
+                }
+            }
+        }
+        const float lum = dot(ground, float3(0.3f, 0.59f, 0.11f));
+        const float chroma = max(ground.r, max(ground.g, ground.b)) - min(ground.r, min(ground.g, ground.b));
+        const float wGrass = saturate((ground.g - max(ground.r, ground.b)) * 7.0f);
+        const float wSnow = (1.0f - wGrass) * saturate((lum - 0.62f) * 5.0f) * saturate(1.0f - chroma * 4.0f);
+        const float wSand = (1.0f - wGrass - wSnow) * saturate(lum * 2.0f - 0.5f) * saturate((ground.r - ground.b) * 5.0f);
+        const float wDirt = saturate(1.0f - wGrass - wSnow - wSand) * saturate((0.55f - lum) * 3.0f) * saturate((ground.r - ground.b) * 8.0f + 0.3f);
+        const float wPlain = saturate(1.0f - wGrass - wSnow - wSand - wDirt);
+        const float3 grassColour = lerp(saturate(ground * 1.25f + 0.05f), float3(0.38f, 0.58f, 0.16f), 0.45f);
+        const float3 snowColour = float3(0.93f, 0.96f, 1.0f);
+        const float3 sandColour = saturate(ground * 1.25f + 0.1f);
+        const float3 dirtColour = saturate(ground * 0.85f + 0.03f);
+        const float3 plainColour = lerp(float3(0.74f, 0.68f, 0.6f), saturate(ground * 1.35f + 0.12f), 0.4f);
+        const float3 base = (grassColour * wGrass + snowColour * wSnow + sandColour * wSand + dirtColour * wDirt + plainColour * wPlain) * tint;
+
         const float3 middle = origin + direction * (0.5f * (t0 + t1));
         const float falloff = 1.0f - distanceSquared / (radius * radius);
-        const float noise = CloudNoise(middle * (60.0f / radius) * 0.045f + extra.y + float3(0.0f, time * 0.35f, 0.0f));
-        const float body = saturate(1.35f * falloff + (noise - 0.5f) * 0.9f);
-        const float thickness = extra.x * body * (t1 - t0) / radius * 2.2f;
+        const float3 noiseAt = middle * (60.0f / radius) * 0.045f + extra.y + float3(0.0f, time * 0.35f, 0.0f);
+        const float noise = CloudNoise(noiseAt);
+        float body = saturate(1.35f * falloff + (noise - 0.5f) * 0.9f);
+        // Grass shards and earth clumps are flecks, not haze: finer noise, cut hard, only where the cloud is solid enough.
+        const float fleckiness = wGrass * 0.9f + wDirt * 0.45f;
+        const float flecks = saturate((CloudNoise(noiseAt * 4.0f + 7.0f) - 0.52f) * 4.0f) * saturate(falloff * 1.6f);
+        body = lerp(body, flecks, fleckiness);
+        // Snow is a thin powder, sand a thick haze.
+        const float density = extra.x * (1.0f + 0.35f * wSand - 0.35f * wSnow);
+        const float thickness = density * body * (t1 - t0) / radius * 2.2f;
         // The side facing the sun is the brighter.
         const float side = dot(normalize(middle - cloud.xyz + 1e-3f), sunWorld);
         lightSum += base * (0.62f + 0.38f * saturate(0.5f + 0.5f * side)) * thickness;
