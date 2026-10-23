@@ -110,11 +110,6 @@ namespace RT64 {
         bool daySnow = false;
         bool dayAurora = false;
         uint32_t dayMoonPhase = 4;
-        // The mist's strength (0 off, 1 thickest) and when it shows (0 mornings, 1 mornings and nights, 2 always).
-        float dayMist = 0.5f;
-        uint32_t dayMistWhen = 0;
-        // Graphics > Mist (0 off, 1 thickest): the same mist on its own, always showing, used while the cycle is off.
-        float ownMist = 0.0f;
         // WIP volumetric effects (off by default): mist and fog strength (0 off, 1 as designed), the fog's preset
         // (0 to 6), the forced cloud type (0 none, 1 to 7) and the mist layer's extra height in world units. The layer
         // follows a slow anchor under Banjo (volAnchor), so it doesn't bob as he jumps.
@@ -276,8 +271,6 @@ namespace RT64 {
     // and sky, thickens the clouds and draws falling rain; flash (0 to 1) is lightning lighting everything up.
     // snow: it falls as snow.
     void SetSceneWeather(float rain, float flash, bool snow);
-    void SetSceneMist(float strength, uint32_t when);
-    void SetSceneOwnMist(float strength);
     // Volumetric mist, fog and clouds (WIP): see SceneEffectsPS.hlsl (VolSettings) and src/gameplay/volumetric.cpp.
     void SetSceneVolumetric(float mist, float fog, uint32_t fogPreset, uint32_t cloudType, float mistOffset);
     void SetSceneRainDetail(float wet, bool drops);

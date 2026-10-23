@@ -33,10 +33,6 @@ namespace tooie::day_night {
     // Wet, shiny ground in and after the rain, and raindrops running down the screen.
     inline const std::string wet_ground_option = "day_night_wet_ground";
     inline const std::string drops_option = "day_night_drops";
-    // Mist over low ground and round water: how thick (0 off to 100), and when it shows.
-    inline const std::string mist_option = "day_night_mist";
-    enum class MistTime : uint32_t { Mornings, MorningsAndNights, Always };
-    inline const std::string mist_time_option = "day_night_mist_time";
     // Crickets and owls at night, birdsong in the morning (src/gameplay/night_sounds.cpp).
     inline const std::string sounds_option = "day_night_sounds";
 

@@ -804,7 +804,7 @@ void tooie::init_config() {
         for (const std::string* id : { &dn::option, &dn::length_option, &dn::flare_option, &dn::fireflies_option,
                 &dn::weather_option, &dn::aurora_option, &dn::clouds_option, &dn::cloud_amount_option,
                 &dn::cloud_height_option, &dn::cloud_thickness_option, &dn::cloud_speed_option, &dn::wet_ground_option,
-                &dn::drops_option, &dn::mist_option, &dn::mist_time_option, &dn::sounds_option }) {
+                &dn::drops_option, &dn::sounds_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
         recompui::config::set_option_group(dn::option, "Day and night");

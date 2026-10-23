@@ -489,10 +489,6 @@ their texture is drawn.
   half after. Default: on.
 - **Raindrops on Screen**: with Day and Night on, raindrops land on the screen
   in the rain (more when looking up) and run down it. Default: on.
-- **Mist**: with Day and Night on, pale mist drifting in banks over low ground,
-  thickest on and round water. 0 to 100; 0 turns it off. Default: 50.
-- **Mist Time**: when the mist shows: Mornings, Mornings and Nights, or Always.
-  Default: Mornings.
 - **Night Sounds**: with Day and Night on, crickets and the odd owl at night
   and birdsong in the morning, quietly under the music. Default: on.
 

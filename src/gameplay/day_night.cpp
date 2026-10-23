@@ -32,7 +32,6 @@ namespace RT64 {
     void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
     void SetSceneSun(bool custom, float x, float y, float z);
     void SetSceneWeather(float rain, float flash, bool snow);
-    void SetSceneMist(float strength, uint32_t when);
     void SetSceneRainDetail(float wet, bool drops);
     void SetSceneClouds(float cover, float height, float thickness, float speed);
     void SetSceneMoonPhase(uint32_t phase);
@@ -204,23 +203,6 @@ namespace {
             return (float)std::clamp(std::get<double>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(id)) / 100.0, 0.0, 1.0);
         } catch (...) {
             return 0.5f;
-        }
-    }
-
-    // The mist's strength (0 to 1) and when it shows. Test aid: TOOIE_MIST=<0 to 100>,<0 mornings, 1 and nights, 2 always>.
-    std::pair<float, uint32_t> mist_setting() {
-        if (const char* v = std::getenv("TOOIE_MIST")) {
-            float strength = 50.0f;
-            uint32_t when = 0;
-            sscanf(v, "%f,%u", &strength, &when);
-            return { strength / 100.0f, when };
-        }
-        try {
-            auto& config = recompui::config::get_config(recompui::config::graphics::id);
-            return { (float)(std::get<double>(config.get_option_value(tooie::day_night::mist_option)) / 100.0),
-                std::get<uint32_t>(config.get_option_value(tooie::day_night::mist_time_option)) };
-        } catch (...) {
-            return { 0.5f, 0 };
         }
     }
 
@@ -504,8 +486,6 @@ void tooie::day_night::tick(uint8_t* rdram) {
     // heard faintly there. Lightning still flashes through.
     const float above_water = 1.0f - std::clamp(tooie::picture_filters::underwater(), 0.0f, 1.0f);
     RT64::SetSceneWeather(rain * amount * above_water, flash * amount, snow);
-    const auto [mist, mist_when] = mist_setting();
-    RT64::SetSceneMist(mist, mist_when);
     // The ground gets wet in the rain, in about 15 s of a storm, and dries over a minute and a half after.
     // A map change (behind its wipe) snaps it to the weather. No wet ground in snow.
     // Test aid: TOOIE_WET=<0 to 1> holds it there.
@@ -702,23 +682,6 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         "With Day and Night on, raindrops land on the screen in the rain, more when you look up, and run down it.",
         true);
     graphics.add_option_hidden_dependency(drops_option, option, Mode::Off);
-    graphics.add_number_option(
-        mist_option,
-        "Mist",
-        "With Day and Night on, pale mist drifts in banks over low ground, gathers thickest on and round water and rises as spray where waterfalls land. Used in place of the Mist setting while the cycle runs. 0 turns it off.",
-        0, 100, 5, 0, false, 50);
-    graphics.add_option_hidden_dependency(mist_option, option, Mode::Off);
-    graphics.add_enum_option(
-        mist_time_option,
-        "Mist Time",
-        "When the mist shows: in the early morning, also at night, or all day.",
-        {
-            {MistTime::Mornings, "Mornings", "Mornings"},
-            {MistTime::MorningsAndNights, "MorningsAndNights", "Mornings and Nights"},
-            {MistTime::Always, "Always", "Always"},
-        },
-        MistTime::Mornings);
-    graphics.add_option_hidden_dependency(mist_time_option, option, Mode::Off);
     graphics.add_bool_option(
         sounds_option,
         "Night Sounds",

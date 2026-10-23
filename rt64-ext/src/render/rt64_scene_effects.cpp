@@ -1147,17 +1147,6 @@ namespace RT64 {
         effectsSettings.dayMoonPhase = phase & 7u;
     }
 
-    void SetSceneMist(float strength, uint32_t when) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.dayMist = std::clamp(strength, 0.0f, 1.0f);
-        effectsSettings.dayMistWhen = std::min(when, 2u);
-    }
-
-    void SetSceneOwnMist(float strength) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.ownMist = std::clamp(strength, 0.0f, 1.0f);
-    }
-
     void SetSceneVolumetric(float mist, float fog, uint32_t fogPreset, uint32_t cloudType, float mistOffset) {
         const std::scoped_lock lock(effectsMutex);
         effectsSettings.volMist = std::clamp(mist, 0.0f, 1.0f);
@@ -2461,9 +2450,8 @@ namespace RT64 {
     bool SceneWaterWanted() {
         const std::scoped_lock lock(effectsMutex);
         return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.iceReflections > 0.0f) || (effectsSettings.screenSpaceReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) || (effectsSettings.view == SceneEffectsViewSsr) ||
-            // The day and night cycle's mist gathers round water.
-            // and the rain rings on water need it too.
-            (effectsSettings.timeOfDay && ((effectsSettings.dayMist > 0.0f) || (effectsSettings.dayRain > 0.0f))) || (effectsSettings.ownMist > 0.0f) ||
+            // The rain rings on water need it too.
+            (effectsSettings.timeOfDay && (effectsSettings.dayRain > 0.0f)) ||
             (effectsSettings.view == SceneEffectsSoloFirst + 8) || (effectsSettings.view == SceneEffectsSoloFirst + 9);
     }
 
@@ -2539,7 +2527,7 @@ namespace RT64 {
         const SceneEffectsSettings settings = GetSceneEffects();
         return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
             (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0) || (settings.view != 0)) && (settings.depthAddress != 0);
+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0) || (settings.view != 0)) && (settings.depthAddress != 0);
     }
 
     bool SceneEffectsWanted(const RenderTarget *depthTarget) {
@@ -3075,12 +3063,9 @@ namespace RT64 {
             const float moonlight = 1.0f - 0.6f * std::clamp((0.97f - dayBrightest) / 0.3f, 0.0f, 1.0f);
             // Rain hides the sun: no sun shadows under it.
             const float rain = settings.timeOfDay ? settings.dayRain : 0.0f;
-            // The mist and the rain's details ride above the softness and Banjo's flag: 4 * (the mist's strength
-            // (0 to 100) + 128 * when + 512 * how wet the ground is (0 to 31) + 16384 when raindrops land on the screen).
-            // Without the cycle, Graphics > Mist on its own: always showing.
-            const float mistPacked = settings.timeOfDay ? 4.0f * (std::round(settings.dayMist * 100.0f) + 128.0f * float(settings.dayMistWhen) +
-                512.0f * std::round(settings.dayWet * 31.0f) + (settings.dayDrops ? 16384.0f : 0.0f)) :
-                ((settings.ownMist > 0.0f) ? 4.0f * (std::round(settings.ownMist * 100.0f) + 128.0f * 2.0f) : 0.0f);
+            // The rain's details ride above the softness and Banjo's flag: 4 * (512 * how wet the ground is (0 to 31) +
+            // 16384 when raindrops land on the screen).
+            const float mistPacked = settings.timeOfDay ? 4.0f * (512.0f * std::round(settings.dayWet * 31.0f) + (settings.dayDrops ? 16384.0f : 0.0f)) : 0.0f;
             constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain),
                 std::min(settings.sunShadowReach, 999.0f) + 1000.0f * std::round(settings.sunShadowDistance / SUN_SHADOW_MAP_HALF_STEP), dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f + mistPacked };
             if (sunLength > 1e-6f) {
@@ -3167,7 +3152,7 @@ namespace RT64 {
         }
 
         RenderTexture *source = nullptr;
-        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0)) {
+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0)) {
             // The scene so far, without multisampling: the target's resolve, or a copy of the target.
             const RenderTextureView *sourceView = nullptr;
             if (colorTarget->usesResolve()) {

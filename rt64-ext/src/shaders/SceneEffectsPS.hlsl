@@ -3724,9 +3724,8 @@ float DayMorning(float3 tint) {
         (1.0f - DayNight(tint)) * (1.0f - DayWeather().x);
 }
 
-// The mist and rain settings, from the sun shadows' constant (shadows.w = 4 * (strength (0 to 100) + 128 * when +
-// 512 * wet (0 to 31) + 16384 for raindrops) + 2 to leave Banjo out + softness): x the mist's strength (0 to 1),
-// y when (0 mornings, 1 mornings and nights, 2 always), z how wet the ground is (0 to 1), w 1 for raindrops on the
+// The rain settings, from the sun shadows' constant (shadows.w = 4 * (512 * wet (0 to 31) + 16384 for raindrops) +
+// 2 to leave Banjo out + softness; the first 9 bits once held the removed mist): x and y unused (0), z how wet the ground is (0 to 1), w 1 for raindrops on the
 // screen.
 float4 DayMistAndRain() {
     float packed = floor(gConstants.shadows.w / 4.0f);
@@ -3736,10 +3735,6 @@ float4 DayMistAndRain() {
     packed -= wet * 512.0f;
     const float when = floor(packed / 128.0f);
     return float4((packed - when * 128.0f) / 100.0f, when, wet / 31.0f, drops);
-}
-
-float2 DayMistSetting() {
-    return DayMistAndRain().xy;
 }
 
 // Wet ground in and after the rain: everything darkens a little, and what faces up darkens more, in patches
@@ -3768,91 +3763,6 @@ float3 DayWet(float3 scene, int2 pixel, float depth) {
     const float patches = 0.55f + 0.45f * smoothstep(0.25f, 0.7f, WaterNoise(world.xz / 90.0f));
     // No reflection: L wants only water and Icy Side's ice to reflect (2026-10-17), so wet grass and dirt only darken.
     return scene * (1.0f - wet * (0.12f + 0.2f * level * patches));
-}
-
-// Mist: pale banks drifting slowly through the whole level (fixed to the level, not to Banjo), thicker with
-// distance, and thickest on and around water, where it hangs just over the surface even close by, with spray
-// billowing up where a waterfall lands. Lit warm towards the sun. Separate from the Fog setting. Also drawn
-// without the cycle for Graphics > Mist (always showing, tint 1).
-float3 DayMist(float3 color, int2 pixel, float depth, float3 tint) {
-    const float2 setting = DayMistSetting();
-    const float morning = DayMorning(tint);
-    const float night = DayNight(tint) * (1.0f - DayWeather().x * 0.5f);
-    const float when = (setting.y > 1.5f) ? 1.0f : ((setting.y > 0.5f) ? max(morning, night * 0.8f) : morning);
-    if ((setting.x <= 0.0f) || (when <= 0.0f) || (gConstants.rippleAge.w < -1e8f)) {
-        return color;
-    }
-    const float3 center = ViewPosition(pixel, depth);
-    const float3 world = WorldPosition(center);
-    const float scale = length(gConstants.worldX.xyz);
-    const float distance = length(center) * scale;
-    const float time = gConstants.view.z;
-
-    // Water nearby: a ring of looks into the water mask, about 260 world units round the point (on screen),
-    // and the point itself. The mist settles at the water's height.
-    float nearWater = 0.0f;
-    float waterY = 0.0f;
-    // How far across (in the world, along the ground) the nearest water look is from the point, so the layer over the
-    // water fades out smoothly rather than stopping where the looks on screen stop finding it.
-    float waterAcross = 1e9f;
-    // Waterfalls nearby (steep watery draws): how far across the nearest look that found one is, and the lowest
-    // point found (the fall's foot).
-    float fallAcross = 1e9f;
-    float fallFoot = 1e9f;
-    if (gConstants.water.y > 0.5f) {
-        const float height = gConstants.projection.w;
-        const float radius = clamp((260.0f / scale) * gConstants.projection.y * 0.5f * height / max(-center.z, 1e-3f), 3.0f, height * 0.2f);
-        float found = 0.0f;
-        for (int i = 0; i < 9; i++) {
-            const float angle = float(i) * 0.6981317f;
-            const float2 offset = (i == 8) ? float2(0.0f, 0.0f) : float2(cos(angle), sin(angle)) * radius * ((i & 1) ? 1.0f : 0.5f);
-            const int2 at = pixel + int2(offset);
-            float waterDepth;
-            float3 fallTint;
-            if (LoadWater(at, waterDepth) && (SteepAt(at) < 0.5f)) {
-                const float3 waterWorld = WorldPosition(ViewPosition(at, waterDepth));
-                found += 1.0f;
-                waterY += waterWorld.y;
-                waterAcross = min(waterAcross, length(waterWorld.xz - world.xz));
-            }
-            else if (LoadAnyWater(at, waterDepth) && (FallWatery(at, fallTint) > 0.3f)) {
-                const float3 fallWorld = WorldPosition(ViewPosition(at, waterDepth));
-                fallFoot = min(fallFoot, fallWorld.y);
-                fallAcross = min(fallAcross, length(fallWorld.xz - world.xz));
-            }
-        }
-        if (found > 0.0f) {
-            waterY /= found;
-            nearWater = saturate(found / 4.0f) * saturate(1.5f - waterAcross / 200.0f);
-        }
-    }
-
-    // Slowly drifting banks, so the mist lies in patches rather than as an even haze. Laid out in the level's own
-    // space (height too), so they stay put whatever Banjo does.
-    const float2 drift = float2(0.012f, 0.005f) * time;
-    const float2 slant = float2(world.x + world.y * 0.6f, world.z - world.y * 0.6f);
-    const float banks = smoothstep(0.3f, 0.75f, WaterNoise(slant / 900.0f + drift) * 0.65f + WaterNoise(slant / 260.0f - drift * 1.7f) * 0.35f);
-    // Two layers: one through the whole level, and a denser, shallower one just over the water. Each thickens with
-    // how far the view runs through it: across the water it builds up, looking down through it from above it stays
-    // thin.
-    const float cameraY = gConstants.worldY.w;
-    const float groundRun = distance;
-    const float waterTop = waterY + 70.0f;
-    const float waterRun = (nearWater > 0.0f) ? distance * saturate((waterTop - world.y) / max(cameraY - world.y, 60.0f)) : 0.0f;
-    // Spray where a fall lands: thick close by (it doesn't need distance to build up), round the fall's foot (within
-    // about 150 units across) and from there to about 120 units up, billowing and rising.
-    const float footY = (nearWater > 0.0f) ? min(waterY, fallFoot) : fallFoot;
-    const float sprayNear = saturate(1.0f - fallAcross / 150.0f);
-    const float sprayRise = (sprayNear > 0.0f) ? saturate((footY + 120.0f - world.y) / 120.0f) * saturate((world.y - footY + 30.0f) / 30.0f) : 0.0f;
-    const float billow = WaterNoise(float2(world.x + world.z, world.y) / 40.0f - float2(0.0f, time * 0.5f)) * 0.6f + WaterNoise((world.xz - world.y) / 17.0f + time * 0.2f) * 0.4f;
-    const float spray = sprayNear * sprayNear * sprayRise * (0.3f + 0.7f * billow) * 0.7f;
-    const float thickness = groundRun * (0.2f + 0.8f * banks) / 1600.0f + waterRun * nearWater * (0.45f + 0.55f * banks) / 1400.0f + spray;
-    const float amount = (1.0f - exp(-thickness * when * setting.x * 2.0f)) * 0.85f;
-    const float toward = saturate(dot(normalize(center), gConstants.sun.xyz)) * morning;
-    // Mist in shade (a cave mouth, under trees) is lit less: dimmer where the scene behind it is dark.
-    const float shade = saturate(0.5f + dot(color, float3(0.299f, 0.587f, 0.114f)) * 1.4f);
-    const float3 mist = lerp(float3(0.82f, 0.86f, 0.9f), float3(1.0f, 0.88f, 0.72f), toward * toward) * max(tint, 0.5f) * shade;
-    return lerp(color, mist, amount);
 }
 
 // WIP volumetric mist, fog and clouds (Graphics options in the WIP tab, all off by default; src/gameplay/volumetric.cpp).
@@ -5061,7 +4971,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
     const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
     // Eye adaptation also draws the scene itself.
-    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (DayMistSetting().x > 0.0f) || (VolBits() != 0u) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (VolBits() != 0u) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
 
     if (depth >= 0.99999f) {
         // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -5456,17 +5366,6 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             scene = DayWorld(scene, dayTint, !wet);
             const float3 weather = DayWeather();
             scene = DayWeatherLight(scene, weather.x, weather.z, 0.3f);
-        }
-        // The mist lies in front of the nearest thing at the pixel: the game's water and falls don't write depth,
-        // so behind a waterfall the depth is the cave beyond it, and the mist would show through the fall.
-        // Without the cycle this is Graphics > Mist on its own.
-        if (DayMistSetting().x > 0.0f) {
-            float mistDepth = depth;
-            float frontWater;
-            if ((gConstants.water.y > 0.5f) && LoadAnyWater(pixel, frontWater)) {
-                mistDepth = min(mistDepth, frontWater);
-            }
-            scene = DayMist(scene, pixel, mistDepth, daytime ? dayTint : float3(1.0f, 1.0f, 1.0f));
         }
         // WIP volumetric mist and fog along the ray to the nearest thing at the pixel (the water and falls write no depth).
         if (VolBits() != 0u) {
