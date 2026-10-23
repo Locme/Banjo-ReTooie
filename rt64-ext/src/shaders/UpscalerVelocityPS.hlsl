@@ -35,6 +35,10 @@ float SceneDepth(int2 pixel) {
 
 float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET0 {
     const int2 pixel = int2(pos.xy);
+    // flags.x above 1.5: just the depth as a float, for DLSS.
+    if (gConstants.flags.x > 1.5f) {
+        return float4(SceneDepth(pixel), 0.0f, 0.0f, 0.0f);
+    }
     const float2 size = gConstants.projection.zw;
     const float4 t = gConstants.depthTerms;
 

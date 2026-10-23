@@ -21,6 +21,7 @@ target_sources(rt64 PRIVATE
     ${RT64_EXT_DIR}/src/render/rt64_texture_marks.cpp
     ${RT64_EXT_DIR}/src/render/rt64_fsr.cpp
     ${RT64_EXT_DIR}/src/render/rt64_temporal_upscaler.cpp
+    ${RT64_EXT_DIR}/src/render/rt64_dlss.cpp
     ${RT64_EXT_DIR}/src/render/rt64_photo_grade.cpp
     ${RT64_EXT_DIR}/src/hle/rt64_present_queue_ext.cpp
     ${RT64_EXT_DIR}/src/render/rt64_texture_cache_ext.cpp
@@ -152,4 +153,28 @@ if (NOT APPLE)
     rt64_ext_traced_shader("src/shaders/SceneIndirectRT2XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_2X")
     rt64_ext_traced_shader("src/shaders/SceneIndirectRT4XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_4X")
     rt64_ext_traced_shader("src/shaders/SceneIndirectRT8XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_8X")
+endif()
+
+# NVIDIA DLSS / DLAA (rt64_dlss.cpp, Windows only): the NGX headers are in third-party/nvidia-dlss/include (NVIDIA's
+# licence, see its README.md); the import library is fetched from NVIDIA's repository at a pinned commit and checked
+# against its hash. If it cannot be fetched the backend is left out and the DLSS choices fall back to the built-in resolve.
+if(WIN32)
+    set(RT64_EXT_NGX_LIB ${CMAKE_BINARY_DIR}/nvidia-dlss/nvsdk_ngx_d.lib)
+    if(NOT EXISTS ${RT64_EXT_NGX_LIB})
+        file(DOWNLOAD
+            https://github.com/NVIDIA/DLSS/raw/9981c6350dc58c0ce21f024fd65e31e851c31689/lib/Windows_x86_64/x64/nvsdk_ngx_d.lib
+            ${RT64_EXT_NGX_LIB}
+            EXPECTED_HASH SHA256=bc43df9ec032004fde681d3e3afd01cde239e03a0125b822e88674c84287f99c
+            STATUS RT64_EXT_NGX_STATUS)
+        list(GET RT64_EXT_NGX_STATUS 0 RT64_EXT_NGX_CODE)
+        if(NOT RT64_EXT_NGX_CODE EQUAL 0)
+            message(WARNING "Could not fetch nvsdk_ngx_d.lib (${RT64_EXT_NGX_STATUS}); DLSS will not be built in.")
+            file(REMOVE ${RT64_EXT_NGX_LIB})
+        endif()
+    endif()
+    if(EXISTS ${RT64_EXT_NGX_LIB})
+        target_include_directories(rt64 PRIVATE ${PROJECT_SOURCE_DIR}/third-party/nvidia-dlss/include)
+        target_link_libraries(rt64 PUBLIC ${RT64_EXT_NGX_LIB})
+        target_compile_definitions(rt64 PRIVATE TOOIE_HAS_NGX=1)
+    endif()
 endif()

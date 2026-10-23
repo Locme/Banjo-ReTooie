@@ -7475,7 +7475,7 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..faba7b9 100644
+index d1c5273..686096d 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -17,6 +17,23 @@
@@ -7717,7 +7717,7 @@ index d1c5273..faba7b9 100644
          // Texture Copy.
          {
              TextureCopyDescriptorSet descriptorSet;
-@@ -569,6 +733,92 @@ namespace RT64 {
+@@ -569,6 +733,93 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -7790,6 +7790,7 @@ index d1c5273..faba7b9 100644
 +            layoutBuilder.end();
 +            createPass(upscalerVelocity, SMAA_BLOBS(UpscalerVelocityPS), RenderFormat::R16G16_FLOAT);
 +            createPass(upscalerVelocityView, SMAA_BLOBS(UpscalerVelocityPS), RenderTarget::colorBufferFormat(usesHDR));
++            createPass(upscalerDepth, SMAA_BLOBS(UpscalerVelocityPS), RenderFormat::R32_FLOAT);
 +            layoutBuilder.begin();
 +            layoutBuilder.addPushConstant(0, 0, sizeof(interop::UpscalerResolveCB), RenderShaderStageFlag::PIXEL);
 +            layoutBuilder.addDescriptorSet(descriptorSet);
@@ -7810,7 +7811,7 @@ index d1c5273..faba7b9 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +833,20 @@ namespace RT64 {
+@@ -583,6 +834,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -7831,7 +7832,7 @@ index d1c5273..faba7b9 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +1096,201 @@ namespace RT64 {
+@@ -832,6 +1097,201 @@ namespace RT64 {
              }
          }
  
@@ -8034,10 +8035,10 @@ index d1c5273..faba7b9 100644
          {
              PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..eeef6ef 100644
+index 641f3ec..93f944b 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -47,12 +47,49 @@ namespace RT64 {
+@@ -47,12 +47,50 @@ namespace RT64 {
          ShaderRecord rspVertexTestZ;
          ShaderRecord rspVertexTestZMS;
          ShaderRecord rspWorld;
@@ -8083,6 +8084,7 @@ index 641f3ec..eeef6ef 100644
 +        ShaderRecord photoGrade;
 +        ShaderRecord upscalerVelocity;
 +        ShaderRecord upscalerVelocityView;
++        ShaderRecord upscalerDepth;
 +        ShaderRecord upscalerResolve;
          ShaderRecord textureResolve;
          ShaderRecord videoInterfaceLinear;

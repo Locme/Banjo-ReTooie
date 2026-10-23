@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <mutex>
 
 #include "shared/rt64_temporal_upscaler.h"
@@ -187,7 +188,8 @@ namespace RT64 {
     float UpscalerRenderFraction() {
         // Only the built-in resolve (8) enlarges so far; the other choices have no backend yet and must not render small.
         // (Off, FSR 4 native AA and DLAA will always keep the window's size.)
-        if (upscalerMode.load() != 8) {
+        const uint32_t mode = upscalerMode.load();
+        if ((mode != 8) && (mode != 3)) {
             return 1.0f;
         }
         static const float fractions[4] = { 0.667f, 0.58f, 0.5f, 0.333f };
@@ -195,11 +197,12 @@ namespace RT64 {
     }
 
     bool UpscalerWanted() {
-        return upscalerMode.load() == 8;
+        const uint32_t mode = upscalerMode.load();
+        return (mode == 8) || (mode == 3) || (mode == 4);
     }
 
     bool UpscalerJitterActive() {
-        return (upscalerMode.load() == 8) && (unresolvedFrames.load() < 3);
+        return UpscalerWanted() && (unresolvedFrames.load() < 3);
     }
 
     void UpscalerNextFrame() {
@@ -326,8 +329,8 @@ namespace RT64 {
         descriptorSet->setTexture(descriptorSet->gTexture1, depth, RenderTextureLayout::SHADER_READ);
         descriptorSet->setTexture(descriptorSet->gTexture2, input, RenderTextureLayout::SHADER_READ);
 
-        auto drawPass = [&](const ShaderRecord &record, const RenderFramebuffer *framebuffer, bool asPicture) {
-            constants.flags = { asPicture ? 1.0f : 0.0f, debugScale, 1.0f, constants.flags.w };
+        auto drawPass = [&](const ShaderRecord &record, const RenderFramebuffer *framebuffer, float kind) {
+            constants.flags = { kind, debugScale, 1.0f, constants.flags.w };
             commandList->setFramebuffer(framebuffer);
             commandList->setPipeline(record.pipeline.get());
             commandList->setGraphicsPipelineLayout(record.pipelineLayout.get());
@@ -345,8 +348,29 @@ namespace RT64 {
             RenderTextureBarrier(velocityTexture.get(), RenderTextureLayout::COLOR_WRITE)
         };
         commandList->barriers(RenderBarrierStage::GRAPHICS, velocityBarriers, uint32_t(std::size(velocityBarriers)));
-        drawPass(shaderLibrary->upscalerVelocity, velocityFramebuffer.get(), false);
+        drawPass(shaderLibrary->upscalerVelocity, velocityFramebuffer.get(), 0.0f);
         velocityValid = true;
+
+        // DLSS wants a real float depth, not the packed copy.
+        depthFloatValid = false;
+        const uint32_t mode = GetUpscalerMode();
+        if (((mode == 3) || (mode == 4)) && !dlss.unavailable()) {
+            if ((depthFloatTexture == nullptr) || (depthFloatWidth != inputWidth) || (depthFloatHeight != inputHeight)) {
+                depthFloatFramebuffer.reset();
+                depthFloatTexture = device->createTexture(RenderTextureDesc::ColorTarget(inputWidth, inputHeight, RenderFormat::R32_FLOAT));
+                depthFloatTexture->setName("Upscaler Depth Float");
+                depthFloatWidth = inputWidth;
+                depthFloatHeight = inputHeight;
+                const RenderTexture *depthTex = depthFloatTexture.get();
+                depthFloatFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&depthTex, 1));
+            }
+            RenderTextureBarrier depthBarriers[] = {
+                RenderTextureBarrier(depthFloatTexture.get(), RenderTextureLayout::COLOR_WRITE)
+            };
+            commandList->barriers(RenderBarrierStage::GRAPHICS, depthBarriers, uint32_t(std::size(depthBarriers)));
+            drawPass(shaderLibrary->upscalerDepth, depthFloatFramebuffer.get(), 2.0f);
+            depthFloatValid = true;
+        }
 
         if (!debugView) {
             return input;
@@ -356,7 +380,7 @@ namespace RT64 {
             RenderTextureBarrier(debugTexture.get(), RenderTextureLayout::COLOR_WRITE)
         };
         commandList->barriers(RenderBarrierStage::GRAPHICS, debugBarriers, uint32_t(std::size(debugBarriers)));
-        drawPass(shaderLibrary->upscalerVelocityView, debugFramebuffer.get(), true);
+        drawPass(shaderLibrary->upscalerVelocityView, debugFramebuffer.get(), 1.0f);
         debugShown = true;
         return debugTexture.get();
     }
@@ -374,6 +398,54 @@ namespace RT64 {
         }
 
         bool reset = !historyValid;
+
+        // DLSS and DLAA; if DLSS cannot run (no RTX card, no DLL) the built-in resolve below takes over.
+        const uint32_t mode = GetUpscalerMode();
+        if (((mode == 3) || (mode == 4)) && depthFloatValid && !dlss.unavailable()) {
+            if ((dlssOutput == nullptr) || (dlssOutputWidth != outputWidth) || (dlssOutputHeight != outputHeight)) {
+                dlssOutput = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format, RenderMultisampling(), nullptr, RenderTextureFlag::UNORDERED_ACCESS));
+                dlssOutput->setName("Upscaler DLSS Output");
+                dlssOutputWidth = outputWidth;
+                dlssOutputHeight = outputHeight;
+                reset = true;
+            }
+            RenderTextureBarrier dlssBarriers[] = {
+                RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
+                RenderTextureBarrier(depthFloatTexture.get(), RenderTextureLayout::SHADER_READ),
+                RenderTextureBarrier(velocityTexture.get(), RenderTextureLayout::SHADER_READ),
+                RenderTextureBarrier(dlssOutput.get(), RenderTextureLayout::GENERAL)
+            };
+            commandList->barriers(RenderBarrierStage::COMPUTE, dlssBarriers, uint32_t(std::size(dlssBarriers)));
+
+            // TOOIE_DLSS_FLIP=x, y or xy turns the jitter's sign round, if a test shows it is the other way.
+            static const char *flipEnv = std::getenv("TOOIE_DLSS_FLIP");
+            float jitterX = currentJitter[0], jitterY = currentJitter[1];
+            if (flipEnv != nullptr) {
+                if (std::strchr(flipEnv, 'x') != nullptr) jitterX = -jitterX;
+                if (std::strchr(flipEnv, 'y') != nullptr) jitterY = -jitterY;
+            }
+            if (dlss.evaluate(device, commandList, input, depthFloatTexture.get(), velocityTexture.get(), dlssOutput.get(), inputWidth, inputHeight,
+                outputWidth, outputHeight, jitterX, jitterY, reset || !historyValid, upscalerQuality.load(), mode == 4, shaderLibrary->usesHDR))
+            {
+                if (reset) {
+                    historyResets++;
+                }
+                historyValid = true;
+                unresolvedFrames = 0;
+                lastOutputWidth = outputWidth;
+                lastOutputHeight = outputHeight;
+                float jitterLog[4] = { jitterX, jitterY, 0.0f, 0.0f };
+                logUpscaler("resolve (DLSS)", mode, inputWidth, inputHeight, outputWidth, outputHeight, motionWasKnown, jitterLog, historyResets, false);
+                // The output goes on to be read as a texture.
+                RenderTextureBarrier readBarrier(dlssOutput.get(), RenderTextureLayout::SHADER_READ);
+                commandList->barriers(RenderBarrierStage::GRAPHICS, &readBarrier, 1);
+                return dlssOutput.get();
+            }
+            // DLSS just failed (the reason is on the console): this frame and the rest use the built-in resolve.
+            reset = true;
+            historyValid = false;
+        }
+
         if ((outputWidth != lastOutputWidth) || (outputHeight != lastOutputHeight) || (resolved[0] == nullptr)) {
             for (int i = 0; i < 2; i++) {
                 resolvedFramebuffer[i].reset();

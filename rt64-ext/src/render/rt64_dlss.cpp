@@ -6,7 +6,7 @@
 
 #include <cstdio>
 
-#if defined(_WIN32)
+#if defined(_WIN32) && defined(TOOIE_HAS_NGX)
 
 #include <windows.h>
 
@@ -198,7 +198,7 @@ namespace RT64 {
     bool DlssBackend::evaluate(RenderDevice *, RenderCommandList *, RenderTexture *, RenderTexture *, RenderTexture *, RenderTexture *,
         uint32_t, uint32_t, uint32_t, uint32_t, float, float, bool, uint32_t, bool, bool)
     {
-        fail("DLSS is for Windows");
+        fail("this build has no DLSS (Windows builds with the NGX library only)");
         return false;
     }
 }

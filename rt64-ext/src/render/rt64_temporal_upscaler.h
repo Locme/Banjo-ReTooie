@@ -10,6 +10,7 @@
 
 #include "rt64_descriptor_sets.h"
 #include "rt64_shader_library.h"
+#include "rt64_dlss.h"
 
 namespace RT64 {
     // Banjo-Tooie: the temporal upscaler chosen in Graphics (src/display/upscaler.cpp).
@@ -62,6 +63,17 @@ namespace RT64 {
         bool debugShown = false;
         bool historyValid = false;
         bool motionWasKnown = false;
+
+        // DLSS and DLAA (Windows): a float copy of the depth, an output it can write, and the backend.
+        std::unique_ptr<RenderTexture> depthFloatTexture;
+        std::unique_ptr<RenderFramebuffer> depthFloatFramebuffer;
+        std::unique_ptr<RenderTexture> dlssOutput;
+        DlssBackend dlss;
+        bool depthFloatValid = false;
+        uint32_t depthFloatWidth = 0;
+        uint32_t depthFloatHeight = 0;
+        uint32_t dlssOutputWidth = 0;
+        uint32_t dlssOutputHeight = 0;
 
         // Draws the camera's motion into velocityTexture (R16G16 float, pixels, previous minus current, y down) from the
         // depth (the copy of the game's depth RT64 makes for the color target of the same size). With the velocity
