@@ -734,6 +734,11 @@ void tooie::init_config() {
         "Keeps the free camera a little above the floor under it, so tilting the camera low cannot push it into the ground.",
         false);
     graphics.add_bool_option(
+        tooie::free_camera_orbit_option,
+        "Free camera: mouse and gyro",
+        "Moving the mouse (or tilting a controller with a gyro) turns and tilts the free camera, like the right stick. Strength is General > Mouse Sensitivity and Gyro Sensitivity; at 0 each does nothing. Invert left/right and up/down apply too.",
+        false);
+    graphics.add_bool_option(
         tooie::free_camera_look_up_option,
         "Free camera: look up",
         "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
@@ -742,7 +747,7 @@ void tooie::init_config() {
         namespace pf = tooie::picture_filters;
         for (const std::string* id : { &tooie::dive::option, &tooie::menu_mouse::enabled_option,
                 &tooie::free_camera_ease_back_option, &tooie::free_camera_floor_clearance_option,
-                &tooie::free_camera_look_up_option, &pf::grass_section_option,
+                &tooie::free_camera_look_up_option, &tooie::free_camera_orbit_option, &pf::grass_section_option,
                 &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
                 &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
                 &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
@@ -758,6 +763,7 @@ void tooie::init_config() {
         recompui::config::set_option_display_before(tooie::free_camera_ease_back_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_floor_clearance_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_look_up_option, pf::grass_section_option);
+        recompui::config::set_option_display_before(tooie::free_camera_orbit_option, pf::grass_section_option);
         recompui::config::set_option_group(tooie::dive::option, "WIP");
     }
     graphics.add_bool_option(

@@ -46,6 +46,8 @@
 #include "tooie_free_camera.h"
 #include "tooie_photo_mode.h"
 #include "tooie_game.h"
+#include "tooie_hotkeys.h"
+#include "tooie_motion_aim.h"
 #include "tooie_hooks.h"
 #include "tooie_mirror_mode.h"
 #include "tooie_rdram.h"
@@ -135,6 +137,8 @@ namespace {
         float elevation = 0.0f; // held height of the camera above the pivot, in degrees
         float aim = 0.0f;       // view pitch plus elevation: how far above the pivot the camera looks
         float zoom = 1.0f;     // times the game's distance
+        bool snap = false;      // Camera Snap Behind pressed: ease back now, whatever Banjo is doing
+        bool snap_was_down = false;
         float look = 0.0f;      // look-up tilt: degrees the view is raised past the lowest eye height
         float idle = 0.0f;      // seconds since the stick was last used
         float wall = 1.0f;      // smooth walls: the camera's distance as a fraction of the wanted one
@@ -328,6 +332,18 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     stick_x = deadzone(stick_x);
     stick_y = deadzone(stick_y);
 
+    // Mouse and gyro motion since the last step (drained even when unused, so it cannot pile up).
+    float orbit_x = 0.0f;
+    float orbit_y = 0.0f;
+    tooie::motion_aim::take_orbit(&orbit_x, &orbit_y);
+    if (!wip_option<bool>(tooie::free_camera_orbit_option, false)) {
+        orbit_x = 0.0f;
+        orbit_y = 0.0f;
+    }
+    const bool snap_down = tooie::hotkeys::down(recompinput::GameInput::CAMERA_SNAP_BEHIND);
+    const bool snap_pressed = snap_down && !state.snap_was_down;
+    state.snap_was_down = snap_down;
+
     const bool on = tooie::free_camera::enabled();
     const bool gameplay = updating && mode == mode_dynamic && valid_ptr(camera) && valid_ptr(transform) && valid_ptr(dynamic);
     // First person and the like: leave the camera alone but keep the held yaw for afterwards.
@@ -346,7 +362,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     bool easing = false;
     float fade = 1.0f;
     if (on && gameplay && !paused) {
-        const bool stick = stick_x != 0.0f || stick_y != 0.0f;
+        const bool stick = stick_x != 0.0f || stick_y != 0.0f || orbit_x != 0.0f || orbit_y != 0.0f;
         if (!state.active && stick) {
             state.active = true;
             state.yaw = rot[1];
@@ -357,13 +373,19 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             state.wall = 1.0f;
         }
         state.idle = stick ? 0.0f : state.idle + dt;
+        if (snap_pressed) {
+            state.snap = true;
+        }
+        if (stick) {
+            state.snap = false;
+        }
 
         // Ease back towards the game's camera, which is behind Banjo while he moves.
         const auto ease_back = wip_option<uint32_t>(tooie::free_camera_ease_back_option, (uint32_t)tooie::FreeCameraEaseBack::Always);
         const bool flying = std::find(std::begin(flying_states), std::end(flying_states), player_state) != std::end(flying_states);
-        easing = state.active && state.idle >= ease_delay &&
+        easing = state.active && (state.snap || state.idle >= ease_delay &&
             ((ease_back == (uint32_t)tooie::FreeCameraEaseBack::Flying && flying) ||
-             (ease_back == (uint32_t)tooie::FreeCameraEaseBack::Always && (flying || speed >= moving_speed)));
+             (ease_back == (uint32_t)tooie::FreeCameraEaseBack::Always && (flying || speed >= moving_speed))));
         if (easing) {
             const float k = ease(ease_rate, dt);
             const float elevation = std::clamp(game_elevation(pos, banjo), min_elevation, max_elevation);
@@ -382,13 +404,19 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
                 state.active = false;
             }
         }
+        if (!state.active) {
+            state.snap = false;
+        }
         if (state.active) {
             const auto speed = std::min<uint32_t>(option<uint32_t>(tooie::free_camera_speed_option, 1), 2);
             const float sx = (option<bool>(tooie::free_camera_invert_x_option, false) != tooie::mirror_mode::active()) ? -stick_x : stick_x;
             const float sy = option<bool>(tooie::free_camera_invert_y_option, false) ? -stick_y : stick_y;
             // Right turns the view right (yaw grows to the left). Up looks up, so the camera drops.
-            state.yaw = wrap_degrees(state.yaw - sx * yaw_speeds[speed] * dt);
-            const float tilt_input = -sy * yaw_speeds[speed] * pitch_ratio * dt;
+            const bool flip_x = option<bool>(tooie::free_camera_invert_x_option, false) != tooie::mirror_mode::active();
+            const float orbit_yaw = flip_x ? -orbit_x : orbit_x;
+            const float orbit_pitch = option<bool>(tooie::free_camera_invert_y_option, false) ? -orbit_y : orbit_y;
+            state.yaw = wrap_degrees(state.yaw - sx * yaw_speeds[speed] * dt + orbit_yaw);
+            const float tilt_input = -sy * yaw_speeds[speed] * pitch_ratio * dt - orbit_pitch;
 
             // The camera's offset from the pivot, turned about the vertical by the yaw change.
             const float pivot[3] = { banjo[0], banjo[1] + pivot_height, banjo[2] };

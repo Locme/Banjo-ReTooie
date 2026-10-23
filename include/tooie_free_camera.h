@@ -17,6 +17,7 @@ namespace tooie {
     // WIP tab (Graphics config, graphics.json).
     inline const std::string free_camera_floor_clearance_option = "free_camera_floor_clearance";
     inline const std::string free_camera_look_up_option = "free_camera_look_up";
+    inline const std::string free_camera_orbit_option = "free_camera_orbit";
     inline const std::string photo_mode_collision_option = "photo_mode_collision";
     enum class FreeCameraSpeed : uint32_t { Slow, Normal, Fast };
     enum class FreeCameraEaseBack : uint32_t { Off, Flying, Always };
