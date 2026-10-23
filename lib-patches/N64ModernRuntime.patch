@@ -1,8 +1,8 @@
 diff --git a/librecomp/include/librecomp/config.hpp b/librecomp/include/librecomp/config.hpp
-index a1086cf..f7d9170 100644
+index a1086cf..b63c49b 100644
 --- a/librecomp/include/librecomp/config.hpp
 +++ b/librecomp/include/librecomp/config.hpp
-@@ -315,7 +315,25 @@ namespace recomp {
+@@ -315,7 +315,28 @@ namespace recomp {
  
              std::vector<ConfigOptionUpdateContext> get_config_option_updates() { return config_option_updates; }
              bool is_config_option_disabled(size_t option_index) const { return disabled_options.contains(option_index); }
@@ -23,13 +23,16 @@ index a1086cf..f7d9170 100644
 +            bool is_option_collapsed(size_t option_index) const;
 +            void set_option_button(const std::string& option_id, const std::string& off_text, const std::string& on_text);
 +            bool is_option_button(size_t option_index) const { return button_options.contains(option_index); }
++            // A header: a parent row with no control of its own (only its name and an arrow), so its children open under it.
++            void set_option_header(const std::string& option_id);
++            bool is_option_header(size_t option_index) const { return header_options.contains(option_index); }
 +            const std::string& get_option_button_text(size_t option_index, bool value) const;
 +            // ignore_menu_layers: for Search, which shows an option whatever Simple mode and collapsing say.
 +            bool is_config_option_hidden(size_t option_index, bool ignore_menu_layers = false) const;
              void clear_config_option_updates() {
                  config_option_updates.clear();
              }
-@@ -347,6 +365,13 @@ namespace recomp {
+@@ -347,6 +368,14 @@ namespace recomp {
              std::vector<ConfigOptionUpdateContext> config_option_updates = {};
              std::unordered_set<size_t> disabled_options = {};
              std::unordered_set<size_t> hidden_options = {};
@@ -38,6 +41,7 @@ index a1086cf..f7d9170 100644
 +            std::unordered_set<size_t> parent_options = {};
 +            std::unordered_set<size_t> expanded_options = {};
 +            std::unordered_set<size_t> button_options = {};
++            std::unordered_set<size_t> header_options = {};
 +            std::unordered_map<size_t, std::pair<std::string, std::string>> button_texts = {};
 +            bool simple_mode_on = false;
              std::unordered_map<size_t, std::string> enum_option_details = {};
@@ -108,7 +112,7 @@ index 35703bd..7095517 100644
          uint32_t get_section_ram_addr(uint16_t code_section_index);
          std::span<const RelocEntry> get_section_relocs(uint16_t code_section_index);
 diff --git a/librecomp/src/config.cpp b/librecomp/src/config.cpp
-index 6bc03fd..fe97343 100644
+index 6bc03fd..59cd5fb 100644
 --- a/librecomp/src/config.cpp
 +++ b/librecomp/src/config.cpp
 @@ -623,7 +623,7 @@ void Config::update_option_hidden(size_t option_index, bool hidden) {
@@ -120,7 +124,7 @@ index 6bc03fd..fe97343 100644
      if (was_hidden == hidden) {
          return;
      }
-@@ -692,8 +692,82 @@ std::string Config::get_enum_option_details(size_t option_index) const {
+@@ -692,8 +692,87 @@ std::string Config::get_enum_option_details(size_t option_index) const {
      return enum_option_details.at(option_index);
  }
  
@@ -193,6 +197,11 @@ index 6bc03fd..fe97343 100644
 +    size_t option_index = schema.options_by_id[option_id];
 +    button_options.insert(option_index);
 +    button_texts[option_index] = { off_text, on_text };
++}
++
++void Config::set_option_header(const std::string& option_id) {
++    size_t option_index = schema.options_by_id[option_id];
++    header_options.insert(option_index);
 +}
 +
 +const std::string& Config::get_option_button_text(size_t option_index, bool value) const {

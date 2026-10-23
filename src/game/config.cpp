@@ -10,7 +10,6 @@
 #include "tooie_menu_tree.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_day_night.h"
-#include "tooie_dust.h"
 #include "tooie_volumetric.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_music_player.h"
@@ -1040,14 +1039,13 @@ void tooie::init_config() {
         recompui::config::set_option_group(dn::option, "Day And Night");
     }
     tooie::volumetric::add_options(graphics);
-    tooie::dust::add_options(graphics);
     {
         // Volumetric mist, fog and clouds are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
         namespace vol = tooie::volumetric;
         for (const std::string* id : { &vol::mist_option, &vol::mist_water_option, &vol::mist_water_height_option, &vol::mist_fall_option,
                 &vol::mist_fall_height_option, &vol::fog_option, &vol::fog_preset_option, &vol::fog_start_option, &vol::fog_colour_option,
                 &vol::clouds_option, &vol::cloud_amount_option, &vol::cloud_height_option, &vol::cloud_size_option, &vol::cloud_speed_option,
-                &vol::file_option, &tooie::dust::option }) {
+                &vol::file_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
         // One heading a kind, so each can be tested on its own.
@@ -1055,7 +1053,6 @@ void tooie::init_config() {
         recompui::config::set_option_group(vol::fog_option, "Volumetric Fog");
         recompui::config::set_option_group(vol::clouds_option, "Volumetric Clouds");
         recompui::config::set_option_group(vol::file_option, "Volumetric Levels");
-        recompui::config::set_option_group(tooie::dust::option, "Volumetric Dust");
     }
     {
         // Wet, snowy and dirty characters are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
@@ -1091,6 +1088,8 @@ void tooie::init_config() {
     tooie::api_restart::add_prompt(graphics);
     tooie::fsr::add_option(graphics);
     tooie::upscaler::add_option(graphics);
+    // The Water entry (Original, Modern, Stylised) is WIP (L, 2026-10-23): it sits in the WIP tab.
+    recompui::config::set_option_page(tooie::picture_filters::water_option, tooie::work_in_progress_tab_id);
     {
         // The upscalers are WIP (L, 2026-10-23): their own "Upscaler" section in the WIP tab. Still Graphics
         // options, so they save to graphics.json.
@@ -1125,10 +1124,15 @@ void tooie::init_config() {
                                        &tooie::picture_filters::npc_feather_size_option, &tooie::picture_filters::npc_feather_length_option,
                                        &tooie::picture_filters::npc_feather_density_option, &tooie::picture_filters::npc_feather_noisiness_option,
                                        &tooie::picture_filters::npc_feather_transparency_option }) {
-        recompui::config::set_option_display_before(*option, tooie::picture_filters::contrast_option);
+        recompui::config::set_option_display_before(*option, tooie::picture_filters::colour_grading_option);
     }
     recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");
-    recompui::config::set_option_group(tooie::picture_filters::contrast_option, "Colour Grading");
+    // Colour Grading (L, 2026-10-23): its header sits under Colourblind Filter, and its four settings follow it.
+    recompui::config::set_option_display_before(tooie::picture_filters::colour_grading_option, tooie::picture_filters::three_point_option);
+    for (const std::string* option : { &tooie::picture_filters::contrast_option, &tooie::picture_filters::saturation_option,
+                                       &tooie::picture_filters::vignette_option, &tooie::picture_filters::grain_option }) {
+        recompui::config::set_option_display_before(*option, tooie::picture_filters::three_point_option);
+    }
     // 3D grass had its own section after the colour grading (L, 2026-10-16); it is in the WIP tab for now
     // (L, 2026-10-21), and gets set_option_group(grass_section_option, "Grass") back when it returns.
     // Ray Tracing has its own section after the grass, always shown (L, 2026-10-21).
@@ -1200,6 +1204,8 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::texture_dump_option, "Dump");
     tooie::texture_sweep::add_prompt(wip);
     tooie::memory_guard::add_option(wip);
+    // Pass Over Crashes through the two Force Interpolation options (L, 2026-10-23): one heading on the first.
+    recompui::config::set_option_group(tooie::memory_guard::option, "Stability And Features");
     wip.add_bool_option(
         tooie::more_memory::option,
         "More Game Memory",
@@ -1218,6 +1224,12 @@ void tooie::init_config() {
         "Hides the settings entries this port makes unnecessary: Wide-screen Mode and Screen Alignment in the global settings on the save select screen (the TV) and in the Start menu's Settings page, leaving Speaker Mode, and while it is on keeps the game's own widescreen mode off and the picture centred: the game's widescreen squashes the picture for a stretched TV, and this port's widescreen is Aspect Ratio in the Graphics tab. The menu change shows the next time it opens.",
         true);
     tooie::game_frame_rate::add_dev_options(wip);
+    // L, 2026-10-23: the last entry under Stability And Features, on by default.
+    wip.add_bool_option(
+        tooie::hide_pause_settings_option,
+        "Hide Custom Settings In Start Menu",
+        "Leaves out the SETTINGS entry this port adds to the Start menu (the pause menu). Speaker Mode stays in the global settings on the save select screen (the TV). The change shows the next time the Start menu opens.",
+        true);
     // Debug options (under the Debug heading): they moved here from Graphics.
     tooie::effect_views::add_option(wip);
     // Picker Save Only Current Active sits under the same Debug heading (L, 2026-10-23).
