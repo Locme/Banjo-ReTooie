@@ -437,6 +437,8 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
         float roll_side = 0.0f;  // the side picked for the roll in progress, 0 when none
         float heading[2] = {};   // its own measured velocity, eased
         float evel[2] = {};      // the dodge velocity away from an egg coming at it, eased
+        float active_for = 0.0f; // seconds it has been sliding or dodging without a break
+        float pause = 0.0f;      // while above 0 the effect leaves this enemy alone (a loop breaker)
     };
     static std::unordered_map<uint32_t, Track> tracks;
     if (tracks.size() > 512) {
@@ -476,6 +478,15 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
     const uint32_t block = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0x120) : 0;
     const uint32_t state = tooie::rdram::valid_ptr(block) ? tooie::rdram::read_word(rdram, block + 4) : 0;
+    // Loop breaker: an enemy that has been pushed for more than 4 seconds in a row, or whose own movement follows
+    // the yaw this writes, can circle in one place. After 4 s of effect it is left alone for 2.5 s.
+    if (t.pause > 0.0f) {
+        t.pause -= dt;
+        t.vel = 0.0f;
+        t.evel[0] = t.evel[1] = 0.0f;
+        t.active_for = 0.0f;
+        return;
+    }
     // Banjo's attacks that an enemy should step out of (ScriptHawk's movement state names): the roll (49) from up
     // to 500 units, the jump (5, Kazooie alone 0xBD), the peck / claw swipe (6) and Kazooie's wing whack
     // (0xC2, 0xC4) from up to 350.
@@ -544,6 +555,12 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
     const bool sliding = std::fabs(t.vel) >= 0.5f && dist >= 1.0f;
     const bool dodging = std::hypot(t.evel[0], t.evel[1]) >= 0.5f;
     if (!sliding && !dodging) {
+        t.active_for = 0.0f;
+        return;
+    }
+    t.active_for += dt;
+    if (t.active_for > 4.0f) {
+        t.pause = 2.5f;
         return;
     }
     // The slide is perpendicular to the enemy-to-Banjo line: (dz, -dx) / dist.
@@ -559,7 +576,16 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
     const float hz = t.heading[1] + sz + t.evel[1];
     if (std::hypot(hx, hz) > 20.0f) {
         float yaw = tooie::rdram::read_float(rdram, actor + 0x48);
-        const float want = std::atan2(hx, hz) * 57.29578f;
+        float want = std::atan2(hx, hz) * 57.29578f;
+        // Never more than 40 degrees off the line to Banjo, so an enemy that walks along its facing still closes in.
+        const float to_player = std::atan2(dx, dz) * 57.29578f;
+        float off = std::fmod(want - to_player, 360.0f);
+        if (off > 180.0f) {
+            off -= 360.0f;
+        } else if (off < -180.0f) {
+            off += 360.0f;
+        }
+        want = to_player + std::clamp(off, -40.0f, 40.0f);
         float diff = std::fmod(want - yaw, 360.0f);
         if (diff > 180.0f) {
             diff -= 360.0f;
