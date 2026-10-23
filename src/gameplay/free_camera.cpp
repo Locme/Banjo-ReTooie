@@ -257,6 +257,11 @@ namespace {
         return 1.0f - std::exp(-rate * dt);
     }
 
+    // Sound play log: until when (steady clock ms) C Down was last down plus 2 s.
+    std::atomic<int64_t> log_until_ms{0};
+    int64_t now_ms() {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
     // C Down tap or hold (see free_camera::apply_input): held past the threshold, the fine-tune is on.
     std::atomic<bool> fine_held{false};
     // Whether the free camera is running the game's camera now (not first person, a cutscene or a menu).
@@ -653,6 +658,9 @@ void tooie::free_camera::apply_input(uint16_t* buttons) {
     static std::chrono::steady_clock::time_point since;
     const bool tune = wip_option<bool>(tooie::free_camera_rb_distance_option, false);
     const bool physical = (*buttons & n64_r_button) != 0;
+    if (physical) {
+        log_until_ms = now_ms() + 2000;
+    }
     if (!tune || !gameplay_camera.load()) {
         // Passed through as it is; nothing pending.
         down = false;
@@ -686,4 +694,15 @@ void tooie::free_camera::apply_input(uint16_t* buttons) {
         pulse--;
     }
     fine_held = holding;
+}
+
+extern "C" void tooie_sound_log(uint8_t* rdram, recomp_context* ctx, int which) {
+    (void)rdram;
+    if (now_ms() > log_until_ms.load()) {
+        return;
+    }
+    static const char* const names[] = { "func_8009DE38", "func_8009DF94", "func_8009DF18", "func_8009DF58",
+        "func_8009DBF0", "func_8009DB04", "func_800FC348", "func_8010114C" };
+    std::printf("[sfx-R] %s a0 %X a1 %X a2 %X\n", names[which], (unsigned)ctx->r4, (unsigned)ctx->r5, (unsigned)ctx->r6);
+    std::fflush(stdout);
 }

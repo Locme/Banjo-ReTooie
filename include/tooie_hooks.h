@@ -19,6 +19,8 @@ void tooie_sound_slot_wait(uint8_t* rdram, recomp_context* ctx);
 void tooie_sound_event_pool(uint8_t* rdram, recomp_context* ctx);
 int tooie_sound_handle_wait(uint8_t* rdram, recomp_context* ctx);
 int tooie_sound_event_full(uint8_t* rdram, recomp_context* ctx);
+// While C Down is held (and 2 s after), logs a sound play call (which = index of the function).
+void tooie_sound_log(uint8_t* rdram, recomp_context* ctx, int which);
 // 1 when the sequence func_8002ABE0 is about to step has a broken track count (src/game/sound_events.cpp).
 int tooie_seq_delta_guard(uint8_t* rdram, recomp_context* ctx);
 // Heap guard (src/game/heap_guard.cpp): repairs a broken heap block link before func_8001C0A0 walks the list.
