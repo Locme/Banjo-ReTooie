@@ -42,7 +42,6 @@
 #include "funcs.h"
 #include "recompui/config.h"
 #include "recompinput/input_state.h"
-#include "recompinput/profiles.h"
 #include "tooie_debug.h"
 #include "tooie_free_camera.h"
 #include "tooie_photo_mode.h"
@@ -104,6 +103,9 @@ namespace {
     // Floor clearance (WIP): the downward line test runs from this far above the camera to this far below it.
     constexpr float floor_probe_up = 40.0f;
     constexpr float floor_probe_down = 60.0f;
+    // Smooth stairs: rate (per second) the orbit height follows Banjo, and the jump (teleport) that snaps it.
+    constexpr float pivot_rate = 8.0f;
+    constexpr float pivot_snap = 300.0f;
     constexpr float stick_deadzone = 0.2f;
     // Distance, as a multiple of the game's, reached by pushing on past the tilt limits.
     constexpr float min_zoom = 0.25f;
@@ -145,6 +147,8 @@ namespace {
         int32_t wheel = 0;      // mouse wheel total last step
         uint32_t middle = 0;    // middle button presses last step
         bool has_wheel = false;
+        float pivot_y = 0.0f;   // smooth stairs: the height the camera orbits, eased towards Banjo's
+        bool has_pivot = false;
         float look = 0.0f;      // look-up tilt: degrees the view is raised past the lowest eye height
         float idle = 0.0f;      // seconds since the stick was last used
         float wall = 1.0f;      // smooth walls: the camera's distance as a fraction of the wanted one
@@ -253,8 +257,11 @@ namespace {
         return 1.0f - std::exp(-rate * dt);
     }
 
-    // Whether C Down (RB) is held, from the last camera step; read by the sound log.
-    std::atomic<bool> r_held{false};
+    // Sound play log: until when (steady clock ms) C Down was last down plus 2 s.
+    std::atomic<int64_t> log_until_ms{0};
+    int64_t now_ms() {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
     // C Down tap or hold (see free_camera::apply_input): held past the threshold, the fine-tune is on.
     std::atomic<bool> fine_held{false};
     // Whether the free camera is running the game's camera now (not first person, a cutscene or a menu).
@@ -386,12 +393,6 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     const bool snap_pressed = (snap_down && !state.snap_was_down) || middle_clicked;
     state.snap_was_down = snap_down;
 
-    {
-        uint16_t buttons = 0;
-        float bx = 0.0f, by = 0.0f;
-        recompinput::profiles::get_n64_input(0, &buttons, &bx, &by);
-        r_held = (buttons & n64_r_button) != 0;
-    }
     const bool on = tooie::free_camera::enabled();
     const bool gameplay = updating && mode == mode_dynamic && valid_ptr(camera) && valid_ptr(transform) && valid_ptr(dynamic);
     // First person and the like: leave the camera alone but keep the held yaw for afterwards.
@@ -426,6 +427,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             state.elevation = std::clamp(game_elevation(pos, banjo), min_elevation, max_elevation);
             state.aim = std::clamp(signed_degrees(rot[0]) + game_elevation(pos, banjo), min_aim, max_aim);
             state.zoom = 1.0f;
+            state.has_pivot = false;
             state.look = 0.0f;
             state.wall = 1.0f;
         }
@@ -485,7 +487,17 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             const float tilt_input = -sy * yaw_speeds[speed] * pitch_ratio * dt - orbit_pitch;
 
             // The camera's offset from the pivot, turned about the vertical by the yaw change.
-            const float pivot[3] = { banjo[0], banjo[1] + pivot_height, banjo[2] };
+            // Smooth stairs: the orbit height follows Banjo's with an ease, so steps don't bob the camera.
+            const float pivot_target = banjo[1] + pivot_height;
+            if (!state.has_pivot || !option<bool>(tooie::free_camera_smooth_height_option, true) ||
+                std::fabs(pivot_target - state.pivot_y) > pivot_snap) {
+                state.pivot_y = pivot_target;
+            }
+            else {
+                state.pivot_y += (pivot_target - state.pivot_y) * ease(pivot_rate, dt);
+            }
+            state.has_pivot = true;
+            const float pivot[3] = { banjo[0], state.pivot_y, banjo[2] };
             const float ox = pos[0] - pivot[0];
             const float oy = pos[1] - pivot[1];
             const float oz = pos[2] - pivot[2];
@@ -639,16 +651,6 @@ extern "C" int tooie_free_camera_player_alpha(int alpha) {
     return fade >= 1.0f ? alpha : (int)((float)alpha * fade);
 }
 
-extern "C" void tooie_sound_log(uint8_t* rdram, recomp_context* ctx, int which) {
-    (void)rdram;
-    if (!r_held.load()) {
-        return;
-    }
-    static const char* const names[] = { "func_800DA298", "func_8009DE38", "func_800DA544" };
-    std::printf("[sfx-R] %s a0 %X a1 %X a2 %X\n", names[which], (unsigned)ctx->r4, (unsigned)ctx->r5, (unsigned)ctx->r6);
-    std::fflush(stdout);
-}
-
 void tooie::free_camera::apply_input(uint16_t* buttons) {
     static bool down = false;
     static bool holding = false;
@@ -656,6 +658,9 @@ void tooie::free_camera::apply_input(uint16_t* buttons) {
     static std::chrono::steady_clock::time_point since;
     const bool tune = wip_option<bool>(tooie::free_camera_rb_distance_option, false);
     const bool physical = (*buttons & n64_r_button) != 0;
+    if (physical) {
+        log_until_ms = now_ms() + 2000;
+    }
     if (!tune || !gameplay_camera.load()) {
         // Passed through as it is; nothing pending.
         down = false;
@@ -689,4 +694,15 @@ void tooie::free_camera::apply_input(uint16_t* buttons) {
         pulse--;
     }
     fine_held = holding;
+}
+
+extern "C" void tooie_sound_log(uint8_t* rdram, recomp_context* ctx, int which) {
+    (void)rdram;
+    if (now_ms() > log_until_ms.load()) {
+        return;
+    }
+    static const char* const names[] = { "func_8009DE38", "func_8009DF94", "func_8009DF18", "func_8009DF58",
+        "func_8009DBF0", "func_8009DB04", "func_800FC348", "func_8010114C" };
+    std::printf("[sfx-R] %s a0 %X a1 %X a2 %X\n", names[which], (unsigned)ctx->r4, (unsigned)ctx->r5, (unsigned)ctx->r6);
+    std::fflush(stdout);
 }

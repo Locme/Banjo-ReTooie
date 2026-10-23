@@ -185,16 +185,6 @@ void tooie::dust::tick(uint8_t* rdram) {
         for (int k = 0; k < 3; k++) {
             c.pos[k] += c.vel[k] * dt;
         }
-        // Standing in a cloud dirties him more.
-        if (have_banjo) {
-            const float dx = c.pos[0] - position[0];
-            const float dy = c.pos[1] - (position[1] + 20.0f);
-            const float dz = c.pos[2] - position[2];
-            if (std::sqrt(dx * dx + dy * dy + dz * dz) < 50.0f) {
-                const float t = c.age / c.life;
-                exposure.store(exposure.load() + dt * (1.0f - t));
-            }
-        }
         clouds[kept++] = c;
     }
     cloud_count = kept;
@@ -223,8 +213,14 @@ namespace {
         if (!valid_ptr(at)) {
             return false;
         }
-        // (A puff is made at his feet: it dirties him, whether the game draws it or this does.)
-        exposure.store(exposure.load() + 1.0f);
+        // (A puff is made at his feet: it dirties him, whether the game draws it or this does. A roll or a landing makes
+        // several at once, so the puffs within 0.75 s of one count are one trigger.)
+        static double last_trigger = -10.0;
+        const double game_now = tooie::game_frame_rate::game_seconds();
+        if (game_now - last_trigger >= 0.75 || game_now < last_trigger) {
+            last_trigger = game_now;
+            exposure.store(exposure.load() + 1.0f);
+        }
         if (!enabled.load()) {
             return false;
         }

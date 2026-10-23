@@ -53,7 +53,7 @@ namespace {
     tooie::canary_mary::Mode mode() {
         try {
             return static_cast<tooie::canary_mary::Mode>(std::get<uint32_t>(
-                recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::canary_mary::mode_option)));
+                recompui::config::get_general_config().get_option_value(tooie::canary_mary::mode_option)));
         } catch (...) {
             return tooie::canary_mary::Mode::Fair;
         }

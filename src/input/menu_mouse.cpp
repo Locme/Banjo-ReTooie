@@ -107,7 +107,7 @@ namespace {
 
     bool enabled() {
         try {
-            return std::get<bool>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(tooie::menu_mouse::enabled_option));
+            return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::menu_mouse::enabled_option));
         } catch (...) {
             return true;
         }

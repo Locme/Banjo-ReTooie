@@ -27,13 +27,15 @@ namespace RT64 {
             float jitterX, float jitterY, bool reset, bool fsr4, bool native, bool hdr, float nearPlane, float farPlane, float fovY,
             RenderTexture *reactive, float sharpness);
 
-        bool unavailable() const { return failed; }
+        // FSR 4 missing (a card without it) leaves FSR 3 usable, and the other way round.
+        bool unavailable(bool fsr4) const { return failed || versionMissing[fsr4 ? 1 : 0]; }
         std::string reason;
 
         ~FfxBackend();
 
     private:
         bool failed = false;
+        bool versionMissing[2] = { false, false };
         void *module = nullptr;
         void *context = nullptr;
         uint32_t contextInputWidth = 0;
@@ -45,6 +47,7 @@ namespace RT64 {
         void *deviceUsed = nullptr;
 
         void fail(const std::string &why);
+        void failVersion(bool fsr4, const std::string &why);
         void destroyContext();
     };
 };

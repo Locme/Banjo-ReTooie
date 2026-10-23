@@ -117,6 +117,9 @@ framework, not from this port's code, so it is not described here.
   or anything else drawn over it, and the pause menu's music plays and the picture's effects keep moving. Cutscenes, map
   changes, the title screen and the file select carry on as before.
   Default: On (L, 2026-10-19).
+- **Mouse in the game's menus** (Menu section; was in WIP until 2026-10-23): the pause menu
+  and the save select follow the mouse; the row under the cursor is picked and a left click
+  presses A, a right click B. Default: on.
 - **Press Start Early in Intro**: press Start during the logos and title flight to go
   straight to the file select. Default: on.
 - **Text speed**: how fast dialogue text prints: 1x, 2x, 4x or Instant (a
@@ -128,7 +131,7 @@ framework, not from this port's code, so it is not described here.
   Banjo keeps trotting after you let go of Z; press Z or C-left to stop. The
   toggle also ends by itself when the trot does (water, a hit, a cutscene).
   Hold is the original: hold Z to keep trotting. Default: Toggle.
-- **Totals checklist**: On or Off. On adds a "LEFT HERE" table to every
+- **Totals checklist** (Menu section): On or Off. On adds a "LEFT HERE" table to every
   world's page in the pause menu's Totals (and "LEFT IN THE GAME" to Game
   Totals): how many Jiggies, Honeycombs, Cheato pages, Glowbos, Notes, Jinjos
   and Jamjars moves are still to find, or DONE, and in green how many of those
@@ -153,10 +156,6 @@ framework, not from this port's code, so it is not described here.
   submarine is the other way round: it changes in water only). Golden Goliath
   and Dragon Kazooie are not part of it. Default: On (since 2026-10-19; a
   saved Off turns on once).
-- **Canary Mary races**: Fair, Easy or Original. In the original she speeds up
-  past her normal pace whenever you lead; Fair removes that catch-up, Easy is
-  Fair with her pace at 85%. She still slows down when you fall behind.
-  Default: Fair.
 - **Fine aim**: Off, Hold key or Always. In first person (C-up) the left stick
   turns the view slower, for aiming eggs. The key is Fine Aim in Controls >
   Hotkeys (R or right trigger by default). **Fine aim speed**: 25%, 40% or 60%
@@ -176,16 +175,34 @@ framework, not from this port's code, so it is not described here.
     between it and Banjo and glides back out afterwards, instead of jumping,
     and Banjo fades out when the camera comes very close to him. Default: off.
 
+## Gameplay
+
+The Gameplay tab's Difficulty section. These are General options shown on their
+own tab, so they are saved in general.json and apply as soon as they change.
+
+- **Enemies do double damage**: every hit from an enemy or hazard takes twice the
+  honeycombs. Falls hurt as they always do. Default: off.
+- **Enemy aim**: Original, Better or Sharp. Enemies and shots that aim ahead of
+  you aim half a second (Better) or a full second (Sharp) of your running ahead.
+  **Enemy aim: aimed shots** (percent of shots aimed ahead, default 75) and
+  **Enemy aim: homing shots** (Klungo's potion steers while it flies, default
+  on) show when it is not Original. Default: Original.
+- **Enemy dynamic positioning**: a curated list of enemies slide sideways while
+  they close in and sidestep your roll. Default: off.
+- **Lower Enemy Attack Cooldown**: the same enemies wait half as long between
+  attacks. Default: off.
+- **Canary Mary races** (was in QOL > Balancing until 2026-10-23): Fair, Easy or Original. In the original she speeds up
+  past her normal pace whenever you lead; Fair removes that catch-up, Easy is
+  Fair with her pace at 85%. She still slows down when you fall behind.
+  Default: Fair.
+
 ## WIP
 
 Features still being worked on, in the WIP tab's WIP section. When one is done it
 moves back to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's
-menus to QOL, Grass to Graphics after the colour grading). The tab is a page of Graphics
+menus is already in QOL > Menu, Grass to Graphics after the colour grading). The tab is a page of Graphics
 options: all of them save in graphics.json. The Grass toggle and the 3D grass settings
 under it are described in the Graphics sections.
-
-- **Mouse in the game's menus** (on by default): the pause menu and the save select follow
-  the mouse; the row under the cursor is picked and a left click presses A, a right click B.
 
 - **Dive** (off by default): press the Run key (B on a controller) in the air as
   Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and stays

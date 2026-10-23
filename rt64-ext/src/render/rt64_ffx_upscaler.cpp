@@ -43,6 +43,15 @@ namespace RT64 {
         reason = why;
     }
 
+    void FfxBackend::failVersion(bool fsr4, const std::string &why) {
+        if (!versionMissing[fsr4 ? 1 : 0]) {
+            fprintf(stdout, "[upscaler] %s unavailable: %s\n", fsr4 ? "FSR 4" : "FSR 3", why.c_str());
+            fflush(stdout);
+        }
+        versionMissing[fsr4 ? 1 : 0] = true;
+        reason = why;
+    }
+
     void FfxBackend::destroyContext() {
         if ((context != nullptr) && (functions.DestroyContext != nullptr)) {
             ffxContext ctx = context;
@@ -60,7 +69,7 @@ namespace RT64 {
         float jitterX, float jitterY, bool reset, bool fsr4, bool native, bool hdr, float nearPlane, float farPlane, float fovY,
         RenderTexture *reactive, float sharpness)
     {
-        if (failed) {
+        if (unavailable(fsr4)) {
             return false;
         }
 
@@ -122,7 +131,7 @@ namespace RT64 {
                 }
             }
             if (chosen < 0) {
-                fail(std::string(fsr4 ? "FSR 4" : "FSR 3") + " is not offered by this card or driver (versions: " + available + ")");
+                failVersion(fsr4, "not offered by this card or driver (versions: " + available + ")");
                 return false;
             }
 
@@ -149,7 +158,7 @@ namespace RT64 {
             ffxContext created = nullptr;
             result = functions.CreateContext(&created, &create.header, nullptr);
             if (result != FFX_API_RETURN_OK) {
-                fail(std::string("could not start ") + (fsr4 ? "FSR 4" : "FSR 3") + " (" + code(result) + "; versions: " + available + ")");
+                failVersion(fsr4, "could not start it (" + code(result) + "; versions: " + available + ")");
                 return false;
             }
             context = created;
@@ -216,6 +225,11 @@ namespace RT64 {
 namespace RT64 {
     FfxBackend::~FfxBackend() { }
     void FfxBackend::destroyContext() { }
+
+    void FfxBackend::failVersion(bool fsr4, const std::string &why) {
+        versionMissing[fsr4 ? 1 : 0] = true;
+        reason = why;
+    }
 
     void FfxBackend::fail(const std::string &why) {
         failed = true;

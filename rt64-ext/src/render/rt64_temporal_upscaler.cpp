@@ -459,7 +459,7 @@ namespace RT64 {
         // DLSS wants a real float depth, not the packed copy.
         depthFloatValid = false;
         const uint32_t mode = GetUpscalerMode();
-        if ((((mode == 3) || (mode == 4)) && !dlss.unavailable()) || (((mode == 1) || (mode == 2) || (mode == 7)) && !ffx.unavailable())) {
+        if ((((mode == 3) || (mode == 4)) && !dlss.unavailable()) || (((mode == 1) || (mode == 2) || (mode == 7)) && !ffx.unavailable(mode != 7))) {
             if ((depthFloatTexture == nullptr) || (depthFloatWidth != inputWidth) || (depthFloatHeight != inputHeight)) {
                 depthFloatFramebuffer.reset();
                 depthFloatTexture = device->createTexture(RenderTextureDesc::ColorTarget(inputWidth, inputHeight, RenderFormat::R32_FLOAT));
@@ -509,7 +509,7 @@ namespace RT64 {
         // DLSS and DLAA; if DLSS cannot run (no RTX card, no DLL) the built-in resolve below takes over.
         const uint32_t mode = GetUpscalerMode();
         const bool useDlss = ((mode == 3) || (mode == 4)) && !dlss.unavailable();
-        const bool useFfx = ((mode == 1) || (mode == 2) || (mode == 7)) && !ffx.unavailable();
+        const bool useFfx = ((mode == 1) || (mode == 2) || (mode == 7)) && !ffx.unavailable(mode != 7);
         if ((useDlss || useFfx) && depthFloatValid) {
             if ((dlssOutput == nullptr) || (dlssOutputWidth != outputWidth) || (dlssOutputHeight != outputHeight)) {
                 dlssOutput = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format, RenderMultisampling(), nullptr, RenderTextureFlag::STORAGE | RenderTextureFlag::UNORDERED_ACCESS));

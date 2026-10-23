@@ -3578,7 +3578,6 @@ RECOMP_FUNC void func_80112550(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800DA298(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
-    tooie_sound_log(rdram, ctx, 0);
     tooie_flag_get_enter(rdram, ctx);
     // 0x800DA298: addiu       $sp, $sp, -0x18
     ctx->r29 = ADD32(ctx->r29, -0X18);

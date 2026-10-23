@@ -54,6 +54,8 @@ namespace tooie {
     inline const std::string qol_tab_id = "qol";
     // The Performance tab (a page of Graphics options, recompui::config::create_page_tab).
     inline const std::string performance_tab_id = "performance";
+    // The Gameplay tab (L, 2026-10-23): a page of General options (Difficulty), saved in general.json.
+    inline const std::string gameplay_tab_id = "gameplay";
     inline const std::string quick_start_option = "quick_start";
     void quick_start_note_input(uint16_t buttons);
     void quick_start_tick(uint8_t* rdram);

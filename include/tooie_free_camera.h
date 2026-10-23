@@ -14,6 +14,7 @@ namespace tooie {
     inline const std::string free_camera_speed_option = "free_camera_speed";
     inline const std::string free_camera_ease_back_option = "free_camera_ease_back";
     inline const std::string free_camera_smooth_walls_option = "free_camera_smooth_walls";
+    inline const std::string free_camera_smooth_height_option = "free_camera_smooth_height";
     inline const std::string free_camera_hover_option = "free_camera_hover";
     // WIP tab (Graphics config, graphics.json).
     inline const std::string free_camera_floor_clearance_option = "free_camera_floor_clearance";

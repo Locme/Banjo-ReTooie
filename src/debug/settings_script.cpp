@@ -1,5 +1,5 @@
 // Headless settings script: TOOIE_SET="<ms>:<option>=<value>[,<option>=<value>...];<ms>:..."
-// changes Graphics (or Sound, or Cheats) options at those times after the game started, the same way
+// changes Graphics (or Sound, Cheats or General) options at those times after the game started, the same way
 // the menu does (set_option_value, which saves and applies them at once), so a
 // run can switch settings live without anyone at the keyboard. Enum options take
 // the index of their choice (game_frame_rate: 0 Original, 1 30 FPS, 2 60 FPS, 3 120 FPS, 4 Unlocked;
@@ -58,6 +58,8 @@ namespace {
                 config = &recompui::config::get_sound_config();
             } else if (!config->has_option(c.option) && tooie::cheats::config().has_option(c.option)) {
                 config = &tooie::cheats::config();
+            } else if (!config->has_option(c.option) && recompui::config::get_general_config().has_option(c.option)) {
+                config = &recompui::config::get_general_config();
             }
             recomp::config::Config& graphics = *config;
             recomp::config::ConfigValueVariant current = graphics.get_option_value(c.option);
