@@ -472,7 +472,6 @@ void tooie::init_config() {
             {tooie::TimerSave::Minutes120, "120", "120 min"},
         },
         tooie::TimerSave::Off);
-    tooie::bottles_revenge::add_option(general);
     tooie::boss_rush::add_option(general);
     tooie::mirror_mode::add_option(general);
     general.add_bool_option(
@@ -674,6 +673,7 @@ void tooie::init_config() {
         "Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy.",
         false);
     tooie::torch_enemy::add_option(general);
+    tooie::bottles_revenge::add_option(general);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(
         tooie::discord::presence_option,
@@ -937,6 +937,7 @@ void tooie::init_config() {
     // Developer switch stay in General.
     for (const std::string* id : { &tooie::boss_rush::option, &tooie::mirror_mode::option, &tooie::classic_sounds::option,
             &tooie::honeycomb_glitter::option, &tooie::original_honeycomb::option, &tooie::jiggy_dance::option,
+            &tooie::bottles_revenge::option,
             &tooie::torch_enemy::option }) {
         recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
     }
