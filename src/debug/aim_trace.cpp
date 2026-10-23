@@ -3,7 +3,7 @@
 // the first version, which counted the callers of the position getters by return address, only logged 0. Now
 // every function that calls a getter (func_800F5A00, func_800F5A2C, func_8008FE68; generated hooks at their
 // entry, player states left out) counts its own calls under its name. With DEV > Aim trace on, the counts are
-// rewritten to logs/aim_trace.txt every 5 seconds as "caller count". Play near the enemies in question and
+// rewritten to aim_trace.txt in the Dev Files folder every 5 seconds as "caller count". Play near the enemies in question and
 // send the file. It changes nothing in the game.
 
 #include <algorithm>
@@ -21,6 +21,7 @@
 #include "librecomp/game.hpp"
 #include "recompui/config.h"
 #include "tooie_aim_trace.h"
+#include "tooie_dev_files.h"
 #include "tooie_game.h"
 
 namespace {
@@ -48,10 +49,7 @@ namespace {
     }
 
     void flush() {
-        std::error_code ec;
-        const std::filesystem::path dir = recomp::get_config_path() / "logs";
-        std::filesystem::create_directories(dir, ec);
-        std::ofstream out(dir / "aim_trace.txt", std::ios::trunc);
+        std::ofstream out(tooie::dev_files::path("aim_trace.txt"), std::ios::trunc);
         if (!out.good()) {
             return;
         }
@@ -66,12 +64,12 @@ void tooie::aim_trace::add_option(recomp::config::Config& wip) {
     wip.add_bool_option(
         option,
         "Aim trace",
-        "For testing. Writes logs/aim_trace.txt, listing which game code reads Banjo's position and how often, so enemy chase code can be found. Play a minute near the enemies in question, then send the file.",
+        "For testing. Writes aim_trace.txt in the Dev Files folder, listing which game code reads Banjo's position and how often, so enemy chase code can be found. Play a minute near the enemies in question, then send the file.",
         false);
     wip.add_bool_option(
         sweep_option,
         "Aim sweep",
-        "For testing. Needs a save being played. Spawns each enemy next to Banjo in turn (reloading the area between them), counts which game code reads his position while it is alive, and writes logs/aim_sweep.txt. It turns itself off when done (about 25 minutes). Stand somewhere open, such as Spiral Mountain.",
+        "For testing. Needs a save being played. Spawns each enemy next to Banjo in turn (reloading the area between them), counts which game code reads his position while it is alive, and writes aim_sweep.txt in the Dev Files folder. It turns itself off when done (about 25 minutes). Stand somewhere open, such as Spiral Mountain.",
         false);
 }
 
