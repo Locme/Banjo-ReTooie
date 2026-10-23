@@ -44,6 +44,10 @@ Texture2D<float4> gFireflies : register(t10);
 Texture2D<float4> gColorHalf : register(t11);
 // The indirect pass (INDIRECT_PASS) at half size: SSGI's light (rgb) and GTAO's visibility (a), for IndirectAt.
 Texture2D<float4> gIndirect : register(t12);
+// Banjo-Tooie: Graphics > Volumetric Dust's clouds this frame (rt64_scene_effects.cpp SetSceneDust): the count as a float
+// in the first 16 bytes, then two float4s a cloud: x, y, z (world), radius; strength, seed, 0, 0. Bound whether or not
+// the device has ray queries.
+ByteAddressBuffer gDust : register(t16);
 #ifdef RAY_TRACED
 // Banjo-Tooie: the 3D world's solid triangles in world space (Graphics > Ray tracing), rebuilt each frame; only in
 // the RAY_TRACED variant of the pass, which is used while the device has ray queries and the structure is built.
@@ -3837,6 +3841,68 @@ float3 VolLookView(int2 pixel) {
     return normalize(float3(ndc.x / gConstants.projection.x, ndc.y / gConstants.projection.y, -1.0f));
 }
 
+uint VolDustCount() {
+    return min(uint(asfloat(gDust.Load(0)) + 0.5f), 24u);
+}
+
+// The dust clouds along the pixel's ray (Graphics > Volumetric Dust): each is a soft sphere of dust, thickest through its
+// middle and eaten into by drifting noise, so a ray through it takes light by the chord it crosses; the clouds' thickness
+// along the ray is summed and the picture lost to them by Beer's law. They are lit from the sun's side, and take the colour
+// of the ground behind them (the picture's own colour here, lifted towards dust) so sand, snow and grass kick up their own.
+float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
+    const uint count = VolDustCount();
+    if (count == 0u) {
+        return color;
+    }
+    const float scale = length(gConstants.worldX.xyz);
+    const float3 look = VolLookView(pixel);
+    const float3 origin = float3(gConstants.worldX.w, gConstants.worldY.w, gConstants.worldZ.w);
+    const float3 direction = float3(dot(look, gConstants.worldX.xyz), dot(look, gConstants.worldY.xyz), dot(look, gConstants.worldZ.xyz)) / scale;
+    const float far = min(worldDistance, 6000.0f);
+    const float time = gConstants.view.z;
+    float3 sunWorld = float3(0.3f, 0.8f, 0.5f);
+    if (dot(gConstants.sun.xyz, gConstants.sun.xyz) > 0.25f) {
+        sunWorld = float3(dot(gConstants.sun.xyz, gConstants.worldX.xyz), dot(gConstants.sun.xyz, gConstants.worldY.xyz), dot(gConstants.sun.xyz, gConstants.worldZ.xyz));
+    }
+    sunWorld = normalize(sunWorld);
+    const float3 ground = saturate(color * 1.35f + 0.12f);
+    const float3 base = lerp(float3(0.74f, 0.68f, 0.6f), ground, 0.55f) * tint;
+    float opticalDepth = 0.0f;
+    float3 lightSum = 0.0f;
+    [loop]
+    for (uint i = 0u; i < count; i++) {
+        const float4 cloud = asfloat(gDust.Load4(16u + i * 32u));
+        const float2 extra = asfloat(gDust.Load2(32u + i * 32u));
+        const float radius = max(cloud.w, 1.0f);
+        const float3 toCloud = cloud.xyz - origin;
+        const float along = dot(toCloud, direction);
+        const float distanceSquared = dot(toCloud, toCloud) - along * along;
+        if (distanceSquared >= radius * radius) {
+            continue;
+        }
+        const float half = sqrt(radius * radius - distanceSquared);
+        const float t0 = max(along - half, 0.0f);
+        const float t1 = min(along + half, far);
+        if (t1 <= t0) {
+            continue;
+        }
+        const float3 middle = origin + direction * (0.5f * (t0 + t1));
+        const float falloff = 1.0f - distanceSquared / (radius * radius);
+        const float noise = CloudNoise(middle * (60.0f / radius) * 0.045f + extra.y + float3(0.0f, time * 0.35f, 0.0f));
+        const float body = saturate(1.35f * falloff + (noise - 0.5f) * 0.9f);
+        const float thickness = extra.x * body * (t1 - t0) / radius * 2.2f;
+        // The side facing the sun is the brighter.
+        const float side = dot(normalize(middle - cloud.xyz + 1e-3f), sunWorld);
+        lightSum += base * (0.62f + 0.38f * saturate(0.5f + 0.5f * side)) * thickness;
+        opticalDepth += thickness;
+    }
+    if (opticalDepth <= 0.0f) {
+        return color;
+    }
+    const float seen = 1.0f - exp(-opticalDepth);
+    return color * (1.0f - seen) + (lightSum / opticalDepth) * seen;
+}
+
 // Volumetric mist and fog along the pixel's ray from the camera to the surface (worldDistance in world units; the
 // sky passes a long one): the ray is marched in steps that are short near the camera, and at each the thickness
 // of a ground-hugging mist layer and of an even fog (both broken up by drifting noise) takes light from the
@@ -3848,7 +3914,7 @@ float3 VolScatter(float3 color, int2 pixel, float worldDistance, float3 tint) {
     const float mist = VolMistStrength();
     const float fogAmount = VolFogStrength();
     if ((mist <= 0.0f) && (fogAmount <= 0.0f)) {
-        return color;
+        return VolDust(color, pixel, worldDistance, tint);
     }
     const float scale = length(gConstants.worldX.xyz);
     const float3 look = VolLookView(pixel);
@@ -3905,7 +3971,7 @@ float3 VolScatter(float3 color, int2 pixel, float worldDistance, float3 tint) {
             transmittance *= step;
         }
     }
-    return color * transmittance + light;
+    return VolDust(color * transmittance + light, pixel, worldDistance, tint);
 }
 
 // Forced clouds (WIP): the cycle's clouds on any level without the cycle, over the sky. The cloud's shape comes
@@ -4988,7 +5054,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             else if (VolCloudType() > 0u) {
                 scene = VolSky(scene, pixel);
             }
-            if (VolBits() != 0u) {
+            if ((VolBits() != 0u) || (VolDustCount() > 0u)) {
                 scene = VolScatter(scene, pixel, 6000.0f, daytime ? dayTint : float3(1.0f, 1.0f, 1.0f));
             }
             if (gConstants.bloom.z > 0.0f) {
@@ -5368,7 +5434,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             scene = DayWeatherLight(scene, weather.x, weather.z, 0.3f);
         }
         // WIP volumetric mist and fog along the ray to the nearest thing at the pixel (the water and falls write no depth).
-        if (VolBits() != 0u) {
+        if ((VolBits() != 0u) || (VolDustCount() > 0u)) {
             float volDepth = depth;
             float volWater;
             if ((gConstants.water.y > 0.5f) && LoadAnyWater(pixel, volWater)) {

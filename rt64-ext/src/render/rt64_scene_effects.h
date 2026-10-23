@@ -38,6 +38,8 @@ namespace RT64 {
     constexpr uint32_t SceneEffectsViewRayScene = 22;
 
     constexpr uint32_t SceneMaxLights = 32;
+    // Banjo-Tooie: volumetric dust clouds (SetSceneDust).
+    constexpr uint32_t SceneMaxDust = 24;
 
     struct SceneEffectsSettings {
         // Banjo-Tooie: the level's lights (lamps, fires) the traced shadows cast from: world x, y, z and the outer range of each.
@@ -272,6 +274,9 @@ namespace RT64 {
     // snow: it falls as snow.
     void SetSceneWeather(float rain, float flash, bool snow);
     // Volumetric mist, fog and clouds (WIP): see SceneEffectsPS.hlsl (VolSettings) and src/gameplay/volumetric.cpp.
+    // Banjo-Tooie: Graphics > Volumetric Dust: the dust clouds this frame (count of them, up to SceneMaxDust), eight floats each:
+    // world x, y, z, radius, strength (0 to 1), a seed, then two spare. The march in VolDust draws them with the mist.
+    void SetSceneDust(const float *clouds, uint32_t count);
     void SetSceneVolumetric(float mist, float fog, uint32_t fogPreset, uint32_t cloudType, float mistOffset);
     void SetSceneRainDetail(float wet, bool drops);
     void SetSceneClouds(float cover, float height, float thickness, float speed);

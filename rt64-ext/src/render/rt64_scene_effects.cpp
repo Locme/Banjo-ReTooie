@@ -138,6 +138,8 @@ namespace RT64 {
             bool bvhBuiltOnce = false;
             // The level's lights for the traced shadows: the count, then each one's x, y, z, range (16 bytes each).
             std::unique_ptr<RenderBuffer> lightsBuffer;
+            // The dust clouds (SceneEffectsPS.hlsl gDust): the count in the first 16 bytes, then two float4s a cloud.
+            std::unique_ptr<RenderBuffer> dustBuffer;
             // The world radiance cache: a hash table of 16-unit cells (check word, colour), 1 M entries.
             std::unique_ptr<RenderBuffer> radianceBuffer;
             // The traced scene's geometries (first index, tile, flags, 0: 16 bytes each, in the structure's order) and the
@@ -525,6 +527,16 @@ namespace RT64 {
         count = std::min(count, SceneMaxLights);
         memcpy(effectsSettings.lights, xyzr, size_t(count) * 4 * sizeof(float));
         effectsSettings.lightCount = count;
+    }
+
+    static std::mutex dustMutex;
+    static float dustClouds[SceneMaxDust * 8] = {};
+    static uint32_t dustCount = 0;
+
+    void SetSceneDust(const float *clouds, uint32_t count) {
+        const std::scoped_lock lock(dustMutex);
+        dustCount = std::min(count, SceneMaxDust);
+        memcpy(dustClouds, clouds, size_t(dustCount) * 8 * sizeof(float));
     }
 
     static std::mutex lampMutex;
@@ -3627,6 +3639,19 @@ namespace RT64 {
             commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::SHADER_READ) });
         }
 
+        if (res.dustBuffer == nullptr) {
+            res.dustBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (1 + 2 * SceneMaxDust)));
+            res.dustBuffer->setName("Scene Effects dust");
+        }
+        {
+            float *dust = reinterpret_cast<float *>(res.dustBuffer->map());
+            memset(dust, 0, 16 * (1 + 2 * SceneMaxDust));
+            const std::scoped_lock lock(dustMutex);
+            dust[0] = float(dustCount);
+            memcpy(dust + 4, dustClouds, size_t(dustCount) * 8 * sizeof(float));
+            res.dustBuffer->unmap();
+        }
+
         if ((res.sceneSet == nullptr) || (res.sceneSetIndirect != res.indirectTexture.get()) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[4].get()) ||
             (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water) || (res.sceneSetWaterColor != waterColor) ||
             (res.sceneSetRipples != res.rippleTexture[0].get()) || (res.sceneSetBvh != (res.bvhReady ? res.bvhTlas.get() : nullptr)) || (res.sceneSetSunMap != res.sunMapTexture.get()) || (res.sceneSetFireflies != res.fireflyTexture.get()) || (res.sceneSetHalf != res.halfTexture.get())) {
@@ -3634,6 +3659,7 @@ namespace RT64 {
                 res.retireLater(std::move(res.sceneSet));
             }
             res.sceneSet = std::make_unique<SceneEffectsDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(), worker->device->getCapabilities().rayQuery, worker->device);
+            res.sceneSet->setBuffer(res.sceneSet->gDust, res.dustBuffer.get(), 16 * (1 + 2 * SceneMaxDust));
             res.sceneSet->setTexture(res.sceneSet->gInput, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
             res.sceneSet->setTexture(res.sceneSet->gBloom, res.bloomTexture[4].get(), RenderTextureLayout::SHADER_READ);
             res.sceneSetDepth = depthTarget->texture.get();

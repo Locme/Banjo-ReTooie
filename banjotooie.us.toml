@@ -2715,3 +2715,11 @@ text = "tooie_aim_trace(rdram, ctx, \"sumumbofx_entrypoint_14\");"
 func = "sumumbofx_entrypoint_9"
 before_vram = 0x80800DB0
 text = "tooie_aim_trace(rdram, ctx, \"sumumbofx_entrypoint_9\");"
+
+# --- Volumetric dust (src/gameplay/dust.cpp) ---------------------------------
+# badust_entrypoint_2 makes every textured dust puff (walking and running feet, the quick turn's skid, landings). With
+# Graphics > WIP > Volumetric Dust on, the puff is a volumetric cloud the renderer draws instead and the function returns.
+[[patches.hook]]
+func = "badust_entrypoint_2"
+before_vram = 0x80800260
+text = "if (tooie_dust_spawn(rdram, ctx)) { return; }"

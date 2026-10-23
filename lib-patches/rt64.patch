@@ -1771,7 +1771,7 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..68a2610 100644
+index 69a82ac..d17896a 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
 @@ -212,6 +212,13 @@ namespace RT64 {
@@ -1807,7 +1807,7 @@ index 69a82ac..68a2610 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +678,192 @@ namespace RT64 {
+@@ -659,6 +678,195 @@ namespace RT64 {
          }
      };
  
@@ -1869,6 +1869,8 @@ index 69a82ac..68a2610 100644
 +        uint32_t gLights = 0;
 +        // The world radiance cache the traced effects remember colours in (SceneEffectsPS.hlsl gRadianceCache).
 +        uint32_t gRadianceCache = 0;
++        // The dust clouds (SceneEffectsPS.hlsl gDust, Graphics > Volumetric Dust), bound with or without ray queries.
++        uint32_t gDust = 0;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, bool rayQuery, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -1883,6 +1885,7 @@ index 69a82ac..68a2610 100644
 +            gFireflies = builder.addTexture(10);
 +            gColorHalf = builder.addTexture(11);
 +            gIndirect = builder.addTexture(12);
++            gDust = builder.addByteAddressBuffer(16);
 +            if (rayQuery) {
 +                gSceneBVH = builder.addAccelerationStructure(13);
 +                gLights = builder.addByteAddressBuffer(14);
