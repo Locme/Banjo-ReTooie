@@ -49,6 +49,8 @@ namespace {
     }
 
     void flush() {
+        std::error_code ec;
+        std::filesystem::create_directories(tooie::dev_files::folder(), ec);
         std::ofstream out(tooie::dev_files::path("aim_trace.txt"), std::ios::trunc);
         if (!out.good()) {
             return;
