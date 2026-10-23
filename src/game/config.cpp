@@ -562,7 +562,7 @@ void tooie::init_config() {
     general.add_option_hidden_dependency(tooie::damage::homing_option, tooie::damage::aim_option, tooie::damage::Aim::Original);
     general.add_bool_option(
         tooie::damage::faster_attacks_option,
-        "Enemy faster attacks",
+        "Lower Enemy Attack Cooldown",
         "Enemies that use the game's shared attack wait (the ones that pause 5 to 8 seconds between attacks) wait half as long.",
         false);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
