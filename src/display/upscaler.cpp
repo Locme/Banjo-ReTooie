@@ -74,7 +74,7 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         option,
         "Upscaler",
-        "Temporal upscaling and anti-aliasing. Temporal (built-in) is the game's own temporal upscaler and works on any card. Temporal (built-in) is the game's own and works on any card. FSR 3 runs on any recent graphics card. FSR 4 needs a Radeon RX 9000 card and DLSS an RTX card; On Android phones, Arm ASR (Mali) and Snapdragon GSR (Adreno) are listed too. The native modes (FSR 4 Native AA, DLAA) anti-alias without upscaling. Off leaves the picture as it is.",
+        "Temporal upscaling and anti-aliasing. Temporal (built-in) is the game's own temporal upscaler and works on any card. FSR 3 runs on any recent graphics card. FSR 4 needs a Radeon RX 9000 card and DLSS an RTX card; On Android phones, Arm ASR (Mali) and Snapdragon GSR (Adreno) are listed too. The native modes (FSR 4 Native AA, DLAA) anti-alias without upscaling. Off leaves the picture as it is.",
         choices,
         Mode::Off);
     graphics.add_enum_option(
