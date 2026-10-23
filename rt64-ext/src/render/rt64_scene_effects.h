@@ -177,6 +177,7 @@ namespace RT64 {
         float charSand = 0.0f;
         float charDrip = 0.0f;
         float charTime = 0.0f;
+        float charSoaked = 0.0f;
         float npcFurDensity = 1.0f;
         float npcFurNoisiness = 0.5f;
         float npcFeathers = 0.0f;
@@ -429,7 +430,7 @@ namespace RT64 {
     // The character surface layer (CharSurface.hlsli): how wet, snowy and dirty Banjo and Kazooie are, 0 to 1.
     void SetSceneCharSurface(float wet, float snow, float dirt, float sand);
     // How strongly they drip (0 to 1) and the time in seconds, for the wet layer's drips.
-    void SetSceneCharDrip(float drip, float seconds);
+    void SetSceneCharDrip(float drip, float seconds, float soaked);
     bool SceneCharSurfaceOn();
     // Banjo's feet (x, y, z) as the scene effects have them, false with no player.
     bool SceneCharFeet(float (&feet)[3]);

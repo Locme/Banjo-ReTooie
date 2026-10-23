@@ -39,7 +39,9 @@ float CharSurfaceSpots(float3 grid, float height, float amount, float reach, flo
     const float low = saturate((reach - height) / reach);
     const float n = 0.55f * FurNoise(grid * 0.45f + seed) + 0.45f * FurNoise(grid * 1.4f + seed * 2.1f);
     const float threshold = 0.82f - 0.5f * amount;
-    return smoothstep(threshold, threshold + 0.09f, n + 0.4f * low) * smoothstep(0.0f, 0.2f, low);
+    // (Near the ground it is thick, higher up it thins out, but the more there is the more of his upper body it reaches.)
+    const float near = smoothstep(0.0f, 0.2f, low);
+    return smoothstep(threshold, threshold + 0.09f, n + 0.4f * low) * lerp(amount * 0.8f, 1.0f, near);
 }
 
 // anchor: the vertex's place in the model (xyz; moves with the body, so the spots stick to it) and its fur mark with how
@@ -77,6 +79,9 @@ float3 CharSurface(float3 color, float3 texColor, float4 anchor, float share, bo
         const float cover = CharSurfaceSpots(grid, height, snow, 20.0f + 90.0f * snow, 41.0f);
         color = lerp(color, float3(0.92f, 0.95f, 1.0f), saturate(cover * tips * keep * 0.95f));
     }
+
+    // Swimming: his fur and skin go dark and heavy.
+    color *= 1.0f - 0.3f * FrParams.charSurface2.z * keep;
 
     // Wet: darker and a little richer all over, with a sheen where it catches the light.
     if (wet > 0.0f) {
