@@ -39,7 +39,7 @@ namespace RT64 {
 
     constexpr uint32_t SceneMaxLights = 32;
     // Banjo-Tooie: volumetric dust clouds (SetSceneDust).
-    constexpr uint32_t SceneMaxDust = 24;
+    constexpr uint32_t SceneMaxDust = 48;
 
     struct SceneEffectsSettings {
         // Banjo-Tooie: the level's lights (lamps, fires) the traced shadows cast from: world x, y, z and the outer range of each.
