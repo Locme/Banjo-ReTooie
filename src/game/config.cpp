@@ -759,7 +759,11 @@ void tooie::init_config() {
         recompui::config::set_option_display_before(tooie::free_camera_ease_back_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_floor_clearance_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_look_up_option, pf::grass_section_option);
-        recompui::config::set_option_group(tooie::dive::option, "WIP");
+        // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
+        recompui::config::set_option_group(tooie::dive::option, "Dive");
+        recompui::config::set_option_group(tooie::menu_mouse::enabled_option, "Menu mouse");
+        recompui::config::set_option_group(tooie::free_camera_ease_back_option, "Free camera");
+        recompui::config::set_option_group(pf::grass_section_option, "3D grass");
     }
     graphics.add_bool_option(
         tooie::high_detail_models_option,
