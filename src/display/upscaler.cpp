@@ -13,6 +13,7 @@
 namespace RT64 {
     // rt64-ext/src/render/rt64_upscaler.h.
     void SetUpscalerMode(uint32_t mode);
+    void SetUpscalerQuality(uint32_t quality);
 }
 
 namespace {
@@ -44,6 +45,12 @@ void tooie::upscaler::apply() {
         mode = (uint32_t)Mode::Off;
     }
     RT64::SetUpscalerMode(mode);
+    uint32_t quality = (uint32_t)Quality::Quality;
+    try {
+        quality = std::get<uint32_t>(graphics_config().get_option_value(quality_option));
+    } catch (...) {
+    }
+    RT64::SetUpscalerQuality(quality);
 }
 
 void tooie::upscaler::add_option(recomp::config::Config& graphics) {
@@ -70,6 +77,25 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
         "Temporal upscaling and anti-aliasing. Temporal (built-in) is the game's own temporal upscaler and works on any card. Temporal (built-in) is the game's own and works on any card. FSR 3 runs on any recent graphics card. FSR 4 needs a Radeon RX 9000 card and DLSS an RTX card; On Android phones, Arm ASR (Mali) and Snapdragon GSR (Adreno) are listed too. The native modes (FSR 4 Native AA, DLAA) anti-alias without upscaling. Off leaves the picture as it is.",
         choices,
         Mode::Off);
+    graphics.add_enum_option(
+        quality_option,
+        "Upscaler Quality",
+        "How much of your window's height the game renders at when Resolution is Auto and an upscaler is on: Quality about 67%, Balanced 58%, Performance 50%, Ultra Performance 33%. The upscaler makes up the rest. Native modes ignore it.",
+        {
+            {Quality::Quality, "Quality", "Quality"},
+            {Quality::Balanced, "Balanced", "Balanced"},
+            {Quality::Performance, "Performance", "Performance"},
+            {Quality::UltraPerformance, "Ultra Performance", "Ultra Performance"},
+        },
+        Quality::Quality);
+    graphics.add_option_change_callback(quality_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                graphics_config().save_config();
+            } else {
+                apply();
+            }
+        });
     graphics.add_option_change_callback(option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
             if (context == recomp::config::OptionChangeContext::Temporary) {

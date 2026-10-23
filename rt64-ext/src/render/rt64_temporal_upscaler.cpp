@@ -19,6 +19,7 @@
 namespace RT64 {
     namespace {
         std::atomic<uint32_t> upscalerMode{ 0 };
+        std::atomic<uint32_t> upscalerQuality{ 0 };
 
         struct Camera {
             float projection[16] = {};
@@ -35,6 +36,11 @@ namespace RT64 {
         std::mutex cameraMutex;
         Camera currentCamera;
         std::atomic<uint32_t> jitterFrame{ 0 };
+        // Frames in a row the resolve could not run for; the jitter is off from the third, so a picture the upscaler
+        // cannot work on (a menu, a cut) does not wobble. A resolve that runs puts it back.
+        std::atomic<uint32_t> unresolvedFrames{ 0 };
+        // Whether the camera was set since the last frame took it (a frame with no 3D world leaves it stale).
+        std::atomic<bool> cameraFresh{ false };
         std::atomic<uint32_t> renderWidth{ 640 };
         std::atomic<uint32_t> renderHeight{ 480 };
         constexpr uint32_t JitterPhases = 16;
@@ -174,8 +180,26 @@ namespace RT64 {
         return upscalerMode.load();
     }
 
-    bool UpscalerJitterActive() {
+    void SetUpscalerQuality(uint32_t quality) {
+        upscalerQuality = std::min(quality, 3U);
+    }
+
+    float UpscalerRenderFraction() {
+        // Only the built-in resolve (8) enlarges so far; the other choices have no backend yet and must not render small.
+        // (Off, FSR 4 native AA and DLAA will always keep the window's size.)
+        if (upscalerMode.load() != 8) {
+            return 1.0f;
+        }
+        static const float fractions[4] = { 0.667f, 0.58f, 0.5f, 0.333f };
+        return fractions[upscalerQuality.load()];
+    }
+
+    bool UpscalerWanted() {
         return upscalerMode.load() == 8;
+    }
+
+    bool UpscalerJitterActive() {
+        return (upscalerMode.load() == 8) && (unresolvedFrames.load() < 3);
     }
 
     void UpscalerNextFrame() {
@@ -214,6 +238,7 @@ namespace RT64 {
         currentCamera.width = width;
         currentCamera.height = height;
         currentCamera.valid = true;
+        cameraFresh = true;
     }
 
     namespace {
@@ -251,7 +276,9 @@ namespace RT64 {
         {
             const std::scoped_lock lock(cameraMutex);
             float projX = 1.0f, projY = 1.0f;
-            motionKnown = reprojection(currentCamera, reproject, constants.depthTerms, projX, projY, jitter);
+            // A camera nobody set for this frame (no 3D world in it) is stale: no motion.
+            const bool fresh = cameraFresh.exchange(false);
+            motionKnown = fresh && reprojection(currentCamera, reproject, constants.depthTerms, projX, projY, jitter);
             constants.flags.w = motionKnown ? 0.0f : 1.0f;
             if (!motionKnown) {
                 // No motion known: no velocity.
@@ -337,14 +364,16 @@ namespace RT64 {
     RenderTexture *UpscalerRenderer::resolve(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
         RenderTexture *input, RenderFormat format, uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight)
     {
-        if (!UpscalerJitterActive() || !velocityValid || debugShown || (input == nullptr) || (inputWidth != width) || (inputHeight != height) ||
+        // Without a known camera motion the picture is not a 3D world (a menu, a cut): left as it is, with no blur.
+        if (!UpscalerWanted() || !velocityValid || debugShown || !motionWasKnown || (input == nullptr) || (inputWidth != width) || (inputHeight != height) ||
             (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR)) || (outputWidth < inputWidth) || (outputHeight < inputHeight))
         {
             historyValid = false;
+            unresolvedFrames++;
             return input;
         }
 
-        bool reset = !historyValid || !motionWasKnown;
+        bool reset = !historyValid;
         if ((outputWidth != lastOutputWidth) || (outputHeight != lastOutputHeight) || (resolved[0] == nullptr)) {
             for (int i = 0; i < 2; i++) {
                 resolvedFramebuffer[i].reset();
@@ -395,6 +424,7 @@ namespace RT64 {
             historyResets++;
         }
         historyValid = true;
+        unresolvedFrames = 0;
         writeIndex = source;
         float jitterLog[4] = { currentJitter[0], currentJitter[1], 0.0f, 0.0f };
         logUpscaler("resolve", GetUpscalerMode(), inputWidth, inputHeight, outputWidth, outputHeight, motionWasKnown, jitterLog, historyResets, false);

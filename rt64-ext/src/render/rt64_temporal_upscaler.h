@@ -17,7 +17,17 @@ namespace RT64 {
     void SetUpscalerMode(uint32_t mode);
     uint32_t GetUpscalerMode();
 
-    // Whether the chosen upscaler needs the 3D world drawn with camera jitter (the built-in temporal one does).
+    // How much of the window's height the game renders at, when the Resolution setting is Auto and an upscaler that
+    // enlarges is chosen: 0 Quality (about 67%), 1 Balanced (58%), 2 Performance (50%), 3 Ultra Performance (33%).
+    void SetUpscalerQuality(uint32_t quality);
+
+    // 1 when nothing is to be enlarged (no upscaler, or a native-resolution mode), else the fraction of the window's height.
+    float UpscalerRenderFraction();
+
+    // Whether the built-in temporal upscaler is the chosen one.
+    bool UpscalerWanted();
+
+    // Whether the 3D world is to be drawn with camera jitter now: it is wanted and the resolve has not been failing.
     bool UpscalerJitterActive();
 
     // Called once for each frame the projections are worked out for (ProjectionProcessor::process).

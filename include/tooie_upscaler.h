@@ -11,6 +11,14 @@
 // their native-resolution modes need motion vectors, depth and camera jitter from RT64 (rt64-ext/src/render/rt64_temporal_upscaler.*).
 namespace tooie::upscaler {
     inline const std::string option = "upscaler";
+    inline const std::string quality_option = "upscaler_quality";
+
+    enum class Quality : uint32_t {
+        Quality,
+        Balanced,
+        Performance,
+        UltraPerformance,
+    };
 
     enum class Mode : uint32_t {
         Off,
