@@ -1605,7 +1605,7 @@ index 6c84c05..6f2e821 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("Config modal has not been initialized.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..1a7afe5 100644
+index 86428c9..b6d50a7 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
 @@ -1,4 +1,7 @@
@@ -1649,7 +1649,7 @@ index 86428c9..1a7afe5 100644
  }
  
  void ConfigOptionElement::process_event(const Event &e) {
-@@ -87,14 +107,68 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -87,14 +107,72 @@ void ConfigOptionElement::process_event(const Event &e) {
      }
  }
  
@@ -1701,6 +1701,10 @@ index 86428c9..1a7afe5 100644
 -    if (config->is_config_option_hidden(option_index)) {
 +    const bool hidden = config->is_config_option_hidden(option_index, ignore_simple);
 +    update_simple_control();
++    // A header (Banjo-Tooie menu layers): only its name and arrow show; its children open under it.
++    if (control_root != nullptr && config->is_option_header(option_index)) {
++        control_root->set_display(Display::None);
++    }
 +    if (expand_button != nullptr) {
 +        const bool open = config->is_option_expanded(option_index);
 +        expand_button->set_display(open ? Display::None : Display::Flex);
@@ -1719,7 +1723,7 @@ index 86428c9..1a7afe5 100644
  }
  
  // ConfigOptionEnum
-@@ -110,6 +184,7 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -110,6 +188,7 @@ ConfigOptionEnum::ConfigOptionEnum(
  {
      ContextId context = recompui::get_current_context();
      Element *wrapper = context.create_element<Element>(this, 0, "div", false);
@@ -1727,7 +1731,7 @@ index 86428c9..1a7afe5 100644
      wrapper->set_display(Display::Flex);
      wrapper->set_flex_direction(FlexDirection::Row);
      wrapper->set_align_items(AlignItems::Center);
-@@ -120,25 +195,48 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -120,25 +199,48 @@ ConfigOptionEnum::ConfigOptionEnum(
      // Negates the extra padding that radio tabs automatically add.
      name_label->set_margin_bottom(4.0f);
  
@@ -1793,7 +1797,7 @@ index 86428c9..1a7afe5 100644
      }
  
      update_value();
-@@ -153,12 +251,18 @@ void ConfigOptionEnum::update_value() {
+@@ -153,12 +255,18 @@ void ConfigOptionEnum::update_value() {
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(this->option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          if (enum_opt.options[i].value == option_value) {
@@ -1814,7 +1818,7 @@ index 86428c9..1a7afe5 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -177,6 +281,14 @@ void ConfigOptionEnum::update_enum_details() {
+@@ -177,6 +285,14 @@ void ConfigOptionEnum::update_enum_details() {
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
@@ -1829,7 +1833,7 @@ index 86428c9..1a7afe5 100644
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
          auto opt_element = radio->get_option_element(i);
-@@ -199,6 +311,7 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -199,6 +315,7 @@ ConfigOptionNumber::ConfigOptionNumber(
      auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
  
      slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
@@ -1837,7 +1841,7 @@ index 86428c9..1a7afe5 100644
      slider->set_width(100.0f, Unit::Percent);
      slider->set_max_width(512.0f, Unit::Dp);
  
-@@ -214,14 +327,29 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -214,14 +331,29 @@ ConfigOptionNumber::ConfigOptionNumber(
              this->on_hover(this->option_id);
          }
      });
@@ -1867,7 +1871,7 @@ index 86428c9..1a7afe5 100644
  };
  
  void ConfigOptionNumber::update_disabled() {
-@@ -229,6 +357,15 @@ void ConfigOptionNumber::update_disabled() {
+@@ -229,6 +361,15 @@ void ConfigOptionNumber::update_disabled() {
      set_enabled(!disabled);
  };
  
@@ -1883,7 +1887,7 @@ index 86428c9..1a7afe5 100644
  // ConfigOptionString
  ConfigOptionString::ConfigOptionString(
      ResourceId rid,
-@@ -245,6 +382,7 @@ ConfigOptionString::ConfigOptionString(
+@@ -245,6 +386,7 @@ ConfigOptionString::ConfigOptionString(
  
      ContextId context = recompui::get_current_context();
      text_input = context.create_element<TextInput>(this);
@@ -1891,7 +1895,7 @@ index 86428c9..1a7afe5 100644
      text_input->set_width(100.0f, Unit::Percent);
      text_input->set_max_width(100.0f, Unit::Percent);
      update_value();
-@@ -284,16 +422,41 @@ ConfigOptionBool::ConfigOptionBool(
+@@ -284,16 +426,41 @@ ConfigOptionBool::ConfigOptionBool(
  
      ContextId context = recompui::get_current_context();
      toggle = context.create_element<Toggle>(this, ToggleSize::Medium);

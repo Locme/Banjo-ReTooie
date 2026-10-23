@@ -5323,6 +5323,14 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "How strongly the colourblind filter shifts the colours.",
         0, 100, 10, 0, true, 100);
     graphics.add_option_hidden_dependency(colourblind_strength_option, colourblind_option, Colourblind::Off);
+    // Colour Grading (L, 2026-10-23): a header row with no switch, under the colourblind filter. Its four settings
+    // (contrast, saturation, vignette, film grain) open under it.
+    graphics.add_bool_option(
+        colour_grading_option,
+        "Colour Grading",
+        "Contrast, colour saturation, vignette and film grain. Open it to see them.",
+        true);
+    graphics.set_option_header(colour_grading_option);
 
     graphics.add_bool_option(
         three_point_option,
