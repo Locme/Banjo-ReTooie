@@ -76,6 +76,9 @@ What changed, newest first, is in [`notes/changelog.md`](notes/changelog.md).
 
 ## Licence
 
+The DLSS runtime `nvngx_dlss.dll` that Windows builds fetch and ship beside the game is NVIDIA's, under NVIDIA's own
+licence (`third-party/nvidia-dlss/LICENSE.txt`), not the GPL.
+
 GPL-3.0, see [`COPYING`](COPYING). N64ModernRuntime is GPL-3.0; N64Recomp and
 RT64 are MIT; RecompFrontend ships no licence file and is used only as a
 submodule. Inter and Noto Emoji are under the SIL Open Font License; PromptFont
