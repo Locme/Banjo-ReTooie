@@ -5170,32 +5170,27 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
             }
             was_wet_in_water = in_water;
             amounts[0] = std::clamp(amounts[0] + (in_water ? 3.0f : -1.0f / dry_seconds) * dt, 0.0f, 1.0f);
-            // The rest comes in little by little: 5% at each trigger, and goes at 1% every 8 seconds. Water cleans it fast.
-            // Triggers: the dust he kicks up (a roll, a landing, a run of steps: one every 0.75 s at most), a step on sand, a
-            // step in snow.
-            static float sand_timer = 0.0f, snow_timer = 0.0f;
+            // Dirt and sand come in little by little: 5% at each trigger, and go at 1% every 8 seconds. Water cleans all three fast.
+            // Triggers: the dust he kicks up (a roll, a landing, a run of steps: one every 0.75 s at most) gives dirt; steps on
+            // sand give sand. (Snow below.)
+            static float sand_timer = 0.0f;
             const float dust_triggers = tooie::dust::take_exposure();
             const bool moving = valid && banjo_grounded(rdram) && speed > 20.0f && speed < 600.0f;
             if (in_water) {
                 for (int i = 1; i < 4; i++) {
                     amounts[i] -= 1.5f * dt;
                 }
-                sand_timer = snow_timer = 0.0f;
+                sand_timer = 0.0f;
             }
             else {
                 const float fade = 0.01f / 8.0f * dt;
-                for (int i = 1; i < 4; i++) {
-                    amounts[i] -= fade;
-                }
-                // (Not on snow, where the puffs are snow.)
+                amounts[2] -= fade;
+                amounts[3] -= fade;
+                // Snow is as it was at first: it gathers while he is out on a map with snow (20 seconds to full), and melts
+                // away over a minute elsewhere.
+                amounts[1] += (snowy_map(map) ? 0.05f : -0.017f) * dt;
+                // (Dust makes him dirty; on snowy maps the puffs are snow, so no dirt there.)
                 amounts[2] += snowy_map(map) ? 0.0f : 0.05f * dust_triggers;
-                if (moving && snowy_map(map)) {
-                    snow_timer += dt;
-                    if (snow_timer >= 1.5f) {
-                        snow_timer = 0.0f;
-                        amounts[1] += 0.05f;
-                    }
-                }
                 if (moving && RT64::SceneSandUnderfoot()) {
                     sand_timer += dt;
                     if (sand_timer >= 0.75f) {
