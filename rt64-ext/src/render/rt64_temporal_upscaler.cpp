@@ -212,7 +212,7 @@ namespace RT64 {
         // Only the built-in resolve (8) enlarges so far; the other choices have no backend yet and must not render small.
         // (Off, FSR 4 native AA and DLAA will always keep the window's size.)
         const uint32_t mode = upscalerMode.load();
-        if ((mode != 8) && (mode != 3) && (mode != 1) && (mode != 7)) {
+        if ((mode != 8) && (mode != 3) && (mode != 1) && (mode != 7) && (mode != 6)) {
             return 1.0f;
         }
         static const float fractions[4] = { 0.667f, 0.58f, 0.5f, 0.333f };
@@ -221,11 +221,12 @@ namespace RT64 {
 
     bool UpscalerWanted() {
         const uint32_t mode = upscalerMode.load();
-        return (mode == 8) || (mode == 3) || (mode == 4) || (mode == 1) || (mode == 2) || (mode == 7);
+        return (mode == 8) || (mode == 3) || (mode == 4) || (mode == 1) || (mode == 2) || (mode == 7) || (mode == 6);
     }
 
     bool UpscalerJitterActive() {
-        return UpscalerWanted() && (unresolvedFrames.load() < 3);
+        // Snapdragon GSR (6) is spatial: no jitter.
+        return UpscalerWanted() && (upscalerMode.load() != 6) && (unresolvedFrames.load() < 3);
     }
 
     void UpscalerNextFrame() {
@@ -289,7 +290,7 @@ namespace RT64 {
     {
         velocityValid = false;
         debugShown = false;
-        if ((GetUpscalerMode() == 0) || (input == nullptr) || (depth == nullptr) || (inputWidth == 0) || (inputHeight == 0) ||
+        if ((GetUpscalerMode() == 0) || (GetUpscalerMode() == 6) || (input == nullptr) || (depth == nullptr) || (inputWidth == 0) || (inputHeight == 0) ||
             (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR)))
         {
             return input;
@@ -412,8 +413,10 @@ namespace RT64 {
         RenderTexture *input, RenderFormat format, uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight)
     {
         // Without a known camera motion the picture is not a 3D world (a menu, a cut): left as it is, with no blur.
-        if (!UpscalerWanted() || !velocityValid || debugShown || !motionWasKnown || (input == nullptr) || (inputWidth != width) || (inputHeight != height) ||
-            (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR)) || (outputWidth < inputWidth) || (outputHeight < inputHeight))
+        const bool spatial = (GetUpscalerMode() == 6);
+        if (!UpscalerWanted() || (!spatial && (!velocityValid || debugShown || !motionWasKnown || (inputWidth != width) || (inputHeight != height))) || (input == nullptr) ||
+            (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR)) || (outputWidth < inputWidth) || (outputHeight < inputHeight) ||
+            (spatial && (shaderLibrary->upscalerGsr.pipeline == nullptr)))
         {
             historyValid = false;
             unresolvedFrames++;
@@ -497,6 +500,39 @@ namespace RT64 {
         if (resolveDescriptorSet == nullptr) {
             resolveDescriptorSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
                 shaderLibrary->samplerLibrary.nearest.clampClamp.get(), device);
+        }
+
+        // Snapdragon GSR (Android): one spatial pass, no history.
+        if (spatial) {
+            if (outputWidth == inputWidth && outputHeight == inputHeight) {
+                return input;
+            }
+            const uint32_t gsrTarget = writeIndex;
+            resolveDescriptorSet->setTexture(resolveDescriptorSet->gTexture0, input, RenderTextureLayout::SHADER_READ);
+            resolveDescriptorSet->setTexture(resolveDescriptorSet->gTexture1, input, RenderTextureLayout::SHADER_READ);
+            resolveDescriptorSet->setTexture(resolveDescriptorSet->gTexture2, input, RenderTextureLayout::SHADER_READ);
+            interop::UpscalerResolveCB gsrConstants;
+            gsrConstants.sizes = { float(inputWidth), float(inputHeight), float(outputWidth), float(outputHeight) };
+            gsrConstants.jitter = { 0.0f, 0.0f, 0.0f, 0.0f };
+            RenderTextureBarrier gsrBarriers[] = {
+                RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
+                RenderTextureBarrier(resolved[gsrTarget].get(), RenderTextureLayout::COLOR_WRITE)
+            };
+            commandList->barriers(RenderBarrierStage::GRAPHICS, gsrBarriers, uint32_t(std::size(gsrBarriers)));
+            commandList->setFramebuffer(resolvedFramebuffer[gsrTarget].get());
+            commandList->setPipeline(shaderLibrary->upscalerGsr.pipeline.get());
+            commandList->setGraphicsPipelineLayout(shaderLibrary->upscalerGsr.pipelineLayout.get());
+            commandList->setGraphicsDescriptorSet(resolveDescriptorSet->get(), 0);
+            commandList->setGraphicsPushConstants(0, &gsrConstants);
+            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
+            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(outputWidth), float(outputHeight)));
+            commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));
+            commandList->drawInstanced(3, 1, 0, 0);
+            writeIndex = 1 - writeIndex;
+            unresolvedFrames = 0;
+            float gsrLog[4] = {};
+            logUpscaler("resolve (Snapdragon GSR)", GetUpscalerMode(), inputWidth, inputHeight, outputWidth, outputHeight, false, gsrLog, historyResets, false);
+            return resolved[gsrTarget].get();
         }
 
         // Written to one of the two textures; the other holds the last frame's result.

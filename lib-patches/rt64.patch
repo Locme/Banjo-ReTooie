@@ -7475,7 +7475,7 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..686096d 100644
+index d1c5273..04963cb 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -17,6 +17,23 @@
@@ -7502,7 +7502,7 @@ index d1c5273..686096d 100644
  #include "shaders/GaussianFilterRGB3x3CS.hlsl.spirv.h"
  #include "shaders/BoxFilterCS.hlsl.spirv.h"
  #include "shaders/BicubicScalingCS.hlsl.spirv.h"
-@@ -40,7 +57,48 @@
+@@ -40,7 +57,51 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -7523,6 +7523,9 @@ index d1c5273..686096d 100644
 +#include "shaders/PhotoGradePS.hlsl.spirv.h"
 +#include "shaders/UpscalerVelocityPS.hlsl.spirv.h"
 +#include "shaders/UpscalerResolvePS.hlsl.spirv.h"
++#ifdef __ANDROID__
++#include "shaders/GsrPS.hlsl.spirv.h"
++#endif
 +#include "shaders/SceneEffectsPS.hlsl.spirv.h"
 +#include "shaders/BloomPS.hlsl.spirv.h"
 +#include "shaders/SceneEffects2XPS.hlsl.spirv.h"
@@ -7551,7 +7554,7 @@ index d1c5273..686096d 100644
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
-@@ -48,6 +106,8 @@
+@@ -48,6 +109,8 @@
  #include "shaders/VideoInterfacePSPixel.hlsl.spirv.h"
  #include "shaders/FullScreenVS.hlsl.spirv.h"
  #include "shaders/Im3DVS.hlsl.spirv.h"
@@ -7560,7 +7563,7 @@ index d1c5273..686096d 100644
  #include "shaders/ComposePS.hlsl.spirv.h"
  #include "shaders/DebugPS.hlsl.spirv.h"
  #include "shaders/Im3DPS.hlsl.spirv.h"
-@@ -86,7 +146,38 @@
+@@ -86,7 +149,38 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -7599,7 +7602,7 @@ index d1c5273..686096d 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
-@@ -94,6 +185,8 @@
+@@ -94,6 +188,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.dxil.h"
  #   include "shaders/FullScreenVS.hlsl.dxil.h"
  #   include "shaders/Im3DVS.hlsl.dxil.h"
@@ -7608,7 +7611,7 @@ index d1c5273..686096d 100644
  #   include "shaders/ComposePS.hlsl.dxil.h"
  #   include "shaders/DebugPS.hlsl.dxil.h"
  #   include "shaders/Im3DPS.hlsl.dxil.h"
-@@ -131,7 +224,38 @@
+@@ -131,7 +227,38 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -7647,7 +7650,7 @@ index d1c5273..686096d 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
-@@ -139,6 +263,8 @@
+@@ -139,6 +266,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.metal.h"
  #   include "shaders/FullScreenVS.hlsl.metal.h"
  #   include "shaders/Im3DVS.hlsl.metal.h"
@@ -7656,7 +7659,7 @@ index d1c5273..686096d 100644
  #   include "shaders/ComposePS.hlsl.metal.h"
  #   include "shaders/DebugPS.hlsl.metal.h"
  #   include "shaders/Im3DPS.hlsl.metal.h"
-@@ -148,6 +274,12 @@
+@@ -148,6 +277,12 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
@@ -7669,7 +7672,7 @@ index d1c5273..686096d 100644
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -204,7 +336,7 @@ namespace RT64 {
+@@ -204,7 +339,7 @@ namespace RT64 {
              samplerDesc.addressW = RenderTextureAddressMode::CLAMP;
  
              // This matches the bias used in the shader when native samplers are not used.
@@ -7678,7 +7681,7 @@ index d1c5273..686096d 100644
  
              // WRAP.
              samplerDesc.addressU = RenderTextureAddressMode::WRAP;
-@@ -549,6 +681,38 @@ namespace RT64 {
+@@ -549,6 +684,38 @@ namespace RT64 {
              rspWorld.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -7717,7 +7720,7 @@ index d1c5273..686096d 100644
          // Texture Copy.
          {
              TextureCopyDescriptorSet descriptorSet;
-@@ -569,6 +733,93 @@ namespace RT64 {
+@@ -569,6 +736,96 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -7796,6 +7799,9 @@ index d1c5273..686096d 100644
 +            layoutBuilder.addDescriptorSet(descriptorSet);
 +            layoutBuilder.end();
 +            createPass(upscalerResolve, SMAA_BLOBS(UpscalerResolvePS), RenderTarget::colorBufferFormat(usesHDR));
++#           ifdef __ANDROID__
++            createPass(upscalerGsr, SMAA_BLOBS(GsrPS), RenderTarget::colorBufferFormat(usesHDR));
++#           endif
 +
 +            // Banjo-Tooie: the scene effects' bloom passes.
 +            layoutBuilder.begin();
@@ -7811,7 +7817,7 @@ index d1c5273..686096d 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +834,20 @@ namespace RT64 {
+@@ -583,6 +840,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -7832,7 +7838,7 @@ index d1c5273..686096d 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +1097,201 @@ namespace RT64 {
+@@ -832,6 +1103,201 @@ namespace RT64 {
              }
          }
  
@@ -8035,10 +8041,10 @@ index d1c5273..686096d 100644
          {
              PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..93f944b 100644
+index 641f3ec..f380936 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -47,12 +47,50 @@ namespace RT64 {
+@@ -47,12 +47,51 @@ namespace RT64 {
          ShaderRecord rspVertexTestZ;
          ShaderRecord rspVertexTestZMS;
          ShaderRecord rspWorld;
@@ -8086,6 +8092,7 @@ index 641f3ec..93f944b 100644
 +        ShaderRecord upscalerVelocityView;
 +        ShaderRecord upscalerDepth;
 +        ShaderRecord upscalerResolve;
++        ShaderRecord upscalerGsr;
          ShaderRecord textureResolve;
          ShaderRecord videoInterfaceLinear;
          ShaderRecord videoInterfaceNearest;

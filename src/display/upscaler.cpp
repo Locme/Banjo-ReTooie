@@ -37,7 +37,7 @@ void tooie::upscaler::apply() {
     }
     // A saved choice this platform doesn't list (a settings file from another device) acts as Off.
 #if defined(__ANDROID__)
-    const bool listed = (mode == (uint32_t)Mode::Off) || (mode == (uint32_t)Mode::Fsr3) || (mode == (uint32_t)Mode::Temporal) || (mode == (uint32_t)Mode::ArmAsr) || (mode == (uint32_t)Mode::SnapdragonGsr);
+    const bool listed = (mode == (uint32_t)Mode::Off) || (mode == (uint32_t)Mode::Temporal) || (mode == (uint32_t)Mode::SnapdragonGsr);
 #else
     const bool listed = (mode != (uint32_t)Mode::ArmAsr) && (mode != (uint32_t)Mode::SnapdragonGsr);
 #endif
@@ -56,15 +56,14 @@ void tooie::upscaler::apply() {
 void tooie::upscaler::add_option(recomp::config::Config& graphics) {
     created = true;
 
-    // Only the upscalers a platform can run are listed: Android has no FSR 4 or DLSS, and Windows no Arm ASR or Snapdragon GSR.
+    // Only the upscalers a platform can run are listed: Android has no FSR 3, FSR 4 or DLSS (their DLLs are Windows only), and Windows no Snapdragon GSR. Arm ASR is not made yet.
     std::vector<recomp::config::ConfigOptionEnumOption> choices = {
         {Mode::Off, "Off", "Off"},
-        {Mode::Fsr3, "FSR 3", "FSR 3"},
         {Mode::Temporal, "Temporal (built-in)", "Temporal (built-in)"},
 #if defined(__ANDROID__)
-        {Mode::ArmAsr, "Arm ASR", "Arm ASR"},
         {Mode::SnapdragonGsr, "Snapdragon GSR", "Snapdragon GSR"},
 #else
+        {Mode::Fsr3, "FSR 3", "FSR 3"},
         {Mode::Fsr4, "FSR 4", "FSR 4"},
         {Mode::Fsr4NativeAA, "FSR 4 Native AA", "FSR 4 Native AA"},
         {Mode::Dlss, "DLSS", "DLSS"},
@@ -74,7 +73,7 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         option,
         "Upscaler",
-        "Temporal upscaling and anti-aliasing. Temporal (built-in) is the game's own temporal upscaler and works on any card. FSR 3 runs on any recent graphics card. FSR 4 needs a Radeon RX 9000 card and DLSS an RTX card; On Android phones, Arm ASR (Mali) and Snapdragon GSR (Adreno) are listed too. The native modes (FSR 4 Native AA, DLAA) anti-alias without upscaling. Off leaves the picture as it is.",
+        "Temporal upscaling and anti-aliasing. Temporal (built-in) is the game's own temporal upscaler and works on any card. FSR 3 runs on any recent Windows graphics card. FSR 4 needs a Radeon RX 9000 card and DLSS an RTX card; On Android phones, Snapdragon GSR (a fast spatial upscaler, best on Adreno) is listed instead. The native modes (FSR 4 Native AA, DLAA) anti-alias without upscaling. Off leaves the picture as it is.",
         choices,
         Mode::Off);
     graphics.add_enum_option(

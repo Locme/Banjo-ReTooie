@@ -72,6 +72,10 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/FsrPS.hlsl" "src/shaders/Fs
 # Camera motion for the temporal upscalers (RT64::SetUpscalerMode, src/display/upscaler.cpp).
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerVelocityPS.hlsl")
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerResolvePS.hlsl")
+# Snapdragon GSR 1 (third-party/snapdragon-gsr, Qualcomm, BSD 3-Clause): Android builds only.
+if(ANDROID)
+    rt64_ext_shader(build_pixel_shader rt64 "src/shaders/GsrPS.hlsl" "-I${PROJECT_SOURCE_DIR}/third-party/snapdragon-gsr")
+endif()
 
 # Photo mode's filters and sharpening (RT64::SetPhotoGrade, src/gameplay/photo_mode.cpp).
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/PhotoGradePS.hlsl")
