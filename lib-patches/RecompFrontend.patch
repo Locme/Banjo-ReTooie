@@ -2227,7 +2227,7 @@ index 49e05db..a9dce3a 100644
          virtual ~ConfigPageOptionsMenu() = default;
      };
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
-index 4fdf81f..65fedeb 100644
+index 4fdf81f..43b3302 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
 +++ b/recompui/src/config/ui_config_tab_graphics.cpp
 @@ -22,6 +22,10 @@ namespace recompui {
@@ -2404,6 +2404,15 @@ index 4fdf81f..65fedeb 100644
              config.add_enum_option(
                  graphics::options::msaa_option,
                  "MS Anti-Aliasing",
+@@ -330,7 +358,7 @@ namespace recompui {
+                 "<br />"
+                 "<recomp-color primary>Note: This option won't be available if your GPU does not support programmable MSAA sample positions, as it is currently required to avoid rendering glitches.</recomp-color>",
+                 antialiasing_options,
+-                ultramodern::renderer::Antialiasing::MSAA2X
++                ultramodern::renderer::Antialiasing::None
+             );
+ 
+             config.add_enum_option(
 @@ -338,16 +366,15 @@ namespace recompui {
                  "HUD Placement",
                  "Adjusts the placement of HUD elements to fit the selected aspect ratio. <recomp-color primary>Expand</recomp-color> will use the aspect ratio of the game's output window.",
