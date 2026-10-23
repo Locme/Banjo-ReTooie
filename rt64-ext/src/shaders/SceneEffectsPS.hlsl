@@ -3889,7 +3889,9 @@ uint VolDustCount() {
 // a plain grey-tan dust.
 float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
     const uint count = VolDustCount();
-    if (count == 0u) {
+    // Debug (header float 3, TOOIE_DUST_DEBUG): 1 draws nothing, 2 flat magenta clouds.
+    const uint debugMode = uint(asfloat(gDust.Load(12)) + 0.5f);
+    if ((count == 0u) || (debugMode == 1u)) {
         return color;
     }
     const float scale = length(gConstants.worldX.xyz);
@@ -3954,7 +3956,8 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
         const float3 sandColour = saturate(ground * 1.25f + 0.1f);
         const float3 dirtColour = saturate(ground * 0.85f + 0.03f);
         const float3 plainColour = lerp(float3(0.74f, 0.68f, 0.6f), saturate(ground * 1.35f + 0.12f), 0.4f);
-        const float3 base = (grassColour * wGrass + snowColour * wSnow + sandColour * wSand + dirtColour * wDirt + plainColour * wPlain) * tint;
+        const float3 baseColour = (grassColour * wGrass + snowColour * wSnow + sandColour * wSand + dirtColour * wDirt + plainColour * wPlain) * tint;
+        const float3 base = (debugMode == 2u) ? float3(1.0f, 0.0f, 1.0f) : baseColour;
 
         const float3 middle = origin + direction * clamp(along, 0.0f, far);
         // The Gaussian, taken to nothing at its reach (so it ends smoothly, with no step).
@@ -3978,7 +3981,9 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
     }
     // Never opaque: at most about 55% of the picture behind is replaced, so a puff stays see-through (L, 2026-10-23).
     const float seen = 0.55f * (1.0f - exp(-opticalDepth));
-    return color * (1.0f - seen) + (lightSum / opticalDepth) * seen;
+    const float3 result = color * (1.0f - seen) + (lightSum / max(opticalDepth, 1e-6f)) * seen;
+    // Never a black or broken pixel from a bad number.
+    return (all(result >= 0.0f) && all(result < 1e6f)) ? result : color;
 }
 
 // Volumetric mist and fog along the pixel's ray from the camera to the surface (worldDistance in world units; the
