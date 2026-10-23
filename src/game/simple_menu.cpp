@@ -151,7 +151,7 @@ namespace {
 
     const std::string base_description =
         "<recomp-color primary>On</recomp-color>: an effect with settings of its own is a single on/off switch (a "
-        "plain slider stays a slider), and the tuning sliders, photo mode and free camera extras, debug options and the DEV tab are hidden. "
+        "plain slider stays a slider), and the tuning sliders, photo mode and free camera extras, and debug options are hidden. "
         "<recomp-color primary>Off</recomp-color> (Advanced): everything is shown. Hidden settings keep "
         "their values and keep working, and Search still finds them.";
 }
@@ -272,13 +272,10 @@ void tooie::simple_menu::classify() {
     }
 }
 
-void tooie::simple_menu::apply(void (*refresh_tabs)()) {
+void tooie::simple_menu::apply() {
     const bool simple = on();
     for (recomp::config::Config* config : all_configs()) {
         config->set_simple_mode(simple);
-    }
-    if (refresh_tabs != nullptr) {
-        refresh_tabs();
     }
     const size_t changed = changed_advanced_count();
     std::string description = base_description;

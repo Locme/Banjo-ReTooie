@@ -4,7 +4,7 @@
 - Asked: 2026-10-23 21:09 UTC
 - Build: claude/project-thread-8oifqv
 - Steps:
-  1. General: Simple menu switch is on; photo mode and free camera extras and DEV are hidden, turn it off and they return
+  1. General: Simple menu switch is on; photo mode extras and debug options are hidden (all tabs stay), turn it off and they return
   2. Graphics: Fog / 3D grass / Banjo fur have a down arrow and a switch, press the arrow and the sliders open on a darker panel
   3. Bloom stays a plain slider
   4. Gameplay > Enhancements: Jiggle switch is off; turn it on, press its arrow, then a part's arrow

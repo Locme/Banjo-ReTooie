@@ -8,8 +8,8 @@ namespace recomp::config {
 }
 
 // Simple / Advanced settings menu (General > Menu). Simple, the default, shows an effect that has
-// settings of its own as an on/off switch (a plain slider stays a slider) and hides the tuning sliders, photo mode and free camera extras, debug options and
-// the DEV tab; Advanced shows everything. Display only: hidden settings keep their values and keep
+// settings of its own as an on/off switch (a plain slider stays a slider) and hides the tuning sliders, photo mode and free camera extras, and debug options;
+// Advanced shows everything. Display only: hidden settings keep their values and keep
 // working, and Search still finds them.
 namespace tooie::simple_menu {
     inline const std::string option = "simple_menu";
@@ -25,8 +25,7 @@ namespace tooie::simple_menu {
     void classify();
 
     // Applies the switch to every tab, and refreshes the "N advanced settings changed" note.
-    // `refresh_tabs` runs after the mode changes, to show or hide whole tabs.
-    void apply(void (*refresh_tabs)());
+    void apply();
 }
 
 #endif

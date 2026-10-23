@@ -91,19 +91,10 @@ namespace {
             on = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::wip_tab_option));
         } catch (...) {
         }
-        // The Simple menu hides the DEV tab (switch it off to see it again) and the WIP page.
-        const bool simple = tooie::simple_menu::on();
         try {
-            recompui::config::set_tab_visible(tooie::wip_tab_id, (on && !simple) || tooie::dev_file_present());
-            recompui::config::set_tab_visible(tooie::work_in_progress_tab_id, !simple);
+            recompui::config::set_tab_visible(tooie::wip_tab_id, on || tooie::dev_file_present());
         } catch (...) {
         }
-    }
-
-    // Shows or hides the tabs that depend on the Simple menu switch.
-    void refresh_simple_menu_tabs() {
-        show_wip_tab();
-        tooie::level_warp::refresh();
     }
 
     void show_achievements_tab() {
@@ -456,7 +447,7 @@ void tooie::init_config() {
     tooie::simple_menu::add_option(general);
     general.add_option_change_callback(tooie::simple_menu::option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
-            tooie::simple_menu::apply(refresh_simple_menu_tabs);
+            tooie::simple_menu::apply();
         });
     tooie::control_scheme::add_option(general);
     general.add_bool_option(
@@ -1276,7 +1267,7 @@ void tooie::init_config() {
     recompui::config::finalize();
     tooie::cheats::reset_on_start();
     move_saved_options_to_graphics();
-    tooie::simple_menu::apply(nullptr);
+    tooie::simple_menu::apply();
     show_wip_tab();
     move_saved_tab_options();
     turn_off_cheats_tab_once();
