@@ -12,8 +12,6 @@ namespace tooie {
     inline const std::string free_camera_invert_x_option = "free_camera_invert_x";
     inline const std::string free_camera_invert_y_option = "free_camera_invert_y";
     inline const std::string free_camera_speed_option = "free_camera_speed";
-    // Shows or hides the advanced free camera rows in the menu only; it changes no camera behaviour.
-    inline const std::string free_camera_advanced_option = "free_camera_advanced";
     inline const std::string free_camera_ease_back_option = "free_camera_ease_back";
     inline const std::string free_camera_smooth_walls_option = "free_camera_smooth_walls";
     inline const std::string free_camera_smooth_height_option = "free_camera_smooth_height";

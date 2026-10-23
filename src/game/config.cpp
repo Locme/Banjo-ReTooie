@@ -359,24 +359,24 @@ namespace {
 }
 
 namespace {
-    // Smooth walls became on by default when the advanced free camera rows went behind a toggle (L, 2026-10-23).
-    // Before that the default was off, so a saved off is turned on once: while qol.json has no value for the new
-    // Advanced Free Camera Settings toggle (it gets one the first time QOL saves). Done on the file before the
-    // configs load.
+    // Smooth walls became on by default (L, 2026-10-23). A saved off from the old default is turned on once.
     void turn_on_saved_smooth_walls() {
-        const std::filesystem::path path = recomp::get_config_path() / "qol.json";
+        const std::filesystem::path dir = recomp::get_config_path();
+        const std::filesystem::path marker = dir / "smooth_walls_on.done";
+        if (std::filesystem::exists(marker)) {
+            return;
+        }
+        const std::filesystem::path path = dir / "qol.json";
         nlohmann::json json;
         if (std::ifstream file(path); file) {
             json = nlohmann::json::parse(file, nullptr, false);
         }
-        if (!json.is_object() || json.contains(tooie::free_camera_advanced_option) ||
-            !json.contains(tooie::free_camera_smooth_walls_option)) {
-            return;
+        if (json.is_object() && json.contains(tooie::free_camera_smooth_walls_option)) {
+            json[tooie::free_camera_smooth_walls_option] = true;
+            std::ofstream file(path, std::ios::trunc);
+            file << json.dump(4);
         }
-        json[tooie::free_camera_smooth_walls_option] = true;
-        json[tooie::free_camera_advanced_option] = false;
-        std::ofstream file(path, std::ios::trunc);
-        file << json.dump(4);
+        std::ofstream{marker};
     }
 }
 
@@ -470,7 +470,7 @@ void tooie::init_config() {
     tooie::mirror_mode::add_option(general);
     general.add_bool_option(
         tooie::snout_jiggle::master_option,
-        "Jiggle",
+        "Jiggle Physics",
         "Turns every jiggle below on or off at once: Banjo's snout, nose, belly, ears, fur and backpack, Kazooie's feathers and Mumbo. Each part keeps its own switch and settings, which open under this one.",
         false);
     general.add_bool_option(
@@ -702,15 +702,13 @@ void tooie::init_config() {
         });
 
     // Section headings in the General tab (the controls and sliders above them have none).
-    recompui::config::set_option_group(tooie::save_backups_option, "Saves");
+    // One section in General for the saves and the other switches (L, 2026-10-23).
+    recompui::config::set_option_group(tooie::save_backups_option, "Saves And Others");
     // At the end of the section before Back-Ports, with its own heading, so the options around it keep theirs.
     recompui::config::set_option_display_before(tooie::precompile_shaders_option, tooie::classic_sounds::option);
-    recompui::config::set_option_group(tooie::precompile_shaders_option, "Others");
-    recompui::config::set_option_group(tooie::timer_save_option, "Saves");
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports And Cut Content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
     recompui::config::set_option_group(tooie::snout_jiggle::master_option, "Enhancements");
-    recompui::config::set_option_group(tooie::discord::presence_option, "Others");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
@@ -751,14 +749,8 @@ void tooie::init_config() {
     qol.add_bool_option(
         tooie::free_camera_option,
         "Free Camera",
-        "The right stick turns the camera smoothly around Banjo and tilts it, instead of the game's stepped camera swings. The camera stays where you turned it until a cutscene or another area.",
+        "The right stick turns the camera smoothly around Banjo and tilts it, instead of the game's stepped camera swings. The camera stays where you turned it until a cutscene or another area. Its settings show below it.",
         true);
-    // Only shows or hides the rows below in this menu (L, 2026-10-23); the options keep working either way.
-    qol.add_bool_option(
-        tooie::free_camera_advanced_option,
-        "Advanced Free Camera Settings",
-        "Shows the rest of the free camera settings below: speed, inverting, walls, ease back, stairs, small objects, mouse, gyro, floor clearance and look up. This only shows or hides them here; they keep working as set either way.",
-        false);
     qol.add_enum_option(
         tooie::free_camera_speed_option,
         "Free Camera Speed",
@@ -835,39 +827,6 @@ void tooie::init_config() {
         "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
         true);
     tooie::photo_mode::add_options(qol);
-    for (const std::string* id : { &tooie::free_camera_advanced_option }) {
-        qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
-    }
-    // The advanced rows show only while Free camera and Advanced Free Camera Settings are both on. A hidden
-    // dependency takes one source option, so both callbacks set the rows' hidden state. On load the Advanced
-    // callback runs after Free camera's (it is added later), so it sees both loaded values.
-    {
-        static const std::string* const advanced_rows[] = {
-            &tooie::free_camera_invert_x_option, &tooie::free_camera_invert_y_option,
-            &tooie::free_camera_smooth_walls_option, &tooie::free_camera_ease_back_option,
-            &tooie::free_camera_smooth_height_option, &tooie::free_camera_hover_option, &tooie::free_camera_speed_option,
-            &tooie::free_camera_mouse_option, &tooie::free_camera_gyro_option,
-            &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option };
-        auto update_advanced_rows = [](bool free_camera, bool advanced) {
-            recomp::config::Config& qol = recompui::config::get_config(tooie::qol_tab_id);
-            for (const std::string* id : advanced_rows) {
-                qol.update_option_hidden(*id, !(free_camera && advanced));
-            }
-        };
-        qol.add_option_change_callback(tooie::free_camera_option,
-            [update_advanced_rows](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
-                const auto advanced = recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::free_camera_advanced_option);
-                update_advanced_rows(std::get<bool>(value), std::get<bool>(advanced));
-            });
-        qol.add_option_change_callback(tooie::free_camera_advanced_option,
-            [update_advanced_rows](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
-                const auto free_camera = recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::free_camera_option);
-                update_advanced_rows(std::get<bool>(free_camera), std::get<bool>(value));
-            });
-        for (const std::string* id : advanced_rows) {
-            qol.update_option_hidden(*id, true);
-        }
-    }
     qol.add_enum_option(
         tooie::talon_trot::mode_option,
         "Talon Trot",
