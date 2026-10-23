@@ -481,11 +481,6 @@ namespace {
             sweep.ids.clear();
             sweep.ids.push_back(0); // the first pass has no enemy: what runs anyway
             for (const Enemy& enemy : enemies) {
-                // Bigfoot family: route code that wrote into the heap away from home and hung the game (L's
-                // sweep, 2026-10-23), so the pass-over guard looped in heap_free. Not swept; spawn them by hand.
-                if (enemy.id == 0x3E5 || enemy.id == 0x3E6 || enemy.id == 0x44E) {
-                    continue;
-                }
                 if (enemy.home_entry == 0) {
                     sweep.ids.push_back(enemy.id);
                 }
