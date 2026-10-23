@@ -23,7 +23,7 @@ namespace tooie::motion_aim {
 
     // The mouse and gyro motion in degrees (yaw positive to the left, pitch positive upwards) since the last
     // call, for the free camera's orbit. Always drains it.
-    void take_orbit(float* yaw, float* pitch);
+    void take_orbit(float* mouse_yaw, float* mouse_pitch, float* gyro_yaw, float* gyro_pitch);
 
     // Once per frame on the game thread (tooie_warp_tick): turns the first-person view.
     void tick(uint8_t* rdram, recomp_context* ctx);

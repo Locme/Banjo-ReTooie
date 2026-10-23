@@ -356,15 +356,23 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     stick_y = deadzone(stick_y);
 
     // Mouse and gyro motion since the last step (drained even when unused, so it cannot pile up).
-    float orbit_x = 0.0f;
-    float orbit_y = 0.0f;
-    tooie::motion_aim::take_orbit(&orbit_x, &orbit_y);
-    const auto mouse_mode = wip_option<uint32_t>(tooie::free_camera_orbit_option, (uint32_t)tooie::FreeCameraMouse::Always);
-    if (mouse_mode == (uint32_t)tooie::FreeCameraMouse::Off ||
-        (mouse_mode == (uint32_t)tooie::FreeCameraMouse::Hold && !tooie::hotkeys::down(recompinput::GameInput::CAMERA_MOUSE_LOOK))) {
-        orbit_x = 0.0f;
-        orbit_y = 0.0f;
+    float mouse_x = 0.0f, mouse_y = 0.0f, gyro_x = 0.0f, gyro_y = 0.0f;
+    tooie::motion_aim::take_orbit(&mouse_x, &mouse_y, &gyro_x, &gyro_y);
+    const auto mouse_mode = option<uint32_t>(tooie::free_camera_mouse_option, (uint32_t)tooie::FreeCameraMouse::Always);
+    const auto gyro_mode = option<uint32_t>(tooie::free_camera_gyro_option, (uint32_t)tooie::FreeCameraMouse::Hold);
+    const bool look_key = tooie::hotkeys::down(recompinput::GameInput::CAMERA_MOUSE_LOOK);
+    auto allowed = [&](uint32_t mode) {
+        return mode == (uint32_t)tooie::FreeCameraMouse::Always ||
+            (mode == (uint32_t)tooie::FreeCameraMouse::Hold && look_key);
+    };
+    if (!allowed(mouse_mode)) {
+        mouse_x = mouse_y = 0.0f;
     }
+    if (!allowed(gyro_mode)) {
+        gyro_x = gyro_y = 0.0f;
+    }
+    const float orbit_x = mouse_x + gyro_x;
+    const float orbit_y = mouse_y + gyro_y;
     // Mouse wheel zoom and the middle button (snap behind) while the mouse is on; counts since last step.
     const int32_t wheel_now = recompinput::get_game_mouse_wheel();
     const uint32_t middle_now = recompinput::get_game_mouse_clicks(2);

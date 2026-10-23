@@ -191,7 +191,7 @@ namespace {
         }
     }
 
-    // Mouse Sensitivity starts at 10 (L, 2026-10-23) instead of off, so the mouse camera works out of the box:
+    // Mouse Sensitivity starts at 5 (L, 2026-10-23) instead of off, so the mouse camera works out of the box:
     // set it once while general.json has no saved value for it. The option's own number type is kept.
     void default_mouse_sensitivity() {
         const std::filesystem::path file = recomp::get_config_path() / "general.json";
@@ -208,7 +208,7 @@ namespace {
             std::visit([&](auto value) {
                 using T = decltype(value);
                 if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
-                    general.set_option_value("mouse_sensitivity", T(10));
+                    general.set_option_value("mouse_sensitivity", T(5));
                     general.save_config();
                 }
             }, current);
@@ -688,6 +688,26 @@ void tooie::init_config() {
         "Free camera: hover over small objects",
         "A small object near the camera no longer pulls it in towards Banjo when the camera can still see him past it: the camera stays where you put it and hovers over the object. An object that is really between Banjo and the camera still pulls it in.",
         true);
+    qol.add_enum_option(
+        tooie::free_camera_mouse_option,
+        "Free camera: mouse",
+        "Moving the mouse turns and tilts the free camera, like the right stick. <recomp-color primary>Always</recomp-color>: whenever you play. <recomp-color primary>Hold a key</recomp-color>: only while the Camera Mouse Look key (Controls > Hotkeys) is held. Strength is General > Mouse Sensitivity; at 0 the mouse does nothing. Invert left/right and up/down apply too. When it is not Off, the mouse wheel zooms the camera in and out and the middle button snaps it behind Banjo.",
+        {
+            {tooie::FreeCameraMouse::Off, "Off", "Off"},
+            {tooie::FreeCameraMouse::Always, "Always", "Always"},
+            {tooie::FreeCameraMouse::Hold, "Hold", "Hold a key"},
+        },
+        tooie::FreeCameraMouse::Always);
+    qol.add_enum_option(
+        tooie::free_camera_gyro_option,
+        "Free camera: gyro",
+        "Tilting a controller that has a gyro turns and tilts the free camera. <recomp-color primary>Hold a key</recomp-color> (the default): only while the Camera Mouse Look key (Controls > Hotkeys, not bound by default) is held. <recomp-color primary>Always</recomp-color>: whenever you play. Strength is General > Gyro Sensitivity; at 0 the gyro does nothing.",
+        {
+            {tooie::FreeCameraMouse::Off, "Off", "Off"},
+            {tooie::FreeCameraMouse::Always, "Always", "Always"},
+            {tooie::FreeCameraMouse::Hold, "Hold", "Hold a key"},
+        },
+        tooie::FreeCameraMouse::Hold);
     qol.add_bool_option(
         tooie::free_camera_floor_clearance_option,
         "Free camera: floor clearance",
@@ -703,7 +723,8 @@ void tooie::init_config() {
                                    &tooie::free_camera_invert_y_option,
                                    &tooie::free_camera_smooth_walls_option, &tooie::free_camera_ease_back_option,
                                    &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option,
-                                   &tooie::free_camera_hover_option }) {
+                                   &tooie::free_camera_hover_option,
+                                   &tooie::free_camera_mouse_option, &tooie::free_camera_gyro_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
     qol.add_enum_option(
@@ -787,16 +808,6 @@ void tooie::init_config() {
         "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and lies there until you jump. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
         false);
     tooie::menu_mouse::add_options(graphics);
-    graphics.add_enum_option(
-        tooie::free_camera_orbit_option,
-        "Free camera: mouse and gyro",
-        "Moving the mouse (or tilting a controller with a gyro) turns and tilts the free camera, like the right stick. <recomp-color primary>Always</recomp-color>: whenever you play. <recomp-color primary>Hold a key</recomp-color>: only while the Camera Mouse Look key (Controls > Hotkeys) is held; the gyro is not held back. Strength is General > Mouse Sensitivity and Gyro Sensitivity; at 0 each does nothing, so raise Mouse Sensitivity (25 is a good start) for the mouse to work. Invert left/right and up/down apply too. When it is on, the mouse wheel zooms the camera in and out and the middle button snaps it behind Banjo.",
-        {
-            {tooie::FreeCameraMouse::Off, "Off", "Off"},
-            {tooie::FreeCameraMouse::Always, "Always", "Always"},
-            {tooie::FreeCameraMouse::Hold, "Hold", "Hold a key"},
-        },
-        tooie::FreeCameraMouse::Always);
     graphics.add_bool_option(
         tooie::free_camera_rb_distance_option,
         "Free camera: hold C Down to fine-tune distance",
@@ -805,7 +816,7 @@ void tooie::init_config() {
     {
         namespace pf = tooie::picture_filters;
         for (const std::string* id : { &tooie::dive::option, &tooie::menu_mouse::enabled_option,
-                &tooie::free_camera_orbit_option, &tooie::free_camera_rb_distance_option, &pf::grass_section_option,
+                &tooie::free_camera_rb_distance_option, &pf::grass_section_option,
                 &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
                 &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
                 &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
@@ -818,12 +829,11 @@ void tooie::init_config() {
         // WIP heading.
         recompui::config::set_option_display_before(tooie::dive::option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::menu_mouse::enabled_option, pf::grass_section_option);
-        recompui::config::set_option_display_before(tooie::free_camera_orbit_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_rb_distance_option, pf::grass_section_option);
         // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
         recompui::config::set_option_group(tooie::dive::option, "Dive");
         recompui::config::set_option_group(tooie::menu_mouse::enabled_option, "Menu mouse");
-        recompui::config::set_option_group(tooie::free_camera_orbit_option, "Free camera");
+        recompui::config::set_option_group(tooie::free_camera_rb_distance_option, "Free camera");
         recompui::config::set_option_group(pf::grass_section_option, "3D grass");
     }
     graphics.add_bool_option(
