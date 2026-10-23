@@ -80,7 +80,7 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/ObjectVelocityPS.hlsl")
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/ReactivePS.hlsl")
 # Snapdragon GSR 1 (third-party/snapdragon-gsr, Qualcomm, BSD 3-Clause): Android builds only.
 if(ANDROID)
-    rt64_ext_shader(build_pixel_shader rt64 "src/shaders/GsrPS.hlsl" "-I${PROJECT_SOURCE_DIR}/third-party/snapdragon-gsr")
+    rt64_ext_shader(build_pixel_shader rt64 "src/shaders/GsrPS.hlsl" "-I${RT64_EXT_DIR}/../third-party/snapdragon-gsr")
 endif()
 
 # Photo mode's filters and sharpening (RT64::SetPhotoGrade, src/gameplay/photo_mode.cpp).
@@ -184,7 +184,7 @@ if(WIN32)
         endif()
     endif()
     if(EXISTS ${RT64_EXT_NGX_LIB})
-        target_include_directories(rt64 PRIVATE ${PROJECT_SOURCE_DIR}/third-party/nvidia-dlss/include)
+        target_include_directories(rt64 PRIVATE ${RT64_EXT_DIR}/../third-party/nvidia-dlss/include)
         target_link_libraries(rt64 ${RT64_EXT_NGX_LIB})
         target_compile_definitions(rt64 PRIVATE TOOIE_HAS_NGX=1)
     endif()
@@ -193,6 +193,6 @@ endif()
 # AMD FSR 3 / FSR 4 (rt64_ffx_upscaler.cpp, Windows only): the FidelityFX API headers are in third-party/amd-fsr (AMD's
 # licence, LICENSE.txt, which must go with the DLLs); the DLLs are loaded at run time, so nothing is linked.
 if(WIN32)
-    target_include_directories(rt64 PRIVATE ${PROJECT_SOURCE_DIR}/third-party/amd-fsr)
+    target_include_directories(rt64 PRIVATE ${RT64_EXT_DIR}/../third-party/amd-fsr)
     target_compile_definitions(rt64 PRIVATE TOOIE_HAS_FFX=1)
 endif()
