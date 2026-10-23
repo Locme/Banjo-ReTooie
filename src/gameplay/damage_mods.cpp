@@ -367,6 +367,7 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
         float moving_for = 0.0f; // seconds since it last moved by itself, counted down from 0.4
         float vel = 0.0f;        // the sideways speed now, eased toward its target
         float roll_side = 0.0f;  // the side picked for the roll in progress, 0 when none
+        float heading[2] = {};   // its own measured velocity, eased
     };
     static std::unordered_map<uint32_t, Track> tracks;
     if (tracks.size() > 512) {
@@ -384,6 +385,13 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
         t.moving_for = 0.4f;
     } else {
         t.moving_for = std::max(0.0f, t.moving_for - dt);
+    }
+    if (t.have && moved < 400.0f) {
+        const float k = std::min(1.0f, dt * 8.0f);
+        t.heading[0] += ((x - t.pos[0]) / dt - t.heading[0]) * k;
+        t.heading[1] += ((z - t.pos[1]) / dt - t.heading[1]) * k;
+    } else {
+        t.heading[0] = t.heading[1] = 0.0f;
     }
     t.pos[0] = x;
     t.pos[1] = z;
@@ -435,6 +443,23 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
     const float step = t.vel * dt / dist;
     tooie::rdram::write_float(rdram, actor + 4, x + dz * step);
     tooie::rdram::write_float(rdram, actor + 0xC, z - dx * step);
+    // Face the way it is actually going (its own movement plus the slide): the game's yaw is rotation[1] at
+    // +0x48, in degrees, turned toward atan2(dx, dz) as func_800F1DF4 measures it. Turn a quarter of the way
+    // there each frame, the short way round; below 20 units a second it has no heading and keeps its facing.
+    const float hx = t.heading[0] + dz * t.vel / dist;
+    const float hz = t.heading[1] - dx * t.vel / dist;
+    if (std::hypot(hx, hz) > 20.0f) {
+        float yaw = tooie::rdram::read_float(rdram, actor + 0x48);
+        const float want = std::atan2(hx, hz) * 57.29578f;
+        float diff = std::fmod(want - yaw, 360.0f);
+        if (diff > 180.0f) {
+            diff -= 360.0f;
+        } else if (diff < -180.0f) {
+            diff += 360.0f;
+        }
+        yaw += diff * std::min(1.0f, dt * 8.0f);
+        tooie::rdram::write_float(rdram, actor + 0x48, std::fmod(yaw + 360.0f, 360.0f));
+    }
 }
 
 // Faster enemy attacks (L, 2026-10-23): the shared enemy helper sucoaster_entrypoint_14 (used by every enemy
