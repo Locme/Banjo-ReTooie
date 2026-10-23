@@ -734,6 +734,16 @@ void tooie::init_config() {
         "Free camera: floor clearance",
         "Keeps the free camera a little above the floor under it, so tilting the camera low cannot push it into the ground.",
         false);
+    graphics.add_enum_option(
+        tooie::free_camera_orbit_option,
+        "Free camera: mouse and gyro",
+        "Moving the mouse (or tilting a controller with a gyro) turns and tilts the free camera, like the right stick. <recomp-color primary>Always</recomp-color>: whenever you play. <recomp-color primary>Hold a key</recomp-color>: only while the Camera Mouse Look key (Controls > Hotkeys) is held; the gyro is not held back. Strength is General > Mouse Sensitivity and Gyro Sensitivity; at 0 each does nothing. Invert left/right and up/down apply too. When it is on, the mouse wheel zooms the camera in and out and the middle button snaps it behind Banjo.",
+        {
+            {tooie::FreeCameraMouse::Off, "Off", "Off"},
+            {tooie::FreeCameraMouse::Always, "Always", "Always"},
+            {tooie::FreeCameraMouse::Hold, "Hold", "Hold a key"},
+        },
+        tooie::FreeCameraMouse::Off);
     graphics.add_bool_option(
         tooie::free_camera_look_up_option,
         "Free camera: look up",
@@ -743,7 +753,7 @@ void tooie::init_config() {
         namespace pf = tooie::picture_filters;
         for (const std::string* id : { &tooie::dive::option, &tooie::menu_mouse::enabled_option,
                 &tooie::free_camera_ease_back_option, &tooie::free_camera_floor_clearance_option,
-                &tooie::free_camera_look_up_option, &pf::grass_section_option,
+                &tooie::free_camera_look_up_option, &tooie::free_camera_orbit_option, &pf::grass_section_option,
                 &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
                 &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
                 &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
@@ -759,6 +769,7 @@ void tooie::init_config() {
         recompui::config::set_option_display_before(tooie::free_camera_ease_back_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_floor_clearance_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_look_up_option, pf::grass_section_option);
+        recompui::config::set_option_display_before(tooie::free_camera_orbit_option, pf::grass_section_option);
         // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
         recompui::config::set_option_group(tooie::dive::option, "Dive");
         recompui::config::set_option_group(tooie::menu_mouse::enabled_option, "Menu mouse");
