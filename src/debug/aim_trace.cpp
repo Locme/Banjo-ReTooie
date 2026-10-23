@@ -32,6 +32,7 @@ namespace {
     clock_type::time_point last_option_check{};
     bool option_on = false;
     bool dirty = false;
+    bool capturing = false;
 
     bool check_option() {
         const auto now = clock_type::now();
@@ -43,7 +44,7 @@ namespace {
                 option_on = false;
             }
         }
-        return option_on;
+        return option_on || capturing;
     }
 
     void flush() {
@@ -67,6 +68,11 @@ void tooie::aim_trace::add_option(recomp::config::Config& wip) {
         "Aim trace",
         "For testing. Writes logs/aim_trace.txt, listing which game code reads Banjo's position and how often, so enemy chase code can be found. Play a minute near the enemies in question, then send the file.",
         false);
+    wip.add_bool_option(
+        sweep_option,
+        "Aim sweep",
+        "For testing. Needs a save being played. Spawns each enemy next to Banjo in turn (reloading the area between them), counts which game code reads his position while it is alive, and writes logs/aim_sweep.txt. It turns itself off when done (about 25 minutes). Stand somewhere open, such as Spiral Mountain.",
+        false);
 }
 
 // Entry of each function that calls a player-position getter; caller is its name.
@@ -78,9 +84,38 @@ extern "C" void tooie_aim_trace(uint8_t* rdram, recomp_context* ctx, const char*
     counts[caller]++;
     dirty = true;
     const auto now = clock_type::now();
-    if (now - last_flush > std::chrono::seconds(5)) {
+    if (!capturing && now - last_flush > std::chrono::seconds(5)) {
         last_flush = now;
         flush();
         dirty = false;
+    }
+}
+
+void tooie::aim_trace::capture_begin() {
+    std::lock_guard lock{ trace_mutex };
+    counts.clear();
+    capturing = true;
+}
+
+std::map<std::string, uint64_t> tooie::aim_trace::capture_end() {
+    std::lock_guard lock{ trace_mutex };
+    capturing = false;
+    std::map<std::string, uint64_t> result;
+    result.swap(counts);
+    return result;
+}
+
+bool tooie::aim_trace::sweep_requested() {
+    try {
+        return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(sweep_option));
+    } catch (...) {
+        return false;
+    }
+}
+
+void tooie::aim_trace::sweep_finished() {
+    try {
+        recompui::config::get_config(tooie::wip_tab_id).update_option_value(sweep_option, false);
+    } catch (...) {
     }
 }

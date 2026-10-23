@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T562 Aim sweep: find the enemy chase code automatically
+- Asked: 2026-10-23 06:31 UTC
+- Build: main
+- Steps:
+  1. Play a save in an open place (Spiral Mountain is good)
+  2. General > DEV tab: turn on Aim sweep
+  3. Leave the game running about 25 minutes; each enemy appears in front of Banjo for 12 s, then the area reloads
+  4. When the toast says it is done, send me logs/aim_sweep.txt
+- Look for: Enemies spawn one at a time and the area reloads between them; the game does not freeze or crash; logs/aim_sweep.txt gets one line per enemy. Banjo may get hurt or die; that is fine.
+- Status: waiting for L
+
 ## T561 PBR re-sweep with the 11 rules
 - Asked: 2026-10-23 00:45 UTC
 - Build: main @ HEAD
