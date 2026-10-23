@@ -1602,7 +1602,7 @@ index 6c84c05..6f2e821 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("Config modal has not been initialized.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..4d4b1cb 100644
+index 86428c9..7cf3165 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
 @@ -1,4 +1,7 @@
@@ -1807,7 +1807,7 @@ index 86428c9..4d4b1cb 100644
              this->on_hover(this->option_id);
          }
      });
-+    last_on_value = num_opt.default_value != 0.0 ? num_opt.default_value : num_opt.max;
++    last_on_value = num_opt.default_value != 0.0 ? num_opt.default_value : (num_opt.min + num_opt.max) / 2.0;
 +
 +    simple_toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
 +    simple_toggle->set_display(Display::None);

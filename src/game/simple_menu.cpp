@@ -15,20 +15,23 @@
 #include "tooie_simple_menu.h"
 
 namespace {
-    // Number options that stay visible in Simple as a plain slider.
+    // Number options that stay visible in Simple as a plain slider: effects that are only a slider
+    // (nothing else to tune), and settings that are not effects.
     const std::unordered_set<std::string> kept_sliders = {
-        "Brightness", "Field of View", "Cutscene Field of View", "Day Length",
+        "Brightness", "Field of View", "Cutscene Field of View", "Day Length", "Sharpening",
+        "Ambient occlusion", "SSGI", "Bounce light", "Rim light", "Toon shading: Characters",
+        "Toon shading: World", "Mist", "Parallax", "Traced reflections", "Traced light beams",
+        "Screen-space reflections", "Water reflections", "Ice reflections", "Heat haze",
+        "Light shafts", "Bloom", "Eye adaptation", "Cutscene depth of field", "Depth of field",
+        "Vignette", "Film grain", "Contrast", "Colour saturation",
     };
 
-    // Number options whose main use is on/off: Simple shows them as a switch (off is 0, on is the
-    // last non-zero value; the first "on" is the default, or half the range when the default is 0).
+    // Effects with sliders of their own to tune: Simple shows the main slider as a switch (off is 0,
+    // on is the last non-zero value; the first "on" is the default, or half the range when the default
+    // is 0) and hides the rest.
     const std::unordered_set<std::string> toggle_names = {
-        "Sharpening", "Ambient occlusion", "SSGI", "Bounce light", "Toon outlines", "Rim light",
-        "Toon shading: Characters", "Toon shading: World", "Water waves", "Mist", "Parallax",
-        "Displaced ground", "Traced reflections", "Traced light beams", "Screen-space reflections",
-        "Water reflections", "Ice reflections", "Banjo fur", "Kazooie feathers", "NPC fur",
-        "NPC feathers", "Heat haze", "Sun shadows", "Light shafts", "Bloom", "Eye adaptation",
-        "Cutscene depth of field", "Depth of field", "Fog", "Vignette", "Film grain", "3D grass",
+        "Toon outlines", "Water waves", "Underwater tint", "Displaced ground", "Banjo fur",
+        "Kazooie feathers", "NPC fur", "NPC feathers", "Sun shadows", "Fog", "3D grass",
     };
 
     // Options (any type) hidden in Simple, whatever tab they are in.
@@ -112,8 +115,8 @@ namespace {
     }
 
     const std::string base_description =
-        "<recomp-color primary>On</recomp-color>: each effect is a single on/off switch, and the tuning "
-        "sliders, photo mode and free camera extras, debug options and the DEV tab are hidden. "
+        "<recomp-color primary>On</recomp-color>: an effect with settings of its own is a single on/off switch (a "
+        "plain slider stays a slider), and the tuning sliders, photo mode and free camera extras, debug options and the DEV tab are hidden. "
         "<recomp-color primary>Off</recomp-color> (Advanced): everything is shown. Hidden settings keep "
         "their values and keep working, and Search still finds them.";
 }

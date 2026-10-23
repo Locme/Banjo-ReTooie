@@ -7,8 +7,8 @@ namespace recomp::config {
     class Config;
 }
 
-// Simple / Advanced settings menu (General > Menu). Simple, the default, shows each effect as an
-// on/off switch and hides the tuning sliders, photo mode and free camera extras, debug options and
+// Simple / Advanced settings menu (General > Menu). Simple, the default, shows an effect that has
+// settings of its own as an on/off switch (a plain slider stays a slider) and hides the tuning sliders, photo mode and free camera extras, debug options and
 // the DEV tab; Advanced shows everything. Display only: hidden settings keep their values and keep
 // working, and Search still finds them.
 namespace tooie::simple_menu {
