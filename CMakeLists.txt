@@ -356,6 +356,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/high_detail_models.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/day_night.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/sun_control.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/volumetric.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/night_sounds.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/hd_shadows.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/field_of_view.cpp

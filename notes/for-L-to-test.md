@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T562 Volumetric mist, fog and clouds (WIP tab)
+- Asked: 2026-10-23 06:10 UTC
+- Build: branch claude/project-thread-nmtx34
+- Steps:
+  1. Build this branch (claude/project-thread-nmtx34), Graphics > WIP > Volumetric
+  2. Spiral Mountain: Volumetric Mist 50 and Volumetric Fog 40 with each preset; walk and jump
+  3. Volumetric Clouds: each type, in a level with and without Day and Night
+  4. Dev Files/volumetric.txt: add a line such as 0xAF clouds=stormy cover=80 mist=40 and save while the game runs
+- Look for: Mist stays in the level and meets scenery with no texture-on-model look; fog presets differ clearly; clouds show on the sky of any level, Stormy is dark grey; the file's line applies within a second. Send frame rate with them on.
+- Status: waiting for L
+
 ## T561 PBR re-sweep with the 11 rules
 - Asked: 2026-10-23 00:45 UTC
 - Build: main @ HEAD

@@ -7,6 +7,7 @@
 #include "tooie_game.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_day_night.h"
+#include "tooie_volumetric.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_music_player.h"
 #include "tooie_mix_rate.h"
@@ -803,6 +804,15 @@ void tooie::init_config() {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
         recompui::config::set_option_group(dn::option, "Day and night");
+    }
+    tooie::volumetric::add_options(graphics);
+    {
+        // Volumetric mist, fog and clouds are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
+        namespace vol = tooie::volumetric;
+        for (const std::string* id : { &vol::mist_option, &vol::fog_option, &vol::fog_preset_option, &vol::clouds_option, &vol::file_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        recompui::config::set_option_group(vol::mist_option, "Volumetric");
     }
     graphics.add_bool_option(
         tooie::draw_distance_option,

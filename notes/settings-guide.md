@@ -496,6 +496,22 @@ their texture is drawn.
 - **Night Sounds**: with Day and Night on, crickets and the odd owl at night
   and birdsong in the morning, quietly under the music. Default: on.
 
+## Graphics: WIP > Volumetric (mist, fog and clouds)
+
+All off by default; they sit in the WIP tab. Drawn on the picture after the scene, so nothing in the game changes.
+
+- **Volumetric Mist**: pale banks along the ground as a real volume, marched along each pixel's ray: thickest at the
+  ground Banjo stands on (a slow anchor, so it doesn't bob when he jumps) and gone about 300 units above it, drifting
+  slowly, lit by the sun and warmer looking towards it. Not tied to Banjo's position sideways. 0 to 100; 0 is off.
+- **Volumetric Fog**: an even fog through the whole scene with slow patches in it, lit by the sun. 0 to 100 (100 the
+  preset as designed); 0 is off.
+- **Volumetric Fog Preset**: Default, Bright, Hell, Murky, Poison, Sponza, Pillar: the settings of Vapor's presets.
+- **Volumetric Clouds**: Off, Fair, Scattered, Overcast, Stormy, Wispy, Sunset, Thunderstorm. The cycle's 3D clouds on
+  the sky of any level, day or night cycle or not (with the cycle, they replace its clouds).
+- **Volumetric Level File**: reads `Dev Files/volumetric.txt`, one level a line, overriding the options for that
+  level (cloud type and shape, mist, fog, preset, mist height). Made the first time any option is on, with the format
+  in its comments; read again within a second of a change. Test aid: `TOOIE_VOL=<mist>,<fog>,<preset 0-6>,<clouds 0-7>`.
+
 ## Graphics: Game Frame Rate and Interpolation
 
 Both sit in the "Frame rate and overlay" section, Interpolation right under

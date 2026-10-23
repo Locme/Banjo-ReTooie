@@ -93,6 +93,13 @@ the BRDF) is ported from Simeon Radivoev's ComputeStochasticReflections, MIT (li
 Occlusion written from Jimenez et al.'s 2016 paper; no code is copied from
 MaxwellGengYF's Unity GTAO, which has no licence.
 
+The volumetric fog's presets (Default, Bright, Hell, Murky, Poison, Sponza, Pillar) use the settings (albedo,
+extinction, emissive, ambient light) of the presets in Arthur Brussee's
+[Vapor](https://github.com/ArthurBrussee/Vapor), MIT (licence text beside that code in `SceneEffectsPS.hlsl`);
+the march itself is our own, written from Wronski's 2014 and Hillaire's 2015 volumetric scattering papers. The
+Unity Asset Store package "Aero - Volumetric Fog and Mist" is under Unity's Asset Store EULA, which does not let its
+source go into another project, so none of it is used.
+
 ## Credits
 
 * [N64Recomp](https://github.com/N64Recomp/N64Recomp),

@@ -115,6 +115,16 @@ namespace RT64 {
         uint32_t dayMistWhen = 0;
         // Graphics > Mist (0 off, 1 thickest): the same mist on its own, always showing, used while the cycle is off.
         float ownMist = 0.0f;
+        // WIP volumetric effects (off by default): mist and fog strength (0 off, 1 as designed), the fog's preset
+        // (0 to 6), the forced cloud type (0 none, 1 to 7) and the mist layer's extra height in world units. The layer
+        // follows a slow anchor under Banjo (volAnchor), so it doesn't bob as he jumps.
+        float volMist = 0.0f;
+        float volFog = 0.0f;
+        uint32_t volFogPreset = 0;
+        uint32_t volCloudType = 0;
+        float volMistOffset = 0.0f;
+        float volAnchor = 0.0f;
+        bool volAnchorValid = false;
         // How wet the ground is (0 dry, 1 soaked), and whether raindrops land on the screen.
         float dayWet = 0.0f;
         bool dayDrops = false;
@@ -268,6 +278,8 @@ namespace RT64 {
     void SetSceneWeather(float rain, float flash, bool snow);
     void SetSceneMist(float strength, uint32_t when);
     void SetSceneOwnMist(float strength);
+    // Volumetric mist, fog and clouds (WIP): see SceneEffectsPS.hlsl (VolSettings) and src/gameplay/volumetric.cpp.
+    void SetSceneVolumetric(float mist, float fog, uint32_t fogPreset, uint32_t cloudType, float mistOffset);
     void SetSceneRainDetail(float wet, bool drops);
     void SetSceneClouds(float cover, float height, float thickness, float speed);
     // Banjo-Tooie: the moon's phase for the day and night cycle, 0 new, 2 first quarter, 4 full, 6 last quarter.
