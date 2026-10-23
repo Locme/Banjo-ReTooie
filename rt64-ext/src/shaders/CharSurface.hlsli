@@ -83,6 +83,14 @@ float3 CharSurface(float3 color, float3 texColor, float4 anchor, float share, bo
     // Swimming: his fur and skin go dark and heavy.
     color *= 1.0f - 0.3f * FrParams.charSurface2.z * keep;
 
+    // Icy water (swimming in it, or still wet from it): an ice-blue cast over everything wet.
+    const float icy = FrParams.charSurface2.w;
+    if (icy > 0.0f) {
+        const float cold = icy * saturate(max(wet, FrParams.charSurface2.z)) * keep;
+        const float luma = dot(color, float3(0.3f, 0.59f, 0.11f));
+        color = lerp(color, float3(0.35f, 0.7f, 1.0f) * (luma + 0.12f) * 1.5f, 0.6f * cold);
+    }
+
     // Wet: darker and a little richer all over, with a sheen where it catches the light.
     if (wet > 0.0f) {
         const float luma = dot(color, float3(0.3f, 0.59f, 0.11f));
