@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T569 Character surface round 3: gradual build-up
+- Asked: 2026-10-23 17:45 UTC
+- Build: main after PR #22
+- Steps:
+  1. Pull main and build on Windows; WIP > Character surface: all sliders 100
+  2. Roll once on dirt: about 5% dirty, not 100%; roll again and again to build it up; wait: 1% off every 8 seconds
+  3. Run on sand and in snow: 5% a step-group; jump in water: dirt, sand and snow wash off quickly
+  4. Swim: fur goes darker, no drips; get out: drips, dry in 8 to 20 seconds (random)
+  5. At high dirt, the chest and head get spots too
+- Look for: Is 5% per trigger the right pace (a roll, a landing, a run of steps)? Does the upper body get covered at high amounts?
+- Status: waiting for L
+
 ## T568 Character surface round 2: spots, feet and shorts, drips
 - Asked: 2026-10-23 16:55 UTC
 - Build: main after PR #21

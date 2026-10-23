@@ -9959,7 +9959,7 @@ index 3f33475..7d84d10 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..1b2048b 100644
+index 2e62aaf..daad456 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
 @@ -13,6 +13,157 @@ namespace interop {
@@ -10115,7 +10115,7 @@ index 2e62aaf..1b2048b 100644
 +        // Banjo-Tooie: the character surface layer (CharSurface.hlsli): how wet (x), snowy (y) and dirty (z) Banjo and Kazooie
 +        // are, 0 to 1.
 +        float4 charSurface;
-+        // The time in seconds (wrapping at 1000) for its drips, then how strongly Banjo drips (0 to 1).
++        // The time in seconds (wrapping at 1000) for its drips, then how strongly Banjo drips (0 to 1), then 1 while he swims (his fur goes darker).
 +        float4 charSurface2;
      };
  #ifdef HLSL_CPU

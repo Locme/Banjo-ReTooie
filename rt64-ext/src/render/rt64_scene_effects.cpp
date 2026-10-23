@@ -1410,8 +1410,9 @@ namespace RT64 {
         effectsSettings.charDirt = std::clamp(dirt, 0.0f, 1.0f);
     }
 
-    void SetSceneCharDrip(float drip, float seconds) {
+    void SetSceneCharDrip(float drip, float seconds, float soaked) {
         const std::scoped_lock lock(effectsMutex);
+        effectsSettings.charSoaked = std::clamp(soaked, 0.0f, 1.0f);
         effectsSettings.charDrip = std::clamp(drip, 0.0f, 1.0f);
         effectsSettings.charTime = seconds;
     }
@@ -1519,7 +1520,7 @@ namespace RT64 {
         frameParams.furSway = { settings.furSway[0], settings.furSway[1], settings.furSway[2], 0.0f };
         const float npcAmount = std::min(settings.npcFur, 1.0f);
         frameParams.charSurface = { settings.charWet, settings.charSnow, settings.charDirt, settings.charSand };
-        frameParams.charSurface2 = { settings.charTime, settings.charDrip, 0.0f, 0.0f };
+        frameParams.charSurface2 = { settings.charTime, settings.charDrip, settings.charSoaked, 0.0f };
         frameParams.npcFurParams = { 2.5f * std::max(settings.npcFurLength, 0.1f), 2.4f * settings.npcFurDensity, 0.6f - 0.3f * npcAmount, settings.npcFurNoisiness };
         return true;
     }
