@@ -1218,6 +1218,12 @@ void tooie::init_config() {
         "Dump Sounds",
         "Saves the game's sounds as WAV files to the sound_dump folder, sorted into a folder for each sound bank and instrument (bank0_0/inst3/snd12_rom01A2B40_22050hz_1ch.wav), with index.txt listing each one's place in the ROM. Each sound is written once, as banks load while you play, so visit different areas to collect more. Samples are saved at the bank's rate; the game bends some sounds' pitch when it plays them.",
         false);
+    // L, 2026-10-17: on by default; the game's own widescreen mode is for stretched TVs.
+    wip.add_bool_option(
+        tooie::hide_vanilla_widescreen_option,
+        "Hide Unnecessary Settings Entry",
+        "Hides the settings entries this port makes unnecessary: Wide-screen Mode and Screen Alignment in the global settings on the save select screen (the TV) and in the Start menu's Settings page, leaving Speaker Mode, and while it is on keeps the game's own widescreen mode off and the picture centred: the game's widescreen squashes the picture for a stretched TV, and this port's widescreen is Aspect Ratio in the Graphics tab. The menu change shows the next time it opens.",
+        true);
     tooie::game_frame_rate::add_dev_options(wip);
     // Debug options (under the Debug heading): they moved here from Graphics.
     tooie::effect_views::add_option(wip);

@@ -42,10 +42,12 @@ namespace {
     // Whether the menu that is open was built with only Speaker Mode.
     bool hidden = false;
 
-    // L, 2026-10-23: the DEV switch is gone and the game's own Wide-screen Mode and Screen Alignment rows
-    // are shown again, so the hooks below do nothing.
     bool enabled() {
-        return false;
+        try {
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::hide_vanilla_widescreen_option));
+        } catch (...) {
+            return true;
+        }
     }
 
     bool log_enabled() {

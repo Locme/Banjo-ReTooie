@@ -9,7 +9,6 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
-- DEV > Hide Unnecessary Settings Entry is gone, and the game's own Wide-screen Mode and Screen Alignment rows show again in the save select TV and the Start menu Settings page (L). Untested on PC.
 - New **Simple menu** (General, on by default): hides the tuning sliders of the photo mode and free camera extras, and the debug options; no tab is hidden; turn it off to see everything. Search still finds hidden options (L). Untested on PC.
 - **Openable settings** (L): an effect with settings of its own (Fog, 3D grass, Banjo fur, Sun shadows, Toon outlines and others) is one on/off switch with a down arrow in front of its name; press the arrow to open its sliders on a darker panel, press again to close. An effect that is only a slider (Bloom, SSGI) stays a slider. Untested on PC.
 - **Jiggle** is now one switch, **off by default**, under Gameplay > Enhancements; the arrow opens Snout, Belly, Ear, Fur, Backpack, Kazooie and Mumbo jiggle (each on by default, each with its own arrow and sliders). Anyone who had jiggle on has to turn the Jiggle switch on once (L). Untested on PC.
