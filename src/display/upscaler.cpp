@@ -34,29 +34,33 @@ void tooie::upscaler::apply() {
         mode = std::get<uint32_t>(graphics_config().get_option_value(option));
     } catch (...) {
     }
-#if !defined(__ANDROID__)
-    // The Android upscalers do nothing elsewhere.
-    if ((mode == (uint32_t)Mode::ArmAsr) || (mode == (uint32_t)Mode::SnapdragonGsr)) {
+    // A saved choice this platform doesn't list (a settings file from another device) acts as Off.
+#if defined(__ANDROID__)
+    const bool listed = (mode == (uint32_t)Mode::Off) || (mode == (uint32_t)Mode::Fsr3) || (mode == (uint32_t)Mode::ArmAsr) || (mode == (uint32_t)Mode::SnapdragonGsr);
+#else
+    const bool listed = (mode != (uint32_t)Mode::ArmAsr) && (mode != (uint32_t)Mode::SnapdragonGsr);
+#endif
+    if (!listed) {
         mode = (uint32_t)Mode::Off;
     }
-#endif
     RT64::SetUpscalerMode(mode);
 }
 
 void tooie::upscaler::add_option(recomp::config::Config& graphics) {
     created = true;
 
-    // Arm ASR and Snapdragon GSR are listed on Android only.
+    // Only the upscalers a platform can run are listed: Android has no FSR 4 or DLSS, and Windows no Arm ASR or Snapdragon GSR.
     std::vector<recomp::config::ConfigOptionEnumOption> choices = {
         {Mode::Off, "Off", "Off"},
         {Mode::Fsr3, "FSR 3", "FSR 3"},
+#if defined(__ANDROID__)
+        {Mode::ArmAsr, "Arm ASR", "Arm ASR"},
+        {Mode::SnapdragonGsr, "Snapdragon GSR", "Snapdragon GSR"},
+#else
         {Mode::Fsr4, "FSR 4", "FSR 4"},
         {Mode::Fsr4NativeAA, "FSR 4 Native AA", "FSR 4 Native AA"},
         {Mode::Dlss, "DLSS", "DLSS"},
         {Mode::Dlaa, "DLAA", "DLAA"},
-#if defined(__ANDROID__)
-        {Mode::ArmAsr, "Arm ASR", "Arm ASR"},
-        {Mode::SnapdragonGsr, "Snapdragon GSR", "Snapdragon GSR"},
 #endif
     };
     graphics.add_enum_option(
