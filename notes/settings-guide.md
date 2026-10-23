@@ -117,6 +117,9 @@ framework, not from this port's code, so it is not described here.
   or anything else drawn over it, and the pause menu's music plays and the picture's effects keep moving. Cutscenes, map
   changes, the title screen and the file select carry on as before.
   Default: On (L, 2026-10-19).
+- **Mouse in the game's menus** (Menu section; was in WIP until 2026-10-23): the pause menu
+  and the save select follow the mouse; the row under the cursor is picked and a left click
+  presses A, a right click B. Default: on.
 - **Press Start Early in Intro**: press Start during the logos and title flight to go
   straight to the file select. Default: on.
 - **Text speed**: how fast dialogue text prints: 1x, 2x, 4x or Instant (a
@@ -128,7 +131,7 @@ framework, not from this port's code, so it is not described here.
   Banjo keeps trotting after you let go of Z; press Z or C-left to stop. The
   toggle also ends by itself when the trot does (water, a hit, a cutscene).
   Hold is the original: hold Z to keep trotting. Default: Toggle.
-- **Totals checklist**: On or Off. On adds a "LEFT HERE" table to every
+- **Totals checklist** (Menu section): On or Off. On adds a "LEFT HERE" table to every
   world's page in the pause menu's Totals (and "LEFT IN THE GAME" to Game
   Totals): how many Jiggies, Honeycombs, Cheato pages, Glowbos, Notes, Jinjos
   and Jamjars moves are still to find, or DONE, and in green how many of those
@@ -197,12 +200,9 @@ own tab, so they are saved in general.json and apply as soon as they change.
 
 Features still being worked on, in the WIP tab's WIP section. When one is done it
 moves back to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's
-menus to QOL, Grass to Graphics after the colour grading). The tab is a page of Graphics
+menus is already in QOL > Menu, Grass to Graphics after the colour grading). The tab is a page of Graphics
 options: all of them save in graphics.json. The Grass toggle and the 3D grass settings
 under it are described in the Graphics sections.
-
-- **Mouse in the game's menus** (on by default): the pause menu and the save select follow
-  the mouse; the row under the cursor is picked and a left click presses A, a right click B.
 
 - **Dive** (off by default): press the Run key (B on a controller) in the air as
   Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and stays
