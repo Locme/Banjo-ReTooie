@@ -45,6 +45,15 @@
 - Look for: Sharp picture without doubling or trails behind moving characters; no blur on menus and cuts; HUD steady (and sharp with Full Resolution); send the [upscaler] console lines and screenshots. Full guide: notes/upscaler-test-guide.md
 - Status: waiting for L
 
+## T564 Enemy dynamic positioning
+- Asked: 2026-10-23
+- Build: main
+- Steps:
+  1. General > Gameplay: turn on Enemy dynamic positioning
+  2. Fight Dragunda, a Gobgoyle or an Eyeball; roll toward one
+- Look for: it slides sideways as it comes at you and steps out of the line of your roll; no sliding through walls or off ledges, no jitter. If it looks wrong, say which enemy.
+- Status: waiting for L
+
 ## T563 Volumetric mist, fog and clouds (WIP tab)
 - Asked: 2026-10-23 06:10 UTC
 - Build: branch claude/project-thread-nmtx34

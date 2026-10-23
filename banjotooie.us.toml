@@ -1794,6 +1794,23 @@ func = "func_80800204_chklungophial"
 before_vram = 0x80800204
 text = "tooie_klungo_potion_steer(rdram, ctx);"
 
+# Enemy dynamic positioning (src/gameplay/damage_mods.cpp): per-frame update of Dragunda, the Gobgoyles and the Eyeballs.
+
+[[patches.hook]]
+func = "func_80800140_chquicksandbaddy"
+before_vram = 0x80800140
+text = "tooie_enemy_strafe(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_80800054_chlavagargoyle"
+before_vram = 0x80800054
+text = "tooie_enemy_strafe(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_808013F8_chfantasyeyeball"
+before_vram = 0x808013F8
+text = "tooie_enemy_strafe(rdram, ctx);"
+
 # Enemy attacks: the shared enemy helper sucoaster_entrypoint_14 sets a 5 to 8 second countdown byte (data +0x12) at these two stores; the hook halves it.
 [[patches.hook]]
 func = "sucoaster_entrypoint_14"

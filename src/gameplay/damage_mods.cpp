@@ -276,6 +276,84 @@ extern "C" void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx) {
 // flight the horizontal velocity is nudged toward the speed that would reach where the player is heading
 // (his position plus his measured movement over the time the potion has left) by then, so a potion only
 // misses when he really changes direction. The time left is the horizontal distance over the horizontal speed.
+// Dynamic positioning (L, 2026-10-23): hooked at the entry of the per-frame update ($a0 is the actor; position
+// floats at +4, +8, +0xC) of killable melee enemies with their own chase code: Dragunda (chquicksandbaddy
+// func_80800140), the Gobgoyles (chlavagargoyle func_80800054) and the Eyeballs (chfantasyeyeball
+// func_808013F8). The shared sucoaster helper is left out on purpose: what the Aim sweep saw using it are mostly
+// objects that cannot be killed. These updates have no sideways step, so this adds one on top of the enemy's
+// own movement: an enemy that is moving (it displaced itself since the last frame) and is between 150 and
+// 800 units from Banjo slides perpendicular to the line between them at 120 units a second, the side picked
+// per enemy and swapped every 2 to 4 seconds. While Banjo is rolling (state 49) and the enemy is within 500
+// units, the step is 350 units a second, to the side of his roll line it is already on, so it tries not to be
+// rolled on. Walls and floors are not checked; the step is a few units a frame.
+extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
+    static bool on = false;
+    static auto last_check = std::chrono::steady_clock::now() - std::chrono::seconds(2);
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last_check > std::chrono::seconds(1)) {
+        last_check = now;
+        try {
+            on = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::damage::strafe_option));
+        } catch (...) {
+            on = false;
+        }
+    }
+    const uint32_t actor = (uint32_t)ctx->r4;
+    if (!on || !aim_have_prev || !tooie::rdram::valid_ptr(actor)) {
+        return;
+    }
+    const float dt = tooie::rdram::read_float(rdram, 0x8012C760u);
+    if (!(dt > 0.0f) || dt > 0.1f) {
+        return;
+    }
+    struct Track {
+        float pos[2] = {};
+        bool have = false;
+        float side = 1.0f;
+        float swap_in = 0.0f;
+    };
+    static std::unordered_map<uint32_t, Track> tracks;
+    if (tracks.size() > 512) {
+        tracks.clear();
+    }
+    Track& t = tracks[actor];
+    const float x = tooie::rdram::read_float(rdram, actor + 4);
+    const float z = tooie::rdram::read_float(rdram, actor + 0xC);
+    const float moved = t.have ? std::hypot(x - t.pos[0], z - t.pos[1]) : 0.0f;
+    const bool was_moving = t.have && moved > 0.4f && moved < 400.0f;
+    t.pos[0] = x;
+    t.pos[1] = z;
+    t.have = true;
+    t.swap_in -= dt;
+    if (t.swap_in <= 0.0f) {
+        t.swap_in = 2.0f + (float)((actor >> 4) % 21) / 10.0f;
+        t.side = t.side < 0.0f ? 1.0f : -1.0f;
+    }
+    const float dx = aim_prev[0] - x;
+    const float dz = aim_prev[2] - z;
+    const float dist = std::hypot(dx, dz);
+    if (!was_moving || dist < 150.0f || dist > 800.0f) {
+        return;
+    }
+    const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
+    const uint32_t block = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0x120) : 0;
+    const uint32_t state = tooie::rdram::valid_ptr(block) ? tooie::rdram::read_word(rdram, block + 4) : 0;
+    float speed = 120.0f;
+    float side = t.side;
+    if (state == 49 && dist < 500.0f) {
+        speed = 350.0f;
+        const float vlen = std::hypot(aim_vel[0], aim_vel[1]);
+        if (vlen > 1.0f) {
+            const float cross = aim_vel[0] * (z - aim_prev[2]) - aim_vel[1] * (x - aim_prev[0]);
+            side = cross >= 0.0f ? 1.0f : -1.0f;
+        }
+    }
+    // Perpendicular to the enemy-to-Banjo line: (dz, -dx) / dist.
+    const float step = speed * dt * side / dist;
+    tooie::rdram::write_float(rdram, actor + 4, x + dz * step);
+    tooie::rdram::write_float(rdram, actor + 0xC, z - dx * step);
+}
+
 // Faster enemy attacks (L, 2026-10-23): the shared enemy helper sucoaster_entrypoint_14 (used by every enemy
 // the Aim sweep saw reading the player through func_8080202C_sucoaster) rolls a random 5 to 8 second wait
 // (func_800DC178(5.0, 8.0), func_800D9058 turns the seconds into the byte) and stores it at data +0x12, which

@@ -561,6 +561,11 @@ void tooie::init_config() {
         true);
     general.add_option_hidden_dependency(tooie::damage::homing_option, tooie::damage::aim_option, tooie::damage::Aim::Original);
     general.add_bool_option(
+        tooie::damage::strafe_option,
+        "Enemy dynamic positioning",
+        "Dragunda, the Gobgoyles and the Eyeballs slide sideways while they close in, and sidestep when you roll toward them, so they are harder to roll over. Other enemies are not changed yet.",
+        false);
+    general.add_bool_option(
         tooie::damage::faster_attacks_option,
         "Lower Enemy Attack Cooldown",
         "Enemies that use the game's shared attack wait (the ones that pause 5 to 8 seconds between attacks) wait half as long.",
@@ -594,6 +599,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::damage::aim_chance_option, "Gameplay");
     recompui::config::set_option_group(tooie::damage::homing_option, "Gameplay");
     recompui::config::set_option_group(tooie::damage::faster_attacks_option, "Gameplay");
+    recompui::config::set_option_group(tooie::damage::strafe_option, "Gameplay");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
