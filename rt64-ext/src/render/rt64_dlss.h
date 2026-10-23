@@ -15,7 +15,7 @@
 #include "common/rt64_plume.h"
 
 namespace RT64 {
-    // Banjo-Tooie: NVIDIA DLSS (and DLAA, the same model at the output's own size) through NGX, on Windows with Direct3D 12.
+    // Banjo-Tooie: NVIDIA DLSS (and DLAA, the same model at the output's own size) through NGX, on Windows with Direct3D 12 or Vulkan.
     // The NGX library (third-party/nvidia-dlss, NVIDIA's licence) and nvngx_dlss.dll are NVIDIA's; neither is on other platforms.
     struct DlssBackend {
         // Records DLSS on the command list. color is the jittered game image at inputWidth by inputHeight, depth a float depth
@@ -39,6 +39,7 @@ namespace RT64 {
     private:
         bool failed = false;
         bool initialized = false;
+        bool vulkan = false;
         void *params = nullptr;
         void *feature = nullptr;
         uint32_t featureInputWidth = 0;

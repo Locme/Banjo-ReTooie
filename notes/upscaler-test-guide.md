@@ -11,7 +11,7 @@ Graphics > **WIP** tab > **Upscaler** section:
 - **Upscaler: Reactive Mask** (on by default): marks particles, fire and spray so FSR/DLSS trust their history less there.
 - **Upscaler: Sharpness** (Off/Low/Medium/High): sharpening after the upscale (Temporal and FSR; DLSS ignores it).
 
-FSR 3, FSR 4 and DLSS need the **Direct3D 12** graphics API; on Vulkan they are greyed out and only Temporal works.
+FSR 3 and FSR 4 need the **Direct3D 12** graphics API; on Vulkan they are greyed out. DLSS and DLAA run on Direct3D 12 and on Vulkan (the Vulkan path is new and untested: if DLSS does nothing on Vulkan, send the `[upscaler] DLSS unavailable: ...` line and any `Missing required extension` lines).
 
 Set **Resolution to Auto** first, otherwise the game renders at its normal size and the upscalers only anti-alias.
 

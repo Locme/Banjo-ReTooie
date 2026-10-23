@@ -187,6 +187,10 @@ if(WIN32)
         target_include_directories(rt64 PRIVATE ${RT64_EXT_DIR}/../third-party/nvidia-dlss/include)
         target_link_libraries(rt64 ${RT64_EXT_NGX_LIB})
         target_compile_definitions(rt64 PRIVATE TOOIE_HAS_NGX=1)
+        # Vulkan: plume asks NGX for the extensions DLSS needs (rt64-ext/src/plume_dlss/render/plume_dlss.h).
+        target_compile_definitions(plume PRIVATE DLSS_ENABLED=1)
+        target_include_directories(plume PRIVATE ${RT64_EXT_DIR}/src/plume_dlss)
+        target_include_directories(rt64 PRIVATE ${RT64_EXT_DIR}/src/plume_dlss)
     endif()
 endif()
 
