@@ -579,7 +579,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             }
             const float full = std::sqrt((want[0] - pivot[0]) * (want[0] - pivot[0]) +
                 (want[1] - pivot[1]) * (want[1] - pivot[1]) + (want[2] - pivot[2]) * (want[2] - pivot[2]));
-            if (option<bool>(tooie::free_camera_smooth_walls_option, false) && full > 1.0f) {
+            if (option<bool>(tooie::free_camera_smooth_walls_option, true) && full > 1.0f) {
                 const float reach = std::sqrt((hit[0] - pivot[0]) * (hit[0] - pivot[0]) +
                     (hit[1] - pivot[1]) * (hit[1] - pivot[1]) + (hit[2] - pivot[2]) * (hit[2] - pivot[2]));
                 const float target = blocked ? std::clamp(reach / full, 0.0f, 1.0f) : 1.0f;
