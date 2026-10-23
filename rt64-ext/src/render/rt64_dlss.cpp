@@ -82,6 +82,16 @@ namespace RT64 {
             }
             feature = nullptr;
         }
+        if (params != nullptr) {
+            // Capability parameters are the caller's to free (nvsdk_ngx.h, NVSDK_NGX_GetCapabilityParameters).
+            if (vulkan) {
+                NVSDK_NGX_VULKAN_DestroyParameters(static_cast<NVSDK_NGX_Parameter *>(params));
+            }
+            else {
+                NVSDK_NGX_D3D12_DestroyParameters(static_cast<NVSDK_NGX_Parameter *>(params));
+            }
+            params = nullptr;
+        }
         if (initialized && (deviceUsed != nullptr)) {
             if (vulkan) {
                 NVSDK_NGX_VULKAN_Shutdown1(static_cast<VkDevice>(deviceUsed));
@@ -184,8 +194,6 @@ namespace RT64 {
             NVSDK_NGX_Handle *handle = nullptr;
             const NVSDK_NGX_Result result = useVulkan ? NGX_VULKAN_CREATE_DLSS_EXT(vkCommandList->vk, 1, 1, &handle, ngxParams, &create) :
                 NGX_D3D12_CREATE_DLSS_EXT(d3dCommandList->d3d, 1, 1, &handle, ngxParams, &create);
-            if (!useVulkan) {
-            }
             if (NVSDK_NGX_FAILED(result)) {
                 fail("could not create the DLSS feature: " + narrow(GetNGXResultAsString(result)));
                 return false;
