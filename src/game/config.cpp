@@ -563,12 +563,12 @@ void tooie::init_config() {
     general.add_bool_option(
         tooie::damage::strafe_option,
         "Enemy dynamic positioning",
-        "A curated list of enemies (Boltoid, Gruntydactyl, Hothead, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba) slide sideways while they close in, and sidestep when you roll toward them, so they are harder to roll over.",
+        "A curated list of enemies (Billy Bob, Boltoid, Gruntydactyl, Guvnor, Hothead, Jippo Jim, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba) slide sideways while they close in, and sidestep when you roll toward them, so they are harder to roll over.",
         false);
     general.add_bool_option(
         tooie::damage::faster_attacks_option,
         "Lower Enemy Attack Cooldown",
-        "The curated list of enemies (Boltoid, Gruntydactyl, Hothead, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba) wait half as long between attacks.",
+        "The curated list of enemies (Billy Bob, Boltoid, Gruntydactyl, Guvnor, Hothead, Jippo Jim, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba) wait half as long between attacks.",
         false);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(

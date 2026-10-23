@@ -280,11 +280,14 @@ extern "C" void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx) {
 // Curated enemies (L, 2026-10-23): the two enemy toggles only touch the enemies on L's list, not every actor
 // built on the shared sucoaster helper (many of those are objects that cannot be killed). An object is on the
 // list when its actor entry (+0x10, the pointer _gemarkersDll_entrypoint_0 returns for the actor id, as the
-// enemy spawner's guard uses) matches one of these ids. Ids not yet known (Bargasaurus, Billy Bob, Diggit,
-// Flatso, Globble, Guvnor, Jippo Jim) are missing from the list.
+// enemy spawner's guard uses) matches one of these ids. Ids not yet known (Bargasaurus, Diggit, Flatso,
+// Globble) are missing from the list.
 namespace {
     constexpr uint16_t curated_ids[] = {
         0x440, // Boltoid
+        0x150, // Billy Bob
+        0x327, // Jippo Jim
+        0x3C3, // Guvnor
         0x133, 0x134, // Gruntydactyl
         0x462, // Hothead
         0x3C9, // Keelhaul
