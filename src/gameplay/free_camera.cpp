@@ -114,6 +114,8 @@ namespace {
     // Camera line test flags and radius, as the game's camera uses them (func_80113640).
     constexpr uint32_t sweep_flags = 0x820020;
     constexpr float sweep_radius = 45.0f;
+    // Hover over small objects: the thin line test that decides whether Banjo can still be seen.
+    constexpr float hover_radius = 12.0f;
 
     // Ease back: seconds after the stick is let go, the rate (per second) of the ease, the speed
     // (units per second) Banjo counts as moving at, and how close counts as caught up.
@@ -190,7 +192,8 @@ namespace {
 
     // func_800FAB50(from, to, normal_out, flags, radius on the stack): a swept line test that moves
     // `to` back to where it first hits. Runs it on scratch space below the hook's stack frame.
-    bool sweep(uint8_t* rdram, recomp_context* ctx, const float from[3], float to[3], float* normal = nullptr) {
+    bool sweep(uint8_t* rdram, recomp_context* ctx, const float from[3], float to[3], float* normal = nullptr,
+               float radius = sweep_radius) {
         recomp_context saved = *ctx;
         const uint32_t sp = ((uint32_t)ctx->r29 - 0x80) & ~0xFu;
         const uint32_t from_addr = sp + 0x20;
@@ -201,7 +204,7 @@ namespace {
             write_float(rdram, to_addr + 4 * i, to[i]);
             write_float(rdram, normal_addr + 4 * i, 0.0f);
         }
-        write_float(rdram, sp + 0x10, sweep_radius);
+        write_float(rdram, sp + 0x10, radius);
         ctx->r29 = (int32_t)sp; // addresses are sign-extended in the registers
         ctx->r4 = (int32_t)from_addr;
         ctx->r5 = (int32_t)to_addr;
@@ -537,6 +540,16 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             // line test (func_800FAB50(from, to_inout, normal_out, flags, radius), as func_80113640 uses it).
             float hit[3] = { want[0], want[1], want[2] };
             blocked = sweep(rdram, ctx, pivot, hit);
+            // A small object near the line stops the wide test but not the view of Banjo: if a thin line
+            // from Banjo to the wanted spot is clear, the camera stays there and hovers over it. Banjo is
+            // never hidden, because anything between him and the camera stops the thin line too.
+            if (blocked && option<bool>(tooie::free_camera_hover_option, true)) {
+                float thin[3] = { want[0], want[1], want[2] };
+                if (!sweep(rdram, ctx, pivot, thin, nullptr, hover_radius)) {
+                    std::memcpy(hit, want, sizeof(hit));
+                    blocked = false;
+                }
+            }
             const float full = std::sqrt((want[0] - pivot[0]) * (want[0] - pivot[0]) +
                 (want[1] - pivot[1]) * (want[1] - pivot[1]) + (want[2] - pivot[2]) * (want[2] - pivot[2]));
             if (option<bool>(tooie::free_camera_smooth_walls_option, false) && full > 1.0f) {

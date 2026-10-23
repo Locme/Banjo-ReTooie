@@ -276,6 +276,22 @@ extern "C" void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx) {
 // flight the horizontal velocity is nudged toward the speed that would reach where the player is heading
 // (his position plus his measured movement over the time the potion has left) by then, so a potion only
 // misses when he really changes direction. The time left is the horizontal distance over the horizontal speed.
+// Faster enemy attacks (L, 2026-10-23): the shared enemy helper sucoaster_entrypoint_14 (used by every enemy
+// the Aim sweep saw reading the player through func_8080202C_sucoaster) rolls a random 5 to 8 second wait
+// (func_800DC178(5.0, 8.0), func_800D9058 turns the seconds into the byte) and stores it at data +0x12, which
+// sucoaster_entrypoint_2 counts down. With the option on the stored wait is halved (hooked before both stores,
+// $v0 holds the byte).
+extern "C" void tooie_enemy_attack_timer(uint8_t*, recomp_context* ctx) {
+    bool on = false;
+    try {
+        on = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::damage::faster_attacks_option));
+    } catch (...) {
+    }
+    if (on) {
+        ctx->r2 = (int32_t)(((uint32_t)ctx->r2 & 0xFFu) / 2u);
+    }
+}
+
 extern "C" void tooie_klungo_potion_steer(uint8_t* rdram, recomp_context* ctx) {
     bool homing = true;
     try {

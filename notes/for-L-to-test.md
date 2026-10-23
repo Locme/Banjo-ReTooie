@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T567 Character surface in WIP, dust dirt and sand
+- Asked: 2026-10-23 13:54 UTC
+- Build: main after PR #20
+- Steps:
+  1. Pull main and build on Windows; WIP tab > Character surface: set Dirty characters to 100
+  2. Run about on a sand map (Terrydactyland sand, Jolly Roger's Lagoon beach) for 20-30 seconds
+  3. Look at his legs and feet: a pale tan grainy coat; then run in dust for brown mud; swim to wash both off
+  4. TOOIE_CHAR_SAND=100 holds the sand coat fixed (headless)
+- Look for: Does sand under his feet give him a tan coat that builds in about 20 seconds and dusts off slowly? Is the tan coat visible without looking like a texture error? Sand on non-sand ground (false positives)?
+- Status: waiting for L
+
 ## T566 Wet, snowy and dirty characters
 - Asked: 2026-10-23 13:22 UTC
 - Build: branch claude/project-thread-xmr3el
@@ -43,6 +54,17 @@
   3. Volumetric Clouds: each type, in a level with and without Day and Night
   4. Dev Files/volumetric.txt: add a line such as 0xAF clouds=stormy cover=80 mist=40 and save while the game runs
 - Look for: Mist stays in the level and meets scenery with no texture-on-model look; fog presets differ clearly; clouds show on the sky of any level, Stormy is dark grey; the file's line applies within a second. Send frame rate with them on.
+  5. (2026-10-23) Volumetric Mist is finer at the low end (slider 1 to 100, squared). Try Mist Over Water and Mist at Waterfalls (strength and height each), Volumetric Fog Start Distance and Colour, and the cloud Amount, Height, Size and Speed sliders (50 is the type's own; Height 0 brings the layer down to the horizon). Volumetric Fog 40 is about a quarter as thick as before.
+  6. Run and ground pound on grass with Volumetric Dust on: the puff should be small, pale and see-through, with no outline.
+- Status: waiting for L
+
+## T563 Lower Enemy Attack Cooldown
+- Asked: 2026-10-23
+- Build: main
+- Steps:
+  1. General > Gameplay: turn on Lower Enemy Attack Cooldown
+  2. Fight a Beehive, Torch enemy, Soarasaur, Tintup or Washup (enemies that use the shared helper), then turn it off and compare how often they attack
+- Look for: they attack about twice as often; nothing else changes. Not covered: enemies the sweep found with their own code (Eyeball, Dragunda, Gobgoyle, Onion, Toxi-Gag and others).
 - Status: waiting for L
 
 ## T562 Aim sweep: find the enemy chase code automatically

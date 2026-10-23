@@ -29,6 +29,7 @@
 #include <variant>
 #include <vector>
 
+#include "tooie_dust.h"
 #include "tooie_game_frame_rate.h"
 #include "recompui/config.h"
 
@@ -113,7 +114,8 @@ namespace RT64 {
     void SetSceneFur(float amount, float length, float density, float noisiness);
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
-    void SetSceneCharSurface(float wet, float snow, float dirt);
+    void SetSceneCharSurface(float wet, float snow, float dirt, float sand);
+    bool SceneSandUnderfoot();
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand);
     void SetSceneSandTextures(const uint64_t *hashes, size_t count);
@@ -5128,7 +5130,7 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     // comes in water and dries off in about ten seconds; snow gathers while he is out on a map with snow and melts away
     // over a minute elsewhere, quickly in water; dirt builds slowly while he runs about on the ground and washes off in water.
     {
-        static float amounts[3] = {};
+        static float amounts[4] = {};
         static std::chrono::steady_clock::time_point last{};
         static float last_pos[3] = {};
         static bool had_pos = false;
@@ -5148,19 +5150,36 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
             if (in_water) {
                 amounts[1] -= 0.5f * dt;
                 amounts[2] -= 0.35f * dt;
+                tooie::dust::take_exposure();
             }
             else {
                 amounts[1] += (snowy_map(map) ? 0.05f : -0.017f) * dt;
                 // (Walking on the ground, not in a jump or a lift: speed alone is enough, 150 units a second is a run.)
                 if (valid && banjo_grounded(rdram) && speed > 20.0f && speed < 600.0f) {
-                    amounts[2] += (snowy_map(map) ? 0.002f : 0.008f) * dt;
+                    amounts[2] += (snowy_map(map) ? 0.0007f : 0.003f) * dt;
                 }
+                // The dust he kicks up and stands in (Volumetric dust's clouds, or the game's own puffs): about 80 puffs make
+                // him filthy. Not on snow, where the puffs are snow.
+                amounts[2] += tooie::dust::take_exposure() * (snowy_map(map) ? 0.0f : 0.012f);
+            }
+            // Sand: gathers while he is on sand textures (found by the renderer), a little faster moving, and dusts off slowly;
+            // water washes it off.
+            if (in_water) {
+                amounts[3] -= 0.4f * dt;
+            }
+            else if (RT64::SceneSandUnderfoot()) {
+                amounts[3] += (speed > 20.0f ? 0.06f : 0.025f) * dt;
+            }
+            else {
+                amounts[3] -= 0.008f * dt;
             }
             amounts[1] = std::clamp(amounts[1], 0.0f, 1.0f);
             amounts[2] = std::clamp(amounts[2], 0.0f, 1.0f);
+            amounts[3] = std::clamp(amounts[3], 0.0f, 1.0f);
         }
         else {
-            amounts[0] = amounts[1] = amounts[2] = 0.0f;
+            tooie::dust::take_exposure();
+            amounts[0] = amounts[1] = amounts[2] = amounts[3] = 0.0f;
             had_pos = false;
         }
         const std::atomic<float>* maxes[3] = { &char_wet_max, &char_snow_max, &char_dirt_max };
@@ -5169,7 +5188,10 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
             const float forced = char_forced[i].load();
             out[i] = ((forced >= 0.0f) ? forced : amounts[i]) * maxes[i]->load();
         }
-        RT64::SetSceneCharSurface(out[0], out[1], out[2]);
+        // (Sand goes with the dirt slider: the dirty look is mud away from sand and sand on it.)
+        static const bool force_sand = std::getenv("TOOIE_CHAR_SAND") != nullptr;
+        const float sand = (force_sand ? (float)(std::atof(std::getenv("TOOIE_CHAR_SAND")) / 100.0) : amounts[3]) * char_dirt_max.load();
+        RT64::SetSceneCharSurface(out[0], out[1], out[2], sand);
     }
     // The fog is measured from Banjo.
     {
@@ -5580,7 +5602,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         char_dirt_option,
         "Dirty characters",
-        "Banjo and Kazooie get dirty as they run about: mud on the legs and undersides that builds up slowly and washes off in water. The number is how dirty they can get; 0 is off.",
+        "Banjo and Kazooie get dirty as they run about: mud on the legs and undersides that builds up as they run about and kick up dust (Volumetric dust or the game's own puffs), and a pale coat of sand after they walk on sand. Both wash off in water. The number is how dirty they can get; 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         banjo_fur_length_option,

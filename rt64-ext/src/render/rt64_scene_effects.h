@@ -174,6 +174,7 @@ namespace RT64 {
         float charWet = 0.0f;
         float charSnow = 0.0f;
         float charDirt = 0.0f;
+        float charSand = 0.0f;
         float npcFurDensity = 1.0f;
         float npcFurNoisiness = 0.5f;
         float npcFeathers = 0.0f;
@@ -282,6 +283,10 @@ namespace RT64 {
     // world x, y, z, radius, strength (0 to 1), a seed, then two spare. The march in VolDust draws them with the mist.
     void SetSceneDust(const float *clouds, uint32_t count);
     void SetSceneVolumetric(float mist, float fog, uint32_t fogPreset, uint32_t cloudType, float mistOffset);
+    // The rest of the volumetric settings, riding in the dust buffer's header (SceneEffectsPS.hlsl VolExtra): the fog's start
+    // distance (world units) and colour (0 the preset's own, 1 to 4 Haze, Mist, Dusk, Gloom), and the mist over water and at a
+    // waterfall's foot: strength (0 to 1) and how high it hangs (world units) for each.
+    void SetSceneVolumetricExtra(float fogStart, uint32_t fogColour, float waterMist, float waterHeight, float fallMist, float fallHeight);
     void SetSceneRainDetail(float wet, bool drops);
     void SetSceneClouds(float cover, float height, float thickness, float speed);
     // Banjo-Tooie: the moon's phase for the day and night cycle, 0 new, 2 first quarter, 4 full, 6 last quarter.
@@ -420,8 +425,14 @@ namespace RT64 {
     // model's draws (G_EX_SETFURSHELLS_V1); each is drawn again as shells pushed out along its normals.
     void SetSceneFur(float amount, float length, float density, float noisiness);
     // The character surface layer (CharSurface.hlsli): how wet, snowy and dirty Banjo and Kazooie are, 0 to 1.
-    void SetSceneCharSurface(float wet, float snow, float dirt);
+    void SetSceneCharSurface(float wet, float snow, float dirt, float sand);
     bool SceneCharSurfaceOn();
+    // Banjo's feet (x, y, z) as the scene effects have them, false with no player.
+    bool SceneCharFeet(float (&feet)[3]);
+    // A ground draw of a sand texture lies under Banjo's feet (the renderer notes it each frame it does; true within the last
+    // third of a second), for the character surface layer's sand.
+    void NoteSandUnderfoot();
+    bool SceneSandUnderfoot();
     // The shells drawn over each of Banjo's draws: 0 when the fur is off.
     uint32_t SceneFurShells();
     // Banjo-Tooie: which of a model's vertices get fur or feathers, told by their own colours before the game

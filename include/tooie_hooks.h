@@ -107,6 +107,7 @@ void tooie_fall_damage_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_klungo_potion_steer(uint8_t* rdram, recomp_context* ctx);
+void tooie_enemy_attack_timer(uint8_t* rdram, recomp_context* ctx);
 void tooie_klungo_replay_potions(uint8_t* rdram, recomp_context* ctx);
 void tooie_aim_trace(uint8_t* rdram, recomp_context* ctx, const char* caller);
 void tooie_enemy_hit_damage(uint8_t* rdram, recomp_context* ctx, int reg);
