@@ -103,7 +103,7 @@ namespace {
         bool was_down = false;
         for (;;) {
             std::this_thread::sleep_for(poll_interval);
-            bool down = key_down() && debug_tab_on();
+            bool down = key_down() && (debug_tab_on() || tooie::dev_file_present());
             if (down && !was_down) {
                 std::optional<Place> place;
                 {
@@ -169,7 +169,7 @@ void tooie::level_warp::create_tab() {
 
 void tooie::level_warp::add_option(recomp::config::Config& dev) {
     dev.add_bool_option(option_id, "Warp tab",
-        "Shows the Warp tab, with the level warp list. F9 repeats the last warp.", false);
+        "Shows the Warp tab, with the level warp list. F9 repeats the last warp. A dev.txt file next to the game's exe shows it whatever this says.", false);
     dev.add_option_change_callback(option_id,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             tooie::level_warp::refresh();
@@ -183,5 +183,5 @@ void tooie::level_warp::start() {
 }
 
 void tooie::level_warp::refresh() {
-    show_tab(debug_tab_on());
+    show_tab(debug_tab_on() || tooie::dev_file_present());
 }

@@ -73,13 +73,13 @@
 
 namespace {
     void show_cheats_tab() {
-        bool on = true;
+        bool on = false;
         try {
             on = std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::cheats_tab_option));
         } catch (...) {
         }
         try {
-            recompui::config::set_tab_visible("cheats", on);
+            recompui::config::set_tab_visible("cheats", on || tooie::dev_file_present());
         } catch (...) {
         }
     }
@@ -91,7 +91,7 @@ namespace {
         } catch (...) {
         }
         try {
-            recompui::config::set_tab_visible(tooie::wip_tab_id, on);
+            recompui::config::set_tab_visible(tooie::wip_tab_id, on || tooie::dev_file_present());
         } catch (...) {
         }
     }
@@ -103,7 +103,7 @@ namespace {
         } catch (...) {
         }
         try {
-            recompui::config::set_tab_visible(tooie::achievements::tab_id, on);
+            recompui::config::set_tab_visible(tooie::achievements::tab_id, on || tooie::dev_file_present());
         } catch (...) {
         }
     }
@@ -227,6 +227,21 @@ namespace {
         if (!std::get<bool>(qol.get_option_value(tooie::transform_anywhere::option))) {
             qol.set_option_value(tooie::transform_anywhere::option, true);
             qol.save_config();
+        }
+        std::ofstream{marker};
+    }
+
+    // The Cheats tab became off by default (L, 2026-10-23): turn a saved "on" off once, so it hides on
+    // PCs that saved the old default. dev.txt shows it; the switch in DEV > Additional Tabs still works.
+    void turn_off_cheats_tab_once() {
+        const std::filesystem::path marker = recomp::get_config_path() / "cheats_tab_off.done";
+        if (std::filesystem::exists(marker)) {
+            return;
+        }
+        recomp::config::Config& dev = recompui::config::get_config(tooie::wip_tab_id);
+        if (std::get<bool>(dev.get_option_value(tooie::cheats_tab_option))) {
+            dev.set_option_value(tooie::cheats_tab_option, false);
+            dev.save_config();
         }
         std::ofstream{marker};
     }
@@ -579,7 +594,7 @@ void tooie::init_config() {
     general.add_bool_option(
         tooie::wip_tab_option,
         "Developer Mode",
-        "Shows the DEV tab, with features for developers and features that are still being worked on, and the switches for the Achievements, Cheats and Warp tabs.",
+        "Shows the DEV tab, with features for developers and features that are still being worked on, and the switches for the Achievements, Cheats and Warp tabs. A dev.txt file next to the game's exe shows all of these tabs whatever their switches say.",
         false);
     general.add_option_change_callback(tooie::wip_tab_option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
@@ -1092,8 +1107,9 @@ void tooie::init_config() {
     wip.add_bool_option(
         tooie::cheats_tab_option,
         "Cheats tab",
-        "Shows the Cheats tab. Turn it off to hide it; cheats that are already on stay on.",
-        true);
+        "Shows the Cheats tab. Turn it off to hide it; cheats that are already on stay on. A dev.txt file next to the game's exe shows it whatever this says.",
+        // Off by default (L, 2026-10-23); dev.txt shows it.
+        false);
     wip.add_option_change_callback(tooie::cheats_tab_option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             show_cheats_tab();
@@ -1111,6 +1127,7 @@ void tooie::init_config() {
     move_saved_options_to_graphics();
     show_wip_tab();
     move_saved_tab_options();
+    turn_off_cheats_tab_once();
     show_cheats_tab();
     show_achievements_tab();
     tooie::level_warp::refresh();

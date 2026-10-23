@@ -36,6 +36,9 @@ namespace tooie {
     // App-data root (app_data.cpp): the exe's folder when writable (migrating the old per-user
     // folder once), else the runtime's default location.
     std::filesystem::path resolve_app_folder();
+    // dev.txt next to the exe (or in the working directory, like portable.txt): every hidden tab
+    // shows (DEV, Cheats, Warp, Achievements), whatever their switches say (L, 2026-10-23).
+    bool dev_file_present();
 
     // Save backups (save_backup.cpp): at launch and every 120 s, copies the save file to
     // save_backups/<date-time>/ if it changed, keeping the newest N (General tab settings).
