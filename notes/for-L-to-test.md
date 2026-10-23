@@ -1,5 +1,111 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T563 Volumetric mist, fog and clouds (WIP tab)
+- Asked: 2026-10-23 06:10 UTC
+- Build: branch claude/project-thread-nmtx34
+- Steps:
+  1. Build this branch (claude/project-thread-nmtx34), Graphics > WIP > Volumetric
+  2. Spiral Mountain: Volumetric Mist 50 and Volumetric Fog 40 with each preset; walk and jump
+  3. Volumetric Clouds: each type, in a level with and without Day and Night
+  4. Dev Files/volumetric.txt: add a line such as 0xAF clouds=stormy cover=80 mist=40 and save while the game runs
+- Look for: Mist stays in the level and meets scenery with no texture-on-model look; fog presets differ clearly; clouds show on the sky of any level, Stormy is dark grey; the file's line applies within a second. Send frame rate with them on.
+- Status: waiting for L
+
+## T562 Aim sweep: find the enemy chase code automatically
+- Asked: 2026-10-23 06:31 UTC
+- Build: main
+- Steps:
+  1. Play a save in an open place (Spiral Mountain is good)
+  2. General > DEV tab: turn on Aim sweep
+  3. Leave the game running about 35 minutes; each enemy appears in front of Banjo for 12 s, then the area reloads
+  4. When the toast says it is done, send me logs/aim_sweep.txt
+- Look for: Enemies spawn one at a time and the area reloads between them; the game does not freeze or crash; logs/aim_sweep.txt gets one line per enemy. Banjo may get hurt or die; that is fine.
+- Status: waiting for L
+
+## T561 PBR re-sweep with the 11 rules
+- Asked: 2026-10-23 00:45 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; Ray tracing on, Ray traced BRDF on
+  2. Grunty Industries (green and hazard-striped panels, grimy grey walls), Mayahem Temple gold, a bushy level (Jolly Roger's or Terrydactyland) with the sun behind leaves
+- Also (follow-up): the plain grey steel was re-checked by eye too: 36 more grimy panels are rust, 28 more painted signs and panels are plastic.
+- Look for: Painted panels look like painted plastic, not mirror metal; grimy grey metal is dull; gold and copper reflect in their own texture's colour, not an extra orange; bushes glow less with the sun behind, single leaves still do; icicles and ice crystals are left to Ice reflections
+- Status: waiting for L
+
+## T560 Cheaper traced sun shadows
+- Asked: 2026-10-22 23:58 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; Ray tracing on, Sun shadows on
+  2. Spiral Mountain and a grassy outdoor area; note FPS against the last build
+- Look for: FPS same or a little higher; sun shadows, rooms and light through grates look the same as before
+- Status: waiting for L
+
+## T559 Metal less shiny (rough reflections fade, steel and rust defaults)
+- Asked: 2026-10-22 23:15 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; Ray tracing on, Ray traced BRDF on
+  2. Look at grey metal (Grunty Industries, Glitter Gulch Mine rails) and rusty metal
+- Look for: Grey and rusty metal show a dull sheen instead of a mirror; chrome and gold still mirror-like. Rough surfaces' reflections fade far more than before.
+- Status: waiting for L
+
+## T558 Banjo's ring of lost shading (ray tracing)
+- Asked: 2026-10-22 23:15 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; Ray tracing on, Ambient occlusion on
+  2. Stand in grass or on bumpy ground and look at the ground round Banjo
+- Look for: No lighter circle round him that moves with him; his own body still keeps its lighter AO.
+- Status: waiting for L
+
+## T557 Light Source makes the whole model shine
+- Asked: 2026-10-22 23:15 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build
+  2. Go to the Note Nest from your screenshot (Light Source on its inside)
+- Look for: The note and the nest's rim shine too, not only the picked inside. Banjo walking past it doesn't start shining. The level round it doesn't shine.
+- Status: waiting for L
+
+## T556 Ray tracing speed-ups
+- Asked: 2026-10-22 23:15 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; your usual ray tracing settings, Ray tracing resolution Medium, overlay Full
+  2. Stand outdoors with Traced light beams on, then in a lamp-lit room (Bottles' house), and send the overlay each time
+- Look for: Higher fps than before, mostly where light beams show. Beams look the same, maybe a touch softer. Lamps unchanged.
+- Status: waiting for L
+
+## T555 Save Pick and Paste Pick in all three pick modes
+- Asked: 2026-10-22 21:55 UTC
+- Build: main
+- Steps:
+  1. In any texture pick mode, change a texture in Parallax, Shader Effects and Ray Tracing Material pick modes, then press Save Pick in one of them
+  2. Copy a texture's pick, then Paste Pick onto another texture
+  3. Turn on DEV > Picker Save Only Current Active and repeat
+- Look for: With the switch off, Save Pick writes all three files and Paste copies all three; with it on, only the mode that is on
+- Status: waiting for L
+
+## T554 Ray tracing resolution drop-down (Half / Medium / High)
+- Asked: 2026-10-22 21:00 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build
+  2. Graphics > Ray Tracing > Ray tracing resolution: it replaces the Half-resolution toggle and starts on Medium (the old toggle's setting isn't carried over)
+  3. Medium: the picture and fps as before. Half: as the old Half toggle. High: switch it on in a lamp-lit room and outdoors in the sun, overlay Full
+- Look for: High gives cleaner, less dotty shadows, lamp light and beams, sharp all the way into the distance (it ignores Ray detail distances), at a lower fps. Each choice applies live.
+- Status: waiting for L
+
+## T553 Ice reflection no longer shows what's behind the ice walls
+- Asked: 2026-10-22 21:00 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build
+  2. Ice reflections on, go to the Icy Side spot from your screenshot (the green ice wall with the oil drill area behind it), once with Ray tracing off and once on
+- Look for: The wall shows its own ice or what is really in front of it, never the drill area behind it. Ice floors still reflect Banjo and the scenery at every camera height.
+- Status: waiting for L
+
 ## T552 Ray tracing speed-ups with the same picture (AO, bounce light, model shadows)
 - Asked: 2026-10-22 17:10 UTC
 - Build: main @ 18f8a32
@@ -146,7 +252,7 @@
   1. Graphics > Ray tracing on
   2. Pick an object in Shader Effects pick mode and give it Light Source (9), e.g. the one from your screenshot (31d98c...)
   3. Look round it, then try a few strengths with Shift + mouse wheel
-- Look for: No bright blobs round the object any more; the area round it is lit evenly, as if the whole object glowed
+- Look for: No bright blobs round the object any more; the area round it is lit evenly, as if the whole object glowed (third fix, 2026-10-22 21:50, your pick: the object only shines, nothing round it is lit)
 - Status: waiting for L
 
 ## T531 Sand footprints with the camera straight above

@@ -88,6 +88,12 @@ RayPbr RayPbrNone() {
     return none;
 }
 
+// The colour a material tints its surface's own (diffuse) colour with: a metal's albedo is what it tints its reflection
+// with, and the texture already has its colour, so the more metal the less it is tinted twice.
+float3 DiffuseAlbedo(RayPbr material) {
+    return lerp(material.albedo, 1.0f, material.metalness);
+}
+
 // Ray Tracing Material Pick Mode: whether the traced scene holds a surface with a material of that mode's (lights word 9,
 // bit 2 (value 4); the traced scene's records follow its geometries).
 // The same word carries the Ray traced BRDF roughness (percent times 8) and the subsurface scattering strength (percent times 1024).
@@ -355,6 +361,17 @@ float3 HeldSun(int2 pixel) {
     return sunColor * (disc * 1.1f + pow(toward, 600.0f) * 0.6f + pow(toward, 60.0f) * 0.15f);
 }
 
+// The cloud types' darkness (used as the rain's: greys and darkens the clouds and spreads them over the sky) and how
+// warm the light on them is (0 to 1), by type: 1 Fair, 2 Scattered, 3 Overcast, 4 Stormy, 5 Wispy, 6 Sunset, 7 Thunderstorm.
+float VolCloudDarkness(uint type) {
+    const float table[8] = { 0.0f, 0.0f, 0.0f, 0.45f, 0.92f, 0.0f, 0.0f, 1.0f };
+    return table[type & 7u];
+}
+
+float VolCloudWarmth(uint type) {
+    return (type == 6u) ? 0.9f : 0.0f;
+}
+
 float3 DaySky(float3 color, int2 pixel, float3 tint) {
     const float2 ndc = float2((pixel.x + 0.5f) / gConstants.projection.z * 2.0f - 1.0f, 1.0f - (pixel.y + 0.5f) / gConstants.projection.w * 2.0f);
     const float3 look = normalize(float3(ndc.x / gConstants.projection.x, ndc.y / gConstants.projection.y, -1.0f));
@@ -465,9 +482,13 @@ float3 DaySky(float3 color, int2 pixel, float3 tint) {
     }
 
     // Clouds in front of all of it.
-    if ((DayPacked() & 2u) != 0u) {
+    // Also forced clouds (the WIP Volumetric Clouds option): their type's darkness stands in for rain, their warmth for glow.
+    const uint forcedClouds = (uint(gConstants.fog.z) >> 12 >> 3) & 7u;
+    if (((DayPacked() & 2u) != 0u) || (forcedClouds != 0u)) {
         const float3 sunWorld = normalize(float3(dot(gConstants.sun.xyz, gConstants.worldX.xyz), dot(gConstants.sun.xyz, gConstants.worldY.xyz), dot(gConstants.sun.xyz, gConstants.worldZ.xyz)));
-        const float4 clouds = DayClouds(world, sunWorld, tint, glow, pixel, weather);
+        float3 cloudWeather = weather;
+        cloudWeather.x = max(cloudWeather.x, VolCloudDarkness(forcedClouds));
+        const float4 clouds = DayClouds(world, sunWorld, tint, max(glow, VolCloudWarmth(forcedClouds)), pixel, cloudWeather);
         sky = sky * (1.0f - clouds.a) + clouds.rgb;
     }
     return DayWeatherLight(sky, 0.0f, weather.z, 0.0f);
@@ -889,9 +910,17 @@ bool PlayerShadowsOff() {
     return (uint(asfloat(gLights.Load(36)) + 0.5f) & 1u) != 0u;
 }
 
+// Ray tracing resolution High (lights word 15): every pixel traces all its rays, at any distance.
+bool RayResolutionHigh() {
+    return asfloat(gLights.Load(60)) > 1.5f;
+}
+
 // Ray detail by distance (Graphics > Ray detail distances, the lights buffer's header): 0 all the rays, 1 half (past the
 // first distance), 2 a quarter (past the second); a distance of 0 never.
 uint RayDetail(float distance) {
+    if (RayResolutionHigh()) {
+        return 0u;
+    }
     const float half = asfloat(gLights.Load(48));
     const float quarter = asfloat(gLights.Load(52));
     if ((quarter > 0.0f) && (distance > quarter)) {
@@ -904,6 +933,12 @@ uint RayDetail(float distance) {
 // half (one ray set for each 2x2 pixels), see TracedHalfAt.
 bool HalfTraced() {
     return (uint(asfloat(gLights.Load(36)) + 0.5f) & 2u) != 0u;
+}
+
+// The traced light beams from the indirect pass's second band (half size, TracedHalfBeams): below Ray tracing resolution
+// High; it draws the band whenever the beams are on (rt64_scene_effects.cpp tracedBeamsHalf).
+bool BeamsHalf() {
+    return HalfTraced() || !RayResolutionHigh();
 }
 
 // Ray tracing noise smoothing, 0 (the raw rays) to 1.
@@ -963,7 +998,11 @@ uint RayGeometryFlags(uint geometry) {
 }
 
 // A geometry's material (SceneMaterialTexture: Parallax's shape + 1; 0 for none).
+// The Parallax shape a geometry carries (0 none), unless Ray tracing uses Parallax materials is off (gLights 14).
 uint RayGeometryMaterial(uint geometry) {
+    if (asfloat(gLights.Load(56)) < 0.5f) {
+        return 0u;
+    }
     return (geometry == RayGrassGeometry) ? 0u : (gRayGeometries.Load(geometry * 16u + 12u) & 0xFFu);
 }
 
@@ -1053,6 +1092,10 @@ bool RayCutoutSolid(uint geometry, uint primitive, float2 barycentrics) {
 // leaves) counts only where its texture is solid, so light goes through its holes (L, 2026-10-21).
 // Anything solid among the instances in mask: solid triangles end the search at once (the hardware's fast path); only
 // cut-outs and the grass are looked at one by one.
+// Set when a ray TraceAny traced met a level cut-out (instance 0), solid there or not: the sun's shadow rays that all got
+// through and met none leave SunThroughCutout nothing to find.
+static bool gSawLevelCutout = false;
+
 bool TraceAny(RayDesc ray, uint mask) {
     RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
     query.TraceRayInline(gSceneBVH, RAY_FLAG_NONE, mask, ray);
@@ -1061,6 +1104,9 @@ bool TraceAny(RayDesc ray, uint mask) {
             continue;
         }
         const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
+        if ((query.CandidateInstanceID() == 0u) && ((RayGeometryFlags(geometry) & 5u) == 1u)) {
+            gSawLevelCutout = true;
+        }
         if ((geometry == RayGrassGeometry) ? RayGrassStops(ray, query.CandidateTriangleRayT()) :
             RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics()))
         {
@@ -1162,7 +1208,7 @@ float3 TracedBeams(int2 pixel, float depth) {
     // L 2026-10-21: performance very bad); the Bayer offsets below spread the steps between neighbouring pixels.
     // Ray detail distances take a room's eight down to no fewer than four: with one or two, the Bayer offsets turned a
     // pixel's whole beam on or off and the 4x4 pattern showed as a mesh over the scene (L, 2026-10-22).
-    const int Samples = room ? max(8 >> RayDetail(reach), 4) : 4;
+    const int Samples = (room || RayResolutionHigh()) ? max(8 >> RayDetail(reach), 4) : 4;
     const float step = reach / float(Samples);
     const int2 cell = pixel & 3;
     const float bayer[16] = { 0.0f, 8.0f, 2.0f, 10.0f, 12.0f, 4.0f, 14.0f, 6.0f, 3.0f, 11.0f, 1.0f, 9.0f, 15.0f, 7.0f, 13.0f, 5.0f };
@@ -1253,6 +1299,17 @@ bool SurfaceGeometry(float3 center, out uint geometry) {
     }
     geometry = gSurfaceGeometry;
     return gSurfaceFound;
+}
+
+// Whether a pixel's surface (view space) is Banjo himself: inside his capsule (InsideBanjo) and a model's triangle. The capsule
+// alone took in the ground round his feet, a circle where his fur's smoothing went and the model shadows were left
+// out, which showed as a lighter ring round him with no shadow (L, 2026-10-22).
+bool OnBanjoTraced(float3 center) {
+    if (!InsideBanjo(ViewToWorldPoint(center))) {
+        return false;
+    }
+    uint geometry;
+    return SurfaceGeometry(center, geometry) && ((RayGeometryFlags(geometry) & 4u) != 0u);
 }
 
 float MaterialShine(float3 center, float otherwise) {
@@ -1354,7 +1411,7 @@ float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
     }
     if (RayPbrOn()) {
         const RayPbr hitMaterial = RayGeometryPbr(RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()));
-        colour = colour * hitMaterial.albedo * (1.0f + hitMaterial.emissive);
+        colour = colour * DiffuseAlbedo(hitMaterial) * (1.0f + hitMaterial.emissive);
     }
     if (!inView && HitColoursOn()) {
         // Off the screen or hidden: the colour the surface had when it was last seen.
@@ -1391,6 +1448,16 @@ float4 TracedReflection(int2 pixel, float3 center, float3 normal) {
 float4 TracedRoughReflection(int2 pixel, float3 center, float3 normal, float roughness) {
     if (roughness < 0.03f) {
         return TracedReflection(pixel, center, normal);
+    }
+    // One ray along the mirror direction, what it finds blurred by the roughness (TracedReflectionRay's softness): the
+    // lobe's few rays, a different few each pixel of a 4x4 block with nothing to even them out, showed as a dotted mesh
+    // over every surface with a material (L, 2026-10-22).
+    if (true) {
+        const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
+        const float4 found = TracedReflectionRay(origin, reflect(normalize(center), normal), roughness);
+        // A rough surface's lobe spreads its light thin: it fades well down, so rough and worn metal shows a dull sheen
+        // rather than a dimmed mirror (L, 2026-10-22: metal too shiny).
+        return float4(found.rgb, found.a * lerp(1.0f, 0.15f, smoothstep(0.1f, 0.9f, roughness)));
     }
     const float3 incoming = normalize(center);
     const float3 V = -incoming;
@@ -1451,7 +1518,8 @@ bool Enclosed(float3 worldStart) {
         // Only the level makes a room: Banjo standing over the spot doesn't, nor a model beside it (a note pedestal
         // closed the one way out for the floor round it, so its shadow there came out lit and the rest dark: a
         // reversed shadow, L 2026-10-22).
-        if (!TraceOccluded(ray, 3u)) {
+        // Grass doesn't make a room either, and its blades round the spot were each looked at.
+        if (!TraceAny(ray, RayLevelMask)) {
             return false;
         }
     }
@@ -1482,12 +1550,13 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
     float influence = 0.0f;
     // A turn of the disc's points for each pixel (interleaved gradient noise), so two rays a light over neighbouring
     // pixels cover the disc as four did, at half the cost (L, 2026-10-22: Bottles' House at 20 fps).
-    const float turn = frac(52.9829189f * frac(0.06711056f * float(pixel.x) + 0.00583715f * float(pixel.y))) * 6.2831853f;
+    // Noise smoothing takes the turn towards the same for every pixel.
+    const float turn = frac(52.9829189f * frac(0.06711056f * float(pixel.x) + 0.00583715f * float(pixel.y))) * 6.2831853f * (1.0f - RtSmoothing() * 0.8f);
     uint traced = 0u;
     // Fewer lights and rays far off (Ray detail distances): six lights at two rays, three at one, then one at one.
     const uint detail = RayDetail(-center.z);
     const uint mostTraced = (detail == 0u) ? 6u : ((detail == 1u) ? 3u : 1u);
-    const int rays = (detail == 0u) ? 2 : 1;
+    const int rays = RayResolutionHigh() ? 4 : ((detail == 0u) ? 2 : 1);
     [loop] for (uint i = 0u; i < count; i++) {
         const float4 light = asfloat(gLights.Load4(16u * (i + 4u)));
         const float3 toLight = light.xyz - start;
@@ -1498,27 +1567,34 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
             continue;
         }
         const float falloff = saturate(1.0f - fromSurface / light.w);
-        const float reachHere = falloff * falloff;
-        influence = max(influence, reachHere);
+        // A Light Source pick leaves the room's own light as it is (dimming it round the object and adding its own
+        // back drew a bright patch, a "ball", round it; L 2026-10-22) and adds a gentler light that fades out
+        // smoothly, so what is round the object is just lit a little more, evenly.
+        const bool source = radius > 0.0f;
+        const float reachHere = source ? (0.45f * falloff * falloff * falloff) : (falloff * falloff);
+        if (!source) {
+            influence = max(influence, reachHere);
+        }
         const float3 direction = toLight / distance;
         const float facing = dot(worldNormal, direction);
-        // At most six lights traced a pixel (a room full of lamps traced every one).
-        if ((facing <= 0.0f) || (traced >= mostTraced) || (gLampHalf == 2)) {
+        // At most six lights traced a pixel (a room full of lamps traced every one). A light that would add less than a
+        // step of the picture's colour here isn't traced (nor counted, so a nearer one gets its turn).
+        if ((facing <= 0.0f) || (traced >= mostTraced) || (gLampHalf == 2) || (1.3f * reachHere * facing * distanceFade < 0.002f)) {
             continue;
         }
         traced++;
-        // Two points on a small disc round the light. The rays go right up to the flame, through its fitting
+        // Two points (four at Ray tracing resolution High) on a small disc round the light. The rays go right up to the flame, through its fitting
         // (TraceLampVisible); a Light Source's stop at its object.
         const float stopShort = max(3.0f, radius);
         const float discRadius = 3.0f;
         const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
         const float3 across = cross(direction, side);
         float visible = 0.0f;
-        [unroll] for (int k = 0; k < 2; k++) {
+        [unroll] for (int k = 0; k < 4; k++) {
             if (k >= rays) {
                 break;
             }
-            const float angle = float(k) * 3.1415927f + turn;
+            const float angle = float(k) * ((rays == 4) ? 1.5707963f : 3.1415927f) + turn;
             const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * discRadius;
             const float3 toTarget = target - start;
             const float reach = length(toTarget) - stopShort;
@@ -1592,7 +1668,7 @@ float ModelShadow(float3 center, float3 normal) {
     const float reach = 400.0f;
     float shade = 0.0f;
     // Two rays, turned a different way each pixel (the noise smoothing evens them out).
-    const float turn = frac(52.9829189f * frac(dot(center.xy, float2(0.06711056f, 0.00583715f)) * 37.0f)) * 3.14159265f;
+    const float turn = frac(52.9829189f * frac(dot(center.xy, float2(0.06711056f, 0.00583715f)) * 37.0f)) * 3.14159265f * (1.0f - RtSmoothing() * 0.8f);
     [unroll] for (int k = 0; k < 2; k++) {
         const float angle = float(k) * 3.14159265f + turn;
         RayDesc ray;
@@ -1777,6 +1853,57 @@ float3 HitNormal(float3 origin, float3 direction, float t) {
     return (dot(normal, direction) > 0.0f) ? -normal : normal;
 }
 
+// What a view-space ray first meets, seen-through things included (ice, glass and cut-outs count as solid), within reach.
+float TraceDistanceSolid(float3 origin, float3 direction, float reach) {
+    RayDesc ray;
+    ray.Origin = ViewToWorldPoint(origin);
+    ray.Direction = ViewToWorldDirection(direction);
+    ray.TMin = 0.0f;
+    ray.TMax = reach;
+    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+    query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
+    query.Proceed();
+    return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? query.CommittedRayT() : -1.0f;
+}
+
+// The true way a pixel's surface (view space) faces, from three rays from the camera, facing the camera (false where the rays
+// don't all meet it, at its edges). The ice's own depths can't tell a wall's edge from a floor's: there it fell back to
+// level, and a ray reflected off level ice went on into the wall and showed what is behind it (L, 2026-10-22, Icy Side).
+bool SurfaceNormalTraced(float3 surface, out float3 normal) {
+    normal = 0.0f;
+    const float distance = length(surface);
+    if (distance < 10.0f) {
+        return false;
+    }
+    const float3 direction = surface / distance;
+    const float3 side = normalize(cross(direction, (abs(direction.y) < 0.9f) ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f)));
+    const float3 up = cross(side, direction);
+    const float spread = 0.004f;
+    const float reach = distance * 1.2f + 20.0f;
+    const float start = max(distance - 20.0f - distance * 0.05f, 0.0f);
+    const float3 d1 = normalize(direction + side * spread);
+    const float3 d2 = normalize(direction + up * spread);
+    const float t0 = TraceDistanceSolid(direction * start, direction, reach - start);
+    const float t1 = TraceDistanceSolid(d1 * start, d1, reach - start);
+    const float t2 = TraceDistanceSolid(d2 * start, d2, reach - start);
+    if ((t0 < 0.0f) || (t1 < 0.0f) || (t2 < 0.0f)) {
+        return false;
+    }
+    const float3 p0 = direction * (start + t0);
+    // The three must land on one face: a ray that met something else (the wall's far edge, what stands on the ice) gives
+    // no normal.
+    if (abs(start + t0 - distance) > max(distance * 0.03f, 6.0f)) {
+        return false;
+    }
+    float3 n = cross(d1 * (start + t1) - p0, d2 * (start + t2) - p0);
+    if (dot(n, n) < 1e-8f) {
+        return false;
+    }
+    n = normalize(n);
+    normal = (dot(n, direction) > 0.0f) ? -n : n;
+    return true;
+}
+
 // Path tracing's light at a spot a path landed on (view space, with its normal): the sun where a ray reaches it, and the
 // nearest few of the level's lights that reach it unblocked (cut-outs let it all through: the indirect pass has no
 // textures to read). The screen's colour there already holds the light the game
@@ -1823,7 +1950,7 @@ float3 PathDirectLight(float3 at, float3 normal) {
             continue;
         }
         const float falloff = saturate(1.0f - fromSurface / lamp.w);
-        light += float3(1.0f, 0.8f, 0.55f) * (1.3f * falloff * falloff * facing);
+        light += float3(1.0f, 0.8f, 0.55f) * ((radius > 0.0f) ? (0.45f * falloff * falloff * falloff) : (1.3f * falloff * falloff)) * facing;
     }
     return light;
 }
@@ -1861,7 +1988,7 @@ float3 TracedGI(float3 center, float3 normal, uint cell, out float2 distances) {
         // emissive one gives off its own light into the ray's payload whether or not the picture shows it lit.
         if (RayPbrOn()) {
             const RayPbr hitMaterial = RayGeometryPbr(hitGeometry);
-            hitColour = hitColour * hitMaterial.albedo + hitMaterial.albedo * (hitMaterial.emissive * 0.35f);
+            hitColour = hitColour * DiffuseAlbedo(hitMaterial) + hitMaterial.albedo * (hitMaterial.emissive * 0.35f);
         }
         light += hitColour * trust * far;
         // The path's further hops. Each spot the path lands on also brings the sun's and the lamps' traced light
@@ -2491,6 +2618,11 @@ float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack) {
     float3 r = reflect(v, n);
     float made = 1.0f;
     bool hit;
+    // A ray that leaves into the surface rather than off it (a normal facing away from the camera) meets only what is
+    // behind it: the surface's own picture shows instead.
+    if (dot(r, normal) <= 0.0f) {
+        return 0.0f;
+    }
 #ifdef RAY_TRACED
     // Traced, the true ray finds what is really there (behind the camera too), so ice keeps it rather than bending it
     // into the picture: bent rays copied the scenery on the screen down the ice in smeared stripes (L, 2026-10-21,
@@ -2503,7 +2635,11 @@ float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack) {
     // off along a straight line across the ice wherever the angle passed it (L, 2026-10-21, Icy Side).
     float4 unbent = 0.0f;
     float bendIn = 1.0f;
-    if (bend && (r.z > -0.45f)) {
+    // Only ice that lies roughly level is bent: a ray bent off a wall of ice came back into the picture and copied what
+    // stands beside or behind the wall onto it, as if seen through it (L, 2026-10-22, Icy Side). A wall reflects what is
+    // really in front of it, or its own picture.
+    const float level = dot(normal, normalize(gConstants.worldY.xyz));
+    if (bend && (r.z > -0.45f) && (level > 0.6f)) {
         // The true ray first: one heading back towards the camera still meets what stands on the ice (Banjo's front),
         // so he keeps one real reflection under him at every camera height instead of it cutting out past 45 degrees.
         const float4 real = WaterReflectionMarch(surface, r, 0.0f, hit);
@@ -2511,7 +2647,7 @@ float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack) {
             return real;
         }
         unbent = real;
-        bendIn = smoothstep(-0.45f, -0.3f, r.z);
+        bendIn = smoothstep(-0.45f, -0.3f, r.z) * smoothstep(0.6f, 0.8f, level);
         // Along the picture the way the ray was going (or up the picture, the way level ground runs away, when it
         // came almost straight back), and a fixed way into it.
         float2 across = r.xy;
@@ -3588,9 +3724,8 @@ float DayMorning(float3 tint) {
         (1.0f - DayNight(tint)) * (1.0f - DayWeather().x);
 }
 
-// The mist and rain settings, from the sun shadows' constant (shadows.w = 4 * (strength (0 to 100) + 128 * when +
-// 512 * wet (0 to 31) + 16384 for raindrops) + 2 to leave Banjo out + softness): x the mist's strength (0 to 1),
-// y when (0 mornings, 1 mornings and nights, 2 always), z how wet the ground is (0 to 1), w 1 for raindrops on the
+// The rain settings, from the sun shadows' constant (shadows.w = 4 * (512 * wet (0 to 31) + 16384 for raindrops) +
+// 2 to leave Banjo out + softness; the first 9 bits once held the removed mist): x and y unused (0), z how wet the ground is (0 to 1), w 1 for raindrops on the
 // screen.
 float4 DayMistAndRain() {
     float packed = floor(gConstants.shadows.w / 4.0f);
@@ -3600,10 +3735,6 @@ float4 DayMistAndRain() {
     packed -= wet * 512.0f;
     const float when = floor(packed / 128.0f);
     return float4((packed - when * 128.0f) / 100.0f, when, wet / 31.0f, drops);
-}
-
-float2 DayMistSetting() {
-    return DayMistAndRain().xy;
 }
 
 // Wet ground in and after the rain: everything darkens a little, and what faces up darkens more, in patches
@@ -3634,89 +3765,166 @@ float3 DayWet(float3 scene, int2 pixel, float depth) {
     return scene * (1.0f - wet * (0.12f + 0.2f * level * patches));
 }
 
-// Mist: pale banks drifting slowly through the whole level (fixed to the level, not to Banjo), thicker with
-// distance, and thickest on and around water, where it hangs just over the surface even close by, with spray
-// billowing up where a waterfall lands. Lit warm towards the sun. Separate from the Fog setting. Also drawn
-// without the cycle for Graphics > Mist (always showing, tint 1).
-float3 DayMist(float3 color, int2 pixel, float depth, float3 tint) {
-    const float2 setting = DayMistSetting();
-    const float morning = DayMorning(tint);
-    const float night = DayNight(tint) * (1.0f - DayWeather().x * 0.5f);
-    const float when = (setting.y > 1.5f) ? 1.0f : ((setting.y > 0.5f) ? max(morning, night * 0.8f) : morning);
-    if ((setting.x <= 0.0f) || (when <= 0.0f) || (gConstants.rippleAge.w < -1e8f)) {
+// WIP volumetric mist, fog and clouds (Graphics options in the WIP tab, all off by default; src/gameplay/volumetric.cpp).
+// The settings ride in the 12 bits above the fog's start (fog.y) and length (fog.z), which hold those in steps of 4 units
+// in their low 12 bits: fog.y mist (6 bits, 0 to 63) and fog (6); fog.z the fog's preset (3), the forced cloud type (3,
+// 0 none) and the mist floor's height over Banjo's feet (6 bits, steps of 8 units, 32 = level).
+uint VolBits() {
+    return (uint(gConstants.fog.y) >> 12) | ((uint(gConstants.fog.z) >> 12) << 12);
+}
+
+float VolMistStrength() {
+    return float(VolBits() & 63u) / 63.0f;
+}
+
+float VolFogStrength() {
+    return float((VolBits() >> 6) & 63u) / 63.0f;
+}
+
+uint VolFogPreset() {
+    return (VolBits() >> 12) & 7u;
+}
+
+uint VolCloudType() {
+    return (VolBits() >> 15) & 7u;
+}
+
+float VolFloorDelta() {
+    return (float((VolBits() >> 18) & 63u) - 32.0f) * 8.0f;
+}
+
+// The fog presets (Graphics > Volumetric Fog Preset): the settings of the presets in Arthur Brussee's Vapor
+// (https://github.com/ArthurBrussee/Vapor, VaporSettings/*.asset, Resources/DefaultVaporSetting.asset and
+// Examples/SponzaScene/SponzaFog.asset, Examples/PillarTest/PillarSetting.asset), MIT licence:
+//
+//   MIT License
+//   Copyright (c) 2017 Arthur Brussee
+//   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+//   documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+//   the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
+//   to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+//   The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+//   the Software.
+//   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+//   TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+//   THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+//   CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+//   DEALINGS IN THE SOFTWARE.
+//
+// Only these numbers are taken (no Vapor shader or C# code is copied): albedo (the colour it scatters), extinction (how thick it is),
+// emissive (its own glow) and the ambient light it scatters. The fog itself is our own ray march (Wronski-style
+// scattering along each pixel's ray), not Vapor's code. 0 Default, 1 Bright, 2 Hell, 3 Murky, 4 Poison, 5 Sponza, 6 Pillar.
+// Bright's extinction is 1 here, not Vapor's 0.05: Vapor's lights are far brighter than the game's sun.
+static const float3 kVolAlbedo[7] = {
+    float3(0.4477f, 0.7303f, 0.8456f), float3(0.4191f, 0.4191f, 0.3820f), float3(0.1160f, 0.0f, 0.0f), float3(0.0515f, 0.0515f, 0.0515f),
+    float3(0.3447f, 0.5294f, 0.0973f), float3(0.7777f, 0.8785f, 0.9118f), float3(1.0f, 1.0f, 1.0f) };
+static const float kVolExtinction[7] = { 4.0f, 1.0f, 15.45f, 7.0f, 5.0f, 10.0f, 5.0f };
+static const float3 kVolEmissive[7] = {
+    float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), float3(0.4044f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f),
+    float3(0.6366f, 1.42f, 0.0f), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f) };
+static const float3 kVolAmbient[7] = {
+    float3(0.1604f, 0.1604f, 0.1604f), float3(0.6871f, 1.2361f, 1.46f), float3(0.4485f, 0.4485f, 0.4485f), float3(4.378f, 4.378f, 4.378f),
+    float3(1.0f, 1.0f, 1.0f), float3(0.2353f, 0.2353f, 0.2353f), float3(0.2353f, 0.2353f, 0.2353f) };
+
+// The sun's direction in view space: towards it, or straight up when the game has none set.
+float3 VolSunView() {
+    const float3 sun = gConstants.sun.xyz;
+    return (dot(sun, sun) > 0.25f) ? normalize(sun) : normalize(gConstants.worldY.xyz);
+}
+
+float3 VolLookView(int2 pixel) {
+    const float2 ndc = float2((pixel.x + 0.5f) / gConstants.projection.z * 2.0f - 1.0f, 1.0f - (pixel.y + 0.5f) / gConstants.projection.w * 2.0f);
+    return normalize(float3(ndc.x / gConstants.projection.x, ndc.y / gConstants.projection.y, -1.0f));
+}
+
+// Volumetric mist and fog along the pixel's ray from the camera to the surface (worldDistance in world units; the
+// sky passes a long one): the ray is marched in steps that are short near the camera, and at each the thickness
+// of a ground-hugging mist layer and of an even fog (both broken up by drifting noise) takes light from the
+// picture, and the light they scatter (ambient, and the sun, more when looking towards it) is added, as in
+// Wronski's and Hillaire's volumetric scattering: colour = colour * transmittance + in-scattered light.
+// The mist layer stands at Banjo's ground (a slow anchor, so it does not bob as he jumps) and thins out above it.
+// tint: the day and night cycle's tint of the light (1 without it).
+float3 VolScatter(float3 color, int2 pixel, float worldDistance, float3 tint) {
+    const float mist = VolMistStrength();
+    const float fogAmount = VolFogStrength();
+    if ((mist <= 0.0f) && (fogAmount <= 0.0f)) {
         return color;
     }
-    const float3 center = ViewPosition(pixel, depth);
-    const float3 world = WorldPosition(center);
     const float scale = length(gConstants.worldX.xyz);
-    const float distance = length(center) * scale;
+    const float3 look = VolLookView(pixel);
+    const float3 origin = float3(gConstants.worldX.w, gConstants.worldY.w, gConstants.worldZ.w);
+    const float3 direction = float3(dot(look, gConstants.worldX.xyz), dot(look, gConstants.worldY.xyz), dot(look, gConstants.worldZ.xyz)) / scale;
+    const float far = min(worldDistance, 6000.0f);
+    const float floorY = (gConstants.rippleAge.w > -1e8f) ? (gConstants.rippleAge.w + VolFloorDelta()) : (origin.y - 100.0f);
     const float time = gConstants.view.z;
 
-    // Water nearby: a ring of looks into the water mask, about 260 world units round the point (on screen),
-    // and the point itself. The mist settles at the water's height.
-    float nearWater = 0.0f;
-    float waterY = 0.0f;
-    // How far across (in the world, along the ground) the nearest water look is from the point, so the layer over the
-    // water fades out smoothly rather than stopping where the looks on screen stop finding it.
-    float waterAcross = 1e9f;
-    // Waterfalls nearby (steep watery draws): how far across the nearest look that found one is, and the lowest
-    // point found (the fall's foot).
-    float fallAcross = 1e9f;
-    float fallFoot = 1e9f;
-    if (gConstants.water.y > 0.5f) {
-        const float height = gConstants.projection.w;
-        const float radius = clamp((260.0f / scale) * gConstants.projection.y * 0.5f * height / max(-center.z, 1e-3f), 3.0f, height * 0.2f);
-        float found = 0.0f;
-        for (int i = 0; i < 9; i++) {
-            const float angle = float(i) * 0.6981317f;
-            const float2 offset = (i == 8) ? float2(0.0f, 0.0f) : float2(cos(angle), sin(angle)) * radius * ((i & 1) ? 1.0f : 0.5f);
-            const int2 at = pixel + int2(offset);
-            float waterDepth;
-            float3 fallTint;
-            if (LoadWater(at, waterDepth) && (SteepAt(at) < 0.5f)) {
-                const float3 waterWorld = WorldPosition(ViewPosition(at, waterDepth));
-                found += 1.0f;
-                waterY += waterWorld.y;
-                waterAcross = min(waterAcross, length(waterWorld.xz - world.xz));
-            }
-            else if (LoadAnyWater(at, waterDepth) && (FallWatery(at, fallTint) > 0.3f)) {
-                const float3 fallWorld = WorldPosition(ViewPosition(at, waterDepth));
-                fallFoot = min(fallFoot, fallWorld.y);
-                fallAcross = min(fallAcross, length(fallWorld.xz - world.xz));
-            }
+    const uint preset = min(VolFogPreset(), 6u);
+    // Per world unit: Vapor's extinction is per metre; this is tuned so a level's far side is lost to the thickest.
+    const float fogSigma = fogAmount * kVolExtinction[preset] * 0.00012f;
+    const float3 fogAlbedo = kVolAlbedo[preset];
+    const float3 sunView = VolSunView();
+    const float cosine = dot(look, sunView);
+    // Henyey-Greenstein, mostly forward: brighter looking towards the sun.
+    const float g = 0.45f;
+    const float phase = 0.55f * (1.0f - g * g) / pow(max(1.0f + g * g - 2.0f * g * cosine, 0.05f), 1.5f);
+    const float3 sunLight = float3(1.0f, 0.95f, 0.85f) * (phase + 0.25f) * 1.4f;
+    const float3 fogLight = (fogAlbedo * (kVolAmbient[preset] + sunLight) + kVolEmissive[preset] * 0.6f) * tint;
+    const float3 mistLight = lerp(float3(0.78f, 0.82f, 0.88f), float3(1.0f, 0.9f, 0.76f), saturate(phase * 0.4f)) * tint * 0.9f;
+
+    const int steps = 20;
+    const float jitter = DayHash(float3(pixel, 3.0f));
+    const float3 wind = float3(time * 6.0f, 0.0f, time * 2.5f);
+    float transmittance = 1.0f;
+    float3 light = 0.0f;
+    [loop]
+    for (int i = 0; i < steps; i++) {
+        // Steps grow with distance (squared spacing): fine detail near the camera, the far reach still covered.
+        const float e0 = far * float(i) * float(i) / float(steps * steps);
+        const float e1 = far * float(i + 1) * float(i + 1) / float(steps * steps);
+        const float ds = e1 - e0;
+        const float t = e0 + ds * jitter;
+        const float3 p = origin + direction * t;
+        const float height = p.y - floorY;
+        // The mist: thickest at and under the floor, thinning to nothing about 300 units up, in drifting banks.
+        float mistSigma = 0.0f;
+        if (mist > 0.0f) {
+            const float banks = saturate(0.25f + 1.6f * CloudNoise(p * 0.0045f + wind * 0.004f));
+            mistSigma = mist * 0.0026f * exp(-max(height, 0.0f) / 130.0f) * banks;
         }
-        if (found > 0.0f) {
-            waterY /= found;
-            nearWater = saturate(found / 4.0f) * saturate(1.5f - waterAcross / 200.0f);
+        float fogHere = 0.0f;
+        if (fogAmount > 0.0f) {
+            // An even fog with slow patches, and a little less far above the floor.
+            fogHere = fogSigma * (0.7f + 0.6f * CloudNoise(p * 0.0016f + wind * 0.002f + 5.0f)) * exp(-max(height, 0.0f) / 7000.0f);
+        }
+        const float sigma = mistSigma + fogHere;
+        if (sigma > 1e-7f) {
+            const float3 mistLit = mistLight * lerp(0.75f, 1.0f, saturate(height / 160.0f));
+            const float3 source = (mistSigma * mistLit + fogHere * fogLight) / sigma;
+            const float step = exp(-sigma * ds);
+            light += transmittance * (1.0f - step) * source;
+            transmittance *= step;
         }
     }
+    return color * transmittance + light;
+}
 
-    // Slowly drifting banks, so the mist lies in patches rather than as an even haze. Laid out in the level's own
-    // space (height too), so they stay put whatever Banjo does.
-    const float2 drift = float2(0.012f, 0.005f) * time;
-    const float2 slant = float2(world.x + world.y * 0.6f, world.z - world.y * 0.6f);
-    const float banks = smoothstep(0.3f, 0.75f, WaterNoise(slant / 900.0f + drift) * 0.65f + WaterNoise(slant / 260.0f - drift * 1.7f) * 0.35f);
-    // Two layers: one through the whole level, and a denser, shallower one just over the water. Each thickens with
-    // how far the view runs through it: across the water it builds up, looking down through it from above it stays
-    // thin.
-    const float cameraY = gConstants.worldY.w;
-    const float groundRun = distance;
-    const float waterTop = waterY + 70.0f;
-    const float waterRun = (nearWater > 0.0f) ? distance * saturate((waterTop - world.y) / max(cameraY - world.y, 60.0f)) : 0.0f;
-    // Spray where a fall lands: thick close by (it doesn't need distance to build up), round the fall's foot (within
-    // about 150 units across) and from there to about 120 units up, billowing and rising.
-    const float footY = (nearWater > 0.0f) ? min(waterY, fallFoot) : fallFoot;
-    const float sprayNear = saturate(1.0f - fallAcross / 150.0f);
-    const float sprayRise = (sprayNear > 0.0f) ? saturate((footY + 120.0f - world.y) / 120.0f) * saturate((world.y - footY + 30.0f) / 30.0f) : 0.0f;
-    const float billow = WaterNoise(float2(world.x + world.z, world.y) / 40.0f - float2(0.0f, time * 0.5f)) * 0.6f + WaterNoise((world.xz - world.y) / 17.0f + time * 0.2f) * 0.4f;
-    const float spray = sprayNear * sprayNear * sprayRise * (0.3f + 0.7f * billow) * 0.7f;
-    const float thickness = groundRun * (0.2f + 0.8f * banks) / 1600.0f + waterRun * nearWater * (0.45f + 0.55f * banks) / 1400.0f + spray;
-    const float amount = (1.0f - exp(-thickness * when * setting.x * 2.0f)) * 0.85f;
-    const float toward = saturate(dot(normalize(center), gConstants.sun.xyz)) * morning;
-    // Mist in shade (a cave mouth, under trees) is lit less: dimmer where the scene behind it is dark.
-    const float shade = saturate(0.5f + dot(color, float3(0.299f, 0.587f, 0.114f)) * 1.4f);
-    const float3 mist = lerp(float3(0.82f, 0.86f, 0.9f), float3(1.0f, 0.88f, 0.72f), toward * toward) * max(tint, 0.5f) * shade;
-    return lerp(color, mist, amount);
+// Forced clouds (WIP): the cycle's clouds on any level without the cycle, over the sky. The cloud's shape comes
+// from the cloud constant (view.y); the type's darkness and warmth from the tables above.
+float3 VolSky(float3 color, int2 pixel) {
+    const uint type = VolCloudType();
+    const float3 look = VolLookView(pixel);
+    const float3 world = normalize(float3(dot(look, gConstants.worldX.xyz), dot(look, gConstants.worldY.xyz), dot(look, gConstants.worldZ.xyz)));
+    float3 sunWorld = float3(0.3f, 0.8f, 0.5f);
+    if (dot(gConstants.sun.xyz, gConstants.sun.xyz) > 0.25f) {
+        sunWorld = float3(dot(gConstants.sun.xyz, gConstants.worldX.xyz), dot(gConstants.sun.xyz, gConstants.worldY.xyz), dot(gConstants.sun.xyz, gConstants.worldZ.xyz));
+    }
+    sunWorld = normalize(sunWorld);
+    const float dark = VolCloudDarkness(type);
+    // A stormy sky greys and darkens too.
+    const float grey = dot(color, float3(0.3f, 0.59f, 0.11f));
+    float3 sky = lerp(color, grey.xxx * float3(0.8f, 0.84f, 0.9f), dark * 0.55f) * (1.0f - dark * 0.35f);
+    const float4 clouds = DayClouds(world, sunWorld, float3(1.0f, 1.0f, 1.0f), VolCloudWarmth(type), pixel, float3(dark, 0.0f, 0.0f));
+    return sky * (1.0f - clouds.a) + clouds.rgb;
 }
 
 // Raindrops on the screen in the rain, more when looking up: each lands, holds a while, then runs down leaving
@@ -4019,12 +4227,36 @@ float SunMapLookup(SunMapFrame mapFrame, int offsetX, float3 worldCenter, float3
 // and the spot is under cover (the ray straight up and three of four slanted up meet something). There the game lit it as
 // shade, so the sun's light coming through is added, throwing the grate's pattern (L, 2026-10-21). A wall under eaves or
 // the floor round an object's lip isn't lit through a cut-out, so it gets nothing (King Jingaling's house, the Jiggy shrine).
-bool SunThroughCutout(float3 worldStart, float3 worldSun) {
+bool SunThroughCutout(float3 worldStart, float3 worldSun, bool unblocked) {
     // gLights 8 is 3 when the scene has a level cut-out at all.
     if (asfloat(gLights.Load(32)) < 2.5f) {
         return false;
     }
-    {
+    if (unblocked) {
+        // Every shadow ray got through, so nothing solid lies towards the sun: the first thing there counting cut-outs as
+        // solid is a cut-out wherever there is one. Asked of the cut-outs alone, the solid triangles (most of the world)
+        // are passed by, where the closest-hit ray below walked the whole structure for every sunlit pixel.
+        RayDesc ray;
+        ray.Origin = worldStart;
+        ray.Direction = worldSun;
+        ray.TMin = 0.0f;
+        ray.TMax = 20000.0f;
+        RayQuery<RAY_FLAG_CULL_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        query.TraceRayInline(gSceneBVH, 0, RayLevelMask, ray);
+        while (query.Proceed()) {
+            if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
+                continue;
+            }
+            if ((RayGeometryFlags(RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex())) & 5u) == 1u) {
+                query.CommitNonOpaqueTriangleHit();
+                query.Abort();
+            }
+        }
+        if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+            return false;
+        }
+    }
+    else {
         RayDesc ray;
         ray.Origin = worldStart;
         ray.Direction = worldSun;
@@ -4213,7 +4445,7 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         const float3 up = cross(sunDirection, side);
         const float spread = lerp(0.006f, 0.04f, softness);
         const int Rays = 4;
-        const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
+        const bool onBanjo = OnBanjoTraced(center);
         const uint sunDetail = RayDetail(distance);
         float blocked = 0.0f;
         // Two rays across the cone first; only where they disagree (the shadow's soft edge) the other two are traced.
@@ -4223,6 +4455,13 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         if ((gSunHalf != 2) && (facing < 0.0f) && Enclosed(ViewToWorldPoint(start))) {
             return (gSunHalf == 1) ? 2.0f : 1.0f;
         }
+        // Turned well away from the sun, a ray towards it goes back in through the surface itself: blocked whatever
+        // else is there, so it needn't be traced (unless Banjo lets the rays through him).
+        const bool turnedFromSun = (gSunHalf != 2) && (facing < -0.15f) && !(onBanjo && PlayerShadowsOff());
+        if (turnedFromSun) {
+            blocked = 1.0f;
+            traced = 1;
+        }
         if (gSunHalf == 2) {
             const float half = TracedHalfShadow(pixel, center, surfaceNormal);
             if (half > 1.5f) {
@@ -4231,8 +4470,9 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
             blocked = half;
             traced = 1;
         }
-        [loop] for (int k = 0; (k < Rays) && (gSunHalf != 2); k++) {
-            if ((k == 2) && ((blocked == 0.0f) || (blocked == 2.0f))) {
+        gSawLevelCutout = false;
+        [loop] for (int k = 0; (k < Rays) && (gSunHalf != 2) && !turnedFromSun; k++) {
+            if ((k == 2) && !RayResolutionHigh() && ((blocked == 0.0f) || (blocked == 2.0f))) {
                 break;
             }
             // Far off (Ray detail distances) one ray.
@@ -4241,7 +4481,8 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
             }
             traced++;
             // Steadier on Banjo with the noise smoothing: a different turn each pixel speckled his fur.
-            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f * (onBanjo ? 1.0f - RtSmoothing() : 1.0f);
+            // Noise smoothing turns all pixels' rays the same way (on Banjo even more): smoother, the edge in steps.
+            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f * (1.0f - RtSmoothing() * (onBanjo ? 1.0f : 0.8f));
             const float radius = sqrt((float(k) + 0.5f) / float(Rays)) * spread;
             const float3 direction = normalize(sunDirection + (side * cos(angle) + up * sin(angle)) * radius);
             RayDesc ray;
@@ -4260,7 +4501,9 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         if (gSunHalf == 1) {
             return shadow;
         }
-        if ((shadow < 1.0f) && (facing > 0.0f) && !onBanjo && SunThroughCutout(ViewToWorldPoint(start), normalize(ViewToWorldDirection(sunDirection)))) {
+        if ((shadow < 1.0f) && (facing > 0.0f) && !onBanjo &&
+            ((gSunHalf == 2) || (shadow > 0.0f) || gSawLevelCutout) &&
+            SunThroughCutout(ViewToWorldPoint(start), normalize(ViewToWorldDirection(sunDirection)), shadow <= 0.0f)) {
             sunlight += float3(1.0f, 0.93f, 0.78f) * (0.9f * facing * (1.0f - shadow) * near);
         }
     }
@@ -4522,7 +4765,8 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         const int2 lowerPixel = int2(int(pos.x), int(pos.y) - halfSize.y) * 2;
         const float lowerDepth = LoadDepth(lowerPixel);
         float4 lower = float4(TracedBeams(lowerPixel, lowerDepth), 0.0f);
-        if ((lowerDepth < 0.99999f) && (gConstants.shadows.x > 0.0f)) {
+        // The sun's shadows only at Half resolution (at Medium the band is the beams' alone).
+        if (HalfTraced() && (lowerDepth < 0.99999f) && (gConstants.shadows.x > 0.0f)) {
             const float3 lowerCenter = ViewPosition(lowerPixel, lowerDepth);
             float3 unused = 0.0f;
             gSunHalf = 1;
@@ -4545,7 +4789,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     float4 result = float4(0.0f, 0.0f, 0.0f, 1.0f);
 #ifdef RAY_TRACED
     // Banjo's fur: its rays round the smoothed normal (see the main pass).
-    if (InsideBanjo(ViewToWorldPoint(center)) && (BanjoSmoothRadius() > 0)) {
+    if ((BanjoSmoothRadius() > 0) && OnBanjoTraced(center)) {
         normal = SmoothedNormal(pixel, center, normal, BanjoSmoothRadius());
     }
     if (SsgiStrength() > 0.0f) {
@@ -4727,7 +4971,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
     const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
     // Eye adaptation also draws the scene itself.
-    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (DayMistSetting().x > 0.0f) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (VolBits() != 0u) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
 
     if (depth >= 0.99999f) {
         // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -4740,6 +4984,12 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             if (daytime) {
                 scene = DaySky(scene, pixel, dayTint);
                 scene = DayLensDrops(scene, pixel, dayTint, DayWeather().x);
+            }
+            else if (VolCloudType() > 0u) {
+                scene = VolSky(scene, pixel);
+            }
+            if (VolBits() != 0u) {
+                scene = VolScatter(scene, pixel, 6000.0f, daytime ? dayTint : float3(1.0f, 1.0f, 1.0f));
             }
             if (gConstants.bloom.z > 0.0f) {
                 scene = Adapt(scene);
@@ -4811,7 +5061,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         // Banjo's fur: its tufts' normals turn every pixel, so the traced rays on him were a different few a pixel
         // and crawled as he moved (L, 2026-10-20). There the normal is smoothed over his surface and the traced
         // light gathered wider, so the fur keeps its traced shading without the speckle.
-        const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
+        const bool onBanjo = OnBanjoTraced(center);
         if (onBanjo && (BanjoSmoothRadius() > 0)) {
             normal = SmoothedNormal(pixel, center, normal, BanjoSmoothRadius());
         }
@@ -4832,7 +5082,13 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             // On Banjo himself (above his feet, so the ground round them keeps its contact shading) a quarter as
             // much: his fur and limbs crowd each other, and full GTAO blackened him (L, 2026-10-21).
             const float3 world = ViewToWorldPoint(center);
+#ifdef RAY_TRACED
+            // Traced, only his model's own pixels: the capsule alone took in the grass and bumps round his feet, a ring
+            // with its shading gone that went round with him (L, 2026-10-22).
+            const bool banjoBody = onBanjo && (world.y > gConstants.rippleAge.w + 8.0f);
+#else
             const bool banjoBody = InsideBanjo(world) && (world.y > gConstants.rippleAge.w + 8.0f);
+#endif
             keep *= pow(saturate(MultiBounce(indirect.a, albedo)), AoStrength() * (banjoBody ? 0.5f : 2.0f));
         }
         if (sunShadows) {
@@ -4911,9 +5167,10 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     }
 #ifdef RAY_TRACED
     // Traced light beams, added like the rim light (the fog still covers them).
-    if (gConstants.view.x < 1.5f) {
+    // (Off, the indirect pass draws no band of them to read.)
+    if ((gConstants.view.x < 1.5f) && (asfloat(gLights.Load(16)) > 0.0f)) {
         // (No glow round the level's lights in the air: it showed as balls round every light, L 2026-10-21.)
-        rim += HalfTraced() ? TracedHalfBeams(pixel) : TracedBeams(pixel, depth);
+        rim += BeamsHalf() ? TracedHalfBeams(pixel) : TracedBeams(pixel, depth);
     }
     // Ray Tracing Material Pick Mode's emissive: the surface's own colour, tinted by its albedo, added as light that shadows
     // and the traced lighting don't dim (and the bloom picks up).
@@ -4933,7 +5190,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
                 dot(position, gConstants.worldY.xyz) + gConstants.worldY.w, dot(position, gConstants.worldZ.xyz) + gConstants.worldZ.w);
             distance = length(world - float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w));
         }
-        fog = gConstants.fog.x * (1.0f - exp(-max(distance - gConstants.fog.y, 0.0f) / gConstants.fog.z));
+        fog = gConstants.fog.x * (1.0f - exp(-max(distance - float(uint(gConstants.fog.y) & 4095u) * 4.0f, 0.0f) / max(float(uint(gConstants.fog.z) & 4095u) * 4.0f, 1.0f)));
     }
 
     if (gConstants.view.x > 0.5f) {
@@ -4945,7 +5202,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             (gConstants.view.w > 0.0f) ? HeatHaze(pixel, -ViewPosition(pixel, depth).z) : gColor.Load(int3(pixel, 0)).rgb;
         // Ray Tracing Material Pick Mode: the albedo tints the surface before anything lights it. A metal has no diffuse
         // colour of its own, only what it reflects (below).
-        scene *= pbr.albedo;
+        scene *= DiffuseAlbedo(pbr);
         if (gConstants.water.z > 0.0f) {
             // The surface's own colour lit by it, and a little of it straight on, so dark corners take on the
             // colour of what is around them.
@@ -5084,7 +5341,14 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         if ((iceStrength > 0.0f) && IceAt(pixel, depth, iceDepth)) {
             const float3 iceSurface = ViewPosition(pixel, iceDepth);
             const float3 iceWorld = WorldPosition(iceSurface);
-            const float3 iceFacing = IceNormal(pixel, iceSurface);
+            float3 iceFacing = IceNormal(pixel, iceSurface);
+#ifdef RAY_TRACED
+            // Traced, the ice's own triangles say which way it faces wherever its depths can't.
+            float3 iceTraced;
+            if (SurfaceNormalTraced(iceSurface, iceTraced)) {
+                iceFacing = iceTraced;
+            }
+#endif
             const float2 wobbleAt = (iceWorld.xz + float2(iceWorld.y, -iceWorld.y)) / 40.0f;
             const float2 wobble = float2(WaterNoise(wobbleAt), WaterNoise(wobbleAt + 17.0f)) - 0.5f;
             const float3 side = normalize(cross(iceFacing, (abs(iceFacing.x) < 0.9f) ? float3(1.0f, 0.0f, 0.0f) : float3(0.0f, 1.0f, 0.0f)));
@@ -5103,16 +5367,14 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             const float3 weather = DayWeather();
             scene = DayWeatherLight(scene, weather.x, weather.z, 0.3f);
         }
-        // The mist lies in front of the nearest thing at the pixel: the game's water and falls don't write depth,
-        // so behind a waterfall the depth is the cave beyond it, and the mist would show through the fall.
-        // Without the cycle this is Graphics > Mist on its own.
-        if (DayMistSetting().x > 0.0f) {
-            float mistDepth = depth;
-            float frontWater;
-            if ((gConstants.water.y > 0.5f) && LoadAnyWater(pixel, frontWater)) {
-                mistDepth = min(mistDepth, frontWater);
+        // WIP volumetric mist and fog along the ray to the nearest thing at the pixel (the water and falls write no depth).
+        if (VolBits() != 0u) {
+            float volDepth = depth;
+            float volWater;
+            if ((gConstants.water.y > 0.5f) && LoadAnyWater(pixel, volWater)) {
+                volDepth = min(volDepth, volWater);
             }
-            scene = DayMist(scene, pixel, mistDepth, daytime ? dayTint : float3(1.0f, 1.0f, 1.0f));
+            scene = VolScatter(scene, pixel, length(ViewPosition(pixel, volDepth)) * length(gConstants.worldX.xyz), daytime ? dayTint : float3(1.0f, 1.0f, 1.0f));
         }
         if (daytime) {
             scene = DayLensDrops(scene, pixel, dayTint, DayWeather().x);

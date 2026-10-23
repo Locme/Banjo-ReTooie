@@ -188,7 +188,10 @@ bool tooie::sun_control::tick(uint16_t map, const float start[3]) {
     const bool save_pressed = save_down && !save_was_down;
     save_was_down = save_down;
     if (move_down && !move_was_down) {
-        tooie::toast::show("Move Sun: wheel turns it round, Ctrl + wheel raises or lowers it, Shift for fine steps");
+        char text[128];
+        std::snprintf(text, sizeof(text), "Move Sun (map 0x%X): wheel turns it round, Ctrl + wheel raises or lowers it, Shift for fine steps", map);
+        tooie::toast::show(text);
+        fprintf(stderr, "[sun] Move Sun held on map 0x%X\n", map);
     }
     move_was_down = move_down;
 

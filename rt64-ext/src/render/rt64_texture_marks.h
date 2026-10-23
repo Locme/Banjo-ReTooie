@@ -15,6 +15,15 @@ namespace RT64 {
     void SetSceneGlowTextures(const uint64_t *hashes, size_t count);
     bool SceneGlowTexture(uint64_t hash);
 
+    // Banjo-Tooie: Shader Effects pick mode's Light Source picks: a model drawn with one of these textures shines whole
+    // (every draw of the model gets Slight Glow), not only where the texture is. The model tagging sends which model each
+    // bone matrix id belongs to (0 for none: the level, particles).
+    void SetSceneShineModelTextures(const uint64_t *hashes, size_t count);
+    bool SceneShineModelAny();
+    bool SceneShineModelTexture(uint64_t hash);
+    void SetSceneMatrixObjects(const uint32_t *ids, const uint32_t *objects, size_t count);
+    uint32_t SceneMatrixObject(uint32_t matrixId);
+
     // Banjo-Tooie: Shader Effects pick mode's Light Source: textures that light the traced scene like a lamp, each
     // with its own reach (strength), and no glow in the air round the light. SceneLightSourceReach is 0 for others.
     void SetSceneLightSourceTextures(const uint64_t *hashes, const float *reaches, size_t count);

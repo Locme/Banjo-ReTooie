@@ -29,11 +29,13 @@
 
 #include "tooie_dev_files.h"
 #include "tooie_effect_pick.h"
+#include "tooie_game.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_tags.h"
 #include "tooie_material_pick.h"
 #include "tooie_parallax_pick.h"
 #include "tooie_toast.h"
+#include "tooie_volumetric.h"
 
 namespace RT64 {
     void SetScenePick(bool on, float x, float y, uint32_t layer);
@@ -135,6 +137,15 @@ namespace {
             } else {
                 out << text << " " << shape_names[pick.shape] << " " << pick.depth_percent() << "% " << (pick.shadows ? "shadows" : "noshadows") << "\n";
             }
+        }
+    }
+
+    // DEV > Picker Save Only Current Active (off: Save Pick and Paste Pick act in all three texture pick modes).
+    bool save_only_active() {
+        try {
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::parallax_pick::save_only_active_option));
+        } catch (...) {
+            return false;
         }
     }
 
@@ -766,6 +777,135 @@ namespace {
         }
     };
 
+    // The Save Volumetric Settings key's panel (mode_volumetric): a title and a button for each volumetric setting and Save
+    // All, down the left side where the pick modes' Save All sits, as fractions of the window. A left click on one writes
+    // that setting, as showing now, into this level's line of volumetric.txt.
+    constexpr int vol_buttons = tooie::volumetric::setting_count + 1;
+    constexpr float vol_width = 0.16f;
+
+    float vol_button_top(int button) {
+        return panel_top + count_height + panel_gap + float(button) * (button_height + panel_gap);
+    }
+
+    // The button under the cursor: 0 to setting_count - 1 a setting, setting_count Save All, -1 none.
+    int vol_button_at(float x, float y) {
+        if ((x < panel_left) || (x > panel_left + vol_width)) {
+            return -1;
+        }
+        for (int k = 0; k < vol_buttons; k++) {
+            if ((y >= vol_button_top(k)) && (y <= vol_button_top(k) + button_height)) {
+                return k;
+            }
+        }
+        return -1;
+    }
+
+    struct VolumetricPanel {
+        recompui::ContextId context = recompui::ContextId::null();
+        recompui::Element* buttons[vol_buttons] = {};
+        recompui::Label* texts[vol_buttons] = {};
+        bool shown = false;
+        int shown_hover = -2;
+        int shown_unsaved = -1;
+
+        bool build() {
+            auto lifetime = recompui::lock_context_lifetime();
+            if (!recompui::contexts_alive()) {
+                return false;
+            }
+            try {
+                recompui::ContextId ctx = recompui::create_context();
+                ctx.open();
+                recompui::Element* root = ctx.create_element<recompui::Element>(ctx.get_root_element());
+                root->set_display(recompui::Display::Flex);
+                root->set_background_color(recompui::theme::color::Transparent);
+                root->set_pointer_events(recompui::PointerEvents::None);
+                recompui::Element* title = ctx.create_element<recompui::Element>(root);
+                title->set_display(recompui::Display::Flex);
+                title->set_position(recompui::Position::Absolute);
+                title->set_left(panel_left * 100.0f, recompui::Unit::Percent);
+                title->set_top(panel_top * 100.0f, recompui::Unit::Percent);
+                title->set_width(vol_width * 100.0f, recompui::Unit::Percent);
+                title->set_height(count_height * 100.0f, recompui::Unit::Percent);
+                title->set_justify_content(recompui::JustifyContent::Center);
+                title->set_align_items(recompui::AlignItems::Center);
+                title->set_border_radius(recompui::theme::border::radius_md);
+                title->set_background_color(recompui::theme::color::ModalOverlay);
+                title->set_pointer_events(recompui::PointerEvents::None);
+                ctx.create_element<recompui::Label>(title, "Save for this level", recompui::LabelStyle::Small)->set_pointer_events(recompui::PointerEvents::None);
+                for (int k = 0; k < vol_buttons; k++) {
+                    recompui::Element* button = ctx.create_element<recompui::Element>(root);
+                    button->set_display(recompui::Display::Flex);
+                    button->set_position(recompui::Position::Absolute);
+                    button->set_left(panel_left * 100.0f, recompui::Unit::Percent);
+                    button->set_top(vol_button_top(k) * 100.0f, recompui::Unit::Percent);
+                    button->set_width(vol_width * 100.0f, recompui::Unit::Percent);
+                    button->set_height(button_height * 100.0f, recompui::Unit::Percent);
+                    button->set_justify_content(recompui::JustifyContent::Center);
+                    button->set_align_items(recompui::AlignItems::Center);
+                    button->set_border_radius(recompui::theme::border::radius_md);
+                    button->set_background_color(recompui::theme::color::ModalOverlay);
+                    button->set_pointer_events(recompui::PointerEvents::None);
+                    texts[k] = ctx.create_element<recompui::Label>(button, "", recompui::LabelStyle::Small);
+                    texts[k]->set_pointer_events(recompui::PointerEvents::None);
+                    buttons[k] = button;
+                }
+                ctx.close();
+                ctx.set_captures_input(false);
+                ctx.set_captures_mouse(false);
+                context = ctx;
+                return true;
+            } catch (...) {
+                return false;
+            }
+        }
+
+        // Shows the panel (hover: the button under the cursor), refreshing a button's text and highlight only when it changes.
+        void update(bool show, int hover) {
+            if (!show && !shown) {
+                return;
+            }
+            if ((context == recompui::ContextId::null()) && (!show || !build())) {
+                return;
+            }
+            auto lifetime = recompui::lock_context_lifetime();
+            if (!recompui::contexts_alive()) {
+                return;
+            }
+            if (show) {
+                int unsaved_bits = 0;
+                for (int k = 0; k < tooie::volumetric::setting_count; k++) {
+                    unsaved_bits |= tooie::volumetric::setting_unsaved(k) ? (1 << k) : 0;
+                }
+                if (!shown || (hover != shown_hover) || (unsaved_bits != shown_unsaved)) {
+                    context.open();
+                    for (int k = 0; k < vol_buttons; k++) {
+                        if (k < tooie::volumetric::setting_count) {
+                            texts[k]->set_text(std::string(tooie::volumetric::setting_name(k)) + (((unsaved_bits >> k) & 1) ? "" : " (saved)"));
+                        } else {
+                            texts[k]->set_text("Save All");
+                        }
+                        buttons[k]->set_background_color((hover == k) ? recompui::theme::color::PrimaryA80 : recompui::theme::color::ModalOverlay);
+                    }
+                    context.close();
+                    shown_hover = hover;
+                    shown_unsaved = unsaved_bits;
+                }
+                if (!recompui::is_context_shown(context)) {
+                    recompui::show_context(context, "");
+                }
+                shown = true;
+            } else if (shown) {
+                if (recompui::is_context_shown(context)) {
+                    recompui::hide_context(context);
+                }
+                shown = false;
+                shown_hover = -2;
+                shown_unsaved = -1;
+            }
+        }
+    };
+
     // Headless: TOOIE_PICK="<x>,<y>" (fractions of the window) turns pick mode on with the cursor there, and
     // TOOIE_PICK_CLICKS="<ms>:left|right|middle|reset|deeper;..." clicks that long after start.
     struct Click {
@@ -798,14 +938,15 @@ namespace {
         const auto start = std::chrono::steady_clock::now();
         Label label;
         // One pick mode at a time. TOOIE_PICK_MODE=effects or interp: the headless pick is that mode's.
-        enum Mode { mode_off, mode_parallax, mode_effects, mode_interp, mode_material };
+        enum Mode { mode_off, mode_parallax, mode_effects, mode_interp, mode_material, mode_volumetric };
         Mode mode = mode_off;
         if (forced_x >= 0.0f) {
             const char* forced = std::getenv("TOOIE_PICK_MODE");
             const std::string name = forced != nullptr ? forced : "";
             mode = name == "effects" ? mode_effects : (name == "interp" ? mode_interp : (name == "material" ? mode_material : mode_parallax));
         }
-        bool key_was_down[4] = {};
+        bool key_was_down[5] = {};
+        VolumetricPanel volumetric_panel;
         bool save_was_down = false, delete_was_down = false;
         bool copy_was_down = false, paste_was_down = false, undo_was_down = false;
         // Shader Effects pick mode: the number keys held last poll, and a left click held down to paint: whether it
@@ -830,10 +971,16 @@ namespace {
             int interp_mode;
             bool no_effects;
             tooie::material_pick::Material material;
+            // Entries changed together (a Paste Pick in every texture pick mode) share a group, undone together (0: alone).
+            uint32_t group = 0;
         };
         std::vector<Undo> undo_stack;
-        // Copy Pick's copy (Paste Pick puts it on what is under the cursor, in the same mode).
+        uint32_t next_group = 1;
+        // Copy Pick's copy (Paste Pick puts it on what is under the cursor, in the same mode), and with Picker Save Only
+        // Current Active off, the texture's state in the other texture pick modes too.
         Undo copied{ mode_off, 0, false, Pick{}, 0, 0, false, tooie::material_pick::Material{} };
+        std::vector<Undo> copied_all;
+        static const Mode texture_modes[3] = { mode_parallax, mode_effects, mode_material };
         // The texture or model's state now, in the mode's terms.
         auto snapshot = [&](Mode m, uint64_t key) {
             Undo u{ m, key, false, Pick{}, 0, tooie::interp_tags::mode_default, false, tooie::material_pick::Material{} };
@@ -861,11 +1008,12 @@ namespace {
                 tooie::material_pick::set(key, u.had ? &u.material : nullptr);
             }
         };
-        auto remember = [&](Mode m, uint64_t key) {
+        auto remember = [&](Mode m, uint64_t key, uint32_t group = 0) {
             if (key == 0) {
                 return;
             }
             undo_stack.push_back(snapshot(m, key));
+            undo_stack.back().group = group;
             if (undo_stack.size() > 200) {
                 undo_stack.erase(undo_stack.begin());
             }
@@ -881,16 +1029,18 @@ namespace {
         int64_t last_log = 0;
         for (;;) {
             std::this_thread::sleep_for(10ms);
-            static const recompinput::GameInput keys[4] = { recompinput::GameInput::PARALLAX_PICK, recompinput::GameInput::EFFECTS_PICK,
-                recompinput::GameInput::INTERP_PICK, recompinput::GameInput::MATERIAL_PICK };
-            static const char* on_toasts[4] = {
+            static const recompinput::GameInput keys[5] = { recompinput::GameInput::PARALLAX_PICK, recompinput::GameInput::EFFECTS_PICK,
+                recompinput::GameInput::INTERP_PICK, recompinput::GameInput::MATERIAL_PICK, recompinput::GameInput::VOLUMETRIC_SAVE };
+            static const char* on_toasts[5] = {
                 "Parallax pick mode: left click shape, right click depth, middle click shadows, Shift + left click built-in, wheel deeper",
                 "Shader Effects pick mode: right click or keys 1-9 choose an effect, left click turns it on or off (hold to paint), middle click Show All, Shift + wheel Light Source strength, Shift + left click built-in, wheel deeper",
                 "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
                     "Shift + left click default, wheel deeper",
-                "Ray Tracing Material pick mode: left click gives or switches off a material, middle click steps a preset, Shift + wheel changes albedo, roughness, metalness or emissive (right click or keys 1-7 choose which, Ctrl fine), key 9 Show All, wheel deeper" };
-            static const char* off_toasts[4] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off", "Ray Tracing Material pick mode off" };
-            for (int k = 0; k < 4; k++) {
+                "Ray Tracing Material pick mode: left click gives or switches off a material, middle click steps a preset, Shift + wheel changes albedo, roughness, metalness or emissive (right click or keys 1-7 choose which, Ctrl fine), key 9 Show All, wheel deeper",
+                "Save Volumetric Settings: click a button to save that setting for this level, or Save All (press the key again to close)" };
+            static const char* off_toasts[5] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off", "Ray Tracing Material pick mode off",
+                "Save Volumetric Settings closed" };
+            for (int k = 0; k < 5; k++) {
                 const bool down = tooie::hotkeys::down(keys[k]);
                 if (down && !key_was_down[k]) {
                     // The newer mode wins.
@@ -927,6 +1077,34 @@ namespace {
                     RT64::SetScenePickMarkedTextures(marked.data(), marked.size());
                 }
             }
+            // The Save Volumetric Settings panel: the mouse is free, a left click on a button saves that setting.
+            if (mode == mode_volumetric) {
+                painting = false;
+                RT64::SetScenePick(false, 0.0f, 0.0f, 0);
+                label.update(false, "", 0.0f, 0.0f);
+                float vx = 0.0f, vy = 0.0f;
+                int vw = 1, vh = 1, mx = 0, my = 0;
+                SDL_Window* vwindow = SDL_GetMouseFocus();
+                if (vwindow == nullptr) {
+                    vwindow = SDL_GetKeyboardFocus();
+                }
+                const uint32_t vbuttons = SDL_GetMouseState(&mx, &my);
+                if (vwindow != nullptr) {
+                    SDL_GetWindowSize(vwindow, &vw, &vh);
+                }
+                vx = float(mx) / float(std::max(vw, 1));
+                vy = float(my) / float(std::max(vh, 1));
+                const uint32_t vpressed = vbuttons & ~buttons_were;
+                buttons_were = vbuttons;
+                wheel_was = recompinput::get_mouse_wheel_pos();
+                const int hover = vol_button_at(vx, vy);
+                if (((vpressed & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0) && (hover >= 0)) {
+                    tooie::volumetric::save_setting((hover == tooie::volumetric::setting_count) ? -1 : hover);
+                }
+                volumetric_panel.update(true, hover);
+                continue;
+            }
+            volumetric_panel.update(false, -1);
             if (mode == mode_off) {
                 painting = false;
                 RT64::SetScenePick(false, 0.0f, 0.0f, 0);
@@ -1078,7 +1256,17 @@ namespace {
                 const uint64_t key = interp_on ? uint64_t(tooie::interp_tags::hovered()) : hash;
                 char text[160] = {};
                 if (press_undo) {
-                    if (undo_stack.empty() || (undo_stack.back().mode != mode)) {
+                    if (!undo_stack.empty() && (undo_stack.back().group != 0)) {
+                        // A change made in every texture pick mode at once, undone the same way.
+                        const uint32_t group = undo_stack.back().group;
+                        const uint64_t undone = undo_stack.back().key;
+                        while (!undo_stack.empty() && (undo_stack.back().group == group)) {
+                            const Undo u = undo_stack.back();
+                            undo_stack.pop_back();
+                            apply(u, u.key);
+                        }
+                        snprintf(text, sizeof(text), "Undone: %016llx as it was", (unsigned long long)undone);
+                    } else if (undo_stack.empty() || (undo_stack.back().mode != mode)) {
                         snprintf(text, sizeof(text), "Nothing to undo in this pick mode");
                     } else {
                         const Undo u = undo_stack.back();
@@ -1091,11 +1279,25 @@ namespace {
                         snprintf(text, sizeof(text), "Nothing under the cursor to copy");
                     } else {
                         copied = snapshot(mode, key);
+                        copied_all.clear();
+                        if (!interp_on && !save_only_active()) {
+                            for (const Mode m : texture_modes) {
+                                copied_all.push_back(snapshot(m, key));
+                            }
+                        }
                         snprintf(text, sizeof(text), "Copied %016llx's pick", (unsigned long long)key);
                     }
                 } else if (press_paste) {
                     if (key == 0) {
                         snprintf(text, sizeof(text), "Nothing under the cursor to paste on");
+                    } else if (!interp_on && !copied_all.empty() && !save_only_active()) {
+                        // Every texture pick mode's state at once.
+                        const uint32_t group = next_group++;
+                        for (const Undo& u : copied_all) {
+                            remember(u.mode, key, group);
+                            apply(u, key);
+                        }
+                        snprintf(text, sizeof(text), "Pasted onto %016llx in all three pick modes (not saved yet)", (unsigned long long)key);
                     } else if (copied.mode != mode) {
                         snprintf(text, sizeof(text), "Copy a pick in this pick mode first");
                     } else {
@@ -1134,6 +1336,12 @@ namespace {
                 char text[192];
                 if (interp_on ? (model == 0) : (hash == 0)) {
                     snprintf(text, sizeof(text), "Nothing under the cursor to %s", press_save ? "save" : "delete");
+                } else if (press_save && !interp_on && !save_only_active()) {
+                    // The texture in every texture pick mode at once.
+                    save_one(hash);
+                    save_one_effect(hash);
+                    tooie::material_pick::save_one(hash);
+                    snprintf(text, sizeof(text), "%s saved to Dev Files/parallax_tags.txt, shader_effect_tags.txt and rt_material_tags.txt", name);
                 } else if (press_save) {
                     if (interp_on) {
                         tooie::interp_tags::save_one(model);
@@ -1484,4 +1692,12 @@ void tooie::effect_pick::for_each(const std::function<void(uint64_t hash, Effect
 
 int tooie::parallax_pick::Pick::depth_percent() const {
     return (fine != 0) ? int(fine) * 10 : depth_percents[depth];
+}
+
+void tooie::parallax_pick::add_dev_option(recomp::config::Config& wip) {
+    wip.add_bool_option(
+        save_only_active_option,
+        "Picker Save Only Current Active",
+        "On, the Save Pick and Paste Pick keys act only in the pick mode that is on. Off, they act on the texture under the cursor in all three texture pick modes at once (Parallax, Shader Effects and Ray Tracing Material): Save Pick writes its parallax, shader effects and material to their files, and Paste Pick puts all three of the copied texture's on it. Interpolation pick mode, which picks models, always saves only there.",
+        false);
 }

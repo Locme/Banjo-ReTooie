@@ -21,6 +21,8 @@ namespace tooie::picture_filters {
     enum class FogColour : uint32_t { Haze, Mist, Dusk, Gloom };
     enum class Preset : uint32_t { Custom, Original, Enhanced, Retro };
     enum class Water : uint32_t { Original, Modern, Stylised };
+    // Graphics > Ray Tracing > Ray tracing resolution.
+    enum class RayResolution : uint32_t { Half, Medium, High };
 
     inline const std::string preset_option = "effects_preset";
     // Lighting, Water, Fog (Experimental) toggle: hides the effect options below it (they keep their values).
@@ -74,7 +76,8 @@ namespace tooie::picture_filters {
     inline const std::string ray_tracing_tiles_option = "ray_tracing_tiles";
     inline const std::string ray_tracing_smooth_option = "ray_tracing_smooth";
     inline const std::string ray_tracing_hit_colours_option = "ray_tracing_hit_colours";
-    inline const std::string ray_tracing_half_option = "ray_tracing_half";
+    inline const std::string ray_tracing_resolution_option = "ray_tracing_resolution";
+    inline const std::string ray_tracing_parallax_option = "ray_tracing_parallax";
     inline const std::string ray_detail_half_option = "ray_detail_half_distance";
     inline const std::string ray_detail_quarter_option = "ray_detail_quarter_distance";
     inline const std::string ray_tracing_player_shadows_option = "ray_tracing_player_shadows";
@@ -101,9 +104,6 @@ namespace tooie::picture_filters {
     inline const std::string water_option = "water_style";
     // Graphics > Shore foam: Modern water's broken white line along the shores, on the game's own water (Original).
     inline const std::string shore_foam_option = "water_shore_foam";
-    // Graphics > Mist: the day and night cycle's mist (over low ground, on water, spray at waterfalls) on its own, always
-    // showing. While the cycle runs in a level, its own Mist and Mist Time settings are used instead.
-    inline const std::string mist_option = "mist";
     inline const std::string grass_height_option = "grass_3d_height";
     inline const std::string grass_distance_option = "grass_3d_distance";
     inline const std::string grass_density_option = "grass_3d_density";
@@ -172,6 +172,8 @@ namespace tooie::picture_filters {
     bool toon_characters_on();
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.
     bool banjo_fur_on();
+    // Whether a texture has a Light Source pick, so the model tagging tells RT64 which model each matrix is part of.
+    bool light_source_models_on();
     // Whether sun shadows are on, so the game's culling keeps what casts them from just outside the picture.
     bool sun_shadows_on();
     // Graphics > Ray tracing is on and the device has ray queries (the traced effects run).

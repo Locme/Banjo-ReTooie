@@ -750,6 +750,23 @@ func = "func_80026500"
 before_vram = 0x80026500
 text = "if (tooie_sound_event_full(rdram, ctx)) return;"
 
+# Sound play log (src/gameplay/free_camera.cpp): while the R button is held, prints the arguments of the
+# sound play functions, to find the camera distance sounds (RB fine-tune, 2026-10-23).
+[[patches.hook]]
+func = "func_800DA298"
+before_vram = 0x800DA298
+text = "tooie_sound_log(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "func_8009DE38"
+before_vram = 0x8009DE38
+text = "tooie_sound_log(rdram, ctx, 1);"
+
+[[patches.hook]]
+func = "func_800DA544"
+before_vram = 0x800DA544
+text = "tooie_sound_log(rdram, ctx, 2);"
+
 # func_8002ABE0 (a sequence's time to its next event) loops over as many tracks
 # as its first pointer's word +4 says; a broken count walked over all memory
 # above it (L's Mr. Patch crash, 2026-10-20). More than 32 answers no event.
@@ -934,6 +951,24 @@ text = "if (tooie_storm_spawn_skip(rdram, ctx)) { return; }"
 func = "func_80800E08_chfireicestorm"
 before_vram = 0x80800E08
 text = "if (tooie_storm_spawn_skip(rdram, ctx)) { return; }"
+
+# Particle emitters made while time stands still (Photo Mode, the ESC menu): per-frame spawners
+# never stop and the particles never age, so the frame's display list grew until it overflowed
+# (L's 2026-10-22 Icy Side Photo Mode crash, Uncapped, after the storm hook above). func_800BBCB8
+# makes an emitter and returns it. While time is frozen and the last frame's list was over 60%
+# full it makes none and returns null (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_800BBCB8"
+before_vram = 0x800BBCB8
+text = "if (tooie_particle_spawn_skip(rdram, ctx)) { ctx->r2 = 0; return; }"
+
+# Particles age by the frame's time step (func_800B4790 reads it at 0x800B47C0), so with time frozen
+# they never die. While time is frozen and the last frame's list was over 60% full the step they
+# age by is 1/60 s, so the ones already there expire and the list stops growing.
+[[patches.hook]]
+func = "func_800B4790"
+before_vram = 0x800B47C8
+text = "tooie_particle_age_floor(rdram, ctx);"
 
 # Klungo's fades (chklungo): func_8080231C fades him out and func_808023A4 in
 # ($a0 Klungo, $a1 the alpha to stop at, $a2 the speed per second, both floats).

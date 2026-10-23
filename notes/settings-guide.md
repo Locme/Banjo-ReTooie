@@ -489,12 +489,30 @@ their texture is drawn.
   half after. Default: on.
 - **Raindrops on Screen**: with Day and Night on, raindrops land on the screen
   in the rain (more when looking up) and run down it. Default: on.
-- **Mist**: with Day and Night on, pale mist drifting in banks over low ground,
-  thickest on and round water. 0 to 100; 0 turns it off. Default: 50.
-- **Mist Time**: when the mist shows: Mornings, Mornings and Nights, or Always.
-  Default: Mornings.
+- **Mist** and **Mist Time**: with Day and Night on, the Volumetric Mist (see the Volumetric section) drifts in
+  mornings (the sun low in the east), also at night, or all day; not in the rain. 0 to 100; 0 turns it off. Default:
+  50, Mornings. With the cycle off, Volumetric Mist's own setting is used.
 - **Night Sounds**: with Day and Night on, crickets and the odd owl at night
   and birdsong in the morning, quietly under the music. Default: on.
+
+## Graphics: WIP > Volumetric (mist, fog and clouds)
+
+All off by default; they sit in the WIP tab. Drawn on the picture after the scene, so nothing in the game changes.
+
+- **Volumetric Mist**: pale banks along the ground as a real volume, marched along each pixel's ray: thickest at the
+  ground Banjo stands on (a slow anchor, so it doesn't bob when he jumps) and gone about 300 units above it, drifting
+  slowly, lit by the sun and warmer looking towards it. Not tied to Banjo's position sideways. 0 to 100; 0 is off.
+- **Volumetric Fog**: an even fog through the whole scene with slow patches in it, lit by the sun. 0 to 100 (100 the
+  preset as designed); 0 is off.
+- **Volumetric Fog Preset**: Default, Bright, Hell, Murky, Poison, Sponza, Pillar: the settings of Vapor's presets.
+- **Volumetric Clouds**: Off, Fair, Scattered, Overcast, Stormy, Wispy, Sunset, Thunderstorm. The cycle's 3D clouds on
+  the sky of any level, day or night cycle or not (with the cycle, they replace its clouds).
+- **Volumetric Level File**: reads `Dev Files/volumetric.txt`, one level a line, overriding the options for that
+  level (cloud type and shape, mist, fog, preset, mist height). Made the first time any option is on, with the format
+  in its comments; read again within a second of a change. The **Save Volumetric Settings** key (Controls >
+  Volumetric, no default binding) frees the mouse and shows buttons down the left: Cloud Type, Cloud Shape, Mist, Fog,
+  Fog Preset and Save All. A click writes that setting, as showing now, into this level's line (a setting already
+  saved shows "(saved)"); press the key again to close them. Test aid: `TOOIE_VOL=<mist>,<fog>,<preset 0-6>,<clouds 0-7>`.
 
 ## Graphics: Game Frame Rate and Interpolation
 

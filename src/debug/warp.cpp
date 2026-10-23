@@ -58,6 +58,7 @@ namespace tooie::debug {
 #include "tooie_achievements.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_day_night.h"
+#include "tooie_volumetric.h"
 #include "tooie_picture_filters.h"
 #include "tooie_texture_sweep.h"
 #include "tooie_vram_log.h"
@@ -182,6 +183,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::jiggy_dance::tick(rdram, ctx);
     tooie::achievements::tick(rdram, ctx);
     tooie::day_night::tick(rdram);
+    tooie::volumetric::tick(rdram);
     tooie::hd_shadows::tick();
     tooie::vram_log::start();
     tooie::memory_guard::tick(rdram);

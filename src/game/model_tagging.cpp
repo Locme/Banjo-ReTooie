@@ -66,6 +66,11 @@
 #include "tooie_toast.h"
 
 namespace RT64 {
+    // rt64-ext/src/render/rt64_texture_marks.h.
+    void SetSceneMatrixObjects(const uint32_t *ids, const uint32_t *objects, size_t count);
+}
+
+namespace RT64 {
     void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags, float anchorScale);
 }
 
@@ -640,6 +645,8 @@ namespace {
     // colliding pair is stable while both are drawn, and RT64 then blends one
     // of them from the other's matrix every frame. A repeat gets a fresh id.
     std::unordered_set<uint32_t> ids_given;
+    // This scene's model bones: each id given and its model's (the model's print and its instance), for RT64.
+    std::vector<std::pair<uint32_t, uint32_t>> matrix_objects;
     uint32_t stat_id_repeats = 0;
 
     uint32_t unique_id(uint32_t id) {
@@ -1000,6 +1007,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     if (!overlay) {
         // The 2D overlay is tagged after the scene, in the same frame.
         ids_given.clear();
+        matrix_objects.clear();
     }
     // F8 blend modes (interp_check.cpp) for finding what blends wrong on a real PC.
     const int blend_mode = tooie::interp_check::blend_mode();
@@ -1045,7 +1053,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     const bool effects_now = !overlay && tooie::interp_tags::take_effects();
     // Interpolation pick mode finds models by the ids given below, so they are given at Original too (L, 2026-10-19:
     // it found nothing at the default Interpolation Original); RT64 blends nothing there, so the ids change no frame.
-    const bool interpolating = (interpolation_on() || mouse) && end > start && blend_mode != 1;
+    // A Light Source pick makes its whole model shine (RT64 SceneMatrixObject): the ids are given for that too.
+    const bool shine_models = !overlay && tooie::picture_filters::light_source_models_on();
+    const bool interpolating = (interpolation_on() || mouse || shine_models) && end > start && blend_mode != 1;
     // Without interpolation the scene is still read for the models drawn
     // without effects and for the Pick Model and Model Effects keys.
     const bool excluding = !overlay && end > start && (tooie::interp_tags::any_no_effects() || tooie::picture_filters::toon_characters_on() || effects_now || pick_now || mouse);
@@ -2430,6 +2440,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 }
                 bones_tagged++;
                 blocks[b].ids.push_back(id);
+                if (!overlay) {
+                    matrix_objects.push_back({ id, make_id(blocks[b].model, blocks[b].instance, 0) });
+                }
                 if (mouse) {
                     mouse_id_models[id] = blocks[b].print;
                 }
@@ -2727,7 +2740,17 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
             filled = true;
         }
     }
-    return tag(rdram, start, end, false);
+    const uint32_t written = tag(rdram, start, end, false);
+    // Which model each bone's matrix belongs to, for RT64 (a Light Source pick makes its whole model shine).
+    thread_local std::vector<uint32_t> ids, objects;
+    ids.clear();
+    objects.clear();
+    for (const auto& [id, object] : matrix_objects) {
+        ids.push_back(id);
+        objects.push_back(object);
+    }
+    RT64::SetSceneMatrixObjects(ids.data(), objects.data(), ids.size());
+    return written;
 }
 
 uint32_t tooie::model_tagging::tag_2d(uint8_t* rdram, uint32_t start, uint32_t end) {

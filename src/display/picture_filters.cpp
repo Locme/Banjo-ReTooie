@@ -73,6 +73,7 @@ namespace RT64 {
     void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneGlowTextures(const uint64_t *hashes, size_t count);
+    void SetSceneShineModelTextures(const uint64_t *hashes, size_t count);
     void SetSceneLightSourceTextures(const uint64_t *hashes, const float *reaches, size_t count);
     void SetSceneRayOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneRayTracingBrdfSubsurface(float brdfRoughness, float subsurface);
@@ -85,7 +86,8 @@ namespace RT64 {
     void SetSceneRayTracingReflections(float reflections, float water, float metal, float tiles, float smooth);
     void SetSceneRayTracingHitColours(bool enabled);
     void SetSceneRayTracingPlayerShadows(bool enabled);
-    void SetSceneRayTracingHalf(bool enabled);
+    void SetSceneRayTracingResolution(uint32_t resolution);
+    void SetSceneRayTracingParallax(bool enabled);
     void SetSceneRayDetailDistances(float half, float quarter);
     void SetSceneRayTracingSmoothing(float smoothing);
     void SetScenePathTracing(uint32_t bounces);
@@ -93,7 +95,6 @@ namespace RT64 {
     int GetRayTracingSupport();
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
-    void SetSceneOwnMist(float strength);
     void SetSceneModernWater(bool enabled, bool stylised);
     void SetSceneWaterDetail(float detail);
     void SetSceneGroundDisplacement(float amount, float reach);
@@ -158,6 +159,8 @@ namespace {
     std::atomic<float> water_reflections_set{0.0f};
     std::atomic<bool> water_settings_changed{true};
     std::atomic<bool> banjo_fur{false};
+    // A Light Source pick is set: the model tagging tells RT64 which model each matrix belongs to, so the whole model shines.
+    std::atomic<bool> light_source_models{false};
     std::atomic<bool> sun_shadows{false};
     std::atomic<float> sun_shadow_distance_set{3000.0f};
     std::atomic<float> sun_shadow_reach{0.0f};
@@ -468,6 +471,50 @@ namespace {
         { 0x747f93d5552d7d66, fx(effect_disable) },
         { 0x80c4e4b432d14a7a, fx(effect_disable) },
         { 0xba2dc3d7540c679c, fx(effect_rt_off) },
+        // L's shader_effect_tags.txt of 2026-10-22 (picked by eye in Shader Effects pick mode; ice picks over textures already in ice_textures[] change nothing).
+        { 0x27a85a283bfcca1b, fx(effect_ice) },
+        { 0x3b2c4518ef211b93, fx(effect_ice) },
+        { 0x5a2c1493b3396e7d, fx(effect_ice) },
+        { 0x5bcd476977461cd5, fx(effect_ice) },
+        { 0x6150d75cc647a56b, fx(effect_ice) },
+        { 0x6714212997654fa0, fx(effect_ice) },
+        { 0x6f5df938113c6c0e, fx(effect_ice) },
+        { 0x71a4019c2da79f19, fx(effect_ice) },
+        { 0x725bb85a4d1af3c2, fx(effect_ice) },
+        { 0x77bac8f3566781fd, fx(effect_ice) },
+        { 0x81ec5fb38e476e90, fx(effect_ice) },
+        { 0x8801f7ab563a0132, fx(effect_ice) },
+        { 0x8dbbcaa3115c8b99, fx(effect_ice) },
+        { 0x8efb567a05413918, fx(effect_ice) },
+        { 0x91d77051944d671c, fx(effect_ice) },
+        { 0x9885dae38e226918, fx(effect_ice) },
+        { 0x98ee5e9ba1a698e3, fx(effect_ice) },
+        { 0x9ac1569f44d8ca8e, fx(effect_ice) },
+        { 0xa0f07e99c0e8e41f, fx(effect_ice) },
+        { 0xa3d644c0cb8db89e, fx(effect_ice) },
+        { 0xa581ab5dd620ca76, fx(effect_ice) },
+        { 0xa8db96ed7838b6a5, fx(effect_ice) },
+        { 0xaa784ff04bd78757, fx(effect_ice) },
+        { 0xae436b1f52b9b6e6, fx(effect_ice) },
+        { 0xba77d20b3aa188f8, fx(effect_ice) },
+        { 0xc2dac938089e0303, fx(effect_ice) },
+        { 0xc8f57e8d3428e974, fx(effect_ice) },
+        { 0xca6ad113aa32c770, fx(effect_ice) },
+        { 0xcea4f61a7e7130be, fx(effect_ice) },
+        { 0xd5787e1378d43620, fx(effect_ice) },
+        { 0xdc200769ae049eca, fx(effect_ice) },
+        { 0xe358c019519f2a49, fx(effect_ice) },
+        { 0xe3890f274d878db4, fx(effect_ice) },
+        { 0xe64a57ccbea7f5aa, fx(effect_ice) },
+        { 0xec9eae2276c1888a, fx(effect_ice) },
+        { 0xf2f354eedc1bab3b, fx(effect_ice) },
+        { 0xf90f2f832e292206, fx(effect_ice) },
+        { 0xfa7998071a44c498, fx(effect_ice) },
+        { 0xfc2a94befcacd6d7, fx(effect_ice) },
+        { 0xfc57075b40c809cb, fx(effect_shiny) },
+        // L's shader_effect_tags.txt of 2026-10-22, round two (the Disable picks, 34edb75eecfadfe4 also a Ray Tracing Material 'none').
+        { 0x0581557796590067, fx(effect_disable) },
+        { 0x34edb75eecfadfe4, fx(effect_disable) },
     };
 
     // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
@@ -614,7 +661,7 @@ namespace {
         { 0x010f63904c0d8e53, 17, 170, Bumpy },
         { 0x0111c6b86ede0ade, 7, 151, Smooth },
         { 0x012341b1b0d75b56, 41, 188, Metal, 7 },
-        { 0x015ef1653b33b38e, 32, 188, Smooth },
+        { 0x015ef1653b33b38e, 32, 188, Ice },
         { 0x016c50f3b51f9523, 0, 250, Brick },
         { 0x0173a13e153c861a, 0, 91 },
         { 0x017b097bae58e41e, 22, 153, Wood, 7 },
@@ -642,7 +689,7 @@ namespace {
         { 0x034df8c6d276295f, 90, 155, Bumpy, 7 },
         { 0x035442f9a6cd7efc, 5, 103, Metal },
         { 0x039014c5f7f7ea13, 17, 236, Bumpy, 7 },
-        { 0x03b6793b42af3238, 52, 168, Smooth },
+        { 0x03b6793b42af3238, 52, 168, Ice },
         { 0x03bbdd21c6a714b9, 0, 89, Wood },
         { 0x03c351eb636639d2, 10, 114, Metal, 7 },
         { 0x03cd49073d86df54, 24, 152, Tiles, 7 },
@@ -670,7 +717,7 @@ namespace {
         { 0x0557af15df95d704, 9, 152, Metal, 7 },
         { 0x056644ebac6fbddc, 8, 110 },
         { 0x05749d611ab935e0, 7, 143, Stone, 7 },
-        { 0x0581557796590067, 17, 169, Wood },
+        { 0x0581557796590067, 17, 169, Stone, 7 },
         { 0x0583a8b5a27a0f2f, 34, 107, Bumpy },
         { 0x058502e264bc98d7, 7, 163, Metal, 7 },
         { 0x0587796c4d31d722, 24, 156, Bumpy },
@@ -839,7 +886,7 @@ namespace {
         { 0x13b2750824b2202e, 30, 132 },
         { 0x13b47e670150a364, 55, 157, Smooth },
         { 0x13c036e7abd0c772, 32, 161, Cracks },
-        { 0x13cc5c48c05a3c1e, 13, 100, Smooth },
+        { 0x13cc5c48c05a3c1e, 13, 100, Ice },
         { 0x13d329ee4fc7ece5, 33, 105, Bumpy, 7 },
         { 0x13e2a684ff459045, 88, 150, Bumpy, 7 },
         { 0x13f3e647168b2d8c, 7, 152, Bumpy },
@@ -902,7 +949,7 @@ namespace {
         { 0x18c6fe4a9ae54c94, 4, 148, Leaves },
         { 0x18facd90790db747, 29, 73, Tiles, 7 },
         { 0x1908c1102ecf9ead, 24, 178 },
-        { 0x190911b98a55dc15, 29, 138, Smooth },
+        { 0x190911b98a55dc15, 29, 138, Ice },
         { 0x190f4978edb951a8, 23, 220, Bumpy, 7 },
         { 0x1912b4a0b0ffd817, 40, 130, Metal, 7 },
         { 0x191a787d7555e8ec, 2, 238, Rounded },
@@ -1026,6 +1073,7 @@ namespace {
         { 0x217bcdd8b080800f, 20, 98, Brick },
         { 0x21b015a85b4feaea, 21, 99, Bumpy },
         { 0x21b3744ca6fe7c02, 33, 159, Bumpy },
+        { 0x21b618c38e4a3414, 40, 190, Stone },
         { 0x21ceab0812e99c55, 2, 111, Wood, 7 },
         { 0x2204434e37303bf8, 17, 152, Bumpy },
         { 0x22192b154844f2be, 0, 153 },
@@ -1090,7 +1138,7 @@ namespace {
         { 0x271c67a54d422fde, 17, 171, Bumpy },
         { 0x27248e8f62bb7cce, 56, 181, Bumpy, 7 },
         { 0x272edb1ad6fdf4b2, 3, 157, Metal, 7 },
-        { 0x273e78009b937fde, 15, 140, Smooth },
+        { 0x273e78009b937fde, 15, 140, Ice },
         { 0x275a6695c97c94e8, 14, 108 },
         { 0x27703be820f9c016, 15, 148, Metal, 7 },
         { 0x27773327f32d3637, 9, 90, Cracks },
@@ -1117,7 +1165,7 @@ namespace {
         { 0x28ee377b5789d255, 68, 157, Metal, 7 },
         { 0x28f2a101e74f0482, 7, 138, Bumpy },
         { 0x28f2a5f86eac2153, 40, 187, Bumpy },
-        { 0x29213aa45f5482b7, 24, 180, Smooth },
+        { 0x29213aa45f5482b7, 24, 180, Ice },
         { 0x2929d26c14e07ef9, 16, 104, Bumpy },
         { 0x29301132791f05a4, 37, 184 },
         { 0x293394aeaf0bf7f7, 21, 128, Bumpy },
@@ -1302,7 +1350,7 @@ namespace {
         { 0x34b7d075683be8e1, 0, 122, Wood, 7 },
         { 0x34bc0df8bc599c11, 64, 150, Metal, 7 },
         { 0x34e036b8d3a5ccbb, 46, 113, Leaves },
-        { 0x34edb75eecfadfe4, 7, 109, Metal, 7 },
+        { 0x34edb75eecfadfe4, 7, 109, Stone, 7 },
         { 0x34f050082c5115e6, 22, 160, Ice, 0, false },
         { 0x35158ae452767f97, 33, 175, Leaves },
         { 0x351976c604fadf0d, 28, 112, Metal, 7 },
@@ -1573,7 +1621,7 @@ namespace {
         { 0x489ef60dc361717d, 60, 146 },
         { 0x48bc8d1b919f576d, 74, 157, Bumpy },
         { 0x48bdc58e140c54bf, 22, 97, Wood, 7 },
-        { 0x48c6cbe2f925e03f, 6, 143, Bumpy },
+        { 0x48c6cbe2f925e03f, 6, 143, Ice },
         { 0x48efa3236ca2d3d4, 7, 129 },
         { 0x48f20e44bfdf6a3b, 15, 216, Wood, 7 },
         { 0x4918299448b17621, 34, 144, Dirt },
@@ -2141,7 +2189,7 @@ namespace {
         { 0x71720cad036412e8, 7, 180, Metal, 7 },
         { 0x7179031051659818, 58, 128, Dirt, 7 },
         { 0x71a2a1c63925976b, 10, 104, Bark },
-        { 0x71a4019c2da79f19, 25, 171, Bumpy },
+        { 0x71a4019c2da79f19, 25, 171, Ice },
         { 0x71a4adc936c38120, 60, 229 },
         { 0x71b30bddb0dbacdb, 0, 113, Smooth },
         { 0x71e54e70b5da42f8, 15, 140, Stone, 7 },
@@ -2306,7 +2354,7 @@ namespace {
         { 0x7d182435ca389b30, 15, 147 },
         { 0x7d22c72e5659d669, 20, 150, Wood, 7 },
         { 0x7d56d4ff068e122a, 47, 110, Metal, 7 },
-        { 0x7d7040a04f26397c, 26, 178, Smooth, 7 },
+        { 0x7d7040a04f26397c, 26, 178, Ice, 7 },
         { 0x7d9bc6137ccfee5c, 0, 163, Brick },
         { 0x7da4c2960ea50f7a, 84, 173, Sand, 7 },
         { 0x7da4e6f65810c2ed, 28, 172, Brick },
@@ -2707,7 +2755,7 @@ namespace {
         { 0x9aa7e53d7f3a75cf, 34, 165, Rounded },
         { 0x9ab08733874bc545, 24, 221, Bumpy, 7 },
         { 0x9abf7873bffea7a3, 12, 137 },
-        { 0x9ac1569f44d8ca8e, 18, 138, Smooth },
+        { 0x9ac1569f44d8ca8e, 18, 138, Ice },
         { 0x9adb59faf6497a02, 42, 143, Dirt },
         { 0x9aee981af640bccb, 0, 167, Bumpy, 7 },
         { 0x9b0dbe6f1cc6a337, 15, 134, Wood },
@@ -2785,7 +2833,7 @@ namespace {
         { 0xa0d9d9703f991f7d, 10, 151, Bumpy },
         { 0xa0de3fc13405c501, 46, 146, Rounded },
         { 0xa0ec8f703e868df8, 52, 180, Wood, 7 },
-        { 0xa111f6281c4c0ff7, 184, 251, Ice, 0, false },
+        { 0xa111f6281c4c0ff7, 184, 251, Ice, 20, false },
         { 0xa143bc99822bbca3, 0, 144 },
         { 0xa146cbb1e54c321f, 41, 119 },
         { 0xa158cf9c8d9cd419, 66, 116, Dirt },
@@ -2929,7 +2977,7 @@ namespace {
         { 0xa9623177beee5f46, 15, 152, Bumpy, 7 },
         { 0xa9690b65ed36091c, 63, 172, Rounded },
         { 0xa96d959e636af4bf, 2, 129, Bumpy },
-        { 0xa98cd44b3c853507, 9, 137, Metal, 7 },
+        { 0xa98cd44b3c853507, 9, 137, Stone, 7 },
         { 0xa9a30e2c2dd1d4c9, 17, 126, Wood, 7 },
         { 0xa9c2a14aa3d16803, 24, 152, Bumpy, 7 },
         { 0xa9c6c08511d44618, 61, 185, Brick },
@@ -2940,7 +2988,7 @@ namespace {
         { 0xa9eff74087fe8df3, 21, 139, Wood, 7 },
         { 0xa9f20b0c4ac98505, 33, 130, Wood, 7 },
         { 0xa9f56ccc9425035d, 46, 169, Rounded },
-        { 0xa9f95d7e99c45ea7, 74, 173, Ice, 0, false },
+        { 0xa9f95d7e99c45ea7, 74, 173, Ice, 20, false },
         { 0xaa1283507401823a, 0, 140, Bumpy },
         { 0xaa14bdbf49a24366, 10, 141, Wood, 7 },
         { 0xaa4030800363aab8, 2, 137, Wood, 7 },
@@ -3264,7 +3312,7 @@ namespace {
         { 0xc2bcbf9cc24db01c, 100, 186, Cracks, 7 },
         { 0xc2c1c401b52c8e2e, 21, 113, Cracks },
         { 0xc2d9ede4bd1654f6, 86, 247, Tiles, 7 },
-        { 0xc2dac938089e0303, 25, 169, Smooth },
+        { 0xc2dac938089e0303, 25, 169, Ice },
         { 0xc2eb688aafe50cf1, 8, 163, Metal, 7 },
         { 0xc2f61620b20cc301, 15, 155 },
         { 0xc2f8dffd41d1d262, 32, 206, Wood, 7 },
@@ -3389,7 +3437,7 @@ namespace {
         { 0xcac6e9d96c39cb27, 4, 158 },
         { 0xcad7f1fe05318307, 49, 114, Bumpy, 7 },
         { 0xcad910f996402e64, 28, 151, Rounded },
-        { 0xcadc48b0b699c2ee, 33, 183, Metal, 7 },
+        { 0xcadc48b0b699c2ee, 33, 183, Ice, 7 },
         { 0xcaef5f37b110377b, 9, 119, Bumpy },
         { 0xcaf51b9f35c17fb4, 9, 131 },
         { 0xcb0b278ccffcacfd, 46, 183 },
@@ -3651,7 +3699,7 @@ namespace {
         { 0xdd96acc525117fe8, 0, 107 },
         { 0xdd9d4d9ad015b48e, 19, 185, Bumpy },
         { 0xddbe30be48fc0e0f, 66, 251, Metal, 7 },
-        { 0xddcd958879777c51, 17, 145 },
+        { 0xddcd958879777c51, 17, 145, Stone, 7 },
         { 0xdde5e19b8c0b9ece, 25, 159, Metal, 7 },
         { 0xdde879987590af41, 21, 151, Smooth },
         { 0xddf434e3d92f546c, 58, 174, Bumpy, 7 },
@@ -4005,7 +4053,7 @@ namespace {
         { 0xf8f9bc2833c53a5e, 31, 217, Metal, 7 },
         { 0xf9092aee4b5a144d, 45, 176, Smooth },
         { 0xf90df084850b22b7, 30, 77 },
-        { 0xf90f2f832e292206, 47, 168, Smooth },
+        { 0xf90f2f832e292206, 47, 168, Ice },
         { 0xf9140cd61642a49e, 0, 116, Rounded },
         { 0xf915003e0a22d033, 15, 175, Rounded },
         { 0xf918aaa71f53d965, 42, 156 },
@@ -4058,7 +4106,7 @@ namespace {
         { 0xfbdf0c3fc9562611, 42, 126, Brick },
         { 0xfbf419640b398822, 0, 161, Metal, 7 },
         { 0xfc113562142a1e77, 0, 84 },
-        { 0xfc2a94befcacd6d7, 13, 74, Bumpy },
+        { 0xfc2a94befcacd6d7, 13, 74, Ice },
         { 0xfc3307662a1fe23b, 7, 70, Wood, 7 },
         { 0xfc4dc4c800ae0c7a, 77, 150, Wood, 3 },
         { 0xfc57075b40c809cb, 22, 160, Ice, 0, false },
@@ -4111,6 +4159,11 @@ namespace {
         { 0xffd6a13883063ef1, 28, 137, Brick },
         { 0xffd9d3b61eaec92d, 105, 155, Smooth },
         { 0xfff36d5a5023683c, 7, 144, Bumpy },
+        // L's parallax_tags.txt of 2026-10-22: the shapes above changed to his picks (Ice, with their depths and shadows), and
+        // three textures the sweep left out, with the range Parallax pick mode gives an unlisted texture (40 to 190).
+        { 0x31977ffd179d695b, 40, 190, Ice },
+        { 0x6f5df938113c6c0e, 40, 190, Ice },
+        { 0xa8db96ed7838b6a5, 40, 190, Ice },
     };
 
     constexpr float fog_colours[][3] = {
@@ -4179,7 +4232,6 @@ namespace {
         { &tooie::picture_filters::npc_feathers_option, 0.0 },
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
         { &tooie::picture_filters::shore_foam_option, false },
-        { &tooie::picture_filters::mist_option, 0.0 },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
@@ -4337,18 +4389,26 @@ namespace {
         RT64::SetSceneLampTextures(lamps.data(), lamps.size());
         RT64::SetSceneGrassEdgeTextures(edges.data(), value<bool>(tooie::picture_filters::grass_edges_option, true) ? edges.size() : 0);
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
+        // Light Source picks make the object itself shine (Slight Glow) and light nothing round it: a light of its own
+        // drew a ball of light round the object however it was cast (L, 2026-10-22: "Object glows only").
         std::vector<uint64_t> glow = build(nullptr, nullptr, tooie::effect_pick::effect_glow, true);
-        RT64::SetSceneGlowTextures(glow.data(), glow.size());
-        // Light Source picks: lamps with no glow in the air, reaching 900 units at 100% (as a lamp), more or less with
-        // the texture's strength.
-        std::vector<uint64_t> light_sources;
-        std::vector<float> light_reaches;
+        // A Light Source pick on a model makes the whole model shine, not only the picked texture's parts (L, 2026-10-22:
+        // a Note Nest's note stayed dark with its nest picked).
+        std::vector<uint64_t> shine_models;
         for (const auto& [hash, picked] : picks) {
             if (tooie::effect_pick::has(picked, tooie::effect_pick::effect_light)) {
-                light_sources.push_back(hash);
-                light_reaches.push_back(9.0f * float(tooie::effect_pick::light_strength(picked)));
+                shine_models.push_back(hash);
+                if (std::find(glow.begin(), glow.end(), hash) == glow.end()) {
+                    glow.push_back(hash);
+                }
             }
         }
+        RT64::SetSceneGlowTextures(glow.data(), glow.size());
+        RT64::SetSceneShineModelTextures(shine_models.data(), shine_models.size());
+        light_source_models.store(!shine_models.empty());
+        // Lights for the traced scene from textures: Ray Tracing Material Pick Mode's emissive picks below.
+        std::vector<uint64_t> light_sources;
+        std::vector<float> light_reaches;
         // Ray Tracing Material Pick Mode: the materials (the built-in ones from the texture sweep, a pick over each) go to the traced pass, and an emissive pick also lights the scene as a Light
         // Source would (half the emissive's percent as its strength), unless Shader Effects pick mode has given the texture
         // a Light Source of its own.
@@ -4555,7 +4615,8 @@ void tooie::picture_filters::apply() {
         (float)(value<double>(ray_tracing_tiles_option, 60.0) / 100.0), (float)(value<double>(ray_tracing_smooth_option, 35.0) / 100.0));
     RT64::SetSceneRayTracingHitColours(value<bool>(ray_tracing_hit_colours_option, false));
     RT64::SetSceneRayTracingPlayerShadows(value<bool>(ray_tracing_player_shadows_option, true));
-    RT64::SetSceneRayTracingHalf(value<bool>(ray_tracing_half_option, false));
+    RT64::SetSceneRayTracingResolution(value<uint32_t>(ray_tracing_resolution_option, (uint32_t)RayResolution::Medium));
+    RT64::SetSceneRayTracingParallax(value<bool>(ray_tracing_parallax_option, false));
     RT64::SetSceneRayDetailDistances(float(value<double>(ray_detail_half_option, 2000.0)), float(value<double>(ray_detail_quarter_option, 4000.0)));
     RT64::SetSceneRayTracingSmoothing((float)(value<double>(ray_tracing_smoothing_option, 50.0) / 100.0));
     // Ray traced BRDF takes over the glossy reflections: with it on, the screen-space Stochastic reflections are off.
@@ -4693,12 +4754,6 @@ void tooie::picture_filters::apply() {
         shore_foam = std::atoi(forced) != 0;
     }
     RT64::SetSceneShoreFoam(shore_foam);
-    // Test aid: TOOIE_OWN_MIST=<0 to 100> whatever the setting says.
-    float own_mist = shaders ? (float)(value<double>(mist_option, 0.0) / 100.0) : 0.0f;
-    if (const char* forced = std::getenv("TOOIE_OWN_MIST")) {
-        own_mist = (float)(std::atof(forced) / 100.0);
-    }
-    RT64::SetSceneOwnMist(own_mist);
     water_waves_on = (shader(value<double>(water_waves_option, 0.0)) > 0.0) || modern_water;
     RT64::SetSceneWaterWaves((float)(shader(value<double>(water_waves_option, 0.0)) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
     water_reflections_set = (float)(shader(value<double>(water_reflections_option, 0.0)) / 100.0);
@@ -4754,6 +4809,10 @@ bool tooie::picture_filters::toon_characters_on() {
 
 bool tooie::picture_filters::banjo_fur_on() {
     return banjo_fur;
+}
+
+bool tooie::picture_filters::light_source_models_on() {
+    return light_source_models;
 }
 
 // Ray tracing shows sun shadows (traced ones) at 60 at least whatever the slider says, so the game keeps the whole
@@ -5242,11 +5301,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Shore foam",
         "With Water on <recomp-color primary>Original</recomp-color>: a broken white line of foam drifts along the edges of the game's water, where it gets shallow, as in Modern water. Modern water always has it.",
         false);
-    graphics.add_number_option(
-        mist_option,
-        "Mist",
-        "Pale mist drifts in banks over low ground, hangs thickest on and round water, and rises as spray where waterfalls land. Always showing, at any time of day. While Day and Night runs in a level, its own Mist and Mist Time settings are used instead. 0 turns it off.",
-        0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         deep_snow_option,
         "Deep snow",
@@ -5335,7 +5389,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         ray_tracing_smoothing_option,
         "Ray tracing noise smoothing",
-        "How much the ray traced light and shadows are smoothed out where they get grainy, mostly on Banjo's fur (whose surface turns every pixel, so each pixel caught different rays and the fur crawled as he moved). Higher is calmer but softer; 0 is the raw rays. 50 is the default. Needs Ray tracing on.",
+        "How much the ray traced light and shadows are smoothed out where they get grainy: the soft edges of sun, lamp and model shadows everywhere (higher turns every pixel's rays more alike: calmer, the edge in fine steps), and most on Banjo's fur (whose surface turns every pixel, so each pixel caught different rays and the fur crawled as he moved). 0 is the raw rays. 50 is the default. Needs Ray tracing on.",
         0, 100, 5, 0, false, 50);
     graphics.add_number_option(
         ray_tracing_brdf_option,
@@ -5372,10 +5426,20 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Ray tracing hit colours",
         "Experimental. A traced reflection or bounce that lands on something the picture can't see (off the screen, or hidden behind something) uses the colour that spot had when it was last on screen, remembered in the world as you look around, instead of smearing the nearest colour from the picture. Adds a small cost every frame. Needs Ray tracing on. Starts off: if you see flicker, wrong colours or a crash, leave it off and tell me.",
         false);
+    graphics.add_enum_option(
+        ray_tracing_resolution_option,
+        "Ray tracing resolution",
+        "How many rays the traced shadows, lamp light and light beams use. <recomp-color primary>Half</recomp-color> traces them once for every 2x2 pixels and fills in each pixel from the ones round it on the same surface: about a quarter of the rays, for higher frame rates; shadow edges a little softer. <recomp-color primary>Medium</recomp-color> (the default) traces every pixel, with fewer rays far off (Ray detail distances). <recomp-color primary>High</recomp-color> traces every pixel with all its rays at any distance: the sun's four rays everywhere, four rays a lamp and the beams' eight steps, so less noise and finer shadow edges, at a lower frame rate. Needs Ray tracing on.",
+        {
+            {RayResolution::Half, "Half", "Half"},
+            {RayResolution::Medium, "Medium", "Medium"},
+            {RayResolution::High, "High", "High"},
+        },
+        RayResolution::Medium);
     graphics.add_bool_option(
-        ray_tracing_half_option,
-        "Half-resolution ray tracing",
-        "Traces the sun's shadows, the lamps' and fires' light and the Traced light beams once for every 2x2 pixels instead of every pixel, then fills in each pixel from the ones round it on the same surface. About a quarter of their rays, for higher frame rates (175 FPS); shadow edges are a little softer. Needs Ray tracing on.",
+        ray_tracing_parallax_option,
+        "Ray tracing uses Parallax materials",
+        "Lets ray tracing read what Parallax knows of each texture: metal, glazed tiles and smooth surfaces reflect (the Metal, Tiles and Smooth sliders), and leaves and grass let light through (Ray traced subsurface). Off (the default), ray tracing ignores the Parallax list; Ray Tracing Material picks still apply. Needs Ray tracing on.",
         false);
     graphics.add_number_option(
         ray_detail_half_option,
@@ -5715,7 +5779,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_half_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5759,7 +5823,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(water_detail_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(shore_foam_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(mist_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_height_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_distance_option, grass_section_option, false);

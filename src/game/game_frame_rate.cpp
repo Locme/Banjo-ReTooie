@@ -63,6 +63,7 @@
 #include "tooie_debug.h"
 #include "tooie_game.h"
 #include "tooie_game_frame_rate.h"
+#include "tooie_gfx_budget.h"
 #include "tooie_hooks.h"
 #include "ultramodern/config.hpp"
 #include "ultramodern/ultramodern.hpp"
@@ -923,6 +924,42 @@ extern "C" int tooie_storm_spawn_skip(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t bits = (uint32_t)MEM_W(0, (int32_t)0x8012C760);
     std::memcpy(&dt, &bits, sizeof(dt));
     return (dt < 1.0e-5f) ? 1 : 0;
+}
+
+// func_800BBCB8 makes a particle emitter and returns it. The ice storm hook above stops only that
+// storm's spawners; any other per-frame spawner has the same fault while time is frozen (Photo Mode
+// in Icy Side at Uncapped filled the list, 2026-10-22). While time stands still and the last frame's
+// display list was over 60% full, no emitter is made (the caller gets null: the memory guard passes
+// over a caller that uses it). Logged once per map. Returns 1 to skip.
+extern "C" int tooie_particle_spawn_skip(uint8_t* rdram, recomp_context* ctx) {
+    (void)ctx;
+    float dt;
+    const uint32_t bits = (uint32_t)MEM_W(0, (int32_t)0x8012C760);
+    std::memcpy(&dt, &bits, sizeof(dt));
+    if (dt >= 1.0e-5f || tooie::gfx_budget::last_list_fraction() < 0.6f) {
+        return 0;
+    }
+    static uint32_t skipped = 0;
+    static int logged_map = -1;
+    skipped++;
+    const int map = MEM_HU(0, (gpr)(int32_t)0x80132DC2);
+    if (map != logged_map) {
+        logged_map = map;
+        std::printf("[particles] time is frozen and the display list is %.0f%% full: no new particle emitters in map %03X (%u skipped so far)\n",
+            tooie::gfx_budget::last_list_fraction() * 100.0f, map, skipped);
+        std::fflush(stdout);
+    }
+    return 1;
+}
+
+// func_800B4790 ages the particles by the frame's time step ($f0 after func_800D8FF8). While time
+// stands still and the last frame's list was over 60% full the step is 1/60 s, so the particles
+// already there expire and the list stops growing (the spawn skip above stops new ones).
+extern "C" void tooie_particle_age_floor(uint8_t* rdram, recomp_context* ctx) {
+    (void)rdram;
+    if (ctx->f0.fl < 1.0e-5f && tooie::gfx_budget::last_list_fraction() >= 0.6f) {
+        ctx->f0.fl = 1.0f / 60.0f;
+    }
 }
 
 // Klungo's fades (func_8080231C_chklungo out, func_808023A4_chklungo in; $a0 Klungo,

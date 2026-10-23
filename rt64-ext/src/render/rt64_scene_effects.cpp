@@ -331,7 +331,12 @@ namespace RT64 {
     static std::atomic<uint32_t> rayTracingSubsurfacePercent{ 0 };
     static std::atomic<bool> rayTracingHitColours{ false };
     static std::atomic<bool> rayTracingPlayerShadows{ true };
+    // Ray tracing resolution: 0 half, 1 medium, 2 high.
+    static std::atomic<uint32_t> rayTracingResolution{ 1u };
     static std::atomic<bool> rayTracingHalf{ false };
+    // Graphics > Ray Tracing uses Parallax materials: off, the traced pass ignores the Parallax shapes (metal, tiles, smooth,
+    // leaves and grass) its geometries carry.
+    static std::atomic<bool> rayTracingParallax{ false };
     static std::atomic<float> rayDetailDistances[2] = { 2000.0f, 4000.0f };
     static std::atomic<float> rayTracingSmoothing{ 0.5f };
     static std::atomic<uint32_t> pathTracingBounces{ 0 };
@@ -548,8 +553,13 @@ namespace RT64 {
         rayTracingHitColours.store(enabled);
     }
 
-    void SetSceneRayTracingHalf(bool enabled) {
-        rayTracingHalf.store(enabled);
+    void SetSceneRayTracingParallax(bool enabled) {
+        rayTracingParallax.store(enabled);
+    }
+
+    void SetSceneRayTracingResolution(uint32_t resolution) {
+        rayTracingResolution.store(std::min(resolution, 2u));
+        rayTracingHalf.store(resolution == 0u);
     }
 
     void SetSceneRayDetailDistances(float half, float quarter) {
@@ -699,6 +709,21 @@ namespace RT64 {
         effectsSettings.player[1] = valid ? y : -1e9f;
         effectsSettings.player[2] = z;
         effectsSettings.playerGrounded = grounded;
+        // The volumetric mist's floor: eases towards the ground Banjo stands on (jumps and falls don't move it), and
+        // snaps when he is somewhere else altogether (another floor, a warp).
+        if (valid) {
+            static auto last = std::chrono::steady_clock::now();
+            const auto now = std::chrono::steady_clock::now();
+            const float dt = std::min(std::chrono::duration<float>(now - last).count(), 0.25f);
+            last = now;
+            if (!effectsSettings.volAnchorValid || (std::fabs(y - effectsSettings.volAnchor) > 500.0f)) {
+                effectsSettings.volAnchor = y;
+                effectsSettings.volAnchorValid = true;
+            }
+            else if (grounded) {
+                effectsSettings.volAnchor += (y - effectsSettings.volAnchor) * std::min(1.0f, dt * 0.6f);
+            }
+        }
         if (anySubmittedWorkload) {
             PlayerFrame &frame = playerFrames[playerFrameNext];
             playerFrameNext = (playerFrameNext + 1) % std::size(playerFrames);
@@ -1122,15 +1147,13 @@ namespace RT64 {
         effectsSettings.dayMoonPhase = phase & 7u;
     }
 
-    void SetSceneMist(float strength, uint32_t when) {
+    void SetSceneVolumetric(float mist, float fog, uint32_t fogPreset, uint32_t cloudType, float mistOffset) {
         const std::scoped_lock lock(effectsMutex);
-        effectsSettings.dayMist = std::clamp(strength, 0.0f, 1.0f);
-        effectsSettings.dayMistWhen = std::min(when, 2u);
-    }
-
-    void SetSceneOwnMist(float strength) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.ownMist = std::clamp(strength, 0.0f, 1.0f);
+        effectsSettings.volMist = std::clamp(mist, 0.0f, 1.0f);
+        effectsSettings.volFog = std::clamp(fog, 0.0f, 1.0f);
+        effectsSettings.volFogPreset = std::min(fogPreset, 6u);
+        effectsSettings.volCloudType = std::min(cloudType, 7u);
+        effectsSettings.volMistOffset = std::clamp(mistOffset, -240.0f, 240.0f);
     }
 
     // The cloud shape (cover 0 to 1, height 0.25 to 4, thickness 0.1 to 2, speed 0 to 8) in 6 bits each, with
@@ -2427,9 +2450,8 @@ namespace RT64 {
     bool SceneWaterWanted() {
         const std::scoped_lock lock(effectsMutex);
         return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.iceReflections > 0.0f) || (effectsSettings.screenSpaceReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) || (effectsSettings.view == SceneEffectsViewSsr) ||
-            // The day and night cycle's mist gathers round water.
-            // and the rain rings on water need it too.
-            (effectsSettings.timeOfDay && ((effectsSettings.dayMist > 0.0f) || (effectsSettings.dayRain > 0.0f))) || (effectsSettings.ownMist > 0.0f) ||
+            // The rain rings on water need it too.
+            (effectsSettings.timeOfDay && (effectsSettings.dayRain > 0.0f)) ||
             (effectsSettings.view == SceneEffectsSoloFirst + 8) || (effectsSettings.view == SceneEffectsSoloFirst + 9);
     }
 
@@ -2505,7 +2527,7 @@ namespace RT64 {
         const SceneEffectsSettings settings = GetSceneEffects();
         return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
             (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0);
+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0) || (settings.view != 0)) && (settings.depthAddress != 0);
     }
 
     bool SceneEffectsWanted(const RenderTarget *depthTarget) {
@@ -2666,6 +2688,9 @@ namespace RT64 {
             // Ray detail by distance: past the first the rays a pixel are halved, past the second quartered (0 for never).
             mapped[12] = rayDetailDistances[0].load();
             mapped[13] = rayDetailDistances[1].load();
+            mapped[14] = rayTracingParallax.load() ? 1.0f : 0.0f;
+            // Ray tracing resolution High (2): all the rays at every distance.
+            mapped[15] = float(rayTracingResolution.load());
             memcpy(mapped + 16, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
             // The level's reaches as whole numbers: a fraction marks a Light Source pick and holds its object's size
             // (SceneLightSourceW).
@@ -2935,7 +2960,21 @@ namespace RT64 {
         // Heat haze only above warm surfaces is sent as 2 + its strength (see HeatHaze in SceneEffectsPS).
         const float heatPacked = (settings.heatHazeWarmOnly && (settings.heatHaze > 0.0f)) ? 2.0f + std::min(settings.heatHaze, 1.0f) : settings.heatHaze;
         constants.view = { float(settings.view), PackSceneClouds(settings.dayCloudShape, settings.compare), seconds, heatPacked };
-        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), settings.underwaterTint };
+        // The fog's start and length ride in the low 12 bits of fog.y and fog.z (steps of 4 units: an integer below 2^24 is exact
+        // in a float), the WIP volumetric effects in the 12 bits above each (VolSettings in the shader): fog.y mist (6 bits, 0 to
+        // 63) and fog (6); fog.z the fog's preset (3), the forced cloud type (3), then the mist floor's height over Banjo's feet in
+        // steps of 8 units (6 bits, 32 = level).
+        uint32_t volA = 0;
+        uint32_t volB = 0;
+        if ((settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0)) {
+            const float floorDelta = (settings.volAnchorValid && (settings.player[1] > -1e8f)) ? (settings.volAnchor - settings.player[1] + settings.volMistOffset) : settings.volMistOffset;
+            volA = uint32_t(std::lround(settings.volMist * 63.0f)) | (uint32_t(std::lround(settings.volFog * 63.0f)) << 6);
+            volB = settings.volFogPreset | (settings.volCloudType << 3) | (uint32_t(std::lround(std::clamp(floorDelta / 8.0f + 32.0f, 0.0f, 63.0f))) << 6);
+        }
+        const auto packFog = [](float distance, uint32_t vol, float least) {
+            return float(uint32_t(std::lround(std::clamp(distance, least, 16380.0f) / 4.0f)) | (vol << 12));
+        };
+        constants.fog = { settings.fog, packFog(settings.fogStart, volA, 0.0f), packFog(settings.fogLength, volB, 4.0f), settings.underwaterTint };
         // The fog darkens with the time of day as the sky does.
         const float fogTint[3] = { settings.dayTint[0] * settings.dayTint[0], settings.dayTint[1] * settings.dayTint[1], settings.dayTint[2] * settings.dayTint[2] };
         constants.fogColor = { settings.fogColor[0] * fogTint[0], settings.fogColor[1] * fogTint[1], settings.fogColor[2] * fogTint[2],
@@ -3024,12 +3063,9 @@ namespace RT64 {
             const float moonlight = 1.0f - 0.6f * std::clamp((0.97f - dayBrightest) / 0.3f, 0.0f, 1.0f);
             // Rain hides the sun: no sun shadows under it.
             const float rain = settings.timeOfDay ? settings.dayRain : 0.0f;
-            // The mist and the rain's details ride above the softness and Banjo's flag: 4 * (the mist's strength
-            // (0 to 100) + 128 * when + 512 * how wet the ground is (0 to 31) + 16384 when raindrops land on the screen).
-            // Without the cycle, Graphics > Mist on its own: always showing.
-            const float mistPacked = settings.timeOfDay ? 4.0f * (std::round(settings.dayMist * 100.0f) + 128.0f * float(settings.dayMistWhen) +
-                512.0f * std::round(settings.dayWet * 31.0f) + (settings.dayDrops ? 16384.0f : 0.0f)) :
-                ((settings.ownMist > 0.0f) ? 4.0f * (std::round(settings.ownMist * 100.0f) + 128.0f * 2.0f) : 0.0f);
+            // The rain's details ride above the softness and Banjo's flag: 4 * (512 * how wet the ground is (0 to 31) +
+            // 16384 when raindrops land on the screen).
+            const float mistPacked = settings.timeOfDay ? 4.0f * (512.0f * std::round(settings.dayWet * 31.0f) + (settings.dayDrops ? 16384.0f : 0.0f)) : 0.0f;
             constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain),
                 std::min(settings.sunShadowReach, 999.0f) + 1000.0f * std::round(settings.sunShadowDistance / SUN_SHADOW_MAP_HALF_STEP), dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f + mistPacked };
             if (sunLength > 1e-6f) {
@@ -3116,7 +3152,7 @@ namespace RT64 {
         }
 
         RenderTexture *source = nullptr;
-        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f)) {
+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0)) {
             // The scene so far, without multisampling: the target's resolve, or a copy of the target.
             const RenderTextureView *sourceView = nullptr;
             if (colorTarget->usesResolve()) {
@@ -3678,11 +3714,14 @@ namespace RT64 {
         const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr) &&
             (res.rayTexturesSet != nullptr) && (res.rayTextureCacheSet != nullptr);
         const bool tracedHalf = tracedIndirect && rayTracingHalf.load();
-        if ((((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) || tracedHalf) {
+        // The traced light beams are a soft haze: below Ray tracing resolution High they come from the indirect pass's
+        // second band at half size too (a quarter of their rays), whatever the shadows do (SceneEffectsPS BeamsHalf).
+        const bool tracedBeamsHalf = tracedIndirect && (tracedBeams[0] > 0.0f) && (rayTracingResolution.load() < 2u);
+        if ((((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) || tracedHalf || tracedBeamsHalf) {
             commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
             commandList->setFramebuffer(res.indirectFramebuffer.get());
             GpuSectionScope timedIndirect(WorkloadGpuSections(), GpuSection::IndirectLight, commandList);
-            const uint32_t drawnHeight = tracedHalf ? indirectHeight * 3 : indirectHeight;
+            const uint32_t drawnHeight = tracedHalf ? indirectHeight * 3 : (tracedBeamsHalf ? indirectHeight * 2 : indirectHeight);
             commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(drawnHeight)));
             commandList->setScissors(RenderRect(0, 0, indirectWidth, drawnHeight));
             // The traced form reads the rays' textures too (cut-outs let the sun through their holes), so it takes the
