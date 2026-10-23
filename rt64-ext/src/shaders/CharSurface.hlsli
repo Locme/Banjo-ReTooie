@@ -21,7 +21,7 @@ float CharSurfaceKeep(float3 texColor, float height, bool featherCard) {
     const float saturation = (high - low) / max(high, 1e-4f);
     float keep = smoothstep(0.10f, 0.22f, high);
     // The whites of the eyes: pale and grey.
-    keep *= 1.0f - (1.0f - smoothstep(0.12f, 0.22f, saturation)) * smoothstep(0.45f, 0.6f, high);
+    keep *= 1.0f - (1.0f - smoothstep(0.18f, 0.3f, saturation)) * smoothstep(0.4f, 0.55f, high);
     // Kazooie's green eyes.
     keep *= 1.0f - smoothstep(0.02f, 0.08f, texColor.g - max(texColor.r, texColor.b)) * smoothstep(0.15f, 0.3f, saturation);
     // The inside of his mouth: red to pink (hue under 12 degrees, where his brown fur is 19 and up), not too bright.
@@ -53,8 +53,9 @@ float3 CharSurface(float3 color, float3 texColor, float4 anchor, float share, bo
     const float snow = FrParams.charSurface.y;
     const float dirt = FrParams.charSurface.z;
     const float sand = FrParams.charSurface.w;
-    const float height = saturate((anchor.w - floor(anchor.w + 0.05f)) / 0.45f) * CHAR_HEIGHT_RANGE;
-    const float keep = CharSurfaceKeep(texColor, height, featherCard);
+    // (A feather card's anchor.w carries no height, and its wing is never an eye: it takes the whole layer, low down.)
+    const float height = featherCard ? 30.0f : saturate((anchor.w - floor(anchor.w + 0.05f)) / 0.45f) * CHAR_HEIGHT_RANGE;
+    const float keep = featherCard ? 1.0f : CharSurfaceKeep(texColor, height, featherCard);
     if (keep <= 0.0f) {
         return color;
     }
