@@ -394,7 +394,6 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     }
     // Holding C Down (RB) with the option on: the stick's up and down change the distance instead of tilting.
     float rb_zoom_input = 0.0f;
-    gameplay_camera = on && gameplay && !paused;
     if (fine_held && wip_option<bool>(tooie::free_camera_rb_distance_option, false)) {
         rb_zoom_input = stick_y;
         stick_y = 0.0f;
@@ -408,6 +407,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     // While the free camera is on and the game's own camera is running, the right stick
     // is the free camera's, not C buttons.
     recompinput::set_right_analog_suppressed(on && gameplay && !paused);
+    gameplay_camera = on && gameplay && !paused;
 
     if (!on || !gameplay || map != state.map) {
         state.active = false;

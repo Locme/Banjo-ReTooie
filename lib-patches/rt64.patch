@@ -2165,7 +2165,7 @@ index 69a82ac..d17896a 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..ef56175 100644
+index 9fae0d4..cc80781 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,22 @@
@@ -3517,9 +3517,9 @@ index 9fae0d4..ef56175 100644
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
 -                submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState);
-+                // Mirror Mode: what comes after the 3D world of a frame that has one is the HUD.
-+                // A frame with no 3D world at all (a transition's black screen, menus) is all HUD: it is drawn unflipped.
-+                const bool mirrorHud = GetMirrorMode() && ((targetDrawCall.sceneEffectsAfter <= 0) || (int32_t(pair.first) >= targetDrawCall.sceneEffectsAfter));
++                // Mirror Mode: what comes after the 3D world of a framebuffer that has one is the HUD. A framebuffer
++                // with no 3D world is all HUD when it is part of the picture (mirrorWhole): it is drawn unflipped.
++                const bool mirrorHud = GetMirrorMode() && ((targetDrawCall.mirrorWorldEnd > 0) ? (int32_t(pair.first) >= targetDrawCall.mirrorWorldEnd) : targetDrawCall.mirrorWhole);
 +                const bool beforeEffects = deferExcluded && (rasterScenesDrawn < targetDrawCall.sceneEffectsAfter);
 +                if (beforeEffects) {
 +                    scenesBeforeEffects.push_back(pair.first);
@@ -3805,11 +3805,13 @@ index 9fae0d4..ef56175 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2819,70 @@ namespace RT64 {
+@@ -1408,6 +2819,72 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
 +        targetDrawCall.sceneEffectsAfter = -1;
++        targetDrawCall.mirrorWorldEnd = -1;
++        targetDrawCall.mirrorWhole = false;
 +        targetDrawCall.sceneEffectsDrawData = nullptr;
 +        targetDrawCall.waterInstances.clear();
 +        targetDrawCall.fallInstances.clear();
@@ -3876,7 +3878,7 @@ index 9fae0d4..ef56175 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2906,22 @@ namespace RT64 {
+@@ -1431,6 +2908,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3899,7 +3901,7 @@ index 9fae0d4..ef56175 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2941,167 @@ namespace RT64 {
+@@ -1450,12 +2943,167 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -4067,7 +4069,7 @@ index 9fae0d4..ef56175 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3252,7 @@ namespace RT64 {
+@@ -1606,6 +3254,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -4075,7 +4077,7 @@ index 9fae0d4..ef56175 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3329,20 @@ namespace RT64 {
+@@ -1682,6 +3331,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -4096,7 +4098,7 @@ index 9fae0d4..ef56175 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3408,2225 @@ namespace RT64 {
+@@ -1747,25 +3410,2247 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4973,6 +4975,7 @@ index 9fae0d4..ef56175 100644
 +            worldEnd = int32_t(targetDrawCall.rasterScenes.size());
 +        }
 +        targetDrawCall.sceneEffectsAfter = worldEnd;
++        targetDrawCall.mirrorWorldEnd = worldEnd;
 +
 +        // Banjo-Tooie: some frames draw the sky with its own projection, then a small draw to another buffer,
 +        // then the world, on the same picture (the Spiral Mountain pool). The effects go once, after the last
@@ -5999,6 +6002,27 @@ index 9fae0d4..ef56175 100644
 +        };
 +        finishFurNormals();
 +        effectsPart(RendererEffectsPart::Fur);
++
++        // Banjo-Tooie: Mirror Mode: which framebuffers with no 3D world are part of the picture (mirrorWhole).
++        {
++            bool frameHasWorld = false;
++            for (uint32_t i = 0; i < framebufferCount; i++) {
++                frameHasWorld = frameHasWorld || (framebufferVector[i].renderTargetDrawCall.mirrorWorldEnd > 0);
++            }
++            for (uint32_t i = 0; i < framebufferCount; i++) {
++                RenderTargetDrawCall &drawCall = framebufferVector[i].renderTargetDrawCall;
++                if (drawCall.mirrorWorldEnd > 0) {
++                    continue;
++                }
++                bool afterWorld = false;
++                const RenderTarget *target = (drawCall.fbStorage != nullptr) ? drawCall.fbStorage->colorTarget : nullptr;
++                for (uint32_t j = 0; (j < i) && !afterWorld && (target != nullptr); j++) {
++                    const RenderTargetDrawCall &earlier = framebufferVector[j].renderTargetDrawCall;
++                    afterWorld = (earlier.mirrorWorldEnd > 0) && (earlier.fbStorage != nullptr) && (earlier.fbStorage->colorTarget == target);
++                }
++                drawCall.mirrorWhole = !frameHasWorld || afterWorld;
++            }
++        }
 +        // Banjo-Tooie: how many grounds had to be worked out again (snowGroundCached), to the frame overlay.
 +        uint32_t snowRedone = 0;
 +        // Banjo-Tooie: deep snow's trail grid (a cell of nothing until there is one), only the rows changed since the
@@ -6334,7 +6358,7 @@ index 9fae0d4..ef56175 100644
  
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
-@@ -1816,8 +5677,12 @@ namespace RT64 {
+@@ -1816,8 +5701,12 @@ namespace RT64 {
          }
  #   endif
  
@@ -6348,7 +6372,7 @@ index 9fae0d4..ef56175 100644
  
      void FramebufferRenderer::advanceFrame(bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..8a3be9a 100644
+index 3add9c3..077f422 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,13 @@
@@ -6381,13 +6405,21 @@ index 3add9c3..8a3be9a 100644
  #include "rt64_vertex_processor.h"
  
  #if RT_ENABLED
-@@ -48,6 +56,58 @@ namespace RT64 {
+@@ -48,6 +56,66 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
 +        // Banjo-Tooie: the screen-space effects go after this many raster scenes (the 3D world's), or
 +        // nowhere when negative, with the 3D world's projection.
 +        int32_t sceneEffectsAfter = -1;
++        // Banjo-Tooie: Mirror Mode: the raster scenes up to here are this framebuffer's 3D world, as sceneEffectsAfter
++        // but kept when a later part of the same picture takes the effects over (that set sceneEffectsAfter to -1, so
++        // the earlier part's world was drawn flipped, the wrong way round to the rest). -1 with no world.
++        int32_t mirrorWorldEnd = -1;
++        // Banjo-Tooie: Mirror Mode: a framebuffer with no 3D world is drawn flipped whole (as HUD) only when it is part
++        // of the picture: drawn after the world on the world's own target, or in a frame with no world at all (menus,
++        // transitions). Other buffers (shadows, the game's own helper buffers) are left as they are (endFramebuffers).
++        bool mirrorWhole = false;
 +        // The 3D world's draw data and projection; its matrices are looked up when the effects are recorded,
 +        // after the projection processor has filled them.
 +        const DrawData *sceneEffectsDrawData = nullptr;
@@ -6440,7 +6472,7 @@ index 3add9c3..8a3be9a 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +122,260 @@ namespace RT64 {
+@@ -62,11 +130,260 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -6701,7 +6733,7 @@ index 3add9c3..8a3be9a 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +386,14 @@ namespace RT64 {
+@@ -77,6 +394,14 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
@@ -6716,7 +6748,7 @@ index 3add9c3..8a3be9a 100644
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +404,14 @@ namespace RT64 {
+@@ -87,6 +412,14 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -6731,7 +6763,7 @@ index 3add9c3..8a3be9a 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +425,7 @@ namespace RT64 {
+@@ -100,6 +433,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -6739,7 +6771,7 @@ index 3add9c3..8a3be9a 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +449,10 @@ namespace RT64 {
+@@ -123,6 +457,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -6750,7 +6782,7 @@ index 3add9c3..8a3be9a 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +494,15 @@ namespace RT64 {
+@@ -164,7 +502,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
