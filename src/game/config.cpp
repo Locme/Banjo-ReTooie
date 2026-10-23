@@ -446,22 +446,22 @@ void tooie::init_config() {
     tooie::control_scheme::add_option(general);
     general.add_bool_option(
         tooie::save_backups_option,
-        "Back up saves",
+        "Back Up Saves",
         "Copies your save file into the save_backups folder whenever it changes.",
         true);
     general.add_number_option(
         tooie::save_backups_keep_option,
-        "Save backups to keep",
+        "Save Backups To Keep",
         "How many of the newest save backups to keep.",
         1, 100, 1, 0, false, 10);
     general.add_bool_option(
         tooie::precompile_shaders_option,
-        "Compile all shaders at start",
+        "Compile All Shaders At Start",
         "Compiles every shader the game uses while the game starts, with a percentage on screen, so no area stutters on its first visit. Off: only the shaders you have already met compile at start. The first start takes a while; later starts reuse what was built. Takes effect on the next start.",
         true);
     general.add_enum_option(
         tooie::timer_save_option,
-        "Timer save",
+        "Timer Save",
         "Saves the game by itself after this much play time in a level. Pauses, menus and cutscenes do not count, and a save never happens during them.",
         {
             {tooie::TimerSave::Off, "Off", "Off"},
@@ -474,22 +474,22 @@ void tooie::init_config() {
         tooie::TimerSave::Off);
     general.add_bool_option(
         tooie::classic_sounds::option,
-        "Back-Port: Old Banjo sounds",
+        "Back-Port: Old Banjo Sounds",
         "Banjo-Kazooie's jump sounds instead of Banjo-Tooie's.",
         false);
     general.add_bool_option(
         tooie::honeycomb_glitter::option,
-        "Back-Port: Glittering honeycombs",
+        "Back-Port: Glittering Honeycombs",
         "Health honeycombs sparkle like they did in Banjo-Kazooie.",
         false);
     general.add_bool_option(
         tooie::original_honeycomb::option,
-        "Back-Port: Original honeycomb",
+        "Back-Port: Original Honeycomb",
         "Health honeycombs use Banjo-Kazooie's honeycomb model, which is still in Banjo-Tooie's files. Switching it in a level reloads the area.",
         false);
     general.add_bool_option(
         tooie::jiggy_dance::option,
-        "Back-Port: Get Jiggy animation",
+        "Back-Port: Get Jiggy Animation",
         "Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy.",
         false);
     tooie::bottles_revenge::add_option(general);
@@ -498,141 +498,141 @@ void tooie::init_config() {
     tooie::mirror_mode::add_option(general);
     general.add_bool_option(
         tooie::snout_jiggle::option,
-        "Snout jiggle",
+        "Snout Jiggle",
         "Banjo's snout wobbles as he runs, turns, jumps, falls and lands: it trails behind the way he moves and folds back towards his eyes in a dive. It stays mid-wobble in Photo Mode. Works with player model mods that keep his skeleton, such as Smash Banjo.",
         false);
     {
         using namespace tooie::snout_jiggle;
-        general.add_number_option(stiffness_option, "Snout jiggle: stiffness",
+        general.add_number_option(stiffness_option, "Snout Jiggle: Stiffness",
             "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
-        general.add_number_option(damping_option, "Snout jiggle: damping",
+        general.add_number_option(damping_option, "Snout Jiggle: Damping",
             "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
-        general.add_number_option(mass_option, "Snout jiggle: mass",
+        general.add_number_option(mass_option, "Snout Jiggle: Mass",
             "How heavy the snout is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
-        general.add_number_option(squash_in_option, "Snout jiggle: max squash & stretch inwards",
+        general.add_number_option(squash_in_option, "Snout Jiggle: Max Squash & Stretch Inwards",
             "How far the tip may be pushed back into his face and eyes, as a share of the snout's length.", 0, 95, 5, 0, true, 50);
-        general.add_number_option(squash_walk_option, "Snout jiggle: squash & stretch while walking",
+        general.add_number_option(squash_walk_option, "Snout Jiggle: Squash & Stretch While Walking",
             "The inwards limit while Banjo walks or runs along the ground, so walking forward doesn't squash his face. Jumps, falls, stops and turns use the inwards setting above. It can only be gentler than that.", 0, 95, 5, 0, true, 15);
-        general.add_number_option(squash_out_option, "Snout jiggle: max squash & stretch outwards",
+        general.add_number_option(squash_out_option, "Snout Jiggle: Max Squash & Stretch Outwards",
             "How far the tip may stretch out, as a share of the snout's length.", 0, 300, 5, 0, true, 50);
-        general.add_number_option(squash_across_option, "Snout jiggle: max squash & stretch up and down",
+        general.add_number_option(squash_across_option, "Snout Jiggle: Max Squash & Stretch Up And Down",
             "How far the tip may swing up and down (and to the side), as a share of the snout's length.", 0, 300, 5, 0, true, 50);
-        general.add_bool_option(nose_option, "Snout jiggle: nose jiggle",
+        general.add_bool_option(nose_option, "Snout Jiggle: Nose Jiggle",
             "Banjo's black nose wobbles too, on its own jiggle bone on the end of the snout, with the same spring. Its squash and stretch stays small so it always looks like a nose.", false);
         for (const std::string* id : { &stiffness_option, &damping_option, &mass_option, &squash_in_option, &squash_walk_option, &squash_out_option,
                                        &squash_across_option, &nose_option }) {
             general.add_option_hidden_dependency(*id, option, false);
         }
     }
-    general.add_bool_option(tooie::snout_jiggle::belly_option, "Belly jiggle",
+    general.add_bool_option(tooie::snout_jiggle::belly_option, "Belly Jiggle",
         "The front of Banjo's belly wobbles on a spring as he runs, jumps and lands, with its own settings like the snout's. On Banjo's own model (not model mods). It stays mid-wobble in Photo Mode.",
         false);
     {
         using namespace tooie::snout_jiggle;
-        general.add_number_option(belly_stiffness_option, "Belly jiggle: stiffness",
+        general.add_number_option(belly_stiffness_option, "Belly Jiggle: Stiffness",
             "How hard the belly springs back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
-        general.add_number_option(belly_damping_option, "Belly jiggle: damping",
+        general.add_number_option(belly_damping_option, "Belly Jiggle: Damping",
             "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
-        general.add_number_option(belly_mass_option, "Belly jiggle: mass",
+        general.add_number_option(belly_mass_option, "Belly Jiggle: Mass",
             "How heavy the belly is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
-        general.add_number_option(belly_squash_in_option, "Belly jiggle: max squash & stretch inwards",
+        general.add_number_option(belly_squash_in_option, "Belly Jiggle: Max Squash & Stretch Inwards",
             "How far the belly may squash in, as a share of its depth.", 0, 95, 5, 0, true, 25);
-        general.add_number_option(belly_squash_out_option, "Belly jiggle: max squash & stretch outwards",
+        general.add_number_option(belly_squash_out_option, "Belly Jiggle: Max Squash & Stretch Outwards",
             "How far the belly may bulge out, as a share of its depth.", 0, 300, 5, 0, true, 25);
-        general.add_number_option(belly_squash_across_option, "Belly jiggle: max squash & stretch up and down",
+        general.add_number_option(belly_squash_across_option, "Belly Jiggle: Max Squash & Stretch Up And Down",
             "How far the belly may swing up and down (and to the side), as a share of its depth.", 0, 300, 5, 0, true, 25);
         for (const std::string* id : { &belly_stiffness_option, &belly_damping_option, &belly_mass_option, &belly_squash_in_option,
                                        &belly_squash_out_option, &belly_squash_across_option }) {
             general.add_option_hidden_dependency(*id, belly_option, false);
         }
     }
-    general.add_bool_option(tooie::snout_jiggle::ears_option, "Ear jiggle",
+    general.add_bool_option(tooie::snout_jiggle::ears_option, "Ear Jiggle",
         "Banjo's ears wobble on springs as he runs, turns, jumps and lands, each on its own jiggle bone, with their own settings like the snout's. On Banjo's own model (not model mods). They stay mid-wobble in Photo Mode.",
         false);
     {
         using namespace tooie::snout_jiggle;
-        general.add_number_option(ears_stiffness_option, "Ear jiggle: stiffness",
+        general.add_number_option(ears_stiffness_option, "Ear Jiggle: Stiffness",
             "How hard the ears spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
-        general.add_number_option(ears_damping_option, "Ear jiggle: damping",
+        general.add_number_option(ears_damping_option, "Ear Jiggle: Damping",
             "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 10);
-        general.add_number_option(ears_mass_option, "Ear jiggle: mass",
+        general.add_number_option(ears_mass_option, "Ear Jiggle: Mass",
             "How heavy the ears are: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
-        general.add_number_option(ears_squash_option, "Ear jiggle: max squash & stretch",
+        general.add_number_option(ears_squash_option, "Ear Jiggle: Max Squash & Stretch",
             "How far an ear may squash down, stretch up and flop forwards, backwards and to the side, as a share of its height (squashing stops at 95%).", 0, 300, 5, 0, true, 60);
         for (const std::string* id : { &ears_stiffness_option, &ears_damping_option, &ears_mass_option, &ears_squash_option }) {
             general.add_option_hidden_dependency(*id, ears_option, false);
         }
     }
-    general.add_bool_option(tooie::snout_jiggle::fur_option, "Fur jiggle",
+    general.add_bool_option(tooie::snout_jiggle::fur_option, "Fur Jiggle",
         "The strands of Banjo's fur (the Banjo fur shader, in Character Shaders) lean back as he runs, turns, jumps and lands, and spring upright again when he stops. Its own settings like the snout's. It stays mid-sway in Photo Mode.",
         false);
     {
         using namespace tooie::snout_jiggle;
-        general.add_number_option(fur_stiffness_option, "Fur jiggle: stiffness",
+        general.add_number_option(fur_stiffness_option, "Fur Jiggle: Stiffness",
             "How hard the fur springs back upright. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
-        general.add_number_option(fur_damping_option, "Fur jiggle: damping",
+        general.add_number_option(fur_damping_option, "Fur Jiggle: Damping",
             "How quickly the swaying dies out. 0 sways for ages.", 0, 90, 1, 0, false, 8);
-        general.add_number_option(fur_mass_option, "Fur jiggle: mass",
+        general.add_number_option(fur_mass_option, "Fur Jiggle: Mass",
             "How heavy the fur is: heavier lags further behind and sways slower.", 0.1, 7.5, 0.1, 1, false, 1);
-        general.add_number_option(fur_sway_option, "Fur jiggle: max sway",
+        general.add_number_option(fur_sway_option, "Fur Jiggle: Max Sway",
             "How far the tips may lean, as a share of the strands' length.", 0, 300, 5, 0, true, 100);
         for (const std::string* id : { &fur_stiffness_option, &fur_damping_option, &fur_mass_option, &fur_sway_option }) {
             general.add_option_hidden_dependency(*id, fur_option, false);
         }
     }
-    general.add_bool_option(tooie::snout_jiggle::body_option, "Backpack jiggle",
+    general.add_bool_option(tooie::snout_jiggle::body_option, "Backpack Jiggle",
         "Banjo's backpack swings on a spring as he moves, carrying Kazooie with it, so the pack bounces when he runs, jumps and lands and settles when he stops. Separate from Snout jiggle and Kazooie jiggle, with its own settings. It stays mid-swing in Photo Mode.",
         false);
     {
         using namespace tooie::snout_jiggle;
-        general.add_number_option(body_stiffness_option, "Backpack jiggle: stiffness",
+        general.add_number_option(body_stiffness_option, "Backpack Jiggle: Stiffness",
             "How hard the backpack springs back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
-        general.add_number_option(body_damping_option, "Backpack jiggle: damping",
+        general.add_number_option(body_damping_option, "Backpack Jiggle: Damping",
             "How quickly the bouncing dies out. 0 bounces for ages.", 0, 90, 1, 0, false, 10);
-        general.add_number_option(body_mass_option, "Backpack jiggle: mass",
+        general.add_number_option(body_mass_option, "Backpack Jiggle: Mass",
             "How heavy the backpack is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1.5);
-        general.add_number_option(body_squash_option, "Backpack jiggle: squash & stretch",
+        general.add_number_option(body_squash_option, "Backpack Jiggle: Squash & Stretch",
             "How far the pack may swing, squash and stretch from where it rests, as a share of its size.", 0, 300, 5, 0, true, 25);
-        general.add_number_option(body_tilt_option, "Backpack jiggle: tilt",
+        general.add_number_option(body_tilt_option, "Backpack Jiggle: Tilt",
             "How the pack leans while Banjo walks or runs: positive leans its top forward towards his head, negative leans it back, in degrees. It eases back upright when he stops or leaves the ground.", -60, 60, 5, 0, false, 0);
         for (const std::string* id : { &body_stiffness_option, &body_damping_option, &body_mass_option, &body_squash_option,
                                        &body_tilt_option }) {
             general.add_option_hidden_dependency(*id, body_option, false);
         }
     }
-    general.add_bool_option(tooie::snout_jiggle::kazooie_option, "Kazooie jiggle",
+    general.add_bool_option(tooie::snout_jiggle::kazooie_option, "Kazooie Jiggle",
         "Kazooie's crest and tail feathers wobble on springs as she moves, whether she rides in the backpack or walks alone after Split Up. Separate from Snout jiggle. They stay mid-wobble in Photo Mode.",
         false);
     {
         using namespace tooie::snout_jiggle;
-        general.add_number_option(kazooie_stiffness_option, "Kazooie jiggle: stiffness",
+        general.add_number_option(kazooie_stiffness_option, "Kazooie Jiggle: Stiffness",
             "How hard her feathers spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
-        general.add_number_option(kazooie_damping_option, "Kazooie jiggle: damping",
+        general.add_number_option(kazooie_damping_option, "Kazooie Jiggle: Damping",
             "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
-        general.add_number_option(kazooie_mass_option, "Kazooie jiggle: mass",
+        general.add_number_option(kazooie_mass_option, "Kazooie Jiggle: Mass",
             "How heavy her feathers are: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
-        general.add_number_option(kazooie_squash_in_option, "Kazooie jiggle: max squash & stretch inwards",
+        general.add_number_option(kazooie_squash_in_option, "Kazooie Jiggle: Max Squash & Stretch Inwards",
             "How far each feather may squash back on itself, as a share of its length.", 0, 95, 5, 0, true, 50);
-        general.add_number_option(kazooie_squash_out_option, "Kazooie jiggle: max squash & stretch outwards",
+        general.add_number_option(kazooie_squash_out_option, "Kazooie Jiggle: Max Squash & Stretch Outwards",
             "How far each feather may stretch out, as a share of its length.", 0, 300, 5, 0, true, 50);
-        general.add_number_option(kazooie_squash_across_option, "Kazooie jiggle: max squash & stretch up and down",
+        general.add_number_option(kazooie_squash_across_option, "Kazooie Jiggle: Max Squash & Stretch Up And Down",
             "How far each feather may swing up and down (and to the side), as a share of its length.", 0, 300, 5, 0, true, 50);
         for (const std::string* id : { &kazooie_stiffness_option, &kazooie_damping_option, &kazooie_mass_option,
                                        &kazooie_squash_in_option, &kazooie_squash_out_option, &kazooie_squash_across_option }) {
             general.add_option_hidden_dependency(*id, kazooie_option, false);
         }
-    general.add_bool_option(tooie::snout_jiggle::mumbo_option, "Mumbo jiggle",
+    general.add_bool_option(tooie::snout_jiggle::mumbo_option, "Mumbo Jiggle",
         "The feathers on top of Mumbo's head wobble on springs as he moves, whether you play as him or meet him in his skull. Uses the Kazooie jiggle settings.",
         false);
     }
     general.add_bool_option(
         tooie::damage::double_damage_option,
-        "Enemies do double damage",
+        "Enemies Do Double Damage",
         "Every hit from an enemy or hazard takes twice the honeycombs. Falls hurt as they always do.",
         false);
     general.add_enum_option(
         tooie::damage::aim_option,
-        "Enemy aim",
+        "Enemy Aim",
         "The enemies and shots that aim ahead of you (Klungo's potions, lava gargoyles, fantasy eyeballs, balloon bombs, Gruntilda's fireballs and others) aim at where you are running to. <recomp-color primary>Original</recomp-color> is the game's own aim. <recomp-color primary>Better</recomp-color> aims half a second of your running ahead and <recomp-color primary>Sharp</recomp-color> a full second ahead, and Klungo's potion also steers toward you while it flies. Running in a straight line stops working; only really changing direction still dodges.",
         {
             {tooie::damage::Aim::Original, "Original", "Original"},
@@ -642,19 +642,19 @@ void tooie::init_config() {
         tooie::damage::Aim::Original);
     general.add_number_option(
         tooie::damage::aim_chance_option,
-        "Enemy aim: aimed shots",
+        "Enemy Aim: Aimed Shots",
         "With Enemy aim on Better or Sharp, how many shots are aimed ahead of you and steered, in percent. The others fly as in the game, so the boss cannot be read as always aiming ahead.",
         0, 100, 5, 0, false, 75);
     general.add_option_hidden_dependency(tooie::damage::aim_chance_option, tooie::damage::aim_option, tooie::damage::Aim::Original);
     general.add_bool_option(
         tooie::damage::homing_option,
-        "Enemy aim: homing shots",
+        "Enemy Aim: Homing Shots",
         "With Enemy aim on Better or Sharp, Klungo's potion also steers toward where you are heading while it flies, so only really changing direction dodges it.",
         true);
     general.add_option_hidden_dependency(tooie::damage::homing_option, tooie::damage::aim_option, tooie::damage::Aim::Original);
     general.add_bool_option(
         tooie::damage::strafe_option,
-        "Enemy dynamic positioning",
+        "Enemy Dynamic Positioning",
         "A curated list of enemies (Billy Bob, Boltoid, Diggit, Flatso, Globble, Gruntydactyl, Guvnor, Hothead, Jippo Jim, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba) slide sideways while they close in, and sidestep when you roll toward them, so they are harder to roll over.",
         false);
     general.add_bool_option(
@@ -666,7 +666,7 @@ void tooie::init_config() {
     // value saved in qol.json.
     general.add_enum_option(
         tooie::canary_mary::mode_option,
-        "Canary Mary races",
+        "Canary Mary Races",
         "<recomp-color primary>Fair</recomp-color>: Canary Mary never speeds up past her normal pace to catch you when you lead. <recomp-color primary>Easy</recomp-color> is Fair with her pace at 85%. <recomp-color primary>Original</recomp-color> keeps her catch-up. She still slows down when you fall behind, as in the original.",
         {
             {tooie::canary_mary::Mode::Original, "Original", "Original"},
@@ -695,7 +695,7 @@ void tooie::init_config() {
     // At the end of the section before Back-Ports, with its own heading, so the options around it keep theirs.
     recompui::config::set_option_display_before(tooie::precompile_shaders_option, tooie::classic_sounds::option);
     recompui::config::set_option_group(tooie::precompile_shaders_option, "Shaders");
-    recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports and cut content");
+    recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports And Cut Content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
     recompui::config::set_option_group(tooie::snout_jiggle::option, "Jiggle");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
@@ -715,7 +715,7 @@ void tooie::init_config() {
         true);
     qol.add_enum_option(
         tooie::text_speed_option,
-        "Text speed",
+        "Text Speed",
         "How fast dialogue text prints. <recomp-color primary>Instant</recomp-color> shows each page at once. Menus are not affected.",
         {
             {tooie::TextSpeed::Normal, "Normal", "1x"},
@@ -726,7 +726,7 @@ void tooie::init_config() {
         tooie::TextSpeed::Normal);
     qol.add_enum_option(
         tooie::transition_speed_option,
-        "Level transitions",
+        "Level Transitions",
         "How fast the screen wipe plays when you go to another area. <recomp-color primary>Fast</recomp-color> is 4x, <recomp-color primary>Instant</recomp-color> is 16x. Cutscene fades are not affected.",
         {
             {tooie::TransitionSpeed::Original, "Original", "Original"},
@@ -877,19 +877,19 @@ void tooie::init_config() {
         true);
     qol.add_bool_option(
         tooie::transform_anywhere::option,
-        "Transform anywhere",
+        "Transform Anywhere",
         "The Transform key (Controls tab, Movement; T on the keyboard, not bound on a controller) changes Banjo into the world's Humba Wumba form where he stands, and back, once you have changed in that world's Humba pool. Not in the air, swimming or in cutscenes. The submarine changes in water only.",
         true);
     qol.add_bool_option(
         tooie::totals_checklist::option,
-        "Totals checklist",
+        "Totals Checklist",
         "The pause menu's Totals pages also say how many of each item are left in a world and how many you can get with the moves you have now.",
         true);
     // Mouse in the game's menus moved from the WIP tab to QOL > Menu (L, 2026-10-23).
     tooie::menu_mouse::add_options(qol);
     qol.add_enum_option(
         tooie::fine_aim::mode_option,
-        "Fine aim",
+        "Fine Aim",
         "Turns the first-person view (C-up) slower with the left stick, for aiming eggs. <recomp-color primary>Hold key</recomp-color> slows it only while the Fine Aim key is held (Controls tab, Hotkeys; R by default).",
         {
             {tooie::fine_aim::Mode::Off, "Off", "Off"},
@@ -900,7 +900,7 @@ void tooie::init_config() {
         tooie::fine_aim::Mode::HoldKey);
     qol.add_enum_option(
         tooie::fine_aim::speed_option,
-        "Fine aim speed",
+        "Fine Aim Speed",
         "How fast the view turns with fine aim: 25%, 40% or 60% of the normal speed.",
         {
             {tooie::fine_aim::Speed::Slow, "Slow", "25%"},
@@ -916,11 +916,11 @@ void tooie::init_config() {
     // Totals checklist and Mouse in the game's menus sit under Menu, after Pause Special Menu (L, 2026-10-23).
     recompui::config::set_option_display_before(tooie::totals_checklist::option, tooie::text_speed_option);
     recompui::config::set_option_display_before(tooie::menu_mouse::enabled_option, tooie::text_speed_option);
-    recompui::config::set_option_group(tooie::text_speed_option, "Speed and skipping");
+    recompui::config::set_option_group(tooie::text_speed_option, "Speed And Skipping");
     // Press Start Anytime In Intro sits at the bottom of Speed and skipping (L, 2026-10-16).
     recompui::config::set_option_display_before(tooie::quick_start_option, tooie::free_camera_option);
     recompui::config::set_option_group(tooie::free_camera_option, "Camera");
-    recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves and aiming");
+    recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves And Aiming");
 
     // Gameplay tab (L, 2026-10-23): the enemy options and Canary Mary races under a Difficulty heading. A page
     // of General options, so they stay in general.json and the code that reads them doesn't change.
@@ -947,7 +947,7 @@ void tooie::init_config() {
         false);
     graphics.add_bool_option(
         tooie::free_camera_rb_distance_option,
-        "Hold C Down to Fine-Tune Distance",
+        "Hold C Down To Fine-Tune Distance",
         "Hold C Down (RB on a controller, the game's camera distance button) and push the camera stick up or down to move the free camera closer or further away, in small steps, from about half to twice the game's distance. A quick tap still does the game's own camera distance step; only a hold (about a quarter of a second) fine-tunes, and the game does not see it.",
         false);
     {
@@ -969,7 +969,7 @@ void tooie::init_config() {
         // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
         recompui::config::set_option_group(tooie::dive::option, "Dive");
         recompui::config::set_option_group(tooie::free_camera_rb_distance_option, "Free Camera");
-        recompui::config::set_option_group(pf::grass_section_option, "3D grass");
+        recompui::config::set_option_group(pf::grass_section_option, "3D Grass");
     }
     graphics.add_bool_option(
         tooie::high_detail_models_option,
@@ -1013,7 +1013,7 @@ void tooie::init_config() {
                 &dn::drops_option, &dn::mist_option, &dn::mist_time_option, &dn::sounds_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
-        recompui::config::set_option_group(dn::option, "Day and night");
+        recompui::config::set_option_group(dn::option, "Day And Night");
     }
     tooie::volumetric::add_options(graphics);
     tooie::dust::add_options(graphics);
@@ -1039,7 +1039,7 @@ void tooie::init_config() {
         for (const std::string* id : { &pf::char_wet_option, &pf::char_snow_option, &pf::char_dirt_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
-        recompui::config::set_option_group(pf::char_wet_option, "Character surface");
+        recompui::config::set_option_group(pf::char_wet_option, "Character Surface");
     }
     graphics.add_bool_option(
         tooie::draw_distance_option,
@@ -1054,12 +1054,12 @@ void tooie::init_config() {
         });
     graphics.add_number_option(
         tooie::fov_offset_option,
-        "Field of View",
+        "Field Of View",
         "Degrees added to the normal gameplay camera's field of view. Higher shows more around Banjo.",
         -10, 30, 1, 0, false, 0);
     graphics.add_number_option(
         tooie::cutscene_fov_offset_option,
-        "Cutscene Field of View",
+        "Cutscene Field Of View",
         "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
         -10, 20, 1, 0, false, 0);
     // Vanilla Enhancements (L, 2026-10-21): touches to the game's own look, after the Game view group.
@@ -1096,7 +1096,7 @@ void tooie::init_config() {
     // Section headings in the Graphics tab. The options of a group sit next to each other above, and a
     // heading hides with its option.
     recompui::config::set_option_group(recompui::config::graphics::options::res_option, "Display");
-    recompui::config::set_option_group(tooie::picture_filters::preset_option, "Picture and effects");
+    recompui::config::set_option_group(tooie::picture_filters::preset_option, "Picture And Effects");
     recompui::config::set_option_group(tooie::picture_filters::lighting_section_option, "Shaders");
     // HD Shadows sits in the Sun shadows part of the Shaders group, with its own toggle (L, 2026-10-16).
     recompui::config::set_option_display_before(tooie::hd_shadows_option, tooie::picture_filters::sun_shadows_option);
@@ -1117,7 +1117,7 @@ void tooie::init_config() {
         recompui::config::set_option_display_before(*option, tooie::picture_filters::contrast_option);
     }
     recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");
-    recompui::config::set_option_group(tooie::picture_filters::contrast_option, "Colour grading");
+    recompui::config::set_option_group(tooie::picture_filters::contrast_option, "Colour Grading");
     // 3D grass had its own section after the colour grading (L, 2026-10-16); it is in the WIP tab for now
     // (L, 2026-10-21), and gets set_option_group(grass_section_option, "Grass") back when it returns.
     // Ray Tracing has its own section after the grass, always shown (L, 2026-10-21).
@@ -1134,12 +1134,12 @@ void tooie::init_config() {
         recompui::config::set_option_display_before(*option, tooie::high_detail_models_option);
     }
     recompui::config::set_option_group(tooie::picture_filters::ray_tracing_option, "Ray Tracing");
-    recompui::config::set_option_group(tooie::high_detail_models_option, "Game view");
+    recompui::config::set_option_group(tooie::high_detail_models_option, "Game View");
     recompui::config::set_option_group(tooie::window_beams::option, "Vanilla Enhancements");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
     recompui::config::set_option_display_before(recompui::config::graphics::options::msaa_option, tooie::smaa::option);
-    recompui::config::set_option_group(recompui::config::graphics::options::msaa_option, "Anti-aliasing and scaling");
-    recompui::config::set_option_group(tooie::game_frame_rate::option, "Frame rate and overlay");
+    recompui::config::set_option_group(recompui::config::graphics::options::msaa_option, "Anti-Aliasing And Scaling");
+    recompui::config::set_option_group(tooie::game_frame_rate::option, "Frame Rate And Overlay");
     recompui::config::set_option_group(tooie::effect_views::option, "Debug");
 
     // Performance tab under Graphics (L, 2026-10-16): the frame rate and latency options. They stay in the
@@ -1169,7 +1169,7 @@ void tooie::init_config() {
     // Dumps moved here from General (L, 2026-10-15): they are read from the DEV tab.
     wip.add_enum_option(
         tooie::texture_dump_option,
-        "Texture dump",
+        "Texture Dump",
         "Saves every texture the game draws to the texture_dump folder, for making texture packs: each as a PNG named by its RT64 hash, with an rt64.json, plus RT64's raw dump files. <recomp-color primary>While playing</recomp-color> saves what you see as you play. <recomp-color primary>Sweep all maps</recomp-color> warps through every map by itself and turns the camera around in each, which takes about 40 minutes; load a spare save file first, since the game may save in odd places. It asks before it starts, and it keeps going after a restart (a map the game stopped in is skipped) until it is done or you set this to Off.",
         {
             {tooie::TextureDump::Off, "Off", "Off"},
@@ -1181,23 +1181,23 @@ void tooie::init_config() {
     tooie::memory_guard::add_option(wip);
     wip.add_bool_option(
         tooie::more_memory::option,
-        "More game memory",
+        "More Game Memory",
         "Gives the game a bigger memory heap, bigger buffers for drawing and animations, and 48 sound voices instead of 24, so scenes crowded with characters do not crash and fewer sounds cut out. Takes effect the next time the game starts.",
         true);
     // L, 2026-10-17: a vanilla issue, so a blending option, on by default.
     wip.add_bool_option(
         tooie::picture_filters::texture_seams_option,
-        "Blend texture seams",
+        "Blend Texture Seams",
         "Smooths the lines where the pieces of a picture drawn in parts meet, such as the title screen's logo. The game clamps each piece at its edge, which on the N64 is a fraction of a pixel but shows as a line at high resolutions; this carries each piece's shading on to its edge so the pieces blend.",
         true);
     wip.add_bool_option(
         tooie::asset_dump_option,
-        "Dump assets",
+        "Dump Assets",
         "Writes every model, animation, sprite and other game asset to the asset_dump folder as asset_<id>.bin, with assets.txt listing them (kind 0 is a model). Takes a few seconds. To replace an asset, put an edited asset_<id>.bin in mods/assets: it loads in place of the game's, at any size, the next time the game loads it.",
         false);
     wip.add_bool_option(
         tooie::sound_dump_option,
-        "Dump sounds",
+        "Dump Sounds",
         "Saves the game's sounds as WAV files to the sound_dump folder, sorted into a folder for each sound bank and instrument (bank0_0/inst3/snd12_rom01A2B40_22050hz_1ch.wav), with index.txt listing each one's place in the ROM. Each sound is written once, as banks load while you play, so visit different areas to collect more. Samples are saved at the bank's rate; the game bends some sounds' pitch when it plays them.",
         false);
     // L, 2026-10-17: on by default; the game's own widescreen mode is for stretched TVs.
@@ -1217,7 +1217,7 @@ void tooie::init_config() {
     // Additional Tabs (L, 2026-10-16): switches for the tabs that are hidden or shown as wanted.
     wip.add_bool_option(
         tooie::achievements_tab_option,
-        "Achievements tab",
+        "Achievements Tab",
         "Shows the Achievements tab. Achievements are still earned while it is hidden, and the Start menu's Achievements page always shows them.",
         false);
     wip.add_option_change_callback(tooie::achievements_tab_option,
@@ -1226,7 +1226,7 @@ void tooie::init_config() {
         });
     wip.add_bool_option(
         tooie::cheats_tab_option,
-        "Cheats tab",
+        "Cheats Tab",
         "Shows the Cheats tab. Turn it off to hide it; cheats that are already on stay on. A dev.txt file next to the game's exe shows it whatever this says.",
         // Off by default (L, 2026-10-23); dev.txt shows it.
         false);

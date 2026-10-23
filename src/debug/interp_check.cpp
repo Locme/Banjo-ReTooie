@@ -131,7 +131,7 @@ void tooie::interp_check::add_options(recomp::config::Config& graphics) {
 
     graphics.add_bool_option(
         check_option,
-        "Interpolation check",
+        "Interpolation Check",
         "For testing. Tints a model red for a moment when its blend between game frames looks wrong, and logs it to the console. Shows nothing at the Original frame rate. "
         "The Interpolation Check key (bind one in the Debug section of the Controls tab) switches it on and off while you play. Starts Off each launch.",
         false);
@@ -151,7 +151,7 @@ void tooie::interp_check::add_options(recomp::config::Config& graphics) {
     }
     graphics.add_enum_option(
         blend_option,
-        "Interpolation blend mode",
+        "Interpolation Blend Mode",
         "For testing. How frames between two game frames are blended, to find what blends wrong. "
         "<recomp-color primary>custom</recomp-color> is the setting the game ships with: models snap to the game's own frames and the camera blends, but characters (models with bones) blend with their vertices too, and a model you tagged with the Pick Model and Tag Model keys (interp_tags.txt) does as its tag says. <recomp-color primary>normal</recomp-color> blends every model without vertex blending. The Blend Mode key (bind one in the Debug section of the Controls tab) steps through them. Starts on custom each launch.",
         options,

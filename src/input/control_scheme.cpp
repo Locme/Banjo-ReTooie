@@ -34,7 +34,7 @@ namespace {
 }
 
 void tooie::control_scheme::add_option(recomp::config::Config& general) {
-    general.add_enum_option(option, "Control scheme",
+    general.add_enum_option(option, "Control Scheme",
         "<recomp-color primary>D-pad</recomp-color>: the D-pad walks Banjo (unless the left stick is pushed), "
         "and holding L (LB) makes the D-pad the C-buttons. The D-pad cheats are off in this scheme.",
         {
