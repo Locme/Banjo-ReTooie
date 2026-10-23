@@ -26,9 +26,10 @@ float CharSurfaceKeep(float3 texColor, float height, bool featherCard) {
     keep *= 1.0f - smoothstep(0.02f, 0.08f, texColor.g - max(texColor.r, texColor.b)) * smoothstep(0.15f, 0.3f, saturation);
     // The inside of his mouth: red to pink (hue under 12 degrees, where his brown fur is 19 and up), not too bright.
     // (Kazooie's mouth has the same reds.)
-    if (!featherCard && (texColor.r >= texColor.g) && (texColor.r >= texColor.b) && (saturation > 0.3f) && (high < 0.8f)) {
+    // (Only deep reds, and only up at the head: his chest and muzzle are pale pink, close to the mouth's hue.)
+    if (!featherCard && (texColor.r >= texColor.g) && (texColor.r >= texColor.b) && (saturation > 0.45f) && (high < 0.8f)) {
         const float hue = (texColor.g - texColor.b) / max(texColor.r - min(texColor.g, texColor.b), 1e-4f);
-        keep *= smoothstep(0.15f, 0.3f, hue);
+        keep *= lerp(1.0f, smoothstep(0.15f, 0.3f, hue), smoothstep(75.0f, 95.0f, height));
     }
     return keep;
 }
@@ -81,12 +82,16 @@ float3 CharSurface(float3 color, float3 texColor, float4 anchor, float share, bo
     }
 
     // Swimming: his fur and skin go dark and heavy.
-    color *= 1.0f - 0.3f * FrParams.charSurface2.z * keep;
+    // (Only on what is fur, cloth and feathers: his pale skin, face and chest stay as they are.)
+    const float hi = max(texColor.r, max(texColor.g, texColor.b));
+    const float tint = keep * smoothstep(0.38f, 0.52f, (hi - min(texColor.r, min(texColor.g, texColor.b))) / max(hi, 1e-4f));
+    const float soaked = FrParams.charSurface2.z;
+    color *= 1.0f - 0.3f * soaked * tint;
 
     // Icy water (swimming in it, or still wet from it): an ice-blue cast over everything wet.
     const float icy = FrParams.charSurface2.w;
     if (icy > 0.0f) {
-        const float cold = icy * saturate(max(wet, FrParams.charSurface2.z)) * keep;
+        const float cold = icy * saturate(max(wet, soaked)) * tint;
         const float luma = dot(color, float3(0.3f, 0.59f, 0.11f));
         color = lerp(color, float3(0.35f, 0.7f, 1.0f) * (luma + 0.12f) * 1.5f, 0.6f * cold);
     }
@@ -94,16 +99,18 @@ float3 CharSurface(float3 color, float3 texColor, float4 anchor, float share, bo
     // Wet: darker and a little richer all over, with a sheen where it catches the light.
     if (wet > 0.0f) {
         const float luma = dot(color, float3(0.3f, 0.59f, 0.11f));
-        const float w = wet * keep;
+        // (In the water it is just the darker fur: no sheen or spots, those come once he is out.)
+        const float w = wet * tint;
+        const float dry = 1.0f - soaked;
         color = lerp(color, color * color * 1.3f + luma * 0.05f, 0.7f * w);
         color *= 1.0f - 0.22f * w;
-        color += float3(0.55f, 0.6f, 0.65f) * w * 0.14f * smoothstep(0.55f, 0.85f, FurNoise(grid * 0.8f));
+        color += float3(0.55f, 0.6f, 0.65f) * w * dry * 0.14f * smoothstep(0.55f, 0.85f, FurNoise(grid * 0.8f));
 
         // Dripping: bright streaks of water running down him (columns round the body, the pattern moving down the height).
         const float drip = FrParams.charSurface2.y;
         if (drip > 0.0f) {
             const float streakNoise = FurNoise(float3(anchor.x * 0.8f + 3.0f, anchor.z * 0.8f, height * 0.05f + FrParams.charSurface2.x * 1.6f));
-            const float streak = smoothstep(0.72f, 0.9f, streakNoise) * smoothstep(8.0f, 30.0f, height) * drip * keep;
+            const float streak = smoothstep(0.72f, 0.9f, streakNoise) * smoothstep(8.0f, 30.0f, height) * drip * tint;
             color = lerp(color, color * 0.8f + float3(0.5f, 0.6f, 0.7f) * 0.3f, streak);
         }
     }
