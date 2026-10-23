@@ -24,6 +24,7 @@
 #include "render/rt64_gpu_sections.h"
 #include "render/rt64_fsr.h"
 #include "render/rt64_photo_grade.h"
+#include "render/rt64_temporal_upscaler.h"
 #include "render/rt64_vi_renderer.h"
 
 namespace RT64 {

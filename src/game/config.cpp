@@ -57,6 +57,7 @@
 #include "tooie_low_latency.h"
 #include "tooie_frame_readback.h"
 #include "tooie_fsr.h"
+#include "tooie_upscaler.h"
 #include "tooie_effect_views.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_check.h"
@@ -874,6 +875,15 @@ void tooie::init_config() {
     tooie::fxaa::add_option(graphics);
     tooie::api_restart::add_prompt(graphics);
     tooie::fsr::add_option(graphics);
+    tooie::upscaler::add_option(graphics);
+    {
+        // The upscalers are WIP (L, 2026-10-23): their own "Upscaler" section in the WIP tab. Still Graphics
+        // options, so they save to graphics.json.
+        for (const std::string* id : { &tooie::upscaler::option, &tooie::upscaler::quality_option, &tooie::upscaler::hud_option, &tooie::upscaler::hud_full_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        recompui::config::set_option_group(tooie::upscaler::option, "Upscaler");
+    }
     tooie::game_frame_rate::add_option(graphics);
     recompui::config::graphics::add_interpolation_options(graphics);
     tooie::low_latency::add_option(graphics);
@@ -1046,6 +1056,7 @@ void tooie::init_config() {
     tooie::fxaa::apply();
     tooie::mirror_mode::apply();
     tooie::fsr::apply();
+    tooie::upscaler::apply();
     tooie::low_latency::apply();
     tooie::frame_readback::apply();
 }

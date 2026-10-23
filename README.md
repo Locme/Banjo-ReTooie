@@ -76,6 +76,12 @@ What changed, newest first, is in [`notes/changelog.md`](notes/changelog.md).
 
 ## Licence
 
+The DLSS runtime `nvngx_dlss.dll` that Windows builds fetch and ship beside the game is NVIDIA's, under NVIDIA's own
+licence (`third-party/nvidia-dlss/LICENSE.txt`), not the GPL.
+The FSR 3 / FSR 4 DLLs (`amd_fidelityfx_loader_dx12.dll`, `amd_fidelityfx_upscaler_dx12.dll`) that Windows builds fetch and ship are
+AMD's, redistributed in binary form under AMD's licence (`third-party/amd-fsr/LICENSE.txt`), not the GPL.
+Android builds include Qualcomm's Snapdragon GSR 1 shader (`third-party/snapdragon-gsr`, BSD 3-Clause).
+
 GPL-3.0, see [`COPYING`](COPYING). N64ModernRuntime is GPL-3.0; N64Recomp and
 RT64 are MIT; RecompFrontend ships no licence file and is used only as a
 submodule. Inter and Noto Emoji are under the SIL Open Font License; PromptFont
