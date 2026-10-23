@@ -700,7 +700,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
     recompui::config::set_option_group(tooie::mirror_mode::option, "Features");
     recompui::config::set_option_group(tooie::snout_jiggle::option, "Jiggle");
-    recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
+    recompui::config::set_option_group(tooie::discord::presence_option, "Others");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
