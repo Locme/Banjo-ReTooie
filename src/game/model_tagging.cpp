@@ -1755,6 +1755,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             if ((want == 1 && !banjo_fur) || (want == 2 && !kazooie_feathers)) {
                 want = 0;
             }
+            // His feet and shorts and her crest have no fur or feathers but still get wet, snowy and dirty (kind 5).
+            else if (want == 0 && char_surface && use_model_skip && std::binary_search(kazooie.bare.begin(), kazooie.bare.end(), commands[i].w1 & 0x1FFFFFFF)) {
+                want = 5;
+            }
             if (want == 2 && kazooie_cycle.on && kazooie_call++ != kazooie_only) {
                 want = 0;
             }

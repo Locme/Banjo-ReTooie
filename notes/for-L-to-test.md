@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T568 Character surface round 2: spots, feet and shorts, drips
+- Asked: 2026-10-23 16:55 UTC
+- Build: main after PR #21
+- Steps:
+  1. Pull main and build on Windows; WIP > Character surface: all sliders 100
+  2. Swim, get out: he drips (streaks running down) and dries in 5 to 10 seconds, a different time each exit
+  3. Icy Side: snow spots on his feet and legs, climbing higher the longer he stays; sand and dirt the same
+  4. Check eyes and mouths (Banjo's and Kazooie's) stay clean, feet and shorts are covered, Kazooie's wings and stomach are covered
+  5. Die: everything washes off. Leave Icy Side for the lava world: snow and sand are gone
+- Look for: Spots only near the ground and only where he touches it; eyes and mouths clean (tell me which ones still get coated); Kazooie's wings/feathers coated; drip streaks visible but not too strong
+- Status: waiting for L
+
 ## T567 Character surface in WIP, dust dirt and sand
 - Asked: 2026-10-23 13:54 UTC
 - Build: main after PR #20
@@ -22,6 +34,15 @@
   5. Also try Banjo fur on and Kazooie feathers on with each, and Kazooie out of the backpack
   6. Headless aid: TOOIE_CHAR_WET, TOOIE_CHAR_SNOW, TOOIE_CHAR_DIRT=100 hold one fixed
 - Look for: Wet: darker with a sheen, fur clumped. Snow: white on up-facing parts, more on fur tips. Dirt: brown on lower parts and undersides. Fur and feathers match the body underneath. Flicker where body parts meet (the up-direction is read from the vertex marks, known weak spot). Frame cost with all three on vs off. First use compiles a few extra shaders for Banjo's materials
+- Status: waiting for L
+
+## T566 Hits each enemy takes
+- Asked: 2026-10-23
+- Build: main
+- Steps:
+  1. Spawn each of Boltoid, Gruntydactyl, Hothead, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba (Enemy spawner) one at a time and hit it until it dies (note whether it flinches)
+  2. Send logs/console.log and tell me which enemies flinched
+- Look for: [hits] lines: "enemy hit, damage 100" is one hit, 50 two hits, 34 three; "hit actor entry ... model ..." says which enemy.
 - Status: waiting for L
 
 ## T565 Volumetric dust

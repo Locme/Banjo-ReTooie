@@ -115,6 +115,7 @@ namespace RT64 {
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
     void SetSceneCharSurface(float wet, float snow, float dirt, float sand);
+    void SetSceneCharDrip(float drip, float seconds);
     bool SceneSandUnderfoot();
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand);
@@ -5146,7 +5147,29 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
                 std::copy(pos, pos + 3, last_pos);
             }
             had_pos = valid;
-            amounts[0] = std::clamp(amounts[0] + (in_water ? 3.0f : -0.1f) * dt, 0.0f, 1.0f);
+            // Dying washes everything off (state 0x41, as the boss rush sees it); going to another map takes the snow and the
+            // sand with it (the icy world to the lava world), unless the new map has snow too.
+            static uint16_t last_map = 0xFFFF;
+            if (state == 0x41) {
+                amounts[0] = amounts[1] = amounts[2] = amounts[3] = 0.0f;
+            }
+            if (map != last_map) {
+                if (last_map != 0xFFFF) {
+                    if (!snowy_map(map)) {
+                        amounts[1] = 0.0f;
+                    }
+                    amounts[3] = 0.0f;
+                }
+                last_map = map;
+            }
+            // Wet: soaked in the water, then dry in 5 to 10 seconds, picked at random each time he gets out.
+            static bool was_wet_in_water = false;
+            static float dry_seconds = 8.0f;
+            if (was_wet_in_water && !in_water) {
+                dry_seconds = 5.0f + 5.0f * float(std::chrono::steady_clock::now().time_since_epoch().count() % 1000) / 1000.0f;
+            }
+            was_wet_in_water = in_water;
+            amounts[0] = std::clamp(amounts[0] + (in_water ? 3.0f : -1.0f / dry_seconds) * dt, 0.0f, 1.0f);
             if (in_water) {
                 amounts[1] -= 0.5f * dt;
                 amounts[2] -= 0.35f * dt;
@@ -5192,6 +5215,9 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         static const bool force_sand = std::getenv("TOOIE_CHAR_SAND") != nullptr;
         const float sand = (force_sand ? (float)(std::atof(std::getenv("TOOIE_CHAR_SAND")) / 100.0) : amounts[3]) * char_dirt_max.load();
         RT64::SetSceneCharSurface(out[0], out[1], out[2], sand);
+        // (He drips while he is wet and the wet slider is up.)
+        RT64::SetSceneCharDrip((char_wet_max.load() > 0.0f && char_forced[0].load() < 0.0f) ? amounts[0] : (char_forced[0].load() > 0.0f ? 1.0f : 0.0f),
+            (float)std::fmod(std::chrono::duration<double>(now.time_since_epoch()).count(), 1000.0));
     }
     // The fog is measured from Banjo.
     {

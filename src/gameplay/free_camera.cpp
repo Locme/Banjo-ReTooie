@@ -104,6 +104,9 @@ namespace {
     // Floor clearance (WIP): the downward line test runs from this far above the camera to this far below it.
     constexpr float floor_probe_up = 40.0f;
     constexpr float floor_probe_down = 60.0f;
+    // Smooth stairs: rate (per second) the orbit height follows Banjo, and the jump (teleport) that snaps it.
+    constexpr float pivot_rate = 8.0f;
+    constexpr float pivot_snap = 300.0f;
     constexpr float stick_deadzone = 0.2f;
     // Distance, as a multiple of the game's, reached by pushing on past the tilt limits.
     constexpr float min_zoom = 0.25f;
@@ -145,6 +148,8 @@ namespace {
         int32_t wheel = 0;      // mouse wheel total last step
         uint32_t middle = 0;    // middle button presses last step
         bool has_wheel = false;
+        float pivot_y = 0.0f;   // smooth stairs: the height the camera orbits, eased towards Banjo's
+        bool has_pivot = false;
         float look = 0.0f;      // look-up tilt: degrees the view is raised past the lowest eye height
         float idle = 0.0f;      // seconds since the stick was last used
         float wall = 1.0f;      // smooth walls: the camera's distance as a fraction of the wanted one
@@ -392,13 +397,6 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
         recompinput::profiles::get_n64_input(0, &buttons, &bx, &by);
         r_held = (buttons & n64_r_button) != 0;
     }
-    // Holding C Down (RB) with the option on: the stick's up and down change the distance instead of tilting.
-    float rb_zoom_input = 0.0f;
-    if (fine_held && wip_option<bool>(tooie::free_camera_rb_distance_option, false)) {
-        rb_zoom_input = stick_y;
-        stick_y = 0.0f;
-    }
-
     const bool on = tooie::free_camera::enabled();
     const bool gameplay = updating && mode == mode_dynamic && valid_ptr(camera) && valid_ptr(transform) && valid_ptr(dynamic);
     // First person and the like: leave the camera alone but keep the held yaw for afterwards.
@@ -407,7 +405,14 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     // While the free camera is on and the game's own camera is running, the right stick
     // is the free camera's, not C buttons.
     recompinput::set_right_analog_suppressed(on && gameplay && !paused);
+
+    // Holding C Down (RB) with the option on: the stick's up and down change the distance instead of tilting.
+    float rb_zoom_input = 0.0f;
     gameplay_camera = on && gameplay && !paused;
+    if (fine_held && wip_option<bool>(tooie::free_camera_rb_distance_option, false)) {
+        rb_zoom_input = stick_y;
+        stick_y = 0.0f;
+    }
 
     if (!on || !gameplay || map != state.map) {
         state.active = false;
@@ -426,6 +431,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             state.elevation = std::clamp(game_elevation(pos, banjo), min_elevation, max_elevation);
             state.aim = std::clamp(signed_degrees(rot[0]) + game_elevation(pos, banjo), min_aim, max_aim);
             state.zoom = 1.0f;
+            state.has_pivot = false;
             state.look = 0.0f;
             state.wall = 1.0f;
         }
@@ -485,7 +491,17 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             const float tilt_input = -sy * yaw_speeds[speed] * pitch_ratio * dt - orbit_pitch;
 
             // The camera's offset from the pivot, turned about the vertical by the yaw change.
-            const float pivot[3] = { banjo[0], banjo[1] + pivot_height, banjo[2] };
+            // Smooth stairs: the orbit height follows Banjo's with an ease, so steps don't bob the camera.
+            const float pivot_target = banjo[1] + pivot_height;
+            if (!state.has_pivot || !option<bool>(tooie::free_camera_smooth_height_option, true) ||
+                std::fabs(pivot_target - state.pivot_y) > pivot_snap) {
+                state.pivot_y = pivot_target;
+            }
+            else {
+                state.pivot_y += (pivot_target - state.pivot_y) * ease(pivot_rate, dt);
+            }
+            state.has_pivot = true;
+            const float pivot[3] = { banjo[0], state.pivot_y, banjo[2] };
             const float ox = pos[0] - pivot[0];
             const float oy = pos[1] - pivot[1];
             const float oz = pos[2] - pivot[2];

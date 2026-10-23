@@ -297,6 +297,34 @@ namespace {
 }
 
 namespace {
+    // Canary Mary races moved from the QOL tab to Gameplay, a page of General options (L, 2026-10-23): carry a
+    // value saved in qol.json into general.json once, while general.json has none. Done on the files before the
+    // configs load, so the saved enum name is copied as it is.
+    void move_saved_canary_mary() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        nlohmann::json qol_json;
+        if (std::ifstream file(dir / "qol.json"); file) {
+            qol_json = nlohmann::json::parse(file, nullptr, false);
+        }
+        if (!qol_json.is_object() || !qol_json.contains(tooie::canary_mary::mode_option) ||
+            !qol_json[tooie::canary_mary::mode_option].is_string()) {
+            return;
+        }
+        const std::filesystem::path path = dir / "general.json";
+        nlohmann::json json;
+        if (std::ifstream file(path); file) {
+            json = nlohmann::json::parse(file, nullptr, false);
+        }
+        if (!json.is_object() || json.contains(tooie::canary_mary::mode_option)) {
+            return;
+        }
+        json[tooie::canary_mary::mode_option] = qol_json[tooie::canary_mary::mode_option];
+        std::ofstream file(path, std::ios::trunc);
+        file << json.dump(4);
+    }
+}
+
+namespace {
     // Toon shading became two sliders, Characters and World (L, 2026-10-21). A value saved under the old single
     // "toon_shading" is carried to both once, unless graphics.json already has either of the new ones. Done on the
     // file before the configs load.
@@ -570,6 +598,18 @@ void tooie::init_config() {
         "Lower Enemy Attack Cooldown",
         "The curated list of enemies (Billy Bob, Boltoid, Diggit, Flatso, Globble, Gruntydactyl, Guvnor, Hothead, Jippo Jim, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba) wait half as long between attacks.",
         false);
+    // Moved from QOL > Balancing to Gameplay > Difficulty (L, 2026-10-23); move_saved_canary_mary carries the
+    // value saved in qol.json.
+    general.add_enum_option(
+        tooie::canary_mary::mode_option,
+        "Canary Mary races",
+        "<recomp-color primary>Fair</recomp-color>: Canary Mary never speeds up past her normal pace to catch you when you lead. <recomp-color primary>Easy</recomp-color> is Fair with her pace at 85%. <recomp-color primary>Original</recomp-color> keeps her catch-up. She still slows down when you fall behind, as in the original.",
+        {
+            {tooie::canary_mary::Mode::Original, "Original", "Original"},
+            {tooie::canary_mary::Mode::Fair, "Fair", "Fair"},
+            {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
+        },
+        tooie::canary_mary::Mode::Fair);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(
         tooie::discord::presence_option,
@@ -594,12 +634,6 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports and cut content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
     recompui::config::set_option_group(tooie::snout_jiggle::option, "Jiggle");
-    recompui::config::set_option_group(tooie::damage::double_damage_option, "Gameplay");
-    recompui::config::set_option_group(tooie::damage::aim_option, "Gameplay");
-    recompui::config::set_option_group(tooie::damage::aim_chance_option, "Gameplay");
-    recompui::config::set_option_group(tooie::damage::homing_option, "Gameplay");
-    recompui::config::set_option_group(tooie::damage::faster_attacks_option, "Gameplay");
-    recompui::config::set_option_group(tooie::damage::strafe_option, "Gameplay");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
@@ -684,6 +718,11 @@ void tooie::init_config() {
         },
         tooie::FreeCameraEaseBack::Off);
     qol.add_bool_option(
+        tooie::free_camera_smooth_height_option,
+        "Free camera: smooth stairs",
+        "The free camera follows Banjo's height with a gentle ease, so walking down (or up) stairs and small steps no longer bobs or jerks the camera.",
+        true);
+    qol.add_bool_option(
         tooie::free_camera_hover_option,
         "Free camera: hover over small objects",
         "A small object near the camera no longer pulls it in towards Banjo when the camera can still see him past it: the camera stays where you put it and hovers over the object. An object that is really between Banjo and the camera still pulls it in.",
@@ -723,7 +762,7 @@ void tooie::init_config() {
                                    &tooie::free_camera_invert_y_option,
                                    &tooie::free_camera_smooth_walls_option, &tooie::free_camera_ease_back_option,
                                    &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option,
-                                   &tooie::free_camera_hover_option,
+                                   &tooie::free_camera_hover_option, &tooie::free_camera_smooth_height_option,
                                    &tooie::free_camera_mouse_option, &tooie::free_camera_gyro_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
@@ -774,25 +813,24 @@ void tooie::init_config() {
         tooie::fine_aim::Speed::Medium);
     qol.add_option_hidden_dependency(tooie::fine_aim::speed_option, tooie::fine_aim::mode_option, tooie::fine_aim::Mode::Off);
     tooie::motion_aim::add_options(qol);
-    qol.add_enum_option(
-        tooie::canary_mary::mode_option,
-        "Canary Mary races",
-        "<recomp-color primary>Fair</recomp-color>: Canary Mary never speeds up past her normal pace to catch you when you lead. <recomp-color primary>Easy</recomp-color> is Fair with her pace at 85%. <recomp-color primary>Original</recomp-color> keeps her catch-up. She still slows down when you fall behind, as in the original.",
-        {
-            {tooie::canary_mary::Mode::Original, "Original", "Original"},
-            {tooie::canary_mary::Mode::Fair, "Fair", "Fair"},
-            {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
-        },
-        tooie::canary_mary::Mode::Fair);
 
     // Section headings in the QOL tab (the options of a group sit next to each other above).
     recompui::config::set_option_group(tooie::menu_pause::option, "Menu");
     recompui::config::set_option_group(tooie::text_speed_option, "Speed and skipping");
     // Press Start Anytime In Intro sits at the bottom of Speed and skipping (L, 2026-10-16).
     recompui::config::set_option_display_before(tooie::quick_start_option, tooie::free_camera_option);
-    recompui::config::set_option_group(tooie::canary_mary::mode_option, "Balancing");
     recompui::config::set_option_group(tooie::free_camera_option, "Camera");
     recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves and aiming");
+
+    // Gameplay tab (L, 2026-10-23): the enemy options and Canary Mary races under a Difficulty heading. A page
+    // of General options, so they stay in general.json and the code that reads them doesn't change.
+    recompui::config::create_page_tab("Gameplay", tooie::gameplay_tab_id, recompui::config::general::id);
+    for (const std::string* id : { &tooie::damage::double_damage_option, &tooie::damage::aim_option,
+            &tooie::damage::aim_chance_option, &tooie::damage::homing_option, &tooie::damage::strafe_option,
+            &tooie::damage::faster_attacks_option, &tooie::canary_mary::mode_option }) {
+        recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
+    }
+    recompui::config::set_option_group(tooie::damage::double_damage_option, "Difficulty");
 
     // Features still being worked on (L, 2026-10-21), in a section named like the tab. When one is done it
     // moves to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's menus back to QOL, the
@@ -1105,6 +1143,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
     move_saved_hud_placement();
+    move_saved_canary_mary();
     split_saved_toon_shading();
     recompui::config::finalize();
     tooie::cheats::reset_on_start();
