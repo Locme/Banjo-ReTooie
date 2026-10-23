@@ -9,6 +9,10 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
+- New **Simple menu** (General, on by default): hides the tuning sliders of the photo mode and free camera extras, the debug options and the DEV tab; turn it off to see everything. Search still finds hidden options (L). Untested on PC.
+- **Openable settings** (L): an effect with settings of its own (Fog, 3D grass, Banjo fur, Sun shadows, Toon outlines and others) is one on/off switch with a down arrow in front of its name; press the arrow to open its sliders on a darker panel, press again to close. An effect that is only a slider (Bloom, SSGI) stays a slider. Untested on PC.
+- **Jiggle** is now one switch, **off by default**, under Gameplay > Enhancements; the arrow opens Snout, Belly, Ear, Fur, Backpack, Kazooie and Mumbo jiggle (each on by default, each with its own arrow and sliders). Anyone who had jiggle on has to turn the Jiggle switch on once (L). Untested on PC.
+- **Boss rush** is a button (Start boss rush / Stop boss rush) instead of a switch (L). Untested on PC.
 
 - Enemy dynamic positioning (Gameplay, off; also steps out of Banjo eggs in flight): the curated enemies (Boltoid, Gruntydactyl, Hothead, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba) slide sideways while closing in and sidestep when Banjo rolls toward them; Lower Enemy Attack Cooldown now only touches the same list. Untested on PC (T564).
 - DEV > Aim sweep (for testing, off): spawns about 60 enemies one after another next to Banjo, reloading the area between them, and writes aim_sweep.txt in the Dev Files folder listing which player-position readers run with each. About 25 minutes; it turns itself off. Untested on PC (T562). The 16 "(only where it lives)" enemies are included: Banjo is warped to a map whose setup places each one first, so the sweep takes a bit longer.
