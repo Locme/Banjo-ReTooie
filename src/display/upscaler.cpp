@@ -18,6 +18,7 @@ namespace RT64 {
     void SetUpscalerHudSplit(bool enabled);
     void SetUpscalerHudFullResolution(bool enabled);
     void SetUpscalerReactive(bool enabled);
+    void SetUpscalerObjectMotion(bool enabled);
     void SetUpscalerSharpness(float sharpness);
 }
 
@@ -99,6 +100,12 @@ void tooie::upscaler::apply() {
     } catch (...) {
     }
     RT64::SetUpscalerReactive(reactive);
+    bool object_motion = true;
+    try {
+        object_motion = std::get<bool>(graphics_config().get_option_value(object_motion_option));
+    } catch (...) {
+    }
+    RT64::SetUpscalerObjectMotion(object_motion);
     uint32_t sharpness = (uint32_t)Sharpness::Off;
     try {
         sharpness = std::get<uint32_t>(graphics_config().get_option_value(sharpness_option));
@@ -177,7 +184,12 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
             {Sharpness::High, "High", "High"},
         },
         Sharpness::Off);
-    for (const std::string* id : { &reactive_option, &sharpness_option }) {
+    graphics.add_bool_option(
+        object_motion_option,
+        "Upscaler: Object Motion",
+        "Draws the 3D world's solid things a second time to tell the upscaler how characters and enemies move, which cuts smearing behind them. It costs frame rate; turn it off if the upscaler runs slower than no upscaler. The Reactive Mask needs it.",
+        true);
+    for (const std::string* id : { &reactive_option, &sharpness_option, &object_motion_option }) {
         graphics.add_option_change_callback(*id,
             [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
                 if (context == recomp::config::OptionChangeContext::Temporary) {

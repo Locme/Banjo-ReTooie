@@ -65,6 +65,8 @@ namespace RT64 {
     // Graphics > Upscaler > Reactive mask: the see-through draws (particles, fire, spray) marked so the upscaler trusts
     // its history less there (drawReactive, in the call above, draws them). And Sharpness (0 to 1).
     void SetUpscalerReactive(bool enabled);
+    // Graphics > Upscaler > Object Motion: the moving things' own velocity (the solid draws again; costs GPU time).
+    void SetUpscalerObjectMotion(bool enabled);
     void SetUpscalerSharpness(float sharpness);
     float UpscalerSharpness();
 
