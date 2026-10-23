@@ -336,7 +336,7 @@ namespace {
 // helper has no movement code of its own, so this adds a sideways step on top of whatever the enemy's own
 // movement does: an enemy that is moving (it displaced itself since the last frame) and is between 150 and
 // 800 units from Banjo slides perpendicular to the line between them at 55 units a second, the side picked
-// per enemy and swapped every 2 to 4 seconds. While Banjo is rolling (state 49) and the enemy is within 500
+// per enemy and swapped every 2 to 4 seconds. While Banjo is rolling, jumping, pecking or whacking and the enemy is within 350 to 500
 // units, the step is 350 units a second, to the side of his roll line it is already on, so it tries not to be
 // rolled on. Walls and floors are not checked; the step is a few units a frame.
 extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
@@ -407,7 +407,11 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
     const uint32_t block = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0x120) : 0;
     const uint32_t state = tooie::rdram::valid_ptr(block) ? tooie::rdram::read_word(rdram, block + 4) : 0;
-    const bool rolling = state == 49 && dist < 500.0f;
+    // Banjo's attacks that an enemy should step out of (ScriptHawk's movement state names): the roll (49) from up
+    // to 500 units, the jump (5, Kazooie alone 0xBD), the peck / claw swipe (6) and Kazooie's wing whack
+    // (0xC2, 0xC4) from up to 350.
+    const bool rolling = (state == 49 && dist < 500.0f)
+        || ((state == 5 || state == 6 || state == 0xBD || state == 0xC2 || state == 0xC4) && dist < 350.0f);
     if (!rolling) {
         t.roll_side = 0.0f;
     }
