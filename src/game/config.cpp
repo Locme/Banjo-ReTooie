@@ -743,12 +743,12 @@ void tooie::init_config() {
         true);
     qol.add_bool_option(
         tooie::free_camera_option,
-        "Free camera",
+        "Free Camera",
         "The right stick turns the camera smoothly around Banjo and tilts it, instead of the game's stepped camera swings. The camera stays where you turned it until a cutscene or another area.",
         true);
     qol.add_enum_option(
         tooie::free_camera_speed_option,
-        "Free camera speed",
+        "Free Camera Speed",
         "How fast the right stick turns the free camera.",
         {
             {tooie::FreeCameraSpeed::Slow, "Slow", "Slow"},
@@ -764,22 +764,22 @@ void tooie::init_config() {
         false);
     qol.add_bool_option(
         tooie::free_camera_invert_x_option,
-        "Free camera: invert left/right",
+        "Invert Left/Right",
         "Reverses which way the right stick turns the free camera.",
         false);
     qol.add_bool_option(
         tooie::free_camera_invert_y_option,
-        "Free camera: invert up/down",
+        "Invert Up/Down",
         "Reverses which way the right stick tilts the free camera.",
         false);
     qol.add_bool_option(
         tooie::free_camera_smooth_walls_option,
-        "Free camera: smooth walls",
+        "Smooth Walls",
         "The camera glides in when a wall gets between it and Banjo and glides back out afterwards, instead of jumping. Banjo fades out when the camera gets very close to him.",
         true);
     qol.add_enum_option(
         tooie::free_camera_ease_back_option,
-        "Free camera: ease back",
+        "Ease Back",
         "A second after you let go of the right stick, the camera drifts back behind Banjo. <recomp-color primary>Flying only</recomp-color> does it while flying, <recomp-color primary>Always</recomp-color> also while running or swimming. Standing still leaves the camera where you turned it.",
         {
             {tooie::FreeCameraEaseBack::Off, "Off", "Off"},
@@ -789,17 +789,17 @@ void tooie::init_config() {
         tooie::FreeCameraEaseBack::Off);
     qol.add_bool_option(
         tooie::free_camera_smooth_height_option,
-        "Free camera: smooth stairs",
+        "Smooth Stairs",
         "The free camera follows Banjo's height with a gentle ease, so walking down (or up) stairs and small steps no longer bobs or jerks the camera.",
         true);
     qol.add_bool_option(
         tooie::free_camera_hover_option,
-        "Free camera: hover over small objects",
+        "Hover Over Small Objects",
         "A small object near the camera no longer pulls it in towards Banjo when the camera can still see him past it: the camera stays where you put it and hovers over the object. An object that is really between Banjo and the camera still pulls it in.",
         true);
     qol.add_enum_option(
         tooie::free_camera_mouse_option,
-        "Free camera: mouse",
+        "Mouse",
         "Moving the mouse turns and tilts the free camera, like the right stick. <recomp-color primary>Always</recomp-color>: whenever you play. <recomp-color primary>Hold a key</recomp-color>: only while the Camera Mouse Look key (Controls > Hotkeys) is held. Strength is General > Mouse Sensitivity; at 0 the mouse does nothing. Invert left/right and up/down apply too. When it is not Off, the mouse wheel zooms the camera in and out and the middle button snaps it behind Banjo.",
         {
             {tooie::FreeCameraMouse::Off, "Off", "Off"},
@@ -809,7 +809,7 @@ void tooie::init_config() {
         tooie::FreeCameraMouse::Always);
     qol.add_enum_option(
         tooie::free_camera_gyro_option,
-        "Free camera: gyro",
+        "Gyro",
         "Tilting a controller that has a gyro turns and tilts the free camera. <recomp-color primary>Hold a key</recomp-color> (the default): only while the Camera Mouse Look key (Controls > Hotkeys, not bound by default) is held. <recomp-color primary>Always</recomp-color>: whenever you play. Strength is General > Gyro Sensitivity; at 0 the gyro does nothing.",
         {
             {tooie::FreeCameraMouse::Off, "Off", "Off"},
@@ -819,12 +819,12 @@ void tooie::init_config() {
         tooie::FreeCameraMouse::Hold);
     qol.add_bool_option(
         tooie::free_camera_floor_clearance_option,
-        "Free camera: floor clearance",
+        "Floor Clearance",
         "Keeps the free camera a little above the floor under it, so tilting the camera low cannot push it into the ground.",
         true);
     qol.add_bool_option(
         tooie::free_camera_look_up_option,
-        "Free camera: look up",
+        "Look Up",
         "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
         true);
     tooie::photo_mode::add_options(qol);
@@ -947,7 +947,7 @@ void tooie::init_config() {
         false);
     graphics.add_bool_option(
         tooie::free_camera_rb_distance_option,
-        "Free camera: hold C Down to fine-tune distance",
+        "Hold C Down to Fine-Tune Distance",
         "Hold C Down (RB on a controller, the game's camera distance button) and push the camera stick up or down to move the free camera closer or further away, in small steps, from about half to twice the game's distance. A quick tap still does the game's own camera distance step; only a hold (about a quarter of a second) fine-tunes, and the game does not see it.",
         false);
     {
@@ -968,7 +968,7 @@ void tooie::init_config() {
         recompui::config::set_option_display_before(tooie::free_camera_rb_distance_option, pf::grass_section_option);
         // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
         recompui::config::set_option_group(tooie::dive::option, "Dive");
-        recompui::config::set_option_group(tooie::free_camera_rb_distance_option, "Free camera");
+        recompui::config::set_option_group(tooie::free_camera_rb_distance_option, "Free Camera");
         recompui::config::set_option_group(pf::grass_section_option, "3D grass");
     }
     graphics.add_bool_option(
