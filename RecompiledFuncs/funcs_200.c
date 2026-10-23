@@ -3885,6 +3885,7 @@ RECOMP_FUNC void _gczoombox_entrypoint_20(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8009DF58(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_sound_log(rdram, ctx, 3);
     // 0x8009DF58: addiu       $sp, $sp, -0x20
     ctx->r29 = ADD32(ctx->r29, -0X20);
     // 0x8009DF5C: sw          $ra, 0x1C($sp)

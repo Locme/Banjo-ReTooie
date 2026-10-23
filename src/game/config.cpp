@@ -174,7 +174,7 @@ namespace {
         const nlohmann::json sources[] = { load(tooie::work_in_progress_tab_id + ".json"), load("qol.json") };
         recomp::config::Config& graphics = recompui::config::get_config(recompui::config::graphics::id);
         bool changed = false;
-        for (const std::string& option : {tooie::dive::option, tooie::menu_mouse::enabled_option}) {
+        for (const std::string& option : {tooie::dive::option}) {
             if (graphics_json.contains(option)) {
                 continue;
             }
@@ -321,6 +321,33 @@ namespace {
         json[tooie::canary_mary::mode_option] = qol_json[tooie::canary_mary::mode_option];
         std::ofstream file(path, std::ios::trunc);
         file << json.dump(4);
+    }
+}
+
+namespace {
+    // Mouse in the game's menus moved from the WIP tab (a page of Graphics options, graphics.json) to QOL
+    // (L, 2026-10-23): carry a value saved in graphics.json (or work_in_progress.json) into qol.json once,
+    // while qol.json has none. Done on the files before the configs load.
+    void move_saved_menu_mouse() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        auto load = [&](const std::string& file) {
+            std::ifstream in(dir / file);
+            nlohmann::json json = in ? nlohmann::json::parse(in, nullptr, false) : nlohmann::json();
+            return json.is_object() ? json : nlohmann::json::object();
+        };
+        nlohmann::json qol_json = load("qol.json");
+        if (qol_json.contains(tooie::menu_mouse::enabled_option)) {
+            return;
+        }
+        for (const std::string& file : { std::string("graphics.json"), tooie::work_in_progress_tab_id + ".json" }) {
+            const nlohmann::json source = load(file);
+            if (source.contains(tooie::menu_mouse::enabled_option) && source[tooie::menu_mouse::enabled_option].is_boolean()) {
+                qol_json[tooie::menu_mouse::enabled_option] = source[tooie::menu_mouse::enabled_option];
+                std::ofstream out(dir / "qol.json", std::ios::trunc);
+                out << qol_json.dump(4);
+                return;
+            }
+        }
     }
 }
 
@@ -790,6 +817,8 @@ void tooie::init_config() {
         "Totals checklist",
         "The pause menu's Totals pages also say how many of each item are left in a world and how many you can get with the moves you have now.",
         true);
+    // Mouse in the game's menus moved from the WIP tab to QOL > Menu (L, 2026-10-23).
+    tooie::menu_mouse::add_options(qol);
     qol.add_enum_option(
         tooie::fine_aim::mode_option,
         "Fine aim",
@@ -816,6 +845,9 @@ void tooie::init_config() {
 
     // Section headings in the QOL tab (the options of a group sit next to each other above).
     recompui::config::set_option_group(tooie::menu_pause::option, "Menu");
+    // Totals checklist and Mouse in the game's menus sit under Menu, after Pause Special Menu (L, 2026-10-23).
+    recompui::config::set_option_display_before(tooie::totals_checklist::option, tooie::text_speed_option);
+    recompui::config::set_option_display_before(tooie::menu_mouse::enabled_option, tooie::text_speed_option);
     recompui::config::set_option_group(tooie::text_speed_option, "Speed and skipping");
     // Press Start Anytime In Intro sits at the bottom of Speed and skipping (L, 2026-10-16).
     recompui::config::set_option_display_before(tooie::quick_start_option, tooie::free_camera_option);
@@ -845,7 +877,6 @@ void tooie::init_config() {
         "Dive",
         "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and lies there until you jump. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
         false);
-    tooie::menu_mouse::add_options(graphics);
     graphics.add_bool_option(
         tooie::free_camera_rb_distance_option,
         "Free camera: hold C Down to fine-tune distance",
@@ -853,7 +884,7 @@ void tooie::init_config() {
         false);
     {
         namespace pf = tooie::picture_filters;
-        for (const std::string* id : { &tooie::dive::option, &tooie::menu_mouse::enabled_option,
+        for (const std::string* id : { &tooie::dive::option,
                 &tooie::free_camera_rb_distance_option, &pf::grass_section_option,
                 &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
                 &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
@@ -863,14 +894,12 @@ void tooie::init_config() {
                 &pf::grass_lod_option, &pf::grass_half_rate_option, &pf::grass_ray_tracing_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
-        // Dive and Mouse in the game's menus first, then the Grass toggle and its settings, all under one
+        // Dive first, then the Grass toggle and its settings, all under one
         // WIP heading.
         recompui::config::set_option_display_before(tooie::dive::option, pf::grass_section_option);
-        recompui::config::set_option_display_before(tooie::menu_mouse::enabled_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_rb_distance_option, pf::grass_section_option);
         // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
         recompui::config::set_option_group(tooie::dive::option, "Dive");
-        recompui::config::set_option_group(tooie::menu_mouse::enabled_option, "Menu mouse");
         recompui::config::set_option_group(tooie::free_camera_rb_distance_option, "Free camera");
         recompui::config::set_option_group(pf::grass_section_option, "3D grass");
     }
@@ -1144,6 +1173,7 @@ void tooie::init_config() {
 
     move_saved_hud_placement();
     move_saved_canary_mary();
+    move_saved_menu_mouse();
     split_saved_toon_shading();
     recompui::config::finalize();
     tooie::cheats::reset_on_start();
