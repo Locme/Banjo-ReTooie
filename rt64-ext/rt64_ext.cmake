@@ -74,6 +74,7 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/FsrPS.hlsl" "src/shaders/Fs
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerVelocityPS.hlsl")
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerResolvePS.hlsl")
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerHudPS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerHudLayersPS.hlsl")
 rt64_ext_shader(build_vertex_shader rt64 "src/shaders/ObjectVelocityVS.hlsl")
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/ObjectVelocityPS.hlsl")
 # Snapdragon GSR 1 (third-party/snapdragon-gsr, Qualcomm, BSD 3-Clause): Android builds only.

@@ -17,6 +17,7 @@
 
 #include "rt64_render_target.h"
 #include "rt64_object_velocity.h"
+#include "rt64_render_target_manager.h"
 
 namespace RT64 {
     namespace {
@@ -781,5 +782,158 @@ namespace RT64 {
         }
         objectVelocity.fresh = false;
         return objectVelocity.color.get();
+    }
+}
+
+namespace RT64 {
+    namespace {
+        std::atomic<bool> hudFullResolution{ false };
+        std::atomic<uint32_t> presentOutputWidth{ 0 };
+        std::atomic<uint32_t> presentOutputHeight{ 0 };
+
+        struct HudLayerResources {
+            std::mutex mutex;
+            std::unique_ptr<RenderTarget> color[2];
+            std::unique_ptr<RenderTarget> depth;
+            RenderFramebufferStorage storage[2];
+            uint32_t width = 0;
+            uint32_t height = 0;
+            bool usesHDR = false;
+            bool fresh = false;
+        };
+
+        HudLayerResources hudLayers;
+    }
+
+    void SetUpscalerHudFullResolution(bool enabled) {
+        hudFullResolution = enabled;
+    }
+
+    void SetUpscalerOutputSize(uint32_t width, uint32_t height) {
+        presentOutputWidth = width;
+        presentOutputHeight = height;
+    }
+
+    bool UpscalerHudLayersWanted(uint32_t colorWidth, uint32_t colorHeight, uint32_t sampleCount) {
+        const uint32_t outW = presentOutputWidth.load();
+        const uint32_t outH = presentOutputHeight.load();
+        // Only without multisampling, and only when the upscaler enlarges (the output is the one the present queue last used).
+        return hudFullResolution.load() && UpscalerHudSplitWanted() && (sampleCount <= 1) && (colorWidth > 0) && (colorHeight > 0) &&
+            (outW > colorWidth) && (outH > colorHeight) && (outW <= colorWidth * 4) && (outH <= colorHeight * 4);
+    }
+
+    RenderFramebufferStorage *UpscalerBeginHudLayer(RenderWorker *worker, RenderTarget *colorTarget, uint32_t layer, float &scaleX, float &scaleY) {
+        const uint32_t outW = presentOutputWidth.load();
+        const uint32_t outH = presentOutputHeight.load();
+        if ((layer > 1) || (colorTarget == nullptr) || (outW == 0) || (outH == 0)) {
+            return nullptr;
+        }
+
+        HudLayerResources &res = hudLayers;
+        const std::scoped_lock lock(res.mutex);
+        if (layer == 0) {
+            res.fresh = false;
+        }
+        if ((res.depth == nullptr) || (res.width != outW) || (res.height != outH) || (res.usesHDR != colorTarget->usesHDR)) {
+            for (int i = 0; i < 2; i++) {
+                res.storage[i].colorDepthWrite.reset();
+                res.storage[i].colorWriteDepthRead.reset();
+                res.color[i] = std::make_unique<RenderTarget>(0, Framebuffer::Type::Color, RenderMultisampling(), colorTarget->usesHDR);
+                res.color[i]->setupColor(worker, outW, outH);
+            }
+            res.depth = std::make_unique<RenderTarget>(0, Framebuffer::Type::Depth, RenderMultisampling(), colorTarget->usesHDR);
+            res.depth->setupDepth(worker, outW, outH);
+            for (int i = 0; i < 2; i++) {
+                res.storage[i].setup(worker->device, RenderFramebufferKey(), res.color[i].get(), res.depth.get());
+            }
+            res.width = outW;
+            res.height = outH;
+            res.usesHDR = colorTarget->usesHDR;
+        }
+
+        RenderCommandList *commandList = worker->commandList.get();
+        commandList->barriers(RenderBarrierStage::GRAPHICS, {
+            RenderTextureBarrier(res.color[layer]->texture.get(), RenderTextureLayout::COLOR_WRITE),
+            RenderTextureBarrier(res.depth->texture.get(), RenderTextureLayout::DEPTH_WRITE)
+        });
+        commandList->setFramebuffer(res.storage[layer].colorDepthWrite.get());
+        const float value = (layer == 0) ? 0.0f : 1.0f;
+        commandList->clearColor(0, RenderColor(value, value, value, 1.0f));
+        commandList->clearDepth(true, 1.0f);
+        scaleX = float(outW) / float(colorTarget->width);
+        scaleY = float(outH) / float(colorTarget->height);
+        return &res.storage[layer];
+    }
+
+    void UpscalerEndHudLayer(RenderWorker *worker, uint32_t layer) {
+        HudLayerResources &res = hudLayers;
+        const std::scoped_lock lock(res.mutex);
+        if ((layer > 1) || (res.color[layer] == nullptr)) {
+            return;
+        }
+        worker->commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.color[layer]->texture.get(), RenderTextureLayout::SHADER_READ) });
+        if (layer == 1) {
+            res.fresh = true;
+        }
+    }
+
+    bool UpscalerHudLayers(uint32_t width, uint32_t height, RenderTexture *&black, RenderTexture *&white) {
+        HudLayerResources &res = hudLayers;
+        const std::scoped_lock lock(res.mutex);
+        if (!res.fresh || (res.width != width) || (res.height != height) || (res.color[0] == nullptr) || (res.color[1] == nullptr)) {
+            res.fresh = false;
+            return false;
+        }
+        res.fresh = false;
+        black = res.color[0]->texture.get();
+        white = res.color[1]->texture.get();
+        return true;
+    }
+
+    RenderTexture *UpscalerRenderer::composeHudLayers(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
+        RenderTexture *upscaled, RenderTexture *black, RenderTexture *white, RenderFormat format, uint32_t outputWidth, uint32_t outputHeight)
+    {
+        if ((upscaled == nullptr) || (black == nullptr) || (white == nullptr) || (shaderLibrary->upscalerHudLayers.pipeline == nullptr)) {
+            return upscaled;
+        }
+
+        if ((hudTexture == nullptr) || (hudWidth != outputWidth) || (hudHeight != outputHeight)) {
+            hudFramebuffer.reset();
+            hudTexture = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format));
+            hudTexture->setName("Upscaler HUD");
+            const RenderTexture *tex = hudTexture.get();
+            hudFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&tex, 1));
+            hudWidth = outputWidth;
+            hudHeight = outputHeight;
+        }
+        if (hudDescriptorSet == nullptr) {
+            hudDescriptorSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+                shaderLibrary->samplerLibrary.nearest.clampClamp.get(), device);
+        }
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture0, upscaled, RenderTextureLayout::SHADER_READ);
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture1, black, RenderTextureLayout::SHADER_READ);
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture2, white, RenderTextureLayout::SHADER_READ);
+
+        interop::UpscalerResolveCB constants;
+        constants.sizes = { float(outputWidth), float(outputHeight), float(outputWidth), float(outputHeight) };
+        constants.jitter = { shaderLibrary->usesHDR ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+
+        RenderTextureBarrier barriers[] = {
+            RenderTextureBarrier(upscaled, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(black, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(white, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(hudTexture.get(), RenderTextureLayout::COLOR_WRITE)
+        };
+        commandList->barriers(RenderBarrierStage::GRAPHICS, barriers, uint32_t(std::size(barriers)));
+        commandList->setFramebuffer(hudFramebuffer.get());
+        commandList->setPipeline(shaderLibrary->upscalerHudLayers.pipeline.get());
+        commandList->setGraphicsPipelineLayout(shaderLibrary->upscalerHudLayers.pipelineLayout.get());
+        commandList->setGraphicsDescriptorSet(hudDescriptorSet->get(), 0);
+        commandList->setGraphicsPushConstants(0, &constants);
+        commandList->setVertexBuffers(0, nullptr, 0, nullptr);
+        commandList->setViewports(RenderViewport(0.0f, 0.0f, float(outputWidth), float(outputHeight)));
+        commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));
+        commandList->drawInstanced(3, 1, 0, 0);
+        return hudTexture.get();
     }
 }

@@ -15,6 +15,7 @@ namespace RT64 {
     void SetUpscalerMode(uint32_t mode);
     void SetUpscalerQuality(uint32_t quality);
     void SetUpscalerHudSplit(bool enabled);
+    void SetUpscalerHudFullResolution(bool enabled);
 }
 
 namespace {
@@ -58,6 +59,12 @@ void tooie::upscaler::apply() {
     } catch (...) {
     }
     RT64::SetUpscalerHudSplit(hud_outside);
+    bool hud_full = false;
+    try {
+        hud_full = std::get<bool>(graphics_config().get_option_value(hud_full_option));
+    } catch (...) {
+    }
+    RT64::SetUpscalerHudFullResolution(hud_full);
 }
 
 void tooie::upscaler::add_option(recomp::config::Config& graphics) {
@@ -99,6 +106,19 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
         "Upscaler: HUD Outside",
         "Keeps the HUD out of the upscaler: the upscaler works on the 3D world alone and the HUD is added afterwards, so it cannot ghost or shimmer. The HUD is drawn at the game's lowered resolution. Off sends the whole picture through the upscaler.",
         true);
+    graphics.add_bool_option(
+        hud_full_option,
+        "Upscaler: HUD Full Resolution (Experimental)",
+        "Draws the HUD again at your window's resolution and puts it on the upscaled picture, so it stays sharp. Needs HUD Outside and no MSAA. Screens that show the 3D world inside the HUD (some menus) may look wrong; turn it off if so.",
+        false);
+    graphics.add_option_change_callback(hud_full_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                graphics_config().save_config();
+            } else {
+                apply();
+            }
+        });
     graphics.add_option_change_callback(hud_option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
             if (context == recomp::config::OptionChangeContext::Temporary) {

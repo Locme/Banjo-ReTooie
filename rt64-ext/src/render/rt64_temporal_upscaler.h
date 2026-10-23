@@ -18,6 +18,7 @@
 namespace RT64 {
     struct RenderWorker;
     struct RenderTarget;
+    struct RenderFramebufferStorage;
 
     // Banjo-Tooie: the temporal upscaler chosen in Graphics (src/display/upscaler.cpp).
     // Mode: 0 off, 1 FSR 4, 2 FSR 4 native AA, 3 DLSS, 4 DLAA, 5 Arm ASR, 6 Snapdragon GSR (Android), 7 FSR 3, 8 the built-in temporal resolve.
@@ -75,6 +76,16 @@ namespace RT64 {
     // A copy can be taken once.
     RenderTexture *UpscalerWorldSnapshot(uint32_t width, uint32_t height);
 
+    // Graphics > Upscaler > HUD at full resolution (experimental): after the 3D world the framebuffer renderer draws the HUD
+    // again at the upscaler's output size, once over black and once over white, and the present queue puts it on the upscaled
+    // picture (UpscalerRenderer::composeHudLayers). The present queue says the output size it is using for the frame.
+    void SetUpscalerHudFullResolution(bool enabled);
+    void SetUpscalerOutputSize(uint32_t width, uint32_t height);
+    bool UpscalerHudLayersWanted(uint32_t colorWidth, uint32_t colorHeight, uint32_t sampleCount);
+    RenderFramebufferStorage *UpscalerBeginHudLayer(RenderWorker *worker, RenderTarget *colorTarget, uint32_t layer, float &scaleX, float &scaleY);
+    void UpscalerEndHudLayer(RenderWorker *worker, uint32_t layer);
+    bool UpscalerHudLayers(uint32_t width, uint32_t height, RenderTexture *&black, RenderTexture *&white);
+
     struct UpscalerRenderer {
         std::unique_ptr<RenderTexture> velocityTexture;
         std::unique_ptr<RenderFramebuffer> velocityFramebuffer;
@@ -121,6 +132,10 @@ namespace RT64 {
 
         // The built-in temporal resolve: the jittered game image and its velocity, with the last result, make an image of
         // outputWidth by outputHeight (the same size or larger). Returns the input itself when it does not apply.
+        // Puts the HUD layers (drawn at the output size over black and over white) on the upscaled world.
+        RenderTexture *composeHudLayers(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
+            RenderTexture *upscaled, RenderTexture *black, RenderTexture *white, RenderFormat format, uint32_t outputWidth, uint32_t outputHeight);
+
         // Adds the HUD (the finished frame minus the world copy) to the upscaled world. Returns the upscaled world if it cannot.
         RenderTexture *composeHud(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
             RenderTexture *upscaled, RenderTexture *world, RenderTexture *finished, RenderFormat format,
