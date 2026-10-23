@@ -672,6 +672,11 @@ void tooie::init_config() {
         },
         tooie::FreeCameraEaseBack::Off);
     qol.add_bool_option(
+        tooie::free_camera_hover_option,
+        "Free camera: hover over small objects",
+        "A small object near the camera no longer pulls it in towards Banjo when the camera can still see him past it: the camera stays where you put it and hovers over the object. An object that is really between Banjo and the camera still pulls it in.",
+        true);
+    qol.add_bool_option(
         tooie::free_camera_floor_clearance_option,
         "Free camera: floor clearance",
         "Keeps the free camera a little above the floor under it, so tilting the camera low cannot push it into the ground.",
@@ -685,7 +690,8 @@ void tooie::init_config() {
     for (const std::string* id : { &tooie::free_camera_speed_option, &tooie::free_camera_invert_x_option,
                                    &tooie::free_camera_invert_y_option,
                                    &tooie::free_camera_smooth_walls_option, &tooie::free_camera_ease_back_option,
-                                   &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option }) {
+                                   &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option,
+                                   &tooie::free_camera_hover_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
     qol.add_enum_option(
