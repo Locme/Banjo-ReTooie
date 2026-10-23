@@ -392,14 +392,6 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
         recompinput::profiles::get_n64_input(0, &buttons, &bx, &by);
         r_held = (buttons & n64_r_button) != 0;
     }
-    // Holding C Down (RB) with the option on: the stick's up and down change the distance instead of tilting.
-    float rb_zoom_input = 0.0f;
-    gameplay_camera = on && gameplay && !paused;
-    if (fine_held && wip_option<bool>(tooie::free_camera_rb_distance_option, false)) {
-        rb_zoom_input = stick_y;
-        stick_y = 0.0f;
-    }
-
     const bool on = tooie::free_camera::enabled();
     const bool gameplay = updating && mode == mode_dynamic && valid_ptr(camera) && valid_ptr(transform) && valid_ptr(dynamic);
     // First person and the like: leave the camera alone but keep the held yaw for afterwards.
@@ -408,6 +400,14 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     // While the free camera is on and the game's own camera is running, the right stick
     // is the free camera's, not C buttons.
     recompinput::set_right_analog_suppressed(on && gameplay && !paused);
+
+    // Holding C Down (RB) with the option on: the stick's up and down change the distance instead of tilting.
+    float rb_zoom_input = 0.0f;
+    gameplay_camera = on && gameplay && !paused;
+    if (fine_held && wip_option<bool>(tooie::free_camera_rb_distance_option, false)) {
+        rb_zoom_input = stick_y;
+        stick_y = 0.0f;
+    }
 
     if (!on || !gameplay || map != state.map) {
         state.active = false;
