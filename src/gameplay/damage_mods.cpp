@@ -337,7 +337,7 @@ namespace {
 // movement does: an enemy that is moving (it displaced itself since the last frame) and is between 150 and
 // 800 units from Banjo slides perpendicular to the line between them at 55 units a second, the side picked
 // per enemy and swapped every 2 to 4 seconds. While Banjo is rolling (state 49) and the enemy is within 500
-// units, the step is 240 units a second, to the side of his roll line it is already on, so it tries not to be
+// units, the step is 350 units a second, to the side of his roll line it is already on, so it tries not to be
 // rolled on. Walls and floors are not checked; the step is a few units a frame.
 extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
     static bool on = false;
@@ -404,14 +404,14 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
         t.roll_side = 0.0f;
     }
     // The target sideways speed: 0 outside 150 to 800 units (fading in over 100 units at each end) or when it is
-    // not moving, 55 units a second, or 240 while Banjo rolls, on the side picked when the roll began.
+    // not moving, 55 units a second, or 350 while Banjo rolls, on the side picked when the roll began.
     float target = 0.0f;
     if (t.moving_for > 0.0f && dist > 1.0f) {
         const float fade = std::clamp(std::min(dist - 150.0f, 800.0f - dist) / 100.0f, 0.0f, 1.0f);
         float side = t.side;
         float speed = 55.0f;
         if (rolling) {
-            speed = 240.0f;
+            speed = 350.0f;
             if (t.roll_side == 0.0f) {
                 const float vlen = std::hypot(aim_vel[0], aim_vel[1]);
                 if (vlen > 1.0f) {
