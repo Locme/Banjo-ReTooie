@@ -1681,7 +1681,7 @@ index 8ea27d5..50ebf26 100644
          std::vector<uint16_t> worldIndices;
          std::vector<uint16_t> fogIndices;
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..d35b544 100644
+index 5a331aa..b9e39a2 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -4,9 +4,14 @@
@@ -1761,7 +1761,106 @@ index 5a331aa..d35b544 100644
              if (processWorldVertices) {
                  workload.resetWorldOutputBuffers();
  
-@@ -645,6 +671,8 @@ namespace RT64 {
+@@ -414,6 +440,24 @@ namespace RT64 {
+             RenderTarget *colorTarget;
+             RenderTarget *depthTarget;
+             RenderFramebufferKey fbKey;
++            thread_local std::unordered_set<RenderTarget *> resizedTargets;
++            thread_local std::vector<std::pair<RenderTarget *, RenderTarget *>> colorDepthPairs;
++            resizedTargets.clear();
++            colorDepthPairs.clear();
++
++            // Banjo-Tooie: render targets only ever grow, so when the upscaler's render fraction changes (a mode or quality switch)
++            // they are made again at exactly the size wanted, or the game would go on rendering at the old, bigger size.
++            static float lastRenderFraction = 1.0f;
++            const float currentRenderFraction = UpscalerRenderFraction();
++            const bool refitTargets = (currentRenderFraction != lastRenderFraction);
++            // Each target is refit once, by the first pair that uses it; the pairs after it (and the later passes) only grow it.
++            thread_local std::unordered_set<RenderTarget *> refitSeen;
++            refitSeen.clear();
++            auto refitExact = [&](RenderTarget *target) {
++                return refitTargets && !refitSeen.count(target);
++            };
++            lastRenderFraction = currentRenderFraction;
++
+             auto getTargetsFromPair = [&](uint32_t f) {
+                 const FramebufferPair &fbPair = workload.fbPairs[f];
+                 const auto &colorImg = fbPair.colorImage;
+@@ -474,8 +518,10 @@ namespace RT64 {
+                         fbKey.depthTargetKey = RenderTargetKey(depthFb->addressStart, depthFb->width, depthFb->siz, Framebuffer::Type::Depth);
+                         depthTarget = &targetManager.get(fbKey.depthTargetKey);
+                         depthTarget->resolutionScale = fixedResScale;
+-                        rtWidth = std::max(rtWidth, depthTarget->width);
+-                        rtHeight = std::max(rtHeight, depthTarget->height);
++                        if (!refitExact(depthTarget)) {
++                            rtWidth = std::max(rtWidth, depthTarget->width);
++                            rtHeight = std::max(rtHeight, depthTarget->height);
++                        }
+                         chosenRt = depthTarget;
+                     }
+                     else {
+@@ -483,8 +529,10 @@ namespace RT64 {
+                     }
+ 
+                     if (colorTarget != nullptr) {
+-                        rtWidth = std::max(rtWidth, colorTarget->width);
+-                        rtHeight = std::max(rtHeight, colorTarget->height);
++                        if (!refitExact(colorTarget)) {
++                            rtWidth = std::max(rtWidth, colorTarget->width);
++                            rtHeight = std::max(rtHeight, colorTarget->height);
++                        }
+                         chosenRt = colorTarget;
+                     }
+ 
+@@ -502,11 +550,6 @@ namespace RT64 {
+                 }
+             };
+ 
+-            thread_local std::unordered_set<RenderTarget *> resizedTargets;
+-            thread_local std::vector<std::pair<RenderTarget *, RenderTarget *>> colorDepthPairs;
+-            resizedTargets.clear();
+-            colorDepthPairs.clear();
+-
+             const uint32_t fbPairCount = (debuggerRenderer.framebufferIndex >= 0) ? (debuggerRenderer.framebufferIndex + 1) : workload.fbPairCount;
+             for (uint32_t f = 0; f < fbPairCount; f++) {
+                 const FramebufferPair &fbPair = workload.fbPairs[f];
+@@ -538,7 +581,7 @@ namespace RT64 {
+                         depthFb->nativeTarget.resetBufferHistory();
+                     }
+ 
+-                    if ((colorTarget != nullptr) && colorTarget->resize(ext.workloadGraphicsWorker, rtWidth, rtHeight)) {
++                    if ((colorTarget != nullptr) && colorTarget->resize(ext.workloadGraphicsWorker, rtWidth, rtHeight, refitExact(colorTarget))) {
+                         resizedTargets.emplace(colorTarget);
+                         colorFb->readHeight = 0;
+                     }
+@@ -550,7 +593,7 @@ namespace RT64 {
+                             dummyDepthTarget->setupDepth(ext.workloadGraphicsWorker, rtWidth, rtHeight);
+                         }
+ 
+-                        if ((dummyDepthTarget != nullptr) && dummyDepthTarget->resize(ext.workloadGraphicsWorker, rtWidth, rtHeight)) {
++                        if ((dummyDepthTarget != nullptr) && dummyDepthTarget->resize(ext.workloadGraphicsWorker, rtWidth, rtHeight, refitExact(dummyDepthTarget.get()))) {
+                             resizedTargets.emplace(dummyDepthTarget.get());
+                         }
+ 
+@@ -563,11 +606,16 @@ namespace RT64 {
+                             colorDepthPairs.emplace_back(colorTarget, depthTarget);
+                         }
+ 
+-                        if (depthTarget->resize(ext.workloadGraphicsWorker, rtWidth, rtHeight)) {
++                        if (depthTarget->resize(ext.workloadGraphicsWorker, rtWidth, rtHeight, refitExact(depthTarget))) {
+                             resizedTargets.emplace(depthTarget);
+                             depthFb->readHeight = 0;
+                         }
+                     }
++
++                    if (refitTargets) {
++                        refitSeen.emplace(colorTarget);
++                        refitSeen.emplace((depthFb == nullptr) ? dummyDepthTarget.get() : depthTarget);
++                    }
+                 }
+ 
+                 fbManager.setupOperations(ext.workloadGraphicsWorker, fbPair.startFbOperations, fixedResScale, targetManager, &resizedTargets);
+@@ -645,6 +693,8 @@ namespace RT64 {
                  gameCallCursor += fbPair.gameCallCount;
              }
  
@@ -1770,7 +1869,7 @@ index 5a331aa..d35b544 100644
              // Create all GPU tile mappings and upload them.
              if (!workload.drawData.gpuTiles.empty()) {
                  std::pair<size_t, size_t> gpuTileRange;
-@@ -701,7 +729,11 @@ namespace RT64 {
+@@ -701,7 +751,11 @@ namespace RT64 {
              ext.workloadGraphicsWorker->commandList->begin();
              ext.workloadGraphicsWorker->commandList->resetQueryPool(queryPool.get(), 0, 2);
              ext.workloadGraphicsWorker->commandList->writeTimestamp(queryPool.get(), 0);
@@ -1782,7 +1881,7 @@ index 5a331aa..d35b544 100644
              framebufferRenderer->recordSetup(ext.workloadGraphicsWorker, bufferUploaders, processRSP ? rspProcessor.get() : nullptr, processWorldVertices ? vertexProcessor.get() : nullptr, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              
              // Record all framebuffer pairs.
-@@ -789,6 +821,11 @@ namespace RT64 {
+@@ -789,6 +843,11 @@ namespace RT64 {
                          }
                      }
                      
@@ -1794,7 +1893,7 @@ index 5a331aa..d35b544 100644
                      framebufferRenderer->recordFramebuffer(ext.workloadGraphicsWorker, framebufferIndex++);
  
                      // Transition the render targets in case the present queue will show them so it doesn't have to perform transitions.
-@@ -837,17 +874,23 @@ namespace RT64 {
+@@ -837,17 +896,23 @@ namespace RT64 {
                      fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
@@ -1818,7 +1917,7 @@ index 5a331aa..d35b544 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -858,6 +901,8 @@ namespace RT64 {
+@@ -858,6 +923,8 @@ namespace RT64 {
          }
  
          framebufferRenderer->advanceFrame(workloadConfig.raytracingEnabled);
@@ -1827,7 +1926,7 @@ index 5a331aa..d35b544 100644
          rendererCPUProfiler.end();
          rendererCPUProfiler.log();
          rendererCPUProfiler.reset();
-@@ -867,6 +912,7 @@ namespace RT64 {
+@@ -867,6 +934,7 @@ namespace RT64 {
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();
@@ -7582,7 +7681,7 @@ index 5c40c18..19ce026 100644
  };
 \ No newline at end of file
 diff --git a/src/render/rt64_render_target.cpp b/src/render/rt64_render_target.cpp
-index 81917bc..179c3ff 100644
+index 81917bc..48ede8c 100644
 --- a/src/render/rt64_render_target.cpp
 +++ b/src/render/rt64_render_target.cpp
 @@ -3,6 +3,7 @@
@@ -7618,6 +7717,39 @@ index 81917bc..179c3ff 100644
  #if PRINT_CONSTRUCTOR_DESTRUCTOR
          fprintf(stdout, "~RenderTarget(0x%p)\n", this);
  #endif
+@@ -53,12 +60,14 @@ namespace RT64 {
+         fbWriteDescSet.reset();
+     }
+ 
+-    bool RenderTarget::resize(RenderWorker *worker, uint32_t newWidth, uint32_t newHeight) {
+-        const bool insufficientSize = (width < newWidth) || (height < newHeight);
++    bool RenderTarget::resize(RenderWorker *worker, uint32_t newWidth, uint32_t newHeight, bool exact) {
++        const bool insufficientSize = (width < newWidth) || (height < newHeight) || (exact && ((width != newWidth) || (height != newHeight)));
+         if (insufficientSize) {
+-            // Pick the biggest width and height out of the current size and the new size.
+-            newWidth = std::max(width, newWidth);
+-            newHeight = std::max(height, newHeight);
++            // Pick the biggest width and height out of the current size and the new size (unless the size must be exact).
++            if (!exact) {
++                newWidth = std::max(width, newWidth);
++                newHeight = std::max(height, newHeight);
++            }
+ 
+             if (type == Framebuffer::Type::Depth) {
+                 setupDepth(worker, newWidth, newHeight);
+diff --git a/src/render/rt64_render_target.h b/src/render/rt64_render_target.h
+index 82d8a36..f0719fe 100644
+--- a/src/render/rt64_render_target.h
++++ b/src/render/rt64_render_target.h
+@@ -50,7 +50,7 @@ namespace RT64 {
+         RenderTarget(uint32_t addressForName, Framebuffer::Type type, const RenderMultisampling &multisampling, bool usesHDR);
+         ~RenderTarget();
+         void releaseTextures();
+-        bool resize(RenderWorker *worker, uint32_t newWidth, uint32_t newHeight);
++        bool resize(RenderWorker *worker, uint32_t newWidth, uint32_t newHeight, bool exact = false);
+         void setupColor(RenderWorker *worker, uint32_t width, uint32_t height);
+         void setupDepth(RenderWorker *worker, uint32_t width, uint32_t height);
+         void setupDummy(RenderWorker *worker);
 diff --git a/src/render/rt64_shader_common.cpp b/src/render/rt64_shader_common.cpp
 index f8cb73b..fe889bc 100644
 --- a/src/render/rt64_shader_common.cpp
@@ -7645,7 +7777,7 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..38cd73e 100644
+index d1c5273..b166786 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -3,6 +3,7 @@
@@ -7984,7 +8116,7 @@ index d1c5273..38cd73e 100644
 +            layoutBuilder.addPushConstant(0, 0, sizeof(interop::UpscalerVelocityCB), RenderShaderStageFlag::PIXEL);
 +            layoutBuilder.addDescriptorSet(descriptorSet);
 +            layoutBuilder.end();
-+            createPass(upscalerVelocity, SMAA_BLOBS(UpscalerVelocityPS), RenderFormat::R16G16_FLOAT);
++            createPass(upscalerVelocity, SMAA_BLOBS(UpscalerVelocityPS), RenderFormat::R16G16B16A16_FLOAT);
 +            createPass(upscalerVelocityView, SMAA_BLOBS(UpscalerVelocityPS), RenderTarget::colorBufferFormat(usesHDR));
 +            createPass(upscalerDepth, SMAA_BLOBS(UpscalerVelocityPS), RenderFormat::R32_FLOAT);
 +            layoutBuilder.begin();
@@ -8263,7 +8395,7 @@ index d1c5273..38cd73e 100644
 +            // The see-through draws again over the solid ones: depth tested, no depth written, only the reactive mask written.
 +            std::unique_ptr<RenderShader> reactiveShader = device->createShader(CREATE_SHADER_INPUTS(ReactivePSBlobDXIL, ReactivePSBlobSPIRV, ReactivePSBlobMSL, "PSMain", shaderFormat));
 +            pipelineDesc.pixelShader = reactiveShader.get();
-+            pipelineDesc.renderTargetBlend[0].renderTargetWriteMask = 0;
++            pipelineDesc.renderTargetBlend[0].renderTargetWriteMask = uint8_t(RenderColorWriteEnable::BLUE);
 +            pipelineDesc.depthWriteEnabled = false;
 +            pipelineDesc.depthFunction = RenderComparisonFunction::LESS_EQUAL;
 +            upscalerReactive.pipelineLayout = layoutBuilder.create(device);
