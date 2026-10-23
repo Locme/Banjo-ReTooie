@@ -7560,7 +7560,7 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..38cd73e 100644
+index d1c5273..b166786 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -3,6 +3,7 @@
@@ -7899,7 +7899,7 @@ index d1c5273..38cd73e 100644
 +            layoutBuilder.addPushConstant(0, 0, sizeof(interop::UpscalerVelocityCB), RenderShaderStageFlag::PIXEL);
 +            layoutBuilder.addDescriptorSet(descriptorSet);
 +            layoutBuilder.end();
-+            createPass(upscalerVelocity, SMAA_BLOBS(UpscalerVelocityPS), RenderFormat::R16G16_FLOAT);
++            createPass(upscalerVelocity, SMAA_BLOBS(UpscalerVelocityPS), RenderFormat::R16G16B16A16_FLOAT);
 +            createPass(upscalerVelocityView, SMAA_BLOBS(UpscalerVelocityPS), RenderTarget::colorBufferFormat(usesHDR));
 +            createPass(upscalerDepth, SMAA_BLOBS(UpscalerVelocityPS), RenderFormat::R32_FLOAT);
 +            layoutBuilder.begin();
@@ -8178,7 +8178,7 @@ index d1c5273..38cd73e 100644
 +            // The see-through draws again over the solid ones: depth tested, no depth written, only the reactive mask written.
 +            std::unique_ptr<RenderShader> reactiveShader = device->createShader(CREATE_SHADER_INPUTS(ReactivePSBlobDXIL, ReactivePSBlobSPIRV, ReactivePSBlobMSL, "PSMain", shaderFormat));
 +            pipelineDesc.pixelShader = reactiveShader.get();
-+            pipelineDesc.renderTargetBlend[0].renderTargetWriteMask = 0;
++            pipelineDesc.renderTargetBlend[0].renderTargetWriteMask = uint8_t(RenderColorWriteEnable::BLUE);
 +            pipelineDesc.depthWriteEnabled = false;
 +            pipelineDesc.depthFunction = RenderComparisonFunction::LESS_EQUAL;
 +            upscalerReactive.pipelineLayout = layoutBuilder.create(device);

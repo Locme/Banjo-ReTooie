@@ -60,14 +60,16 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     float3 result = current;
     if (gConstants.jitter.z > 0.5f) {
         const int2 center = clamp(base, int2(0, 0), maxPixel);
-        const float2 velocity = gTexture1.Load(int3(center, 0)).xy;
+        const float4 motion = gTexture1.Load(int3(center, 0));
+        const float2 velocity = motion.xy;
         const float2 historyUV = (q + velocity) / inSize;
         if (all(historyUV > 0.0f) && all(historyUV < 1.0f)) {
             const float3 history = gTexture2.SampleLevel(LinearSampler, historyUV, 0).rgb;
             const float3 clamped = clamp(history, lowest, highest);
             // Less of the old part when it had to be clamped hard (a thing moved or came uncovered).
             const float rejected = saturate(length(history - clamped) * 4.0f);
-            const float blend = lerp(gConstants.jitter.w, 1.0f, rejected);
+            // See-through things (particles, fire, spray) take more of the new picture.
+            const float blend = lerp(lerp(gConstants.jitter.w, 1.0f, rejected), 1.0f, saturate(motion.z));
             result = lerp(clamped, current, blend);
         }
     }
