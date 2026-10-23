@@ -931,6 +931,13 @@ void tooie::init_config() {
         recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
     }
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Difficulty");
+    // Features and Back-Ports from General (L, 2026-10-23), with their headings. Saves, shaders, Discord and the
+    // Developer switch stay in General.
+    for (const std::string* id : { &tooie::boss_rush::option, &tooie::classic_sounds::option,
+            &tooie::honeycomb_glitter::option, &tooie::original_honeycomb::option, &tooie::jiggy_dance::option,
+            &tooie::torch_enemy::option }) {
+        recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
+    }
 
     // Features still being worked on (L, 2026-10-21), in a section named like the tab. When one is done it
     // moves to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's menus back to QOL, the
