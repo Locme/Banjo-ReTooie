@@ -2824,7 +2824,6 @@ RECOMP_FUNC void _bsride_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800FC348(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
-    tooie_sound_log(rdram, ctx, 6);
     // 0x800FC348: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x800FC34C: sw          $s4, 0x28($sp)
