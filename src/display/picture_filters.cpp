@@ -29,6 +29,7 @@
 #include <variant>
 #include <vector>
 
+#include "tooie_dust.h"
 #include "tooie_game_frame_rate.h"
 #include "recompui/config.h"
 
@@ -5148,18 +5149,23 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
             if (in_water) {
                 amounts[1] -= 0.5f * dt;
                 amounts[2] -= 0.35f * dt;
+                tooie::dust::take_exposure();
             }
             else {
                 amounts[1] += (snowy_map(map) ? 0.05f : -0.017f) * dt;
                 // (Walking on the ground, not in a jump or a lift: speed alone is enough, 150 units a second is a run.)
                 if (valid && banjo_grounded(rdram) && speed > 20.0f && speed < 600.0f) {
-                    amounts[2] += (snowy_map(map) ? 0.002f : 0.008f) * dt;
+                    amounts[2] += (snowy_map(map) ? 0.0007f : 0.003f) * dt;
                 }
+                // The dust he kicks up and stands in (Volumetric dust's clouds, or the game's own puffs): about 80 puffs make
+                // him filthy. Not on snow, where the puffs are snow.
+                amounts[2] += tooie::dust::take_exposure() * (snowy_map(map) ? 0.0f : 0.012f);
             }
             amounts[1] = std::clamp(amounts[1], 0.0f, 1.0f);
             amounts[2] = std::clamp(amounts[2], 0.0f, 1.0f);
         }
         else {
+            tooie::dust::take_exposure();
             amounts[0] = amounts[1] = amounts[2] = 0.0f;
             had_pos = false;
         }
@@ -5580,7 +5586,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         char_dirt_option,
         "Dirty characters",
-        "Banjo and Kazooie get dirty as they run about: mud on the legs and undersides that builds up slowly and washes off in water. The number is how dirty they can get; 0 is off.",
+        "Banjo and Kazooie get dirty as they run about: mud on the legs and undersides that builds up as they run about and kick up dust (Volumetric dust or the game's own puffs), and washes off in water. The number is how dirty they can get; 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         banjo_fur_length_option,
