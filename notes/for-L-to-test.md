@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T571 Blocky shadows with ray tracing
+- Asked: 2026-10-23 22:56 UTC
+- Build: main @ 155c892
+- Steps:
+  1. Ray tracing on, Traced shadows of the player on, HD shadows off
+  2. Stand Banjo on grass in sunlight (Spiral Mountain)
+  3. Walk around and look at his shadow
+- Look for: Is the hard, blocky shadow under Banjo gone, with only a soft-edged traced shadow left?
+- Status: waiting for L
+
 ## T570 Openable settings, Jiggle, Boss rush button
 - Asked: 2026-10-23 21:09 UTC
 - Build: claude/project-thread-8oifqv
