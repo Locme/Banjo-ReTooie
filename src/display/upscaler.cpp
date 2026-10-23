@@ -150,7 +150,7 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         quality_option,
         "Upscaler Quality",
-        "How much of your window's height the game renders at when Resolution is Auto and an upscaler is on: Quality about 67%, Balanced 58%, Performance 50%, Ultra Performance 33%. The upscaler makes up the rest. Native modes ignore it.",
+        "How much of your window's height the game renders at when Resolution is Auto and an upscaler is on: Quality about 67%, Balanced 58%, Performance 50%, Ultra Performance 33%, rounded to a whole multiple of the game's own height (so at small windows two choices can render at the same size). The upscaler makes up the rest. Native modes ignore it.",
         {
             {Quality::Quality, "Quality", "Quality"},
             {Quality::Balanced, "Balanced", "Balanced"},

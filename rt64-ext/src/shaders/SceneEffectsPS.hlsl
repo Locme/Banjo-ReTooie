@@ -3878,7 +3878,7 @@ float3 VolLookView(int2 pixel) {
 }
 
 uint VolDustCount() {
-    return min(uint(asfloat(gDust.Load(0)) + 0.5f), 24u);
+    return min(uint(asfloat(gDust.Load(0)) + 0.5f), 48u);
 }
 
 // The dust clouds along the pixel's ray (Graphics > Volumetric Dust): each is a soft sphere of dust, thickest through its
@@ -3910,17 +3910,21 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
     for (uint i = 0u; i < count; i++) {
         const float4 cloud = asfloat(gDust.Load4(16u + i * 32u));
         const float2 extra = asfloat(gDust.Load2(32u + i * 32u));
+        // A soft blob, not a ball: a Gaussian of the distance from the cloud's centre (sigma half its radius), so the dust has no
+        // surface and no outline at all, however it overlaps. Along a ray through it the thickness is the Gaussian of the ray's
+        // closest approach, cut by where the ray starts (the camera) and ends (the surface behind).
         const float radius = max(cloud.w, 1.0f);
+        const float sigma = radius * 0.5f;
         const float3 toCloud = cloud.xyz - origin;
         const float along = dot(toCloud, direction);
         const float distanceSquared = dot(toCloud, toCloud) - along * along;
-        if (distanceSquared >= radius * radius) {
+        const float reachSquared = 6.25f * sigma * sigma;
+        if (distanceSquared >= reachSquared) {
             continue;
         }
-        const float half = sqrt(radius * radius - distanceSquared);
-        const float t0 = max(along - half, 0.0f);
-        const float t1 = min(along + half, far);
-        if (t1 <= t0) {
+        // How much of the blob's length along the ray is between the camera and the surface.
+        const float visible = saturate(0.5f + (far - along) / (2.0f * sigma)) * saturate(0.5f + along / (2.0f * sigma));
+        if (visible <= 0.0f) {
             continue;
         }
         // The ground under the cloud: its spot on screen (the world point to view space, then the projection).
@@ -3952,22 +3956,18 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
         const float3 plainColour = lerp(float3(0.74f, 0.68f, 0.6f), saturate(ground * 1.35f + 0.12f), 0.4f);
         const float3 base = (grassColour * wGrass + snowColour * wSnow + sandColour * wSand + dirtColour * wDirt + plainColour * wPlain) * tint;
 
-        const float3 middle = origin + direction * (0.5f * (t0 + t1));
-        const float falloff = 1.0f - distanceSquared / (radius * radius);
+        const float3 middle = origin + direction * clamp(along, 0.0f, far);
+        // The Gaussian, taken to nothing at its reach (so it ends smoothly, with no step).
+        const float envelope = max(exp(-distanceSquared / (sigma * sigma)) - 0.0019f, 0.0f);
         const float3 noiseAt = middle * (60.0f / radius) * 0.045f + extra.y + float3(0.0f, time * 0.35f, 0.0f);
-        const float noise = CloudNoise(noiseAt);
-        float body = saturate(1.35f * falloff + (noise - 0.5f) * 0.9f);
-        // Grass shards and earth clumps are flecks, not haze: finer noise, cut hard, only where the cloud is solid enough.
+        float body = saturate(0.35f + 1.3f * CloudNoise(noiseAt));
+        // Grass shards and earth clumps are flecks, not haze: finer noise, cut hard (inside the same soft envelope).
         const float fleckiness = wGrass * 0.9f + wDirt * 0.45f;
-        const float flecks = saturate((CloudNoise(noiseAt * 4.0f + 7.0f) - 0.52f) * 4.0f) * saturate(falloff * 1.6f);
+        const float flecks = saturate((CloudNoise(noiseAt * 4.0f + 7.0f) - 0.45f) * 3.0f);
         body = lerp(body, flecks, fleckiness);
         // Snow is a thin powder, sand a thick haze.
         const float density = extra.x * (1.0f + 0.35f * wSand - 0.35f * wSnow);
-        // A soft puff, not a ball: the thickness goes with the square of how far the ray is from the rim (zero slope there) and
-        // is never a plateau, so even where several clouds meet there is no round outline (a glass ball Banjo stood in, L,
-        // 2026-10-23: the chord through a ball falls off like a square root at its rim, and with the opacity cap that left a flat
-        // disc with a defined edge).
-        const float thickness = density * body * falloff * falloff * (t1 - t0) / radius * 1.1f;
+        const float thickness = density * body * envelope * visible * sigma / 22.0f;
         // The side facing the sun is the brighter.
         const float side = dot(normalize(middle - cloud.xyz + 1e-3f), sunWorld);
         lightSum += base * (0.62f + 0.38f * saturate(0.5f + 0.5f * side)) * thickness;
