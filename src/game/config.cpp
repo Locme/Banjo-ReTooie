@@ -79,7 +79,7 @@ namespace {
         } catch (...) {
         }
         try {
-            recompui::config::set_tab_visible("cheats", on || tooie::dev_file_present());
+            recompui::config::set_tab_visible("cheats", on);
         } catch (...) {
         }
     }
@@ -91,7 +91,7 @@ namespace {
         } catch (...) {
         }
         try {
-            recompui::config::set_tab_visible(tooie::wip_tab_id, on || tooie::dev_file_present());
+            recompui::config::set_tab_visible(tooie::wip_tab_id, on);
         } catch (...) {
         }
     }
@@ -103,7 +103,7 @@ namespace {
         } catch (...) {
         }
         try {
-            recompui::config::set_tab_visible(tooie::achievements::tab_id, on || tooie::dev_file_present());
+            recompui::config::set_tab_visible(tooie::achievements::tab_id, on);
         } catch (...) {
         }
     }
@@ -419,6 +419,8 @@ namespace {
 }
 
 void tooie::init_config() {
+    // dev.txt next to the exe shows every tab hidden by a switch, including tabs added later (L, 2026-10-23).
+    recompui::config::set_show_all_tabs(tooie::dev_file_present());
     // Before finalize(), which loads the controls config and with it the hotkey bindings.
     tooie::speedup::register_input();
     tooie::frame_overlay::register_input();

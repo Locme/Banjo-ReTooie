@@ -183,5 +183,5 @@ void tooie::level_warp::start() {
 }
 
 void tooie::level_warp::refresh() {
-    show_tab(debug_tab_on() || tooie::dev_file_present());
+    show_tab(debug_tab_on());
 }
