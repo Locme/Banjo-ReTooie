@@ -1060,8 +1060,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // without effects and for the Pick Model and Model Effects keys.
     const bool excluding = !overlay && end > start && (tooie::interp_tags::any_no_effects() || tooie::picture_filters::toon_characters_on() || effects_now || pick_now || mouse);
     // Banjo's fur (Graphics > Banjo fur) needs his model found in the scene.
-    const bool banjo_fur = tooie::picture_filters::banjo_fur_on();
-    const bool kazooie_feathers = tooie::picture_filters::kazooie_feathers_on();
+    // (The character surface layer, wet and snow and dirt, needs his model and hers found the same way.)
+    const bool char_surface = tooie::picture_filters::char_surface_on();
+    const bool banjo_fur = tooie::picture_filters::banjo_fur_on() || char_surface;
+    const bool kazooie_feathers = tooie::picture_filters::kazooie_feathers_on() || char_surface;
     const bool npc_fur = tooie::picture_filters::npc_fur_on();
     const bool npc_feathers = tooie::picture_filters::npc_feathers_on();
     const bool fur = !overlay && end > start && (banjo_fur || kazooie_feathers || npc_fur || npc_feathers);

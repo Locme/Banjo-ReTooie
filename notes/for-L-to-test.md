@@ -1,5 +1,18 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T566 Wet, snowy and dirty characters
+- Asked: 2026-10-23 13:22 UTC
+- Build: branch claude/project-thread-xmr3el
+- Steps:
+  1. Pull this branch and build on Windows; Graphics > Character Shaders: set Wet characters, Snowy characters and Dirty characters to 100
+  2. Spiral Mountain: swim in the moat, then get out and watch Banjo dry over about ten seconds
+  3. Hailfire Peaks Icy Side: walk about; snow settles on his head, shoulders and back
+  4. Run about on grass or sand for a couple of minutes for dirt; then swim to wash it off
+  5. Also try Banjo fur on and Kazooie feathers on with each, and Kazooie out of the backpack
+  6. Headless aid: TOOIE_CHAR_WET, TOOIE_CHAR_SNOW, TOOIE_CHAR_DIRT=100 hold one fixed
+- Look for: Wet: darker with a sheen, fur clumped. Snow: white on up-facing parts, more on fur tips. Dirt: brown on lower parts and undersides. Fur and feathers match the body underneath. Flicker where body parts meet (the up-direction is read from the vertex marks, known weak spot). Frame cost with all three on vs off. First use compiles a few extra shaders for Banjo's materials
+- Status: waiting for L
+
 ## T565 Volumetric dust
 - Asked: 2026-10-23 09:46 UTC
 - Build: main @ db815bd
@@ -39,8 +52,8 @@
   1. Play a save in an open place (Spiral Mountain is good)
   2. General > DEV tab: turn on Aim sweep
   3. Leave the game running about 35 minutes; each enemy appears in front of Banjo for 12 s, then the area reloads
-  4. When the toast says it is done, send me logs/aim_sweep.txt
-- Look for: Enemies spawn one at a time and the area reloads between them; the game does not freeze or crash; logs/aim_sweep.txt gets one line per enemy. Banjo may get hurt or die; that is fine.
+  4. When the toast says it is done, send me aim_sweep.txt in the Dev Files folder If the game crashes or hangs, start the game and turn Aim sweep on again: it carries on after the enemy that crashed it, and notes that one in the file.
+- Look for: Enemies spawn one at a time and the area reloads between them; the game does not freeze or crash; aim_sweep.txt in the Dev Files folder gets one line per enemy. Banjo may get hurt or die; that is fine. If the game crashes or hangs, start the game and turn Aim sweep on again: it carries on after the enemy that crashed it, and notes that one in the file.
 - Status: waiting for L
 
 ## T561 PBR re-sweep with the 11 rules

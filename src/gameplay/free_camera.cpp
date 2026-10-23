@@ -18,7 +18,7 @@
 // dynamic camera keeps its own position (+0x74) and rotation (+0x80), so the
 // game's camera logic is left as it was and only the picture moves.
 //
-// Ease back (WIP > Free camera: ease back, Always by default while it is tested): a second after the stick is let go while
+// Ease back (QOL > Free camera: ease back, off by default): a second after the stick is let go while
 // Banjo flies (Flying only) or flies or moves (Always), the held yaw, elevation, aim and zoom ease
 // towards the game's own camera, which keeps chasing the spot behind Banjo underneath; once they
 // meet, the game's camera takes over again.
@@ -250,14 +250,15 @@ namespace {
         return 1.0f - std::exp(-rate * dt);
     }
 
-    // Whether the R button (RB) is held, from the last camera step; read by the sound log.
+    // Whether C Down (RB) is held, from the last camera step; read by the sound log.
     std::atomic<bool> r_held{false};
     // RB fine-tune: the distance range as a multiple of the game's, and the rate (per second, at a full
     // push) of the change.
     constexpr float rb_min_zoom = 0.5f;
     constexpr float rb_max_zoom = 2.0f;
     constexpr float rb_zoom_rate = 0.8f;
-    constexpr uint16_t n64_r_button = 0x0010;
+    // The game's camera distance button: C Down, which a controller's RB is bound to (L, 2026-10-23).
+    constexpr uint16_t n64_r_button = 0x0004;
 
     // Scales the players' draw alpha (tooie_free_camera_player_alpha), 1 for whole.
     std::atomic<float> player_fade{1.0f};
@@ -374,7 +375,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
         recompinput::profiles::get_n64_input(0, &buttons, &bx, &by);
         r_held = (buttons & n64_r_button) != 0;
     }
-    // Holding RB with the option on: the stick's up and down change the distance instead of tilting.
+    // Holding C Down (RB) with the option on: the stick's up and down change the distance instead of tilting.
     float rb_zoom_input = 0.0f;
     if (r_held && wip_option<bool>(tooie::free_camera_rb_distance_option, false)) {
         rb_zoom_input = stick_y;
@@ -419,7 +420,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
         }
 
         // Ease back towards the game's camera, which is behind Banjo while he moves.
-        const auto ease_back = wip_option<uint32_t>(tooie::free_camera_ease_back_option, (uint32_t)tooie::FreeCameraEaseBack::Always);
+        const auto ease_back = option<uint32_t>(tooie::free_camera_ease_back_option, (uint32_t)tooie::FreeCameraEaseBack::Off);
         const bool flying = std::find(std::begin(flying_states), std::end(flying_states), player_state) != std::end(flying_states);
         easing = state.active && (state.snap || state.idle >= ease_delay &&
             ((ease_back == (uint32_t)tooie::FreeCameraEaseBack::Flying && flying) ||
@@ -450,7 +451,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             const float sx = (option<bool>(tooie::free_camera_invert_x_option, false) != tooie::mirror_mode::active()) ? -stick_x : stick_x;
             const float sy = option<bool>(tooie::free_camera_invert_y_option, false) ? -stick_y : stick_y;
             // Right turns the view right (yaw grows to the left). Up looks up, so the camera drops.
-            // RB held, stick up: closer; down: further. Steps toward the range's limits only.
+            // C Down held, stick up: closer; down: further. Steps toward the range's limits only.
             if (rb_zoom_input != 0.0f) {
                 const float wanted_zoom = state.zoom * std::exp(-rb_zoom_input * rb_zoom_rate * dt);
                 state.zoom = std::clamp(wanted_zoom, rb_min_zoom, rb_max_zoom);
@@ -484,7 +485,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             // reverses that first.
             const float horizontal = std::sqrt(rx * rx + rz * rz);
             const float distance = std::sqrt(horizontal * horizontal + oy * oy);
-            const bool look_up = wip_option<bool>(tooie::free_camera_look_up_option, false);
+            const bool look_up = option<bool>(tooie::free_camera_look_up_option, true);
             const float low_limit = look_up ? look_min_elevation : min_elevation;
             float tilt_left = tilt_input;
             // Look-up tilt: a push past the lowest eye height raises the view instead of closing in; tilting
@@ -562,7 +563,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
 
             // Floor clearance (WIP): a low tilt can swing the eye into the floor, so lift it onto the floor
             // under it (the camera line test's resting point is its radius above the surface).
-            if (wip_option<bool>(tooie::free_camera_floor_clearance_option, false)) {
+            if (option<bool>(tooie::free_camera_floor_clearance_option, true)) {
                 const float from[3] = { want[0], want[1] + floor_probe_up, want[2] };
                 float down[3] = { want[0], want[1] - floor_probe_down, want[2] };
                 if (sweep(rdram, ctx, from, down) && down[1] > want[1]) {

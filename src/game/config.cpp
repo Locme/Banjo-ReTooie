@@ -1,4 +1,6 @@
 #include <filesystem>
+#include <type_traits>
+#include <variant>
 #include <fstream>
 
 #include <json/json.hpp>
@@ -186,6 +188,31 @@ namespace {
         }
         if (changed) {
             graphics.save_config();
+        }
+    }
+
+    // Mouse Sensitivity starts at 10 (L, 2026-10-23) instead of off, so the mouse camera works out of the box:
+    // set it once while general.json has no saved value for it. The option's own number type is kept.
+    void default_mouse_sensitivity() {
+        const std::filesystem::path file = recomp::get_config_path() / "general.json";
+        if (std::filesystem::exists(file)) {
+            std::ifstream in(file);
+            const nlohmann::json json = nlohmann::json::parse(in, nullptr, false);
+            if (json.is_object() && json.contains("mouse_sensitivity")) {
+                return;
+            }
+        }
+        try {
+            recomp::config::Config& general = recompui::config::get_general_config();
+            const auto current = general.get_option_value("mouse_sensitivity");
+            std::visit([&](auto value) {
+                using T = decltype(value);
+                if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
+                    general.set_option_value("mouse_sensitivity", T(10));
+                    general.save_config();
+                }
+            }, current);
+        } catch (...) {
         }
     }
 
@@ -634,10 +661,31 @@ void tooie::init_config() {
         "Free camera: smooth walls",
         "The camera glides in when a wall gets between it and Banjo and glides back out afterwards, instead of jumping. Banjo fades out when the camera gets very close to him.",
         false);
+    qol.add_enum_option(
+        tooie::free_camera_ease_back_option,
+        "Free camera: ease back",
+        "A second after you let go of the right stick, the camera drifts back behind Banjo. <recomp-color primary>Flying only</recomp-color> does it while flying, <recomp-color primary>Always</recomp-color> also while running or swimming. Standing still leaves the camera where you turned it.",
+        {
+            {tooie::FreeCameraEaseBack::Off, "Off", "Off"},
+            {tooie::FreeCameraEaseBack::Flying, "Flying", "Flying only"},
+            {tooie::FreeCameraEaseBack::Always, "Always", "Always"},
+        },
+        tooie::FreeCameraEaseBack::Off);
+    qol.add_bool_option(
+        tooie::free_camera_floor_clearance_option,
+        "Free camera: floor clearance",
+        "Keeps the free camera a little above the floor under it, so tilting the camera low cannot push it into the ground.",
+        true);
+    qol.add_bool_option(
+        tooie::free_camera_look_up_option,
+        "Free camera: look up",
+        "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
+        true);
     tooie::photo_mode::add_options(qol);
     for (const std::string* id : { &tooie::free_camera_speed_option, &tooie::free_camera_invert_x_option,
                                    &tooie::free_camera_invert_y_option,
-                                   &tooie::free_camera_smooth_walls_option }) {
+                                   &tooie::free_camera_smooth_walls_option, &tooie::free_camera_ease_back_option,
+                                   &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
     qol.add_enum_option(
@@ -722,21 +770,6 @@ void tooie::init_config() {
         false);
     tooie::menu_mouse::add_options(graphics);
     graphics.add_enum_option(
-        tooie::free_camera_ease_back_option,
-        "Free camera: ease back",
-        "A second after you let go of the right stick, the camera drifts back behind Banjo. <recomp-color primary>Flying only</recomp-color> does it while flying, <recomp-color primary>Always</recomp-color> also while running or swimming. Standing still leaves the camera where you turned it. On by default (Always) while it is tested here.",
-        {
-            {tooie::FreeCameraEaseBack::Off, "Off", "Off"},
-            {tooie::FreeCameraEaseBack::Flying, "Flying", "Flying only"},
-            {tooie::FreeCameraEaseBack::Always, "Always", "Always"},
-        },
-        tooie::FreeCameraEaseBack::Always);
-    graphics.add_bool_option(
-        tooie::free_camera_floor_clearance_option,
-        "Free camera: floor clearance",
-        "Keeps the free camera a little above the floor under it, so tilting the camera low cannot push it into the ground.",
-        false);
-    graphics.add_enum_option(
         tooie::free_camera_orbit_option,
         "Free camera: mouse and gyro",
         "Moving the mouse (or tilting a controller with a gyro) turns and tilts the free camera, like the right stick. <recomp-color primary>Always</recomp-color>: whenever you play. <recomp-color primary>Hold a key</recomp-color>: only while the Camera Mouse Look key (Controls > Hotkeys) is held; the gyro is not held back. Strength is General > Mouse Sensitivity and Gyro Sensitivity; at 0 each does nothing, so raise Mouse Sensitivity (25 is a good start) for the mouse to work. Invert left/right and up/down apply too. When it is on, the mouse wheel zooms the camera in and out and the middle button snaps it behind Banjo.",
@@ -748,19 +781,13 @@ void tooie::init_config() {
         tooie::FreeCameraMouse::Always);
     graphics.add_bool_option(
         tooie::free_camera_rb_distance_option,
-        "Free camera: hold RB to fine-tune distance",
-        "Hold RB (the game's camera distance button, which still works as it always did when you only tap it) and push the camera stick up or down to move the free camera closer or further away, in small steps, from about half to twice the game's distance.",
-        false);
-    graphics.add_bool_option(
-        tooie::free_camera_look_up_option,
-        "Free camera: look up",
-        "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
+        "Free camera: hold C Down to fine-tune distance",
+        "Hold C Down (RB on a controller, the game's camera distance button, which still works as it always did when you only tap it) and push the camera stick up or down to move the free camera closer or further away, in small steps, from about half to twice the game's distance.",
         false);
     {
         namespace pf = tooie::picture_filters;
         for (const std::string* id : { &tooie::dive::option, &tooie::menu_mouse::enabled_option,
-                &tooie::free_camera_ease_back_option, &tooie::free_camera_floor_clearance_option,
-                &tooie::free_camera_look_up_option, &tooie::free_camera_orbit_option, &tooie::free_camera_rb_distance_option, &pf::grass_section_option,
+                &tooie::free_camera_orbit_option, &tooie::free_camera_rb_distance_option, &pf::grass_section_option,
                 &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
                 &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
                 &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
@@ -773,15 +800,12 @@ void tooie::init_config() {
         // WIP heading.
         recompui::config::set_option_display_before(tooie::dive::option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::menu_mouse::enabled_option, pf::grass_section_option);
-        recompui::config::set_option_display_before(tooie::free_camera_ease_back_option, pf::grass_section_option);
-        recompui::config::set_option_display_before(tooie::free_camera_floor_clearance_option, pf::grass_section_option);
-        recompui::config::set_option_display_before(tooie::free_camera_look_up_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_orbit_option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::free_camera_rb_distance_option, pf::grass_section_option);
         // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
         recompui::config::set_option_group(tooie::dive::option, "Dive");
         recompui::config::set_option_group(tooie::menu_mouse::enabled_option, "Menu mouse");
-        recompui::config::set_option_group(tooie::free_camera_ease_back_option, "Free camera");
+        recompui::config::set_option_group(tooie::free_camera_orbit_option, "Free camera");
         recompui::config::set_option_group(pf::grass_section_option, "3D grass");
     }
     graphics.add_bool_option(
@@ -1032,6 +1056,8 @@ void tooie::init_config() {
         });
     tooie::level_warp::add_option(wip);
     tooie::parallax_pick::add_dev_option(wip);
+    // L, 2026-10-23: under a Debug heading in DEV.
+    recompui::config::set_option_group(tooie::parallax_pick::save_only_active_option, "Debug");
     recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
     move_saved_hud_placement();
@@ -1047,6 +1073,7 @@ void tooie::init_config() {
     move_saved_cutscene_skip();
     turn_on_transform_anywhere_once();
     move_saved_options_to_wip();
+    default_mouse_sensitivity();
     // The settings menu's layout (L, 2026-10-16): tabs in a sidebar on the left, descriptions along the bottom.
     recompui::config::set_sidebar_layout(true);
     tooie::picture_filters::apply();

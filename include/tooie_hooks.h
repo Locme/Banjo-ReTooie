@@ -38,6 +38,7 @@ int tooie_null_guard(uint8_t* rdram, recomp_context* ctx, const char* where);
 
 // Volumetric dust (src/gameplay/dust.cpp): at the entry of badust_entrypoint_2; 1 takes the textured puff'"'"'s place.
 int tooie_dust_spawn(uint8_t* rdram, recomp_context* ctx);
+int tooie_dust_spawn_foot(uint8_t* rdram, recomp_context* ctx);
 
 void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx);
 // Asset replacement (src/game/asset_mods.cpp): in func_800D5B34 before it fetches an asset; 1 when a mod file was loaded instead.
