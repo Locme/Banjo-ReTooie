@@ -79,7 +79,7 @@ void tooie::hotkeys::register_inputs() {
     add(GameInput::CAMERA_SNAP_BEHIND, "Camera Snap Behind",
         "Swings the free camera round to the spot behind Banjo, the same smooth glide as Free camera: ease back. Unbound by default; bind it to a key or a button.", SDL_SCANCODE_UNKNOWN, "Hotkeys");
     add(GameInput::CAMERA_MOUSE_LOOK, "Camera Mouse Look",
-        "Hold it to turn and tilt the free camera with the mouse, when WIP > Free camera: mouse is set to Hold a key. Unbound by default.", SDL_SCANCODE_UNKNOWN, "Hotkeys");
+        "Hold it to turn and tilt the free camera with the mouse and the controller gyro, for whichever of QOL > Free camera: mouse and Free camera: gyro is set to Hold a key. Unbound by default.", SDL_SCANCODE_UNKNOWN, "Hotkeys");
     add(GameInput::SUN_SAVE, "Save Sun Location",
         "Saves where the sun stands in this level to sun.txt in the Dev Files folder next to the save files. The game reads it back at start, and you can send it in for the levels' built-in suns.", SDL_SCANCODE_UNKNOWN, "Ray Trace Debug");
     add(GameInput::VOLUMETRIC_SAVE, "Save Volumetric Settings",

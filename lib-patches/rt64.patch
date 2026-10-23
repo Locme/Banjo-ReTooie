@@ -2081,7 +2081,7 @@ index 69a82ac..d17896a 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..a7eb9b6 100644
+index 9fae0d4..4d3df6c 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,22 @@
@@ -4013,7 +4013,7 @@ index 9fae0d4..a7eb9b6 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3409,2268 @@ namespace RT64 {
+@@ -1747,25 +3409,2273 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4551,8 +4551,8 @@ index 9fae0d4..a7eb9b6 100644
 +                // Kazooie's only without feathers on the draw (those keep the marks they have).
 +                const bool charDraw = charSurface && !excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
 +                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
-+                    ((call.callDesc.extendedFlags.furShells == 1) || (call.callDesc.extendedFlags.furShells == 2)) &&
-+                    (fur || (call.callDesc.extendedFlags.furShells == 2)) && ((furDrawData == nullptr) || (furDrawData == &drawData)) &&
++                    ((call.callDesc.extendedFlags.furShells == 1) || (call.callDesc.extendedFlags.furShells == 2) || (call.callDesc.extendedFlags.furShells == 5)) &&
++                    (fur || (call.callDesc.extendedFlags.furShells == 2) || (call.callDesc.extendedFlags.furShells == 5)) && ((furDrawData == nullptr) || (furDrawData == &drawData)) &&
 +                    call.shaderDesc.otherMode.zCmp() && call.shaderDesc.otherMode.zUpd() && (call.shaderDesc.otherMode.zMode() != ZMODE_DEC) &&
 +                    (call.shaderDesc.otherMode.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode);
 +                if (charDraw) {
@@ -5148,6 +5148,9 @@ index 9fae0d4..a7eb9b6 100644
 +        }
 +    }
 +
++    // Banjo-Tooie: the character surface layer's height range above Banjo's feet, in world units (CharSurface.hlsli).
++    static constexpr float CharHeightRange = 180.0f;
++
 +    // Banjo-Tooie: Banjo's fur. Vertices at the same place (a model's draws split at its bones) share their
 +    // normals, so the shells don't open up along the seams; then each normal is made one unit long, pointing
 +    // out of the model (the game's triangles all wind the same way, which one is told from the whole model).
@@ -5200,6 +5203,8 @@ index 9fae0d4..a7eb9b6 100644
 +            }
 +        }
 +
++        float feet[3] = {};
++        const bool haveFeet = charSurface && SceneCharFeet(feet);
 +        double outward = 0.0;
 +        for (size_t i = 0; i < furVertexVector.size(); i++) {
 +            const uint32_t v = furVertexVector[i];
@@ -5235,10 +5240,10 @@ index 9fae0d4..a7eb9b6 100644
 +            // The character surface layer (CharSurface.hlsli) reads how far up the vertex faces, 0 (down) to 1 (up), from
 +            // the fraction of its mark: the marks are whole numbers and the shaders' tests for them have half a unit to spare.
 +            if (charSurface) {
-+                const float length = std::sqrt(n.x * n.x + n.y * n.y + n.z * n.z);
-+                const float up = (length > 1e-6f) ? std::clamp(0.5f + 0.5f * n.y * sign / length, 0.0f, 1.0f) : 0.5f;
++                // (How high the vertex is above Banjo's feet: 0 to CharHeightRange units, so the coat can climb from the ground.)
++                const float height = haveFeet ? std::clamp((furPositionVector[v].y - feet[1]) / CharHeightRange, 0.0f, 1.0f) : 0.5f;
 +                interop::float4 &mark = furShaderVector[v * 2 + 1];
-+                mark.w = std::floor(mark.w + 0.01f) + 0.45f * up;
++                mark.w = std::floor(mark.w + 0.01f) + 0.45f * height;
 +            }
 +        }
 +    }
@@ -6294,7 +6299,7 @@ index 9fae0d4..a7eb9b6 100644
  
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
-@@ -1816,8 +5721,12 @@ namespace RT64 {
+@@ -1816,8 +5726,12 @@ namespace RT64 {
          }
  #   endif
  
@@ -8941,7 +8946,7 @@ index bc250a2..48dd7ed 100644
 +
 +#endif // RT64_FBRENDERERCOMMON_HLSLI
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..ecdab46 100644
+index e7895c3..edca78b 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,12 @@
@@ -9160,7 +9165,7 @@ index e7895c3..ecdab46 100644
      // Preserve the value in the destination.
      if (otherMode.cvgDst() == CVG_DST_SAVE) {
          resultColor.a = 0.0f;
-@@ -254,6 +404,144 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +404,148 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -9282,8 +9287,12 @@ index e7895c3..ecdab46 100644
 +    resultColor.rgb *= parallaxLight;
 +
 +    // Banjo-Tooie: Banjo and Kazooie wet, snowy and dirty (CharSurface.hlsli); the same over their fur's shells.
-+    if (shellFeatures && (grassShell == 0) && ((gConstants.seeThrough & RASTER_CHAR_SURFACE) != 0)) {
-+        resultColor.rgb = CharSurface(resultColor.rgb, vertexFurAnchor, (furShell != 0) ? (float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK)) : 0.0f);
++    // (Kazooie's feather cards too: a card's anchor is its place across and along it, x -1 to 1 and y 0 root to 1 tip.)
++    if (shellFeatures && ((gConstants.seeThrough & RASTER_CHAR_SURFACE) != 0) && ((grassShell == 0) || ((gConstants.grassShells & RASTER_FEATHER_CARDS) != 0))) {
++        const bool card = grassShell != 0;
++        const float charShare = card ? saturate(vertexFurAnchor.y) : ((furShell != 0) ? (float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK)) : 0.0f);
++        const float3 charTexture = renderFlagUsesTexture0(rp.flags) ? texVal0.rgb : resultColor.rgb;
++        resultColor.rgb = CharSurface(resultColor.rgb, charTexture, vertexFurAnchor, charShare, card);
 +    }
 +
 +    // Banjo-Tooie: a window or lamp lights up at night: a warm light, a little of its own pattern kept.
@@ -9305,7 +9314,7 @@ index e7895c3..ecdab46 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +549,29 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +553,29 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -9335,7 +9344,7 @@ index e7895c3..ecdab46 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +598,7 @@ void PSMain(
+@@ -287,6 +602,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -9343,7 +9352,7 @@ index e7895c3..ecdab46 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +615,7 @@ void PSMain(
+@@ -303,7 +619,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -9353,7 +9362,7 @@ index e7895c3..ecdab46 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..9a508f2 100644
+index 74b1fa0..296750f 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
 @@ -11,16 +11,92 @@
@@ -9403,7 +9412,7 @@ index 74b1fa0..9a508f2 100644
 +        }
 +        // Banjo-Tooie: Banjo's and Kazooie's own draws take their fur anchor's mark for the character surface layer
 +        // (CharSurface.hlsli): the vertex's fur mark, with how far up it faces in the fraction.
-+        if (shellFeatures && (furShell == 0) && ((gConstants.seeThrough & RASTER_CHAR_SURFACE) != 0)) {
++        if (shellFeatures && (furShell == 0) && (grassShell == 0) && ((gConstants.seeThrough & RASTER_CHAR_SURFACE) != 0)) {
 +            uint furCount, furStride;
 +            furNormals.GetDimensions(furCount, furStride);
 +            if ((iVertexId * 2 + 1) < furCount) {
@@ -9786,10 +9795,10 @@ index 3f33475..7d84d10 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..5f412bb 100644
+index 2e62aaf..1b2048b 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,155 @@ namespace interop {
+@@ -13,6 +13,157 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -9942,6 +9951,8 @@ index 2e62aaf..5f412bb 100644
 +        // Banjo-Tooie: the character surface layer (CharSurface.hlsli): how wet (x), snowy (y) and dirty (z) Banjo and Kazooie
 +        // are, 0 to 1.
 +        float4 charSurface;
++        // The time in seconds (wrapping at 1000) for its drips, then how strongly Banjo drips (0 to 1).
++        float4 charSurface2;
      };
  #ifdef HLSL_CPU
  };
