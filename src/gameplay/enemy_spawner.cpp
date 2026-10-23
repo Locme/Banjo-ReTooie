@@ -42,6 +42,7 @@
 #include "tooie_aim_trace.h"
 #include "tooie_cheats.h"
 #include "tooie_debug.h"
+#include "tooie_dev_files.h"
 #include "tooie_enemy_spawner.h"
 #include "tooie_memory_guard.h"
 #include "tooie_rdram.h"
@@ -389,17 +390,33 @@ namespace {
 
     // The baseline pass (id 0, no enemy) is kept; each enemy's line lists what ran with it alive and not in the baseline.
     std::map<std::string, uint64_t> aim_baseline;
+    // A sweep that found its pending marker (the game crashed or hung with that enemy alive) carries on
+    // from the file it wrote: the enemy is logged as a crash and the ones already recorded are skipped.
+    bool aim_resumed = false;
+    std::vector<uint16_t> aim_done;
+
+    std::filesystem::path aim_pending_path() {
+        return tooie::dev_files::path("aim_sweep_pending.txt");
+    }
+    void aim_pending_set(uint16_t id) {
+        std::ofstream(aim_pending_path(), std::ios::trunc) << std::hex << id << '\n';
+    }
+    void aim_pending_clear() {
+        std::error_code ec;
+        std::filesystem::remove(aim_pending_path(), ec);
+    }
 
     void aim_sweep_record(uint16_t id) {
         const auto counts = tooie::aim_trace::capture_end();
+        aim_pending_clear();
         if (id == 0) {
             aim_baseline = counts;
+            if (aim_resumed) {
+                return; // already in the file
+            }
         }
         const Enemy* enemy = find_enemy(id);
-        std::error_code ec;
-        const std::filesystem::path dir = recomp::get_config_path() / "logs";
-        std::filesystem::create_directories(dir, ec);
-        std::ofstream out(dir / "aim_sweep.txt", id == 0 ? std::ios::trunc : std::ios::app);
+        std::ofstream out(tooie::dev_files::path("aim_sweep.txt"), (id == 0 && !aim_resumed) ? std::ios::trunc : std::ios::app);
         if (!out.good()) {
             return;
         }
@@ -416,10 +433,7 @@ namespace {
 
     void aim_sweep_note(uint16_t id, const char* text) {
         const Enemy* enemy = find_enemy(id);
-        std::error_code ec;
-        const std::filesystem::path dir = recomp::get_config_path() / "logs";
-        std::filesystem::create_directories(dir, ec);
-        std::ofstream out(dir / "aim_sweep.txt", std::ios::app);
+        std::ofstream out(tooie::dev_files::path("aim_sweep.txt"), std::ios::app);
         out << "0x" << std::hex << id << std::dec << ' ' << (enemy ? enemy->name : "?") << ": " << text << '\n';
     }
 
@@ -479,6 +493,28 @@ namespace {
             }
             sweep.maps_known = false;
             sweep.attempt = 0;
+            aim_resumed = false;
+            aim_done.clear();
+            {
+                std::ifstream pending(aim_pending_path());
+                unsigned crashed = 0;
+                if (pending && (pending >> std::hex >> crashed)) {
+                    aim_resumed = true;
+                    aim_sweep_note((uint16_t)crashed, "CRASHED or HUNG the game while alive (skipped on resume)");
+                    aim_done.push_back((uint16_t)crashed);
+                    std::ifstream prev(tooie::dev_files::path("aim_sweep.txt"));
+                    std::string line;
+                    while (std::getline(prev, line)) {
+                        unsigned id = 0;
+                        if (std::sscanf(line.c_str(), "0x%x", &id) == 1) {
+                            aim_done.push_back((uint16_t)id);
+                        }
+                    }
+                    sweep.ids.erase(std::remove_if(sweep.ids.begin(), sweep.ids.end(), [&](uint16_t id) {
+                        return id != 0 && std::find(aim_done.begin(), aim_done.end(), id) != aim_done.end();
+                    }), sweep.ids.end());
+                }
+            }
             sweep.next = 0;
             sweep.phase = 0;
             sweep.start_ms = 0;
@@ -534,7 +570,7 @@ namespace {
                             if (sweep.next >= sweep.ids.size()) {
                                 aim_sweep_running = false;
                                 tooie::aim_trace::sweep_finished();
-                                tooie::toast::show("Aim sweep done: logs/aim_sweep.txt");
+                                tooie::toast::show("Aim sweep done: aim_sweep.txt (Dev Files folder)");
                             }
                         }
                         break;
@@ -544,6 +580,7 @@ namespace {
                     fflush(stdout);
                     if (aim_sweep_running) {
                         tooie::aim_trace::capture_begin();
+                        aim_pending_set(id);
                     }
                     if (id != 0) {
                         spawn_now(rdram, ctx, id);
@@ -566,7 +603,7 @@ namespace {
                     if (sweep.next >= sweep.ids.size() && aim_sweep_running) {
                         aim_sweep_running = false;
                         tooie::aim_trace::sweep_finished();
-                        tooie::toast::show("Aim sweep done: logs/aim_sweep.txt");
+                        tooie::toast::show("Aim sweep done: aim_sweep.txt (Dev Files folder)");
                     }
                 }
                 break;
