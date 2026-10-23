@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T568 Character surface round 2: spots, feet and shorts, drips
+- Asked: 2026-10-23 16:55 UTC
+- Build: main after PR #21
+- Steps:
+  1. Pull main and build on Windows; WIP > Character surface: all sliders 100
+  2. Swim, get out: he drips (streaks running down) and dries in 5 to 10 seconds, a different time each exit
+  3. Icy Side: snow spots on his feet and legs, climbing higher the longer he stays; sand and dirt the same
+  4. Check eyes and mouths (Banjo's and Kazooie's) stay clean, feet and shorts are covered, Kazooie's wings and stomach are covered
+  5. Die: everything washes off. Leave Icy Side for the lava world: snow and sand are gone
+- Look for: Spots only near the ground and only where he touches it; eyes and mouths clean (tell me which ones still get coated); Kazooie's wings/feathers coated; drip streaks visible but not too strong
+- Status: waiting for L
+
 ## T567 Character surface in WIP, dust dirt and sand
 - Asked: 2026-10-23 13:54 UTC
 - Build: main after PR #20
