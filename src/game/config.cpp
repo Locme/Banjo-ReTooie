@@ -468,7 +468,7 @@ void tooie::init_config() {
     tooie::mirror_mode::add_option(general);
     general.add_bool_option(
         tooie::snout_jiggle::master_option,
-        "Jiggle",
+        "Jiggle Physics",
         "Turns every jiggle below on or off at once: Banjo's snout, nose, belly, ears, fur and backpack, Kazooie's feathers and Mumbo. Each part keeps its own switch and settings, which open under this one.",
         false);
     general.add_bool_option(
