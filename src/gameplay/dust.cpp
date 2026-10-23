@@ -62,6 +62,8 @@ namespace {
     int spawned_this_frame = 0;
     constexpr int max_per_frame = 5;
     std::atomic<bool> enabled{ false };
+    // Dust Banjo has been in since take_exposure (see tooie_dust.h).
+    std::atomic<float> exposure{ 0.0f };
     bool log_puffs = false;
 
     uint32_t player_pointer(uint8_t* rdram) {
@@ -183,6 +185,16 @@ void tooie::dust::tick(uint8_t* rdram) {
         for (int k = 0; k < 3; k++) {
             c.pos[k] += c.vel[k] * dt;
         }
+        // Standing in a cloud dirties him more.
+        if (have_banjo) {
+            const float dx = c.pos[0] - position[0];
+            const float dy = c.pos[1] - (position[1] + 20.0f);
+            const float dz = c.pos[2] - position[2];
+            if (std::sqrt(dx * dx + dy * dy + dz * dz) < 50.0f) {
+                const float t = c.age / c.life;
+                exposure.store(exposure.load() + dt * (1.0f - t));
+            }
+        }
         clouds[kept++] = c;
     }
     cloud_count = kept;
@@ -208,7 +220,12 @@ void tooie::dust::tick(uint8_t* rdram) {
 namespace {
     // Takes the puff's place: a cloud at the position (3 floats at `at`) growing from one scale of the game's puff to the other.
     bool spawn(uint8_t* rdram, uint32_t at, float scale_start, float scale_end) {
-        if (!enabled.load() || !valid_ptr(at)) {
+        if (!valid_ptr(at)) {
+            return false;
+        }
+        // (A puff is made at his feet: it dirties him, whether the game draws it or this does.)
+        exposure.store(exposure.load() + 1.0f);
+        if (!enabled.load()) {
             return false;
         }
         if (log_puffs) {
@@ -264,4 +281,8 @@ extern "C" int tooie_dust_spawn(uint8_t* rdram, recomp_context* ctx) {
 // its smoke object: $s0 points at the puff's position, the scales are fixed in the function (about 0.35 growing to 0.7).
 extern "C" int tooie_dust_spawn_foot(uint8_t* rdram, recomp_context* ctx) {
     return spawn(rdram, uint32_t(ctx->r16), 0.35f, 0.7f) ? 1 : 0;
+}
+
+float tooie::dust::take_exposure() {
+    return exposure.exchange(0.0f);
 }
