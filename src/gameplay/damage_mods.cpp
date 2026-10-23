@@ -490,7 +490,9 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
     if (t.moving_for > 0.0f && dist > 1.0f) {
         const float fade = std::clamp(std::min(dist - 150.0f, 800.0f - dist) / 100.0f, 0.0f, 1.0f);
         float side = t.side;
-        float speed = 55.0f;
+        // A run, not a shuffle: the slide is 0.6 of the enemy's own measured speed (at least 55, at most 220
+        // units a second), so the animation it already plays for its own speed fits the way it is going.
+        float speed = std::clamp(0.6f * std::hypot(t.heading[0], t.heading[1]), 55.0f, 220.0f);
         if (rolling) {
             speed = 350.0f;
             if (t.roll_side == 0.0f) {
@@ -564,7 +566,7 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
         } else if (diff < -180.0f) {
             diff += 360.0f;
         }
-        yaw += diff * std::min(1.0f, dt * 8.0f);
+        yaw += diff * std::min(1.0f, dt * 12.0f);
         tooie::rdram::write_float(rdram, actor + 0x48, std::fmod(yaw + 360.0f, 360.0f));
     }
 }
