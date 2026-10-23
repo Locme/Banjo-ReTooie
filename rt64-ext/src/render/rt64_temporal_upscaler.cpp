@@ -197,7 +197,10 @@ namespace RT64 {
     namespace {
         std::atomic<bool> hudSplit{ true };
         std::mutex snapshotMutex;
-        std::unique_ptr<RenderTarget> snapshotTarget;
+        std::unique_ptr<RenderTexture> snapshotTexture;
+        uint32_t snapshotWidth = 0;
+        uint32_t snapshotHeight = 0;
+        RenderFormat snapshotFormat = RenderFormat::UNKNOWN;
         bool snapshotFresh = false;
     }
 
@@ -213,28 +216,37 @@ namespace RT64 {
         if ((colorTarget == nullptr) || colorTarget->isEmpty() || (colorTarget->width == 0) || (colorTarget->height == 0)) {
             return;
         }
+        // The (resolved, if MSAA) color texture is copied as it is: a plain texture of its own size and format.
+        colorTarget->resolveTarget(worker, shaderLibrary);
+        RenderTexture *source = colorTarget->getResolvedTexture();
+        if (source == nullptr) {
+            return;
+        }
         const std::scoped_lock lock(snapshotMutex);
-        if ((snapshotTarget == nullptr) || (snapshotTarget->multisampling.sampleCount != colorTarget->multisampling.sampleCount) ||
-            (snapshotTarget->usesHDR != colorTarget->usesHDR))
-        {
-            snapshotTarget = std::make_unique<RenderTarget>(0, Framebuffer::Type::Color, colorTarget->multisampling, colorTarget->usesHDR);
+        if ((snapshotTexture == nullptr) || (snapshotWidth != colorTarget->width) || (snapshotHeight != colorTarget->height) || (snapshotFormat != colorTarget->format)) {
+            snapshotTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format));
+            snapshotTexture->setName("Upscaler World Snapshot");
+            snapshotWidth = colorTarget->width;
+            snapshotHeight = colorTarget->height;
+            snapshotFormat = colorTarget->format;
         }
-        if ((snapshotTarget->texture == nullptr) || (snapshotTarget->width != colorTarget->width) || (snapshotTarget->height != colorTarget->height)) {
-            snapshotTarget->setupColor(worker, colorTarget->width, colorTarget->height);
-        }
-        snapshotTarget->copyFromTarget(worker, colorTarget, 0, 0, colorTarget->width, colorTarget->height, shaderLibrary);
-        snapshotTarget->resolveTarget(worker, shaderLibrary);
+        RenderTextureBarrier barriers[] = {
+            RenderTextureBarrier(source, RenderTextureLayout::COPY_SOURCE),
+            RenderTextureBarrier(snapshotTexture.get(), RenderTextureLayout::COPY_DEST)
+        };
+        worker->commandList->barriers(RenderBarrierStage::COPY, barriers, uint32_t(std::size(barriers)));
+        worker->commandList->copyTexture(snapshotTexture.get(), source);
         snapshotFresh = true;
     }
 
     RenderTexture *UpscalerWorldSnapshot(uint32_t width, uint32_t height) {
         const std::scoped_lock lock(snapshotMutex);
-        if (!snapshotFresh || (snapshotTarget == nullptr) || (snapshotTarget->width != width) || (snapshotTarget->height != height)) {
+        if (!snapshotFresh || (snapshotTexture == nullptr) || (snapshotWidth != width) || (snapshotHeight != height)) {
             snapshotFresh = false;
             return nullptr;
         }
         snapshotFresh = false;
-        return snapshotTarget->getResolvedTexture();
+        return snapshotTexture.get();
     }
 
     void UpscalerCameraRange(float &nearPlane, float &farPlane, float &fovY) {
