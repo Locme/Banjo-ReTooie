@@ -7,7 +7,6 @@
 
 #include "tooie_photo_album.h"
 #include "tooie_game.h"
-#include "tooie_simple_menu.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_day_night.h"
 #include "tooie_dust.h"
@@ -91,19 +90,10 @@ namespace {
             on = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::wip_tab_option));
         } catch (...) {
         }
-        // The Simple menu hides the DEV tab (switch it off to see it again) and the WIP page.
-        const bool simple = tooie::simple_menu::on();
         try {
-            recompui::config::set_tab_visible(tooie::wip_tab_id, (on && !simple) || tooie::dev_file_present());
-            recompui::config::set_tab_visible(tooie::work_in_progress_tab_id, !simple);
+            recompui::config::set_tab_visible(tooie::wip_tab_id, on || tooie::dev_file_present());
         } catch (...) {
         }
-    }
-
-    // Shows or hides the tabs that depend on the Simple menu switch.
-    void refresh_simple_menu_tabs() {
-        show_wip_tab();
-        tooie::level_warp::refresh();
     }
 
     void show_achievements_tab() {
@@ -453,11 +443,6 @@ void tooie::init_config() {
     general_options.has_gyro_sensitivity = true;
     general_options.has_mouse_sensitivity = true;
     auto& general = recompui::config::create_general_tab(general_options);
-    tooie::simple_menu::add_option(general);
-    general.add_option_change_callback(tooie::simple_menu::option,
-        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
-            tooie::simple_menu::apply(refresh_simple_menu_tabs);
-        });
     tooie::control_scheme::add_option(general);
     general.add_bool_option(
         tooie::save_backups_option,
@@ -512,15 +497,10 @@ void tooie::init_config() {
     tooie::boss_rush::add_option(general);
     tooie::mirror_mode::add_option(general);
     general.add_bool_option(
-        tooie::snout_jiggle::master_option,
-        "Jiggle",
-        "Turns every jiggle below on or off at once: Banjo's snout, nose, belly, ears, fur and backpack, Kazooie's feathers and Mumbo. Each part keeps its own switch and settings, which open under this one.",
-        false);
-    general.add_bool_option(
         tooie::snout_jiggle::option,
         "Snout Jiggle",
         "Banjo's snout wobbles as he runs, turns, jumps, falls and lands: it trails behind the way he moves and folds back towards his eyes in a dive. It stays mid-wobble in Photo Mode. Works with player model mods that keep his skeleton, such as Smash Banjo.",
-        true);
+        false);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(stiffness_option, "Snout Jiggle: Stiffness",
@@ -538,7 +518,7 @@ void tooie::init_config() {
         general.add_number_option(squash_across_option, "Snout Jiggle: Max Squash & Stretch Up And Down",
             "How far the tip may swing up and down (and to the side), as a share of the snout's length.", 0, 300, 5, 0, true, 50);
         general.add_bool_option(nose_option, "Nose Jiggle",
-            "Banjo's black nose wobbles too, on its own jiggle bone on the end of the snout, with the same spring. Its squash and stretch stays small so it always looks like a nose.", true);
+            "Banjo's black nose wobbles too, on its own jiggle bone on the end of the snout, with the same spring. Its squash and stretch stays small so it always looks like a nose.", false);
         for (const std::string* id : { &stiffness_option, &damping_option, &mass_option, &squash_in_option, &squash_walk_option, &squash_out_option,
                                        &squash_across_option, &nose_option }) {
             general.add_option_hidden_dependency(*id, option, false);
@@ -546,7 +526,7 @@ void tooie::init_config() {
     }
     general.add_bool_option(tooie::snout_jiggle::belly_option, "Belly Jiggle",
         "The front of Banjo's belly wobbles on a spring as he runs, jumps and lands, with its own settings like the snout's. On Banjo's own model (not model mods). It stays mid-wobble in Photo Mode.",
-        true);
+        false);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(belly_stiffness_option, "Belly Jiggle: Stiffness",
@@ -568,7 +548,7 @@ void tooie::init_config() {
     }
     general.add_bool_option(tooie::snout_jiggle::ears_option, "Ear Jiggle",
         "Banjo's ears wobble on springs as he runs, turns, jumps and lands, each on its own jiggle bone, with their own settings like the snout's. On Banjo's own model (not model mods). They stay mid-wobble in Photo Mode.",
-        true);
+        false);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(ears_stiffness_option, "Ear Jiggle: Stiffness",
@@ -585,7 +565,7 @@ void tooie::init_config() {
     }
     general.add_bool_option(tooie::snout_jiggle::fur_option, "Fur Jiggle",
         "The strands of Banjo's fur (the Banjo fur shader, in Character Shaders) lean back as he runs, turns, jumps and lands, and spring upright again when he stops. Its own settings like the snout's. It stays mid-sway in Photo Mode.",
-        true);
+        false);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(fur_stiffness_option, "Fur Jiggle: Stiffness",
@@ -602,7 +582,7 @@ void tooie::init_config() {
     }
     general.add_bool_option(tooie::snout_jiggle::body_option, "Backpack Jiggle",
         "Banjo's backpack swings on a spring as he moves, carrying Kazooie with it, so the pack bounces when he runs, jumps and lands and settles when he stops. Separate from Snout jiggle and Kazooie jiggle, with its own settings. It stays mid-swing in Photo Mode.",
-        true);
+        false);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(body_stiffness_option, "Backpack Jiggle: Stiffness",
@@ -622,7 +602,7 @@ void tooie::init_config() {
     }
     general.add_bool_option(tooie::snout_jiggle::kazooie_option, "Kazooie Jiggle",
         "Kazooie's crest and tail feathers wobble on springs as she moves, whether she rides in the backpack or walks alone after Split Up. Separate from Snout jiggle. They stay mid-wobble in Photo Mode.",
-        true);
+        false);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(kazooie_stiffness_option, "Kazooie Jiggle: Stiffness",
@@ -643,7 +623,7 @@ void tooie::init_config() {
         }
     general.add_bool_option(tooie::snout_jiggle::mumbo_option, "Mumbo Jiggle",
         "The feathers on top of Mumbo's head wobble on springs as he moves, whether you play as him or meet him in his skull. Uses the Kazooie jiggle settings.",
-        true);
+        false);
     }
     general.add_bool_option(
         tooie::damage::double_damage_option,
@@ -717,7 +697,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::precompile_shaders_option, "Shaders");
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports And Cut Content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
-    recompui::config::set_option_group(tooie::snout_jiggle::master_option, "Enhancements");
+    recompui::config::set_option_group(tooie::snout_jiggle::option, "Jiggle");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
@@ -1272,11 +1252,9 @@ void tooie::init_config() {
     move_saved_menu_mouse();
     turn_on_saved_smooth_walls();
     split_saved_toon_shading();
-    tooie::simple_menu::classify();
     recompui::config::finalize();
     tooie::cheats::reset_on_start();
     move_saved_options_to_graphics();
-    tooie::simple_menu::apply(nullptr);
     show_wip_tab();
     move_saved_tab_options();
     turn_off_cheats_tab_once();

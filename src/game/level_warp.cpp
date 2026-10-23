@@ -37,7 +37,6 @@
 #include "tooie_game.h"
 #include "tooie_hotkeys.h"
 #include "tooie_level_warp.h"
-#include "tooie_simple_menu.h"
 #include "tooie_test_room.h"
 #include "tooie_toast.h"
 
@@ -67,8 +66,7 @@ namespace {
     // needed Enable cheats).
     bool debug_tab_on() {
         try {
-            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(option_id)) &&
-                !tooie::simple_menu::on();
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(option_id));
         } catch (...) {
             return false;
         }

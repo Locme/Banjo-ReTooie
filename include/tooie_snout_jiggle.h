@@ -15,8 +15,6 @@ namespace tooie::snout_jiggle {
     // (src/game/model_tagging.cpp); otherwise they move only at the game's frame rate and stutter.
     bool blend_vertices(uint32_t first_list_phys);
 
-    // The Jiggle switch over all the parts below (off by default; Gameplay > Enhancements).
-    inline const std::string master_option = "jiggle";
     inline const std::string option = "snout_jiggle";
     // Backpack jiggle (L, 2026-10-19): the backpack and its lid, its own sliders.
     inline const std::string body_option = "backpack_jiggle";
