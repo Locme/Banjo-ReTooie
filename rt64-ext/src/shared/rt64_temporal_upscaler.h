@@ -26,6 +26,22 @@ namespace interop {
         // x: 1 to draw the velocity as a picture, y: that picture's scale in pixels per full colour step, z: whether
         // the depth is the colour copy of RT64's depth target (1) or a plain float depth (0).
         float4 flags;
+        // x: 1 when gTexture2 is the objects' velocity (xy, with alpha 1 where an object was drawn), which wins over the camera's.
+        float4 extra;
+    };
+
+    struct UpscalerObjectVelocityCB {
+        // The jitter-free view-projection of this frame and of the one before, as rows (row vectors: clip = position * M),
+        // then the target's size in pixels.
+        float4 cur0;
+        float4 cur1;
+        float4 cur2;
+        float4 cur3;
+        float4 prev0;
+        float4 prev1;
+        float4 prev2;
+        float4 prev3;
+        float4 size;
     };
 
     struct UpscalerResolveCB {

@@ -16,6 +16,7 @@
 #include "shared/rt64_temporal_upscaler.h"
 
 #include "rt64_render_target.h"
+#include "rt64_object_velocity.h"
 
 namespace RT64 {
     namespace {
@@ -394,7 +395,9 @@ namespace RT64 {
         // Every slot gets a texture; the pass reads the second (the depth).
         descriptorSet->setTexture(descriptorSet->gTexture0, input, RenderTextureLayout::SHADER_READ);
         descriptorSet->setTexture(descriptorSet->gTexture1, depth, RenderTextureLayout::SHADER_READ);
-        descriptorSet->setTexture(descriptorSet->gTexture2, input, RenderTextureLayout::SHADER_READ);
+        RenderTexture *objectVelocity = UpscalerObjectVelocity(inputWidth, inputHeight);
+        descriptorSet->setTexture(descriptorSet->gTexture2, (objectVelocity != nullptr) ? objectVelocity : input, RenderTextureLayout::SHADER_READ);
+        constants.extra = { (objectVelocity != nullptr) ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
 
         auto drawPass = [&](const ShaderRecord &record, const RenderFramebuffer *framebuffer, float kind) {
             constants.flags = { kind, debugScale, 1.0f, constants.flags.w };
@@ -412,6 +415,7 @@ namespace RT64 {
         RenderTextureBarrier velocityBarriers[] = {
             RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
             RenderTextureBarrier(depth, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier((objectVelocity != nullptr) ? objectVelocity : input, RenderTextureLayout::SHADER_READ),
             RenderTextureBarrier(velocityTexture.get(), RenderTextureLayout::COLOR_WRITE)
         };
         commandList->barriers(RenderBarrierStage::GRAPHICS, velocityBarriers, uint32_t(std::size(velocityBarriers)));
@@ -665,5 +669,117 @@ namespace RT64 {
         commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));
         commandList->drawInstanced(3, 1, 0, 0);
         return hudTexture.get();
+    }
+}
+
+namespace RT64 {
+    namespace {
+        struct ObjectVelocityResources {
+            std::mutex mutex;
+            std::unique_ptr<RenderTexture> color;
+            std::unique_ptr<RenderTexture> depth;
+            std::unique_ptr<RenderFramebuffer> framebuffer;
+            std::unique_ptr<ObjectVelocityDescriptorSet> set;
+            uint32_t width = 0;
+            uint32_t height = 0;
+            bool fresh = false;
+        };
+
+        ObjectVelocityResources objectVelocity;
+    }
+
+    bool UpscalerObjectVelocityWanted() {
+        return UpscalerWanted() && (upscalerMode.load() != 6);
+    }
+
+    void UpscalerRecordObjectVelocity(RenderWorker *worker, uint32_t width, uint32_t height, const ShaderLibrary *shaderLibrary,
+        const RenderBuffer *worldPos, const RenderBuffer *worldVel, const std::function<void(RenderCommandList *)> &draw)
+    {
+        if ((width == 0) || (height == 0) || (shaderLibrary->upscalerObjectVelocity.pipeline == nullptr)) {
+            return;
+        }
+
+        // The camera of this frame, without jitter, as view-projection rows (clip = position * M).
+        interop::UpscalerObjectVelocityCB constants;
+        {
+            const std::scoped_lock lock(cameraMutex);
+            const Camera &cam = currentCamera;
+            if (!cam.valid || (cam.width != width) || (cam.height != height)) {
+                return;
+            }
+            const float (&cm)[16] = cam.projection;
+            if ((std::abs(cm[2 * 4 + 3] + 1.0f) > 0.01f) && (std::abs(cm[3 * 4 + 2] + 1.0f) > 0.01f)) {
+                return;
+            }
+            const bool curRow = rowVectorProjection(cam.projection);
+            const bool prevRow = rowVectorProjection(cam.prevProjection);
+            float curProj[16], prevProj[16], jx, jy;
+            removeJitter(cam.projection, curRow, cam.width, cam.height, curProj, jx, jy);
+            removeJitter(cam.prevProjection, prevRow, cam.width, cam.height, prevProj, jx, jy);
+            float curView[16], prevView[16], curProjRow[16], prevProjRow[16], curVP[16], prevVP[16];
+            rowVectorForm(cam.view, curRow, curView);
+            rowVectorForm(cam.prevView, prevRow, prevView);
+            rowVectorForm(curProj, curRow, curProjRow);
+            rowVectorForm(prevProj, prevRow, prevProjRow);
+            multiply(curView, curProjRow, curVP);
+            multiply(prevView, prevProjRow, prevVP);
+            constants.cur0 = { curVP[0], curVP[1], curVP[2], curVP[3] };
+            constants.cur1 = { curVP[4], curVP[5], curVP[6], curVP[7] };
+            constants.cur2 = { curVP[8], curVP[9], curVP[10], curVP[11] };
+            constants.cur3 = { curVP[12], curVP[13], curVP[14], curVP[15] };
+            constants.prev0 = { prevVP[0], prevVP[1], prevVP[2], prevVP[3] };
+            constants.prev1 = { prevVP[4], prevVP[5], prevVP[6], prevVP[7] };
+            constants.prev2 = { prevVP[8], prevVP[9], prevVP[10], prevVP[11] };
+            constants.prev3 = { prevVP[12], prevVP[13], prevVP[14], prevVP[15] };
+            constants.size = { float(width), float(height), 0.0f, 0.0f };
+        }
+
+        const std::scoped_lock lock(objectVelocity.mutex);
+        ObjectVelocityResources &res = objectVelocity;
+        if ((res.color == nullptr) || (res.width != width) || (res.height != height)) {
+            res.framebuffer.reset();
+            res.color = worker->device->createTexture(RenderTextureDesc::ColorTarget(width, height, RenderFormat::R16G16B16A16_FLOAT));
+            res.color->setName("Upscaler Object Velocity");
+            RenderClearValue clearValue = RenderClearValue::Depth(RenderDepth(), RenderFormat::D32_FLOAT);
+            res.depth = worker->device->createTexture(RenderTextureDesc::DepthTarget(width, height, RenderFormat::D32_FLOAT, RenderMultisampling(), &clearValue));
+            res.depth->setName("Upscaler Object Velocity Depth");
+            const RenderTexture *colorTex = res.color.get();
+            res.framebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&colorTex, 1, res.depth.get()));
+            res.width = width;
+            res.height = height;
+        }
+        if (res.set == nullptr) {
+            res.set = std::make_unique<ObjectVelocityDescriptorSet>(worker->device);
+        }
+        res.set->setBuffer(res.set->worldPos, worldPos, RenderBufferStructuredView(sizeof(float) * 4));
+        res.set->setBuffer(res.set->worldVel, worldVel, RenderBufferStructuredView(sizeof(float) * 4));
+
+        RenderCommandList *commandList = worker->commandList.get();
+        commandList->barriers(RenderBarrierStage::GRAPHICS, {
+            RenderTextureBarrier(res.color.get(), RenderTextureLayout::COLOR_WRITE),
+            RenderTextureBarrier(res.depth.get(), RenderTextureLayout::DEPTH_WRITE)
+        });
+        commandList->setFramebuffer(res.framebuffer.get());
+        commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
+        commandList->clearDepth(true, 1.0f);
+        commandList->setViewports(RenderViewport(0.0f, 0.0f, float(width), float(height)));
+        commandList->setScissors(RenderRect(0, 0, width, height));
+        commandList->setPipeline(shaderLibrary->upscalerObjectVelocity.pipeline.get());
+        commandList->setGraphicsPipelineLayout(shaderLibrary->upscalerObjectVelocity.pipelineLayout.get());
+        commandList->setGraphicsDescriptorSet(res.set->get(), 0);
+        commandList->setGraphicsPushConstants(0, &constants);
+        draw(commandList);
+        commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.color.get(), RenderTextureLayout::SHADER_READ) });
+        res.fresh = true;
+    }
+
+    RenderTexture *UpscalerObjectVelocity(uint32_t width, uint32_t height) {
+        const std::scoped_lock lock(objectVelocity.mutex);
+        if (!objectVelocity.fresh || (objectVelocity.color == nullptr) || (objectVelocity.width != width) || (objectVelocity.height != height)) {
+            objectVelocity.fresh = false;
+            return nullptr;
+        }
+        objectVelocity.fresh = false;
+        return objectVelocity.color.get();
     }
 }

@@ -8,6 +8,8 @@
 #ifndef RT64_EXT_RENDER_RT64_TEMPORAL_UPSCALER_H
 #define RT64_EXT_RENDER_RT64_TEMPORAL_UPSCALER_H
 
+#include <functional>
+
 #include "rt64_descriptor_sets.h"
 #include "rt64_shader_library.h"
 #include "rt64_dlss.h"
@@ -50,6 +52,16 @@ namespace RT64 {
 
     // The camera's near and far planes and vertical field of view (radians), from the last projection seen.
     void UpscalerCameraRange(float &nearPlane, float &farPlane, float &fovY);
+
+    // The velocity of things that move on their own (characters, enemies): the framebuffer renderer, once the 3D world is
+    // drawn, draws the solid triangles again with the world positions and the world velocities RT64 worked out. draw
+    // sets the vertex and index buffers and issues the draws.
+    bool UpscalerObjectVelocityWanted();
+    void UpscalerRecordObjectVelocity(RenderWorker *worker, uint32_t width, uint32_t height, const ShaderLibrary *shaderLibrary,
+        const RenderBuffer *worldPos, const RenderBuffer *worldVel, const std::function<void(RenderCommandList *)> &draw);
+
+    // The present queue: the objects' velocity of the frame being shown (alpha 1 where an object was drawn), or null.
+    RenderTexture *UpscalerObjectVelocity(uint32_t width, uint32_t height);
 
     // Graphics > Upscaler > Keep the HUD out of the upscale: the 3D world is copied before the HUD is drawn, the
     // upscaler works on the copy, and the HUD is put back after (UpscalerRenderer::composeHud).
