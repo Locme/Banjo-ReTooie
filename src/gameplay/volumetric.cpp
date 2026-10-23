@@ -20,12 +20,16 @@
 #include <sstream>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "recomp.h"
+#include "recompinput/recompinput.h"
 #include "recompui/config.h"
 
 #include "tooie_debug.h"
 #include "tooie_dev_files.h"
+#include "tooie_hotkeys.h"
+#include "tooie_toast.h"
 #include "tooie_volumetric.h"
 
 namespace RT64 {
@@ -134,6 +138,65 @@ namespace {
             }
         }
         return true;
+    }
+
+    // The shape as the file's 0 to 100 values (the inverse of what tick() makes of them).
+    Level level_of(uint32_t type, const Shape& shape, float mist, float fog, uint32_t preset, float offset) {
+        Level l;
+        l.clouds = int(type);
+        l.cover = std::clamp(shape.cover, 0.0f, 1.0f);
+        l.height = std::clamp(std::log(std::max(shape.height, 0.25f)) / std::log(4.0f) + 0.5f, 0.0f, 1.0f);
+        l.thickness = std::clamp((shape.thickness - 0.2f) / 0.8f, 0.0f, 1.0f);
+        l.speed = std::clamp(std::sqrt(std::max(shape.speed, 0.0f)) / 2.0f, 0.0f, 1.0f);
+        l.mist = mist;
+        l.fog = fog;
+        l.preset = int(preset);
+        l.mist_offset = offset;
+        return l;
+    }
+
+    std::string line_of(uint16_t map, const Level& l) {
+        char text[256];
+        std::snprintf(text, sizeof(text), "0x%X clouds=%s cover=%.0f height=%.0f thickness=%.0f speed=%.0f mist=%.0f fog=%.0f fog_preset=%s mist_offset=%.0f",
+            map, cloud_names[std::clamp(l.clouds, 0, 7)], l.cover * 100.0f, l.height * 100.0f, l.thickness * 100.0f, l.speed * 100.0f,
+            l.mist * 100.0f, l.fog * 100.0f, preset_names[std::clamp(l.preset, 0, 6)], l.mist_offset);
+        return text;
+    }
+
+    // Writes the level's line into volumetric.txt, replacing its old line and keeping the rest of the file as it was.
+    bool save(uint16_t map, const Level& l) {
+        std::vector<std::string> lines;
+        {
+            std::ifstream in(tooie::dev_files::read_path(file_name));
+            std::string line;
+            while (std::getline(in, line)) {
+                lines.push_back(line);
+            }
+        }
+        if (lines.empty()) {
+            lines.push_back("# Volumetric mist, fog and clouds per level, written by Save Volumetric Settings (Controls > Volumetric). See the format at the top of src/gameplay/volumetric.cpp:");
+            lines.push_back("# map (hex), then clouds= cover= height= thickness= speed= (0 to 100) mist= fog= (0 to 100) fog_preset= mist_offset=");
+        }
+        const std::string text = line_of(map, l);
+        bool replaced = false;
+        for (std::string& line : lines) {
+            uint16_t m;
+            Level old;
+            if (read_line(line, m, old) && m == map) {
+                line = text;
+                replaced = true;
+            }
+        }
+        if (!replaced) {
+            lines.push_back(text);
+        }
+        std::error_code ec;
+        std::filesystem::create_directories(tooie::dev_files::folder(), ec);
+        std::ofstream out(tooie::dev_files::path(file_name), std::ios::trunc);
+        for (const std::string& line : lines) {
+            out << line << "\n";
+        }
+        return bool(out);
     }
 
     void write_template() {
@@ -262,7 +325,7 @@ void tooie::volumetric::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         file_option,
         "Volumetric Level File",
-        "Reads Dev Files/volumetric.txt (made the first time any volumetric option is on): per level mist, fog, cloud type and cloud shape that override the settings above, for the levels listed. Changes to the file apply within a second.",
+        "Reads Dev Files/volumetric.txt (made the first time any volumetric option is on, or by the Save Volumetric Settings key in Controls > Volumetric): per level mist, fog, cloud type and cloud shape that override the settings above, for the levels listed. Changes to the file apply within a second.",
         true);
     for (const std::string* id : { &mist_option, &fog_option, &fog_preset_option, &clouds_option, &file_option }) {
         graphics.add_option_change_callback(*id,
@@ -313,6 +376,26 @@ void tooie::volumetric::tick(uint8_t* rdram) {
             if (l.speed >= 0.0f) { shape.speed = (l.speed * 2.0f) * (l.speed * 2.0f); }
         }
     }
+    // Save Volumetric Settings (Controls > Volumetric): everything showing now becomes this level's line.
+    static bool save_was_down = false;
+    const bool save_down = tooie::hotkeys::down(recompinput::GameInput::VOLUMETRIC_SAVE);
+    if (save_down && !save_was_down) {
+        const uint16_t map = tooie::debug::current_map(rdram);
+        const Level now = level_of(cloud_type, shape, mist, fog, preset, offset);
+        char text[128];
+        if (save(map, now)) {
+            levels[map] = now;
+            std::error_code ec;
+            file_time = std::filesystem::last_write_time(tooie::dev_files::read_path(file_name), ec);
+            fprintf(stderr, "[volumetric] saved map 0x%X: %s\n", map, line_of(map, now).c_str());
+            std::snprintf(text, sizeof(text), "Volumetric settings saved to volumetric.txt for map 0x%X", map);
+        }
+        else {
+            std::snprintf(text, sizeof(text), "Could not write volumetric.txt in the Dev Files folder");
+        }
+        tooie::toast::show(text);
+    }
+    save_was_down = save_down;
     RT64::SetSceneVolumetric(mist, fog, preset, cloud_type, offset);
     // Forced clouds take the shape over from the Day and Night cycle's (whose tick has already run this frame).
     if (cloud_type > 0) {

@@ -95,7 +95,7 @@ diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include
 index f5ed6c0..bbec3e9 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,53 @@ namespace recompinput {
+@@ -37,10 +37,54 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
@@ -139,7 +139,8 @@ index f5ed6c0..bbec3e9 100644
 +    DEFINE_INPUT(NOCLIP_TOGGLE, 0, "Toggle Noclip") \
 +    DEFINE_INPUT(SUN_MOVE, 0, "Move Sun") \
 +    DEFINE_INPUT(SUN_SAVE, 0, "Save Sun Location") \
-+    DEFINE_INPUT(MATERIAL_PICK, 0, "Ray Tracing Material Pick Mode")
++    DEFINE_INPUT(MATERIAL_PICK, 0, "Ray Tracing Material Pick Mode") \
++    DEFINE_INPUT(VOLUMETRIC_SAVE, 0, "Save Volumetric Settings")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \
@@ -150,7 +151,7 @@ index f5ed6c0..bbec3e9 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -72,6 +115,9 @@ namespace recompinput {
+@@ -72,6 +116,9 @@ namespace recompinput {
          InputType input_type;
          // Represents a single source input. e.g. A keyboard's shift key, or a controller's R trigger
          int32_t input_id;

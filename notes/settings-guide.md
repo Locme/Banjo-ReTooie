@@ -510,7 +510,9 @@ All off by default; they sit in the WIP tab. Drawn on the picture after the scen
   the sky of any level, day or night cycle or not (with the cycle, they replace its clouds).
 - **Volumetric Level File**: reads `Dev Files/volumetric.txt`, one level a line, overriding the options for that
   level (cloud type and shape, mist, fog, preset, mist height). Made the first time any option is on, with the format
-  in its comments; read again within a second of a change. Test aid: `TOOIE_VOL=<mist>,<fog>,<preset 0-6>,<clouds 0-7>`.
+  in its comments; read again within a second of a change. The **Save Volumetric Settings** key (Controls >
+  Volumetric, no default binding) writes everything showing now (mist, fog, preset, cloud type and shape) as this
+  level's line. Test aid: `TOOIE_VOL=<mist>,<fog>,<preset 0-6>,<clouds 0-7>`.
 
 ## Graphics: Game Frame Rate and Interpolation
 

@@ -78,6 +78,8 @@ void tooie::hotkeys::register_inputs() {
         "Hold it and turn the mouse wheel to move the level's sun, for the ray traced light and the sun shadows: the wheel turns it round the compass, Ctrl + wheel raises or lowers it, Shift for fine steps. It stays where you put it until the game closes; Save Sun Location keeps it. With Day and Night on it stands there all day (the moon keeps its own path at night).", SDL_SCANCODE_UNKNOWN, "Ray Trace Debug");
     add(GameInput::SUN_SAVE, "Save Sun Location",
         "Saves where the sun stands in this level to sun.txt in the Dev Files folder next to the save files. The game reads it back at start, and you can send it in for the levels' built-in suns.", SDL_SCANCODE_UNKNOWN, "Ray Trace Debug");
+    add(GameInput::VOLUMETRIC_SAVE, "Save Volumetric Settings",
+        "Saves the volumetric settings now showing (mist, fog and its preset, cloud type) as this level's line in volumetric.txt in the Dev Files folder next to the save files. They are used for this level from then on, whatever the options say; edit the file to change them.", SDL_SCANCODE_UNKNOWN, "Volumetric");
 }
 
 bool tooie::hotkeys::down(recompinput::GameInput input) {
