@@ -192,29 +192,20 @@ namespace {
         }
     }
 
-    // Mouse Sensitivity starts at 5 (L, 2026-10-23) instead of off, so the mouse camera works out of the box:
-    // set it once while general.json has no saved value for it. The option's own number type is kept.
+    // Mouse Sensitivity is 5 by default (L, 2026-10-23). A saved value from before is set to 5 once, so PCs
+    // that saved the old default (off, or 50 on a Steam Deck) get 5; changing it afterwards stays.
     void default_mouse_sensitivity() {
-        const std::filesystem::path file = recomp::get_config_path() / "general.json";
-        if (std::filesystem::exists(file)) {
-            std::ifstream in(file);
-            const nlohmann::json json = nlohmann::json::parse(in, nullptr, false);
-            if (json.is_object() && json.contains("mouse_sensitivity")) {
-                return;
-            }
+        const std::filesystem::path marker = recomp::get_config_path() / "mouse_sensitivity_5.done";
+        if (std::filesystem::exists(marker)) {
+            return;
         }
         try {
             recomp::config::Config& general = recompui::config::get_general_config();
-            const auto current = general.get_option_value("mouse_sensitivity");
-            std::visit([&](auto value) {
-                using T = decltype(value);
-                if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
-                    general.set_option_value("mouse_sensitivity", T(5));
-                    general.save_config();
-                }
-            }, current);
+            general.set_option_value("mouse_sensitivity", 5.0);
+            general.save_config();
         } catch (...) {
         }
+        std::ofstream{marker};
     }
 
     // Transform anywhere became on by default (L, 2026-10-19): a saved "off" from the old default turns
