@@ -20,6 +20,7 @@ namespace tooie {
     inline const std::string free_camera_orbit_option = "free_camera_orbit";
     inline const std::string photo_mode_collision_option = "photo_mode_collision";
     enum class FreeCameraSpeed : uint32_t { Slow, Normal, Fast };
+    enum class FreeCameraMouse : uint32_t { Off, Always, Hold };
     enum class FreeCameraEaseBack : uint32_t { Off, Flying, Always };
 }
 

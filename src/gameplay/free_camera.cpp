@@ -139,6 +139,9 @@ namespace {
         float zoom = 1.0f;     // times the game's distance
         bool snap = false;      // Camera Snap Behind pressed: ease back now, whatever Banjo is doing
         bool snap_was_down = false;
+        int32_t wheel = 0;      // mouse wheel total last step
+        uint32_t middle = 0;    // middle button presses last step
+        bool has_wheel = false;
         float look = 0.0f;      // look-up tilt: degrees the view is raised past the lowest eye height
         float idle = 0.0f;      // seconds since the stick was last used
         float wall = 1.0f;      // smooth walls: the camera's distance as a fraction of the wanted one
@@ -336,12 +339,23 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     float orbit_x = 0.0f;
     float orbit_y = 0.0f;
     tooie::motion_aim::take_orbit(&orbit_x, &orbit_y);
-    if (!wip_option<bool>(tooie::free_camera_orbit_option, false)) {
+    const auto mouse_mode = wip_option<uint32_t>(tooie::free_camera_orbit_option, (uint32_t)tooie::FreeCameraMouse::Off);
+    if (mouse_mode == (uint32_t)tooie::FreeCameraMouse::Off ||
+        (mouse_mode == (uint32_t)tooie::FreeCameraMouse::Hold && !tooie::hotkeys::down(recompinput::GameInput::CAMERA_MOUSE_LOOK))) {
         orbit_x = 0.0f;
         orbit_y = 0.0f;
     }
+    // Mouse wheel zoom and the middle button (snap behind) while the mouse is on; counts since last step.
+    const int32_t wheel_now = recompinput::get_game_mouse_wheel();
+    const uint32_t middle_now = recompinput::get_game_mouse_clicks(2);
+    const bool mouse_on = mouse_mode != (uint32_t)tooie::FreeCameraMouse::Off;
+    const int32_t wheel_notches = mouse_on && state.has_wheel ? wheel_now - state.wheel : 0;
+    const bool middle_clicked = mouse_on && state.has_wheel && middle_now != state.middle;
+    state.wheel = wheel_now;
+    state.middle = middle_now;
+    state.has_wheel = true;
     const bool snap_down = tooie::hotkeys::down(recompinput::GameInput::CAMERA_SNAP_BEHIND);
-    const bool snap_pressed = snap_down && !state.snap_was_down;
+    const bool snap_pressed = (snap_down && !state.snap_was_down) || middle_clicked;
     state.snap_was_down = snap_down;
 
     const bool on = tooie::free_camera::enabled();
@@ -362,7 +376,8 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     bool easing = false;
     float fade = 1.0f;
     if (on && gameplay && !paused) {
-        const bool stick = stick_x != 0.0f || stick_y != 0.0f || orbit_x != 0.0f || orbit_y != 0.0f;
+        const bool stick = stick_x != 0.0f || stick_y != 0.0f || orbit_x != 0.0f || orbit_y != 0.0f ||
+            wheel_notches != 0;
         if (!state.active && stick) {
             state.active = true;
             state.yaw = rot[1];
@@ -412,6 +427,10 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             const float sx = (option<bool>(tooie::free_camera_invert_x_option, false) != tooie::mirror_mode::active()) ? -stick_x : stick_x;
             const float sy = option<bool>(tooie::free_camera_invert_y_option, false) ? -stick_y : stick_y;
             // Right turns the view right (yaw grows to the left). Up looks up, so the camera drops.
+            // Mouse wheel: each notch changes the distance by 10%, up zooms in.
+            if (wheel_notches != 0) {
+                state.zoom = std::clamp(state.zoom * std::pow(0.9f, (float)wheel_notches), min_zoom, max_zoom);
+            }
             const bool flip_x = option<bool>(tooie::free_camera_invert_x_option, false) != tooie::mirror_mode::active();
             const float orbit_yaw = flip_x ? -orbit_x : orbit_x;
             const float orbit_pitch = option<bool>(tooie::free_camera_invert_y_option, false) ? -orbit_y : orbit_y;

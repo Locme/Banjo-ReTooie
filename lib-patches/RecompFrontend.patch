@@ -95,7 +95,7 @@ diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include
 index f5ed6c0..bbec3e9 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,54 @@ namespace recompinput {
+@@ -37,10 +37,55 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
@@ -140,7 +140,8 @@ index f5ed6c0..bbec3e9 100644
 +    DEFINE_INPUT(SUN_MOVE, 0, "Move Sun") \
 +    DEFINE_INPUT(SUN_SAVE, 0, "Save Sun Location") \
 +    DEFINE_INPUT(MATERIAL_PICK, 0, "Ray Tracing Material Pick Mode") \
-+    DEFINE_INPUT(CAMERA_SNAP_BEHIND, 0, "Camera Snap Behind")
++    DEFINE_INPUT(CAMERA_SNAP_BEHIND, 0, "Camera Snap Behind") \
++    DEFINE_INPUT(CAMERA_MOUSE_LOOK, 0, "Camera Mouse Look")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \
