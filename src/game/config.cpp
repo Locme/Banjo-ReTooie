@@ -862,6 +862,14 @@ void tooie::init_config() {
         }
         recompui::config::set_option_group(vol::mist_option, "Volumetrics");
     }
+    {
+        // Wet, snowy and dirty characters are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
+        namespace pf = tooie::picture_filters;
+        for (const std::string* id : { &pf::char_wet_option, &pf::char_snow_option, &pf::char_dirt_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        recompui::config::set_option_group(pf::char_wet_option, "Character surface");
+    }
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",

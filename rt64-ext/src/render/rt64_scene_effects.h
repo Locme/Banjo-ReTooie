@@ -174,6 +174,7 @@ namespace RT64 {
         float charWet = 0.0f;
         float charSnow = 0.0f;
         float charDirt = 0.0f;
+        float charSand = 0.0f;
         float npcFurDensity = 1.0f;
         float npcFurNoisiness = 0.5f;
         float npcFeathers = 0.0f;
@@ -420,8 +421,14 @@ namespace RT64 {
     // model's draws (G_EX_SETFURSHELLS_V1); each is drawn again as shells pushed out along its normals.
     void SetSceneFur(float amount, float length, float density, float noisiness);
     // The character surface layer (CharSurface.hlsli): how wet, snowy and dirty Banjo and Kazooie are, 0 to 1.
-    void SetSceneCharSurface(float wet, float snow, float dirt);
+    void SetSceneCharSurface(float wet, float snow, float dirt, float sand);
     bool SceneCharSurfaceOn();
+    // Banjo's feet (x, y, z) as the scene effects have them, false with no player.
+    bool SceneCharFeet(float (&feet)[3]);
+    // A ground draw of a sand texture lies under Banjo's feet (the renderer notes it each frame it does; true within the last
+    // third of a second), for the character surface layer's sand.
+    void NoteSandUnderfoot();
+    bool SceneSandUnderfoot();
     // The shells drawn over each of Banjo's draws: 0 when the fur is off.
     uint32_t SceneFurShells();
     // Banjo-Tooie: which of a model's vertices get fur or feathers, told by their own colours before the game
