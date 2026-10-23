@@ -539,6 +539,23 @@ namespace RT64 {
         memcpy(dustClouds, clouds, size_t(dustCount) * 8 * sizeof(float));
     }
 
+    // The volumetric extras, packed (see VolExtra in SceneEffectsPS.hlsl): [0] fog start / 25 (8 bits), fog colour (3), water
+    // height / 4 (7); [1] water mist and fall mist in hundredths (7 each), fall height / 4 (7).
+    static std::mutex volExtraMutex;
+    static float volExtra[2] = {};
+    // Whether the mist over water or at waterfalls is on (it reads the water mask).
+    static bool VolWaterMistWanted() {
+        const std::scoped_lock lock(volExtraMutex);
+        return (uint32_t(volExtra[1]) & 0x3FFFu) != 0u;
+    }
+
+    void SetSceneVolumetricExtra(float fogStart, uint32_t fogColour, float waterMist, float waterHeight, float fallMist, float fallHeight) {
+        const auto bits = [](float v, float scale, uint32_t most) { return std::min(uint32_t(std::lround(std::max(v, 0.0f) / scale)), most); };
+        const std::scoped_lock lock(volExtraMutex);
+        volExtra[0] = float(bits(fogStart, 25.0f, 255u) | (std::min(fogColour, 4u) << 8) | (bits(waterHeight, 4.0f, 127u) << 11));
+        volExtra[1] = float(bits(waterMist, 0.01f, 100u) | (bits(fallMist, 0.01f, 100u) << 7) | (bits(fallHeight, 4.0f, 127u) << 14));
+    }
+
     static std::mutex lampMutex;
     static std::unordered_set<uint64_t> lampTextures;
     static float lampLights[SceneMaxLights * 4] = {};
@@ -1168,14 +1185,14 @@ namespace RT64 {
         effectsSettings.volMistOffset = std::clamp(mistOffset, -240.0f, 240.0f);
     }
 
-    // The cloud shape (cover 0 to 1, height 0.25 to 4, thickness 0.1 to 2, speed 0 to 8) in 6 bits each, with
+    // The cloud shape (cover 0 to 1, height 0.0625 to 4, thickness 0.1 to 2, speed 0 to 8) in 6 bits each, with
     // F8 compare as the sign, so it fits in one float of the effects' push constants (CloudShape in
     // SceneEffectsPS.hlsl). Height steps in log2 and speed in its square root, as the settings do.
     static float PackSceneClouds(const float shape[4], bool compare) {
         auto bits = [](float v, float low, float high) {
             return uint32_t(std::lround(std::clamp((v - low) / (high - low), 0.0f, 1.0f) * 63.0f));
         };
-        const uint32_t packed = bits(shape[0], 0.0f, 1.0f) | (bits(std::log2(std::max(shape[1], 0.25f)), -2.0f, 2.0f) << 6) |
+        const uint32_t packed = bits(shape[0], 0.0f, 1.0f) | (bits(std::log2(std::max(shape[1], 0.0625f)), -4.0f, 2.0f) << 6) |
             (bits(shape[2], 0.1f, 2.0f) << 12) | (bits(std::sqrt(std::max(shape[3], 0.0f)), 0.0f, std::sqrt(8.0f)) << 18);
         return compare ? -(float(packed) + 1.0f) : float(packed);
     }
@@ -1183,7 +1200,7 @@ namespace RT64 {
     void SetSceneClouds(float cover, float height, float thickness, float speed) {
         const std::scoped_lock lock(effectsMutex);
         effectsSettings.dayCloudShape[0] = std::clamp(cover, 0.0f, 1.0f);
-        effectsSettings.dayCloudShape[1] = std::clamp(height, 0.25f, 4.0f);
+        effectsSettings.dayCloudShape[1] = std::clamp(height, 0.0625f, 4.0f);
         effectsSettings.dayCloudShape[2] = std::clamp(thickness, 0.1f, 2.0f);
         effectsSettings.dayCloudShape[3] = std::clamp(speed, 0.0f, 8.0f);
     }
@@ -2460,6 +2477,9 @@ namespace RT64 {
     }
 
     bool SceneWaterWanted() {
+        if (VolWaterMistWanted()) {
+            return true;
+        }
         const std::scoped_lock lock(effectsMutex);
         return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.iceReflections > 0.0f) || (effectsSettings.screenSpaceReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) || (effectsSettings.view == SceneEffectsViewSsr) ||
             // The rain rings on water need it too.
@@ -3648,6 +3668,11 @@ namespace RT64 {
             memset(dust, 0, 16 * (1 + 2 * SceneMaxDust));
             const std::scoped_lock lock(dustMutex);
             dust[0] = float(dustCount);
+            {
+                const std::scoped_lock extraLock(volExtraMutex);
+                dust[1] = volExtra[0];
+                dust[2] = volExtra[1];
+            }
             memcpy(dust + 4, dustClouds, size_t(dustCount) * 8 * sizeof(float));
             res.dustBuffer->unmap();
         }

@@ -42,6 +42,7 @@ namespace {
     // World units of radius for one unit of the game's puff scale, and the cloud's life: tuned by eye (L's test).
     constexpr float radius_per_scale = 22.0f;
     constexpr float life_seconds = 0.9f;
+    constexpr float max_radius = 75.0f;
 
     struct Cloud {
         float pos[3];
@@ -238,8 +239,9 @@ extern "C" int tooie_dust_spawn(uint8_t* rdram, recomp_context* ctx) {
     c.vel[2] = (have_banjo ? velocity[2] * 0.3f : 0.0f) + (hash(n * 3 + 3) - 0.5f) * 2.0f * scatter;
     const float start = std::clamp(scale_start, 0.05f, 4.0f);
     const float end = std::clamp(std::max(scale_end, scale_start), 0.1f, 6.0f);
-    c.radius_start = std::max(8.0f, start * radius_per_scale);
-    c.radius_end = std::max(c.radius_start * 1.5f, end * radius_per_scale);
+    // A landing (the ground pound's especially) calls for a big puff: capped, or it showed as one large flat disc (L, 2026-10-23).
+    c.radius_start = std::clamp(start * radius_per_scale, 8.0f, max_radius * 0.6f);
+    c.radius_end = std::clamp(std::max(c.radius_start * 1.5f, end * radius_per_scale), c.radius_start, max_radius);
     c.age = 0.0f;
     c.life = life_seconds * (0.8f + 0.4f * hash(n * 7 + 5));
     c.seed = hash(n * 11 + 9) * 64.0f;

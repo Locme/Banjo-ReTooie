@@ -830,10 +830,18 @@ void tooie::init_config() {
     {
         // Volumetric mist, fog and clouds are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
         namespace vol = tooie::volumetric;
-        for (const std::string* id : { &vol::mist_option, &vol::fog_option, &vol::fog_preset_option, &vol::clouds_option, &vol::file_option, &tooie::dust::option }) {
+        for (const std::string* id : { &vol::mist_option, &vol::mist_water_option, &vol::mist_water_height_option, &vol::mist_fall_option,
+                &vol::mist_fall_height_option, &vol::fog_option, &vol::fog_preset_option, &vol::fog_start_option, &vol::fog_colour_option,
+                &vol::clouds_option, &vol::cloud_amount_option, &vol::cloud_height_option, &vol::cloud_size_option, &vol::cloud_speed_option,
+                &vol::file_option, &tooie::dust::option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
-        recompui::config::set_option_group(vol::mist_option, "Volumetrics");
+        // One heading a kind, so each can be tested on its own.
+        recompui::config::set_option_group(vol::mist_option, "Volumetric Mist");
+        recompui::config::set_option_group(vol::fog_option, "Volumetric Fog");
+        recompui::config::set_option_group(vol::clouds_option, "Volumetric Clouds");
+        recompui::config::set_option_group(vol::file_option, "Volumetric Levels");
+        recompui::config::set_option_group(tooie::dust::option, "Volumetric Dust");
     }
     graphics.add_bool_option(
         tooie::draw_distance_option,

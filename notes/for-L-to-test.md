@@ -30,6 +30,8 @@
   3. Volumetric Clouds: each type, in a level with and without Day and Night
   4. Dev Files/volumetric.txt: add a line such as 0xAF clouds=stormy cover=80 mist=40 and save while the game runs
 - Look for: Mist stays in the level and meets scenery with no texture-on-model look; fog presets differ clearly; clouds show on the sky of any level, Stormy is dark grey; the file's line applies within a second. Send frame rate with them on.
+  5. (2026-10-23) Volumetric Mist is finer at the low end (slider 1 to 100, squared). Try Mist Over Water and Mist at Waterfalls (strength and height each), Volumetric Fog Start Distance and Colour, and the cloud Amount, Height, Size and Speed sliders (50 is the type's own; Height 0 brings the layer down to the horizon). Volumetric Fog 40 is about a quarter as thick as before.
+  6. Run and ground pound on grass with Volumetric Dust on: the puff should be small, pale and see-through, with no outline.
 - Status: waiting for L
 
 ## T562 Aim sweep: find the enemy chase code automatically

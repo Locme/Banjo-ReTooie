@@ -260,14 +260,14 @@ float CloudNoise(float3 p) {
     return lerp(lerp(x00, x10, f.y), lerp(x01, x11, f.y), f.z);
 }
 
-// The cloud shape packed in view.y (PackSceneClouds in rt64_scene_effects.cpp): cover (0 to 1), height (0.25 to 4),
+// The cloud shape packed in view.y (PackSceneClouds in rt64_scene_effects.cpp): cover (0 to 1), height (0.0625 to 4),
 // thickness (0.1 to 2) and wind speed (0 to 8). The sign is F8 compare.
 float4 CloudShape() {
     const float packedValue = gConstants.view.y;
     const uint packed = uint(((packedValue < 0.0f) ? (-packedValue - 1.0f) : packedValue) + 0.5f);
     const float4 f = float4(packed & 63u, (packed >> 6) & 63u, (packed >> 12) & 63u, (packed >> 18) & 63u) / 63.0f;
     const float speed = f.w * sqrt(8.0f);
-    return float4(f.x, exp2(lerp(-2.0f, 2.0f, f.y)), lerp(0.1f, 2.0f, f.z), speed * speed);
+    return float4(f.x, exp2(lerp(-4.0f, 2.0f, f.y)), lerp(0.1f, 2.0f, f.z), speed * speed);
 }
 
 // How thick the cloud is at a point of the layer (in layer units, 0 at its floor, 1 at its top), 0 for clear air.
@@ -3797,6 +3797,42 @@ float VolFloorDelta() {
     return (float((VolBits() >> 18) & 63u) - 32.0f) * 8.0f;
 }
 
+// The rest of the settings, in the dust buffer's header (SetSceneVolumetricExtra in rt64_scene_effects.cpp): [0] the fog's
+// start distance / 25 (8 bits), its colour (3 bits: 0 the preset's own, 1 to 4 Haze, Mist, Dusk, Gloom) and how high the mist
+// hangs over water / 4 (7); [1] the mist over water and at a waterfall's foot in hundredths (7 bits each) and how high the
+// fall's mist rises / 4 (7).
+uint VolExtra(uint index) {
+    return uint(asfloat(gDust.Load(4u + index * 4u)) + 0.5f);
+}
+
+float VolFogStart() {
+    return float(VolExtra(0u) & 255u) * 25.0f;
+}
+
+uint VolFogColour() {
+    return (VolExtra(0u) >> 8) & 7u;
+}
+
+float VolWaterHeight() {
+    return float((VolExtra(0u) >> 11) & 127u) * 4.0f;
+}
+
+float VolWaterMist() {
+    return float(VolExtra(1u) & 127u) / 100.0f;
+}
+
+float VolFallMist() {
+    return float((VolExtra(1u) >> 7) & 127u) / 100.0f;
+}
+
+float VolFallHeight() {
+    return float((VolExtra(1u) >> 14) & 127u) * 4.0f;
+}
+
+// The normal fog's colours (Graphics > Fog colour), for the volumetric fog's own colour setting.
+static const float3 kVolFogColours[4] = {
+    float3(0.72f, 0.80f, 0.88f), float3(0.90f, 0.92f, 0.94f), float3(0.95f, 0.72f, 0.52f), float3(0.16f, 0.17f, 0.22f) };
+
 // The fog presets (Graphics > Volumetric Fog Preset): the settings of the presets in Arthur Brussee's Vapor
 // (https://github.com/ArthurBrussee/Vapor, VaporSettings/*.asset, Resources/DefaultVaporSetting.asset and
 // Examples/SponzaScene/SponzaFog.asset, Examples/PillarTest/PillarSetting.asset), MIT licence:
@@ -3865,8 +3901,10 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
         sunWorld = float3(dot(gConstants.sun.xyz, gConstants.worldX.xyz), dot(gConstants.sun.xyz, gConstants.worldY.xyz), dot(gConstants.sun.xyz, gConstants.worldZ.xyz));
     }
     sunWorld = normalize(sunWorld);
+    // Mostly dust-coloured: a quarter of the ground's colour, pulled towards grey, so grass kicks up pale dust, not a green disc.
     const float3 ground = saturate(color * 1.35f + 0.12f);
-    const float3 base = lerp(float3(0.74f, 0.68f, 0.6f), ground, 0.55f) * tint;
+    const float3 muted = lerp(dot(ground, float3(0.299f, 0.587f, 0.114f)).xxx, ground, 0.5f);
+    const float3 base = lerp(float3(0.74f, 0.68f, 0.6f), muted, 0.35f) * tint;
     float opticalDepth = 0.0f;
     float3 lightSum = 0.0f;
     [loop]
@@ -3889,8 +3927,9 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
         const float3 middle = origin + direction * (0.5f * (t0 + t1));
         const float falloff = 1.0f - distanceSquared / (radius * radius);
         const float noise = CloudNoise(middle * (60.0f / radius) * 0.045f + extra.y + float3(0.0f, time * 0.35f, 0.0f));
-        const float body = saturate(1.35f * falloff + (noise - 0.5f) * 0.9f);
-        const float thickness = extra.x * body * (t1 - t0) / radius * 2.2f;
+        // Thin at the rim (squared) and broken up by the noise, so a cloud has no outline: one linear in the falloff read as a disc.
+        const float body = saturate(falloff * falloff * (0.25f + 1.9f * noise));
+        const float thickness = extra.x * body * (t1 - t0) / radius * 0.8f;
         // The side facing the sun is the brighter.
         const float side = dot(normalize(middle - cloud.xyz + 1e-3f), sunWorld);
         lightSum += base * (0.62f + 0.38f * saturate(0.5f + 0.5f * side)) * thickness;
@@ -3899,7 +3938,8 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
     if (opticalDepth <= 0.0f) {
         return color;
     }
-    const float seen = 1.0f - exp(-opticalDepth);
+    // Never opaque: at most about 55% of the picture behind is replaced, so a puff stays see-through (L, 2026-10-23).
+    const float seen = 0.55f * (1.0f - exp(-opticalDepth));
     return color * (1.0f - seen) + (lightSum / opticalDepth) * seen;
 }
 
@@ -3910,10 +3950,63 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
 // Wronski's and Hillaire's volumetric scattering: colour = colour * transmittance + in-scattered light.
 // The mist layer stands at Banjo's ground (a slow anchor, so it does not bob as he jumps) and thins out above it.
 // tint: the day and night cycle's tint of the light (1 without it).
+// Where the mist settles round the point the ray ends at (the nearest thing at the pixel), found as the mist used to be: a ring
+// of looks into the water mask about 260 world units round the point. x the water's height there (-1e9 for none), y how far
+// across (along the ground) the nearest water look is, z the lowest point of a waterfall found (-1e9 for none), w how far
+// across the nearest waterfall look is; xz of the nearest of each go in waterAt and fallAt.
+float4 VolSettle(int2 pixel, float3 end, float distance, float3 look, out float2 waterAt, out float2 fallAt) {
+    float4 result = float4(-1e9f, 1e9f, -1e9f, 1e9f);
+    waterAt = 0.0f;
+    fallAt = 0.0f;
+    if (gConstants.water.y <= 0.5f) {
+        return result;
+    }
+    const float scale = length(gConstants.worldX.xyz);
+    const float height = gConstants.projection.w;
+    const float viewDepth = max(distance / scale * max(-look.z, 0.05f), 1e-3f);
+    const float radius = clamp((260.0f / scale) * gConstants.projection.y * 0.5f * height / viewDepth, 3.0f, height * 0.2f);
+    float found = 0.0f;
+    float waterY = 0.0f;
+    for (int i = 0; i < 9; i++) {
+        const float angle = float(i) * 0.6981317f;
+        const float2 offset = (i == 8) ? float2(0.0f, 0.0f) : float2(cos(angle), sin(angle)) * radius * ((i & 1) ? 1.0f : 0.5f);
+        const int2 at = pixel + int2(offset);
+        float waterDepth;
+        if (LoadWater(at, waterDepth) && (SteepAt(at) < 0.5f)) {
+            const float3 waterWorld = WorldPosition(ViewPosition(at, waterDepth));
+            found += 1.0f;
+            waterY += waterWorld.y;
+            const float across = length(waterWorld.xz - end.xz);
+            if (across < result.y) {
+                result.y = across;
+                waterAt = waterWorld.xz;
+            }
+        }
+        else if (LoadAnyWater(at, waterDepth) && (SteepAt(at) >= 0.5f)) {
+            const float3 fallWorld = WorldPosition(ViewPosition(at, waterDepth));
+            result.z = (result.z < -1e8f) ? fallWorld.y : min(result.z, fallWorld.y);
+            const float across = length(fallWorld.xz - end.xz);
+            if (across < result.w) {
+                result.w = across;
+                fallAt = fallWorld.xz;
+            }
+        }
+    }
+    if (found > 0.0f) {
+        result.x = waterY / found;
+    }
+    return result;
+}
+
 float3 VolScatter(float3 color, int2 pixel, float worldDistance, float3 tint) {
-    const float mist = VolMistStrength();
-    const float fogAmount = VolFogStrength();
-    if ((mist <= 0.0f) && (fogAmount <= 0.0f)) {
+    // Squared: the slider's low end is fine, and 100 is as thick as it always was.
+    const float mistSlider = VolMistStrength();
+    const float mist = mistSlider * mistSlider;
+    // The slider's curve eases in (40 is about a quarter as thick as 100, L 2026-10-23: 40 hid the far scenery); 100 is as it was.
+    const float fogAmount = pow(VolFogStrength(), 1.6f);
+    const float waterMist = VolWaterMist();
+    const float fallMist = VolFallMist();
+    if ((mist <= 0.0f) && (fogAmount <= 0.0f) && (waterMist <= 0.0f) && (fallMist <= 0.0f)) {
         return VolDust(color, pixel, worldDistance, tint);
     }
     const float scale = length(gConstants.worldX.xyz);
@@ -3927,15 +4020,27 @@ float3 VolScatter(float3 color, int2 pixel, float worldDistance, float3 tint) {
     const uint preset = min(VolFogPreset(), 6u);
     // Per world unit: Vapor's extinction is per metre; this is tuned so a level's far side is lost to the thickest.
     const float fogSigma = fogAmount * kVolExtinction[preset] * 0.00012f;
-    const float3 fogAlbedo = kVolAlbedo[preset];
+    const uint fogColour = VolFogColour();
+    const float3 fogAlbedo = (fogColour > 0u) ? kVolFogColours[min(fogColour - 1u, 3u)] : kVolAlbedo[preset];
+    const float fogStart = VolFogStart();
     const float3 sunView = VolSunView();
     const float cosine = dot(look, sunView);
     // Henyey-Greenstein, mostly forward: brighter looking towards the sun.
     const float g = 0.45f;
     const float phase = 0.55f * (1.0f - g * g) / pow(max(1.0f + g * g - 2.0f * g * cosine, 0.05f), 1.5f);
     const float3 sunLight = float3(1.0f, 0.95f, 0.85f) * (phase + 0.25f) * 1.4f;
-    const float3 fogLight = (fogAlbedo * (kVolAmbient[preset] + sunLight) + kVolEmissive[preset] * 0.6f) * tint;
+    const float3 fogLight = (fogAlbedo * ((fogColour > 0u) ? (0.35f + sunLight) : (kVolAmbient[preset] + sunLight)) + ((fogColour > 0u) ? 0.0f : 0.6f) * kVolEmissive[preset]) * tint;
     const float3 mistLight = lerp(float3(0.78f, 0.82f, 0.88f), float3(1.0f, 0.9f, 0.76f), saturate(phase * 0.4f)) * tint * 0.9f;
+
+    // Mist settling over water and at a waterfall's foot, round where the ray ends.
+    float4 settle = float4(-1e9f, 1e9f, -1e9f, 1e9f);
+    float2 waterAt = 0.0f;
+    float2 fallAt = 0.0f;
+    if (((waterMist > 0.0f) || (fallMist > 0.0f)) && (worldDistance < 5990.0f)) {
+        settle = VolSettle(pixel, origin + direction * far, far, look, waterAt, fallAt);
+    }
+    const float waterHeight = VolWaterHeight();
+    const float fallHeight = VolFallHeight();
 
     const int steps = 20;
     const float jitter = DayHash(float3(pixel, 3.0f));
@@ -3957,10 +4062,24 @@ float3 VolScatter(float3 color, int2 pixel, float worldDistance, float3 tint) {
             const float banks = saturate(0.25f + 1.6f * CloudNoise(p * 0.0045f + wind * 0.004f));
             mistSigma = mist * 0.0026f * exp(-max(height, 0.0f) / 130.0f) * banks;
         }
+        // A denser, shallower layer hanging just over the water, and spray rising where a waterfall lands.
+        if ((waterMist > 0.0f) && (settle.x > -1e8f)) {
+            const float across = length(p.xz - waterAt);
+            const float over = p.y - settle.x;
+            const float banks = saturate(0.35f + 1.3f * CloudNoise(p * 0.006f + wind * 0.004f));
+            mistSigma += waterMist * 0.004f * banks * saturate(1.5f - across / 260.0f) * exp(-max(over, 0.0f) / max(waterHeight, 8.0f)) * saturate((over + 40.0f) / 40.0f);
+        }
+        if ((fallMist > 0.0f) && (settle.z > -1e8f)) {
+            const float across = length(p.xz - fallAt);
+            const float over = p.y - settle.z;
+            const float billow = saturate(0.3f + 1.2f * CloudNoise(float3(p.x + p.z, p.y - time * 40.0f, p.x - p.z) * 0.02f));
+            mistSigma += fallMist * 0.008f * billow * saturate(1.0f - across / 180.0f) * exp(-max(over, 0.0f) / max(fallHeight, 8.0f)) * saturate((over + 30.0f) / 30.0f);
+        }
         float fogHere = 0.0f;
         if (fogAmount > 0.0f) {
-            // An even fog with slow patches, and a little less far above the floor.
-            fogHere = fogSigma * (0.7f + 0.6f * CloudNoise(p * 0.0016f + wind * 0.002f + 5.0f)) * exp(-max(height, 0.0f) / 7000.0f);
+            // An even fog with slow patches, and a little less far above the floor; it thickens past its start distance.
+            const float begin = lerp(1.0f, saturate((t - fogStart) / 1500.0f), saturate(fogStart / 200.0f));
+            fogHere = fogSigma * begin * (0.7f + 0.6f * CloudNoise(p * 0.0016f + wind * 0.002f + 5.0f)) * exp(-max(height, 0.0f) / 7000.0f);
         }
         const float sigma = mistSigma + fogHere;
         if (sigma > 1e-7f) {

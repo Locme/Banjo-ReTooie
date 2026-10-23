@@ -278,6 +278,10 @@ namespace RT64 {
     // world x, y, z, radius, strength (0 to 1), a seed, then two spare. The march in VolDust draws them with the mist.
     void SetSceneDust(const float *clouds, uint32_t count);
     void SetSceneVolumetric(float mist, float fog, uint32_t fogPreset, uint32_t cloudType, float mistOffset);
+    // The rest of the volumetric settings, riding in the dust buffer's header (SceneEffectsPS.hlsl VolExtra): the fog's start
+    // distance (world units) and colour (0 the preset's own, 1 to 4 Haze, Mist, Dusk, Gloom), and the mist over water and at a
+    // waterfall's foot: strength (0 to 1) and how high it hangs (world units) for each.
+    void SetSceneVolumetricExtra(float fogStart, uint32_t fogColour, float waterMist, float waterHeight, float fallMist, float fallHeight);
     void SetSceneRainDetail(float wet, bool drops);
     void SetSceneClouds(float cover, float height, float thickness, float speed);
     // Banjo-Tooie: the moon's phase for the day and night cycle, 0 new, 2 first quarter, 4 full, 6 last quarter.
