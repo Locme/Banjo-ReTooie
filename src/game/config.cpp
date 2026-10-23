@@ -1133,6 +1133,10 @@ void tooie::init_config() {
                                        &tooie::picture_filters::vignette_option, &tooie::picture_filters::grain_option }) {
         recompui::config::set_option_display_before(*option, tooie::picture_filters::three_point_option);
     }
+    // Tessellation (L, 2026-10-23): its switch sits above Tessellated Snow; Tessellated Sand comes after Tessellated
+    // Snow's settings, before Parallax.
+    recompui::config::set_option_display_before(tooie::picture_filters::tessellation_section_option, tooie::picture_filters::deep_snow_option);
+    recompui::config::set_option_display_before(tooie::picture_filters::tessellated_sand_option, tooie::picture_filters::parallax_option);
     // 3D grass had its own section after the colour grading (L, 2026-10-16); it is in the WIP tab for now
     // (L, 2026-10-21), and gets set_option_group(grass_section_option, "Grass") back when it returns.
     // Ray Tracing has its own section after the grass, always shown (L, 2026-10-21).

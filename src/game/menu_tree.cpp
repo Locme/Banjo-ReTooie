@@ -97,6 +97,8 @@ void tooie::menu_tree::classify() {
                 &ice_reflections_option } },
             { &toon_section_option, { &toon_characters_option, &toon_world_option } },
             { &colour_grading_option, { &contrast_option, &saturation_option, &vignette_option, &grain_option } },
+            { &tessellation_section_option, { &deep_snow_option, &tessellated_sand_option } },
+            { &deep_snow_option, { &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option } },
             { &character_section_option, { &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option,
                 &kazooie_feathers_option, &npc_fur_option, &npc_feathers_option } },
         };

@@ -129,6 +129,8 @@ namespace tooie::picture_filters {
     inline const std::string grass_ray_tracing_option = "grass_3d_ray_tracing";
     // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (rt64-ext/src/shaders/Snow.hlsli),
     // and how deep it is.
+    // The Tessellation switch (L, 2026-10-23): its Tessellated Snow and Tessellated Sand settings sit under it.
+    inline const std::string tessellation_section_option = "tessellation_section";
     inline const std::string deep_snow_option = "deep_snow";
     inline const std::string tessellated_sand_option = "tessellated_sand";
     inline const std::string snow_height_option = "deep_snow_height";

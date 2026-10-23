@@ -4724,12 +4724,13 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneNpcFeathers((float)(npc_feather_amount / 100.0), (float)(value<double>(npc_feather_size_option, 100.0) / 100.0),
         (float)(value<double>(npc_feather_length_option, 100.0) / 100.0), (float)(value<double>(npc_feather_density_option, 100.0) / 100.0),
         (float)(value<double>(npc_feather_noisiness_option, 50.0) / 100.0), (float)(value<double>(npc_feather_transparency_option, 0.0) / 100.0));
-    bool snow = shaders && value<bool>(deep_snow_option, false);
+    const bool tessellation_on = value<bool>(tessellation_section_option, true);
+    bool snow = shaders && tessellation_on && value<bool>(deep_snow_option, false);
     if (const char* forced = std::getenv("TOOIE_DEEP_SNOW")) {
         snow = std::atoi(forced) != 0;
     }
     deep_snow = snow;
-    bool sand = shaders && value<bool>(tessellated_sand_option, false);
+    bool sand = shaders && tessellation_on && value<bool>(tessellated_sand_option, false);
     if (const char* forced = std::getenv("TOOIE_SAND")) {
         sand = std::atoi(forced) != 0;
     }
@@ -5465,15 +5466,21 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Shore Foam",
         "With Water on <recomp-color primary>Original</recomp-color>: a broken white line of foam drifts along the edges of the game's water, where it gets shallow, as in Modern water. Modern water always has it.",
         false);
+    // Tessellation (L, 2026-10-23): a switch over Tessellated Snow (with its settings under it) and Tessellated Sand.
+    graphics.add_bool_option(
+        tessellation_section_option,
+        "Tessellation",
+        "Turns the tessellated snow and sand on or off. Off also hides their settings below. Needs a graphics card with tessellation.",
+        true);
     graphics.add_bool_option(
         deep_snow_option,
-        "Deep Snow",
+        "Tessellated Snow",
         "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and the dents stay (or fill back in, with Snow fills back in). Drawn on the picture, so nothing in the game changes.",
         false);
     graphics.add_bool_option(
         tessellated_sand_option,
         "Tessellated Sand",
-        "Sandy ground takes footprints: Banjo, the NPCs and the enemies press shallow, detailed prints into it wherever they touch it, and the wind has left low ripples over it. As Deep snow, with its detail, fills back in and distance settings. Needs a graphics card with tessellation.",
+        "Sandy ground takes footprints: Banjo, the NPCs and the enemies press shallow, detailed prints into it wherever they touch it, and the wind has left low ripples over it. As Tessellated Snow, with its detail, fills back in and distance settings. Needs a graphics card with tessellation.",
         false);
     graphics.add_number_option(
         snow_height_option,
