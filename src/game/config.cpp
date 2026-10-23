@@ -652,6 +652,18 @@ void tooie::init_config() {
             {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
         },
         tooie::canary_mary::Mode::Fair);
+    // Enhancements on the Gameplay tab (L, 2026-10-23): touches to the game's own look, from Graphics.
+    general.add_bool_option(
+        tooie::window_beams::option,
+        "Window Light Beams",
+        "Beams of light, shaped like their windows, fall from the windows onto the floor and light a patch of it, the way they do in Mumbo's Skull: in Bottles' house, Banjo's house and King Jingaling's throne room. Switching it in one of those rooms reloads the room.",
+        true);
+    general.add_option_change_callback(tooie::window_beams::option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                recompui::config::get_general_config().save_config();
+            }
+        });
     general.add_bool_option(
         tooie::classic_sounds::option,
         "Back-Port: Old Banjo Sounds",
@@ -939,11 +951,12 @@ void tooie::init_config() {
             &tooie::damage::faster_attacks_option, &tooie::canary_mary::mode_option }) {
         recompui::config::set_option_display_before(*id, tooie::boss_rush::option);
     }
+    recompui::config::set_option_group(tooie::window_beams::option, "Enhancements");
     // Features and Back-Ports from General (L, 2026-10-23), with their headings. Saves, shaders, Discord and the
     // Developer switch stay in General.
     for (const std::string* id : { &tooie::boss_rush::option, &tooie::mirror_mode::option, &tooie::classic_sounds::option,
             &tooie::honeycomb_glitter::option, &tooie::original_honeycomb::option, &tooie::jiggy_dance::option,
-            &tooie::bottles_revenge::option,
+            &tooie::bottles_revenge::option, &tooie::window_beams::option,
             &tooie::torch_enemy::option }) {
         recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
     }
@@ -1078,18 +1091,6 @@ void tooie::init_config() {
         "Cutscene Field Of View",
         "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
         -10, 20, 1, 0, false, 0);
-    // Vanilla Enhancements (L, 2026-10-21): touches to the game's own look, after the Game view group.
-    graphics.add_bool_option(
-        tooie::window_beams::option,
-        "Window Light Beams",
-        "Beams of light, shaped like their windows, fall from the windows onto the floor and light a patch of it, the way they do in Mumbo's Skull: in Bottles' house, Banjo's house and King Jingaling's throne room. Switching it in one of those rooms reloads the room.",
-        true);
-    graphics.add_option_change_callback(tooie::window_beams::option,
-        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
-            if (context == recomp::config::OptionChangeContext::Temporary) {
-                recompui::config::get_graphics_config().save_config();
-            }
-        });
     tooie::smaa::add_option(graphics);
     tooie::fxaa::add_option(graphics);
     tooie::api_restart::add_prompt(graphics);
@@ -1151,7 +1152,6 @@ void tooie::init_config() {
     }
     recompui::config::set_option_group(tooie::picture_filters::ray_tracing_option, "Ray Tracing");
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game View");
-    recompui::config::set_option_group(tooie::window_beams::option, "Vanilla Enhancements");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
     recompui::config::set_option_display_before(recompui::config::graphics::options::msaa_option, tooie::smaa::option);
     recompui::config::set_option_group(recompui::config::graphics::options::msaa_option, "Anti-Aliasing And Scaling");
