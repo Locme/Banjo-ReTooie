@@ -50,7 +50,7 @@
 - Build: main
 - Steps:
   1. General > Gameplay: turn on Enemy dynamic positioning
-  2. Fight Dragunda, a Gobgoyle or an Eyeball; roll toward one
+  2. Fight one of Boltoid, Gruntydactyl, Hothead, Minjo, Moggy, Nutta, Soarasaur, Ugger, Washup, Zubba (spawn it with the Enemy spawner); roll toward it. Also try Lower Enemy Attack Cooldown on the same ones (T563)
 - Look for: it slides sideways as it comes at you and steps out of the line of your roll; no sliding through walls or off ledges, no jitter. If it looks wrong, say which enemy.
 - Status: waiting for L
 

@@ -6,7 +6,6 @@ RECOMP_FUNC void func_808013F8_chfantasyeyeball(uint8_t* rdram, recomp_context* 
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
     tooie_aim_trace(rdram, ctx, "func_808013F8_chfantasyeyeball");
-    tooie_enemy_strafe(rdram, ctx);
     // 0x808013F8: addiu       $sp, $sp, -0x70
     ctx->r29 = ADD32(ctx->r29, -0X70);
     // 0x808013FC: sw          $s0, 0x20($sp)
