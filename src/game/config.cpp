@@ -599,6 +599,18 @@ void tooie::init_config() {
     general.add_bool_option(tooie::snout_jiggle::mumbo_option, "Mumbo Jiggle",
         "The feathers on top of Mumbo's head wobble on springs as he moves, whether you play as him or meet him in his skull. Uses the Kazooie jiggle settings.",
         true);
+    // Enhancements on the Gameplay tab (L, 2026-10-23): touches to the game's own look, from Graphics.
+    general.add_bool_option(
+        tooie::window_beams::option,
+        "Window Light Beams",
+        "Beams of light, shaped like their windows, fall from the windows onto the floor and light a patch of it, the way they do in Mumbo's Skull: in Bottles' house, Banjo's house and King Jingaling's throne room. Switching it in one of those rooms reloads the room.",
+        true);
+    general.add_option_change_callback(tooie::window_beams::option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                recompui::config::get_general_config().save_config();
+            }
+        });
     }
     general.add_bool_option(
         tooie::damage::double_damage_option,
@@ -649,18 +661,6 @@ void tooie::init_config() {
             {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
         },
         tooie::canary_mary::Mode::Fair);
-    // Enhancements on the Gameplay tab (L, 2026-10-23): touches to the game's own look, from Graphics.
-    general.add_bool_option(
-        tooie::window_beams::option,
-        "Window Light Beams",
-        "Beams of light, shaped like their windows, fall from the windows onto the floor and light a patch of it, the way they do in Mumbo's Skull: in Bottles' house, Banjo's house and King Jingaling's throne room. Switching it in one of those rooms reloads the room.",
-        true);
-    general.add_option_change_callback(tooie::window_beams::option,
-        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
-            if (context == recomp::config::OptionChangeContext::Temporary) {
-                recompui::config::get_general_config().save_config();
-            }
-        });
     general.add_bool_option(
         tooie::classic_sounds::option,
         "Back-Port: Old Banjo Sounds",
@@ -707,7 +707,6 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::timer_save_option, "Saves");
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports And Cut Content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
-    recompui::config::set_option_group(tooie::mirror_mode::option, "Features");
     recompui::config::set_option_group(tooie::snout_jiggle::master_option, "Enhancements");
     recompui::config::set_option_group(tooie::discord::presence_option, "Others");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
@@ -946,12 +945,52 @@ void tooie::init_config() {
             &tooie::damage::faster_attacks_option, &tooie::canary_mary::mode_option }) {
         recompui::config::set_option_display_before(*id, tooie::boss_rush::option);
     }
-    recompui::config::set_option_group(tooie::window_beams::option, "Enhancements");
     // Features and Back-Ports from General (L, 2026-10-23), with their headings. Saves, shaders, Discord and the
     // Developer switch stay in General.
     for (const std::string* id : { &tooie::boss_rush::option, &tooie::mirror_mode::option, &tooie::classic_sounds::option,
             &tooie::honeycomb_glitter::option, &tooie::original_honeycomb::option, &tooie::jiggy_dance::option,
             &tooie::bottles_revenge::option, &tooie::window_beams::option,
+            &tooie::snout_jiggle::master_option,
+            &tooie::snout_jiggle::option,
+            &tooie::snout_jiggle::body_option,
+            &tooie::snout_jiggle::body_stiffness_option,
+            &tooie::snout_jiggle::body_damping_option,
+            &tooie::snout_jiggle::body_mass_option,
+            &tooie::snout_jiggle::body_squash_option,
+            &tooie::snout_jiggle::body_tilt_option,
+            &tooie::snout_jiggle::belly_option,
+            &tooie::snout_jiggle::belly_stiffness_option,
+            &tooie::snout_jiggle::belly_damping_option,
+            &tooie::snout_jiggle::belly_mass_option,
+            &tooie::snout_jiggle::belly_squash_in_option,
+            &tooie::snout_jiggle::belly_squash_out_option,
+            &tooie::snout_jiggle::belly_squash_across_option,
+            &tooie::snout_jiggle::ears_option,
+            &tooie::snout_jiggle::ears_stiffness_option,
+            &tooie::snout_jiggle::ears_damping_option,
+            &tooie::snout_jiggle::ears_mass_option,
+            &tooie::snout_jiggle::ears_squash_option,
+            &tooie::snout_jiggle::fur_option,
+            &tooie::snout_jiggle::fur_stiffness_option,
+            &tooie::snout_jiggle::fur_damping_option,
+            &tooie::snout_jiggle::fur_mass_option,
+            &tooie::snout_jiggle::fur_sway_option,
+            &tooie::snout_jiggle::kazooie_option,
+            &tooie::snout_jiggle::mumbo_option,
+            &tooie::snout_jiggle::kazooie_stiffness_option,
+            &tooie::snout_jiggle::kazooie_damping_option,
+            &tooie::snout_jiggle::kazooie_mass_option,
+            &tooie::snout_jiggle::kazooie_squash_in_option,
+            &tooie::snout_jiggle::kazooie_squash_out_option,
+            &tooie::snout_jiggle::kazooie_squash_across_option,
+            &tooie::snout_jiggle::stiffness_option,
+            &tooie::snout_jiggle::damping_option,
+            &tooie::snout_jiggle::mass_option,
+            &tooie::snout_jiggle::squash_in_option,
+            &tooie::snout_jiggle::squash_out_option,
+            &tooie::snout_jiggle::squash_across_option,
+            &tooie::snout_jiggle::squash_walk_option,
+            &tooie::snout_jiggle::nose_option,
             &tooie::torch_enemy::option }) {
         recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
     }
