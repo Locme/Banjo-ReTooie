@@ -4665,7 +4665,9 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneGrassLod((float)(value<double>(grass_lod_option, 0.0) / 100.0), value<bool>(grass_half_rate_option, true));
     RT64::SetSceneGrassRayTracing(value<bool>(grass_ray_tracing_option, true));
     send_effect_textures();
-    double fur = value<double>(banjo_fur_option, 0.0);
+    // The Character Shaders switch turns all of the character shaders off; their settings stay as they are.
+    const bool character_on = value<bool>(character_section_option, true);
+    double fur = character_on ? value<double>(banjo_fur_option, 0.0) : 0.0;
     if (const char* forced = std::getenv("TOOIE_BANJO_FUR")) {
         fur = std::atof(forced);
     }
@@ -5629,7 +5631,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         character_section_option,
         "Character Shaders",
-        "Shows Banjo's fur and Kazooie's feather shaders below. Hiding them does not turn any of them off.",
+        "Turns Banjo's fur, Kazooie's feathers and the other character shaders on or off. Off also hides their settings below.",
         true);
     graphics.add_number_option(
         banjo_fur_option,
@@ -5967,34 +5969,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
 
 
     // Hidden when the Shaders toggle is off; the effects keep their values either way.
-    // Ray tracing settings are shown only while Ray tracing is on (L, 2026-10-23). Hiding them changes no value.
-    for (const std::string* id : {
-        &ray_tracing_strength_option,
-        &ray_tracing_reflections_option,
-        &ray_tracing_water_reflections_option,
-        &ray_tracing_metal_option,
-        &ray_tracing_tiles_option,
-        &ray_tracing_smooth_option,
-        &ray_tracing_smoothing_option,
-        &ray_tracing_brdf_option,
-        &ray_tracing_subsurface_option,
-        &path_tracing_option,
-        &path_tracing_bounces_option,
-        &traced_beams_option,
-        &ray_tracing_player_shadows_option,
-        &ray_tracing_hit_colours_option,
-        &ray_tracing_resolution_option,
-        &ray_tracing_parallax_option,
-        &ray_detail_half_option,
-        &ray_detail_quarter_option }) {
-        graphics.add_option_hidden_dependency(*id, ray_tracing_option, false);
-    }
-    graphics.add_option_hidden_dependency(water_reflections_option, reflections_section_option, false);
-    graphics.add_option_hidden_dependency(toon_characters_option, toon_section_option, false);
-    graphics.add_option_hidden_dependency(toon_world_option, toon_section_option, false);
-    graphics.add_option_hidden_dependency(ice_reflections_option, reflections_section_option, false);
-    graphics.add_option_hidden_dependency(ssr_option, reflections_section_option, false);
-    graphics.add_option_hidden_dependency(ssr_stochastic_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(grass_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_height_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_distance_option, grass_section_option, false);
@@ -6014,10 +5988,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_lod_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_half_rate_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_ray_tracing_option, grass_section_option, false);
-    // Banjo's fur and Kazooie's feathers sit in their own Character Shaders section (L, 2026-10-16).
-    for (const std::string* option : { &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option }) {
-        graphics.add_option_hidden_dependency(*option, character_section_option, false);
-    }
 }
 
 std::vector<tooie::picture_filters::CostEffect> tooie::picture_filters::cost_effects() {
