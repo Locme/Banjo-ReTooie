@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "recompui/config.h"
+#include "ultramodern/config.hpp"
 
 #include "tooie_upscaler.h"
 
@@ -30,6 +31,25 @@ namespace {
 
 }
 
+namespace {
+    // Which upscalers have a place in the list below, in list order, and whether they need Direct3D 12.
+    // Off, Temporal, FSR 3, FSR 4, FSR 4 Native AA, DLSS, DLAA (Windows).
+    bool vulkan_selected = false;
+}
+
+void tooie::upscaler::api_changed(uint32_t api) {
+    vulkan_selected = (api == (uint32_t)ultramodern::renderer::GraphicsApi::Vulkan);
+    if (!created) {
+        return;
+    }
+#if !defined(__ANDROID__)
+    for (uint32_t index = 2; index <= 6; index++) {
+        graphics_config().update_enum_option_disabled(option, index, vulkan_selected);
+    }
+    apply();
+#endif
+}
+
 void tooie::upscaler::apply() {
     if (!created) {
         return;
@@ -48,6 +68,12 @@ void tooie::upscaler::apply() {
     if (!listed) {
         mode = (uint32_t)Mode::Off;
     }
+#if !defined(__ANDROID__)
+    // FSR and DLSS need Direct3D 12; on Vulkan the built-in upscaler stands in.
+    if (vulkan_selected && (mode != (uint32_t)Mode::Off) && (mode != (uint32_t)Mode::Temporal)) {
+        mode = (uint32_t)Mode::Temporal;
+    }
+#endif
     RT64::SetUpscalerMode(mode);
     uint32_t quality = (uint32_t)Quality::Quality;
     try {
@@ -84,6 +110,15 @@ void tooie::upscaler::apply() {
 
 void tooie::upscaler::add_option(recomp::config::Config& graphics) {
     created = true;
+    // The API may have been loaded before this option existed.
+    {
+        uint32_t api = 0;
+        try {
+            api = std::get<uint32_t>(graphics.get_option_value(recompui::config::graphics::options::api_option));
+        } catch (...) {
+        }
+        vulkan_selected = (api == (uint32_t)ultramodern::renderer::GraphicsApi::Vulkan);
+    }
 
     // Only the upscalers a platform can run are listed: Android has no FSR 3, FSR 4 or DLSS (their DLLs are Windows only), and Windows no Snapdragon GSR. Arm ASR is not made yet.
     std::vector<recomp::config::ConfigOptionEnumOption> choices = {
@@ -102,7 +137,7 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         option,
         "Upscaler",
-        "Temporal upscaling and anti-aliasing. Temporal (built-in) is the game's own temporal upscaler and works on any card. FSR 3 runs on any recent Windows graphics card. FSR 4 needs a Radeon RX 9000 card and DLSS an RTX card; On Android phones, Snapdragon GSR (a fast spatial upscaler, best on Adreno) is listed instead. The native modes (FSR 4 Native AA, DLAA) anti-alias without upscaling. Off leaves the picture as it is.",
+        "Temporal upscaling and anti-aliasing. Temporal (built-in) is the game's own temporal upscaler and works on any card. FSR 3 runs on any recent Windows graphics card (FSR and DLSS need the Direct3D 12 graphics API and are greyed out on Vulkan). FSR 4 needs a Radeon RX 9000 card and DLSS an RTX card; On Android phones, Snapdragon GSR (a fast spatial upscaler, best on Adreno) is listed instead. The native modes (FSR 4 Native AA, DLAA) anti-alias without upscaling. Off leaves the picture as it is.",
         choices,
         Mode::Off);
     graphics.add_enum_option(

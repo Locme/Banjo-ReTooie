@@ -45,6 +45,9 @@ namespace tooie::upscaler {
 
     void add_option(recomp::config::Config& graphics);
 
+    // Called when the Graphics API choice is loaded or changed: on Vulkan the Direct3D 12 only upscalers (FSR, DLSS) are greyed out.
+    void api_changed(uint32_t api);
+
     // Sends the saved setting to RT64.
     void apply();
 }
