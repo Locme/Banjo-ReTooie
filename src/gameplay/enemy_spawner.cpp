@@ -45,6 +45,7 @@
 #include "tooie_enemy_spawner.h"
 #include "tooie_memory_guard.h"
 #include "tooie_rdram.h"
+#include "tooie_torch_enemy.h"
 #include "tooie_toast.h"
 
 namespace {
@@ -413,6 +414,15 @@ namespace {
         out << '\n';
     }
 
+    void aim_sweep_note(uint16_t id, const char* text) {
+        const Enemy* enemy = find_enemy(id);
+        std::error_code ec;
+        const std::filesystem::path dir = recomp::get_config_path() / "logs";
+        std::filesystem::create_directories(dir, ec);
+        std::ofstream out(dir / "aim_sweep.txt", std::ios::app);
+        out << "0x" << std::hex << id << std::dec << ' ' << (enemy ? enemy->name : "?") << ": " << text << '\n';
+    }
+
     // Headless sweep: TOOIE_ENEMY_SWEEP=<hex id>,<hex id>,... reloads the area before each enemy, so only
     // that one is alive, spawns it in front of Banjo and watches it for a while. Pass-overs logged
     // between its "begin" and "end" lines are its own (the guard forgets the places it has seen first).
@@ -422,6 +432,10 @@ namespace {
         int phase = 0; // 0 waiting to start, 1 area reloading, 2 settling, 3 watching
         std::chrono::steady_clock::time_point since;
         uint32_t start_ms = 160000;
+        // Aim sweep, enemies that only work where they live: the maps that place one, and the one being tried.
+        std::vector<uint16_t> maps;
+        size_t attempt = 0;
+        bool maps_known = false;
     } sweep;
     bool sweep_read = false;
 
@@ -457,6 +471,14 @@ namespace {
                     sweep.ids.push_back(enemy.id);
                 }
             }
+            // Last, the ones that crash away from home: Banjo is warped to a map that places one first.
+            for (const Enemy& enemy : enemies) {
+                if (enemy.home_entry != 0) {
+                    sweep.ids.push_back(enemy.id);
+                }
+            }
+            sweep.maps_known = false;
+            sweep.attempt = 0;
             sweep.next = 0;
             sweep.phase = 0;
             sweep.start_ms = 0;
@@ -471,7 +493,19 @@ namespace {
         switch (sweep.phase) {
             case 0:
                 if (ms >= sweep.start_ms && ready) {
-                    tooie::debug::request_warp(tooie::debug::current_map(rdram), 0, true);
+                    uint16_t map = tooie::debug::current_map(rdram);
+                    const Enemy* guarded = find_enemy(id);
+                    if (aim_sweep_running && guarded != nullptr && guarded->home_entry != 0) {
+                        if (!sweep.maps_known) {
+                            sweep.maps = tooie::torch_enemy::maps_placing(rdram, ctx, id);
+                            sweep.maps_known = true;
+                            sweep.attempt = 0;
+                        }
+                        if (sweep.attempt < sweep.maps.size()) {
+                            map = sweep.maps[sweep.attempt];
+                        }
+                    }
+                    tooie::debug::request_warp(map, 0, true);
                     sweep.phase = 1;
                     sweep.since = clock::now();
                 }
@@ -484,6 +518,27 @@ namespace {
                 break;
             case 2:
                 if (ms >= 8000 && ready) {
+                    const Enemy* guarded = find_enemy(id);
+                    if (aim_sweep_running && guarded != nullptr && guarded->home_entry != 0 && !actor_present(rdram, guarded->home_entry)) {
+                        // Wrong map (or the list was misread): try the next one, up to five.
+                        if (++sweep.attempt < std::min<size_t>(sweep.maps.size(), 5)) {
+                            sweep.phase = 0;
+                            sweep.since = clock::now() - std::chrono::milliseconds(sweep.start_ms);
+                        }
+                        else {
+                            aim_sweep_note(id, sweep.maps.empty() ? "no map places it" : "none of the first maps that place it had one alive");
+                            sweep.next++;
+                            sweep.maps_known = false;
+                            sweep.phase = 0;
+                            sweep.since = clock::now() - std::chrono::milliseconds(sweep.start_ms);
+                            if (sweep.next >= sweep.ids.size()) {
+                                aim_sweep_running = false;
+                                tooie::aim_trace::sweep_finished();
+                                tooie::toast::show("Aim sweep done: logs/aim_sweep.txt");
+                            }
+                        }
+                        break;
+                    }
                     tooie::memory_guard::forget_sites();
                     printf("[enemy-sweep] begin 0x%X\n", id);
                     fflush(stdout);
@@ -505,6 +560,7 @@ namespace {
                         aim_sweep_record(id);
                     }
                     sweep.next++;
+                    sweep.maps_known = false;
                     sweep.phase = 0;
                     sweep.since = clock::now() - std::chrono::milliseconds(sweep.start_ms);
                     if (sweep.next >= sweep.ids.size() && aim_sweep_running) {

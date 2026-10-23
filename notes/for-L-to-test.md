@@ -6,7 +6,7 @@
 - Steps:
   1. Play a save in an open place (Spiral Mountain is good)
   2. General > DEV tab: turn on Aim sweep
-  3. Leave the game running about 25 minutes; each enemy appears in front of Banjo for 12 s, then the area reloads
+  3. Leave the game running about 35 minutes; each enemy appears in front of Banjo for 12 s, then the area reloads
   4. When the toast says it is done, send me logs/aim_sweep.txt
 - Look for: Enemies spawn one at a time and the area reloads between them; the game does not freeze or crash; logs/aim_sweep.txt gets one line per enemy. Banjo may get hurt or die; that is fine.
 - Status: waiting for L
