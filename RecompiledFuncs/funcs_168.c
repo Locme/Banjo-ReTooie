@@ -1458,7 +1458,6 @@ L_80800230:
 RECOMP_FUNC void func_8010114C(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
-    tooie_sound_log(rdram, ctx, 7);
     // 0x8010114C: addiu       $sp, $sp, -0x18
     ctx->r29 = ADD32(ctx->r29, -0X18);
     // 0x80101150: sw          $ra, 0x14($sp)

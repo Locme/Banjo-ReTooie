@@ -379,12 +379,12 @@ void tooie::volumetric::add_options(recomp::config::Config& graphics) {
         0, 500, 10, 0, false, 80);
     graphics.add_number_option(
         mist_fall_option,
-        "Mist at Waterfalls",
+        "Mist At Waterfalls",
         "WIP. Spray and mist that gathers where a waterfall lands, billowing up from its foot. It is its own mist, on without the Volumetric Mist above. 0 turns it off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         mist_fall_height_option,
-        "Mist at Waterfalls Height",
+        "Mist At Waterfalls Height",
         "How high the mist rises above the foot of a waterfall, in the game's units.",
         0, 500, 10, 0, false, 120);
     graphics.add_number_option(

@@ -149,6 +149,8 @@ namespace {
         bool has_wheel = false;
         float pivot_y = 0.0f;   // smooth stairs: the height the camera orbits, eased towards Banjo's
         bool has_pivot = false;
+        float sound_travel = 0.0f; // fine-tune: distance changed since the last step sound
+        float sound_wait = 0.0f;
         float look = 0.0f;      // look-up tilt: degrees the view is raised past the lowest eye height
         float idle = 0.0f;      // seconds since the stick was last used
         float wall = 1.0f;      // smooth walls: the camera's distance as a fraction of the wanted one
@@ -257,11 +259,6 @@ namespace {
         return 1.0f - std::exp(-rate * dt);
     }
 
-    // Sound play log: until when (steady clock ms) C Down was last down plus 2 s.
-    std::atomic<int64_t> log_until_ms{0};
-    int64_t now_ms() {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
-    }
     // C Down tap or hold (see free_camera::apply_input): held past the threshold, the fine-tune is on.
     std::atomic<bool> fine_held{false};
     // Whether the free camera is running the game's camera now (not first person, a cutscene or a menu).
@@ -275,6 +272,30 @@ namespace {
     constexpr float rb_zoom_rate = 0.8f;
     // The game's camera distance button: C Down, which a controller's RB is bound to (L, 2026-10-23).
     constexpr uint16_t n64_r_button = 0x0004;
+
+    // The game's camera distance sounds (found with the sound log, L 2026-10-23): func_8009DB04(player, id,
+    // pitch, volume) with ids 0x487 and 0x488, one for each way. Closer plays 0x487, further 0x488.
+    constexpr uint32_t sound_closer = 0x487;
+    constexpr uint32_t sound_further = 0x488;
+    constexpr int32_t sound_volume = 0x6000;
+    // The change in distance that makes one step sound, and the least time between two.
+    constexpr float sound_step = 0.08f;
+    constexpr float sound_gap = 0.12f;
+
+    void play_step_sound(uint8_t* rdram, recomp_context* ctx, uint32_t id) {
+        const uint32_t player = read_word(rdram, player_table);
+        if (!valid_ptr(player)) {
+            return;
+        }
+        recomp_context saved = *ctx;
+        ctx->r29 = (int32_t)(((uint32_t)ctx->r29 - 0x100) & ~0xFu);
+        ctx->r4 = (int32_t)player;
+        ctx->r5 = (int32_t)id;
+        ctx->r6 = (int32_t)0x3F800000; // pitch 1.0
+        ctx->r7 = sound_volume;
+        func_8009DB04(rdram, ctx);
+        *ctx = saved;
+    }
 
     // Scales the players' draw alpha (tooie_free_camera_player_alpha), 1 for whole.
     std::atomic<float> player_fade{1.0f};
@@ -473,8 +494,21 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             // Right turns the view right (yaw grows to the left). Up looks up, so the camera drops.
             // C Down held, stick up: closer; down: further. Steps toward the range's limits only.
             if (rb_zoom_input != 0.0f) {
-                const float wanted_zoom = state.zoom * std::exp(-rb_zoom_input * rb_zoom_rate * dt);
+                const float before = state.zoom;
+                const float wanted_zoom = before * std::exp(-rb_zoom_input * rb_zoom_rate * dt);
                 state.zoom = std::clamp(wanted_zoom, rb_min_zoom, rb_max_zoom);
+                // A sound for each step of distance, the one for the way it went.
+                state.sound_travel += state.zoom - before;
+                state.sound_wait = std::max(0.0f, state.sound_wait - dt);
+                if (std::fabs(state.sound_travel) >= sound_step && state.sound_wait <= 0.0f) {
+                    play_step_sound(rdram, ctx, state.sound_travel < 0.0f ? sound_closer : sound_further);
+                    state.sound_travel = 0.0f;
+                    state.sound_wait = sound_gap;
+                }
+            }
+            else {
+                state.sound_travel = 0.0f;
+                state.sound_wait = std::max(0.0f, state.sound_wait - dt);
             }
             // Mouse wheel: each notch changes the distance by 10%, up zooms in.
             if (wheel_notches != 0) {
@@ -579,7 +613,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             }
             const float full = std::sqrt((want[0] - pivot[0]) * (want[0] - pivot[0]) +
                 (want[1] - pivot[1]) * (want[1] - pivot[1]) + (want[2] - pivot[2]) * (want[2] - pivot[2]));
-            if (option<bool>(tooie::free_camera_smooth_walls_option, false) && full > 1.0f) {
+            if (option<bool>(tooie::free_camera_smooth_walls_option, true) && full > 1.0f) {
                 const float reach = std::sqrt((hit[0] - pivot[0]) * (hit[0] - pivot[0]) +
                     (hit[1] - pivot[1]) * (hit[1] - pivot[1]) + (hit[2] - pivot[2]) * (hit[2] - pivot[2]));
                 const float target = blocked ? std::clamp(reach / full, 0.0f, 1.0f) : 1.0f;
@@ -658,9 +692,6 @@ void tooie::free_camera::apply_input(uint16_t* buttons) {
     static std::chrono::steady_clock::time_point since;
     const bool tune = wip_option<bool>(tooie::free_camera_rb_distance_option, false);
     const bool physical = (*buttons & n64_r_button) != 0;
-    if (physical) {
-        log_until_ms = now_ms() + 2000;
-    }
     if (!tune || !gameplay_camera.load()) {
         // Passed through as it is; nothing pending.
         down = false;
@@ -694,15 +725,4 @@ void tooie::free_camera::apply_input(uint16_t* buttons) {
         pulse--;
     }
     fine_held = holding;
-}
-
-extern "C" void tooie_sound_log(uint8_t* rdram, recomp_context* ctx, int which) {
-    (void)rdram;
-    if (now_ms() > log_until_ms.load()) {
-        return;
-    }
-    static const char* const names[] = { "func_8009DE38", "func_8009DF94", "func_8009DF18", "func_8009DF58",
-        "func_8009DBF0", "func_8009DB04", "func_800FC348", "func_8010114C" };
-    std::printf("[sfx-R] %s a0 %X a1 %X a2 %X\n", names[which], (unsigned)ctx->r4, (unsigned)ctx->r5, (unsigned)ctx->r6);
-    std::fflush(stdout);
 }

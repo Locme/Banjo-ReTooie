@@ -88,7 +88,7 @@ namespace {
 }
 
 void tooie::mix_rate::add_option(recomp::config::Config& sound) {
-    sound.add_enum_option(option, "Mix rate",
+    sound.add_enum_option(option, "Mix Rate",
         "The rate the game mixes its sound at. <recomp-color primary>High</recomp-color> (44 kHz) gives "
         "clearer high notes than the original 22 kHz; the instruments' own recordings stay the same. "
         "Takes effect at once.",

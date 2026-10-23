@@ -171,13 +171,13 @@ void tooie::speedup::register_input() {
 }
 
 void tooie::speedup::add_options(recomp::config::Config& cheats, const std::string& master_option) {
-    cheats.add_bool_option(enabled_option, "Speed-up",
+    cheats.add_bool_option(enabled_option, "Speed-Up",
         "Lets the Speed-Up key (F2 unless changed in the Cheats section of the Controls tab) run the game faster. Off means the key does nothing.",
         true);
-    cheats.add_number_option(factor_option, "Speed-up factor",
+    cheats.add_number_option(factor_option, "Speed-Up Factor",
         "How much faster the game runs while the speed-up is active.",
         2, 4, 1, 0, false, 3);
-    cheats.add_bool_option(toggle_option, "Speed-up toggle",
+    cheats.add_bool_option(toggle_option, "Speed-Up Toggle",
         "Press the Speed-Up key to switch the speed-up on and off instead of holding it.",
         false);
     for (const std::string* id : { &enabled_option, &factor_option, &toggle_option }) {

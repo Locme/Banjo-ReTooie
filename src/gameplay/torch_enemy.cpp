@@ -1110,7 +1110,7 @@ namespace {
 }
 
 void tooie::torch_enemy::add_option(recomp::config::Config& general) {
-    general.add_bool_option(option, "Cut Content: Torch enemy",
+    general.add_bool_option(option, "Cut Content: Torch Enemy (WIP)",
         "Level: Glitter Gulch Mine. The angry torch cut from the game, back where it was meant to be. It stands "
         "still like an ordinary lit torch until Banjo walks up to it, then opens its eyes and springs at him to "
         "burn him, and chases him. Attacks and eggs put it out.",
