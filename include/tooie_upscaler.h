@@ -11,6 +11,8 @@
 // their native-resolution modes need motion vectors, depth and camera jitter from RT64 (rt64-ext/src/render/rt64_temporal_upscaler.*).
 namespace tooie::upscaler {
     inline const std::string option = "upscaler";
+    // The Vulkan list (Windows): the same Mode values; FSR cannot run on Vulkan, so the full list is hidden then.
+    inline const std::string vulkan_option = "upscaler_vulkan";
     inline const std::string quality_option = "upscaler_quality";
     inline const std::string hud_option = "upscaler_hud_outside";
     inline const std::string hud_full_option = "upscaler_hud_full";
