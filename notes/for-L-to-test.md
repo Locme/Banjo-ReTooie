@@ -36,6 +36,15 @@
 - Look for: Wet: darker with a sheen, fur clumped. Snow: white on up-facing parts, more on fur tips. Dirt: brown on lower parts and undersides. Fur and feathers match the body underneath. Flicker where body parts meet (the up-direction is read from the vertex marks, known weak spot). Frame cost with all three on vs off. First use compiles a few extra shaders for Banjo's materials
 - Status: waiting for L
 
+## T566 Hits each enemy takes
+- Asked: 2026-10-23
+- Build: main
+- Steps:
+  1. Spawn each of Boltoid, Gruntydactyl, Hothead, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba (Enemy spawner) one at a time and hit it until it dies (note whether it flinches)
+  2. Send logs/console.log and tell me which enemies flinched
+- Look for: [hits] lines: "enemy hit, damage 100" is one hit, 50 two hits, 34 three; "hit actor entry ... model ..." says which enemy.
+- Status: waiting for L
+
 ## T565 Volumetric dust
 - Asked: 2026-10-23 09:46 UTC
 - Build: main @ db815bd

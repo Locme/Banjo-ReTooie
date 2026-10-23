@@ -124,6 +124,18 @@ namespace {
 // An enemy hit handler just before it takes the damage (in register reg) from the enemy's health.
 extern "C" void tooie_enemy_hit_damage(uint8_t* rdram, recomp_context* ctx, int reg) {
     hit_log_line("enemy hit, damage", (int)(reg == 2 ? ctx->r2 : ctx->r24));
+    {
+        // Which enemy: func_80800294_sucoasterhit keeps the actor (its $a0) at $sp + 0xA0; the other two handlers
+        // keep it elsewhere, so a word there is only taken for an actor when it points at a game object whose
+        // entry (+0x10) lies in the syscall stub area.
+        const uint32_t actor = tooie::rdram::read_word(rdram, (uint32_t)ctx->r29 + 0xA0);
+        const uint32_t entry = tooie::rdram::valid_ptr(actor) ? tooie::rdram::read_word(rdram, actor + 0x10) : 0;
+        const uint32_t marker = tooie::rdram::valid_ptr(actor) ? tooie::rdram::read_word(rdram, actor) : 0;
+        if (entry >= 0x80080000u && entry < 0x80090000u && tooie::rdram::valid_ptr(marker)) {
+            std::printf("[hits] hit actor entry 0x%08X model 0x%04X\n", entry, (unsigned)(uint16_t)tooie::rdram::read_half(rdram, marker + 0x14));
+            std::fflush(stdout);
+        }
+    }
     if (!tooie::cheats::is_on("cheat_one_hit")) {
         return;
     }
