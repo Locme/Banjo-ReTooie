@@ -825,25 +825,6 @@ void tooie::init_config() {
         "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
         true);
     tooie::photo_mode::add_options(qol);
-    // The free camera rows are the collapsible menu under Free Camera (L, 2026-10-23): they show while it is on.
-    {
-        static const std::string* const free_camera_rows[] = {
-            &tooie::free_camera_speed_option, &tooie::free_camera_invert_x_option, &tooie::free_camera_invert_y_option,
-            &tooie::free_camera_smooth_walls_option, &tooie::free_camera_ease_back_option,
-            &tooie::free_camera_smooth_height_option, &tooie::free_camera_hover_option,
-            &tooie::free_camera_mouse_option, &tooie::free_camera_gyro_option,
-            &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option };
-        qol.add_option_change_callback(tooie::free_camera_option,
-            [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
-                recomp::config::Config& qol = recompui::config::get_config(tooie::qol_tab_id);
-                for (const std::string* id : free_camera_rows) {
-                    qol.update_option_hidden(*id, !std::get<bool>(value));
-                }
-            });
-        for (const std::string* id : free_camera_rows) {
-            qol.update_option_hidden(*id, true);
-        }
-    }
     qol.add_enum_option(
         tooie::talon_trot::mode_option,
         "Talon Trot",

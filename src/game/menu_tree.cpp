@@ -11,7 +11,9 @@
 #include "librecomp/config.hpp"
 #include "recompui/config.h"
 #include "tooie_game.h"
+#include "tooie_free_camera.h"
 #include "tooie_menu_tree.h"
+#include "tooie_picture_filters.h"
 #include "tooie_snout_jiggle.h"
 
 namespace {
@@ -77,6 +79,39 @@ void tooie::menu_tree::classify() {
     for (const Family& family : effect_families) {
         for (const char* child : family.children) {
             parent_of(graphics, child, family.parent);
+        }
+    }
+
+    // Ray Tracing, Reflections, Toon Shading and Free Camera are collapsible menus (L, 2026-10-23): each switch
+    // is an enable switch, and its settings open under it.
+    {
+        using namespace tooie::picture_filters;
+        const std::vector<std::pair<const std::string*, std::vector<const std::string*>>> groups = {
+            { &ray_tracing_option, { &ray_tracing_strength_option, &ray_tracing_reflections_option,
+                &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option,
+                &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option,
+                &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option,
+                &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option,
+                &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option } },
+            { &reflections_section_option, { &ssr_option, &ssr_stochastic_option, &water_reflections_option,
+                &ice_reflections_option } },
+            { &toon_section_option, { &toon_characters_option, &toon_world_option } },
+        };
+        recomp::config::Config* graphics_config = &recompui::config::get_graphics_config();
+        for (const auto& group : groups) {
+            for (const std::string* child : group.second) {
+                graphics_config->set_option_parent(*child, *group.first);
+            }
+        }
+    }
+    {
+        recomp::config::Config* qol = &recompui::config::get_config(tooie::qol_tab_id);
+        const std::vector<const std::string*> rows = { &tooie::free_camera_speed_option, &tooie::free_camera_invert_x_option,
+            &tooie::free_camera_invert_y_option, &tooie::free_camera_smooth_walls_option, &tooie::free_camera_ease_back_option,
+            &tooie::free_camera_smooth_height_option, &tooie::free_camera_hover_option, &tooie::free_camera_mouse_option,
+            &tooie::free_camera_gyro_option, &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option };
+        for (const std::string* row : rows) {
+            qol->set_option_parent(*row, tooie::free_camera_option);
         }
     }
 

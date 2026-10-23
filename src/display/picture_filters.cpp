@@ -5967,34 +5967,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
 
 
     // Hidden when the Shaders toggle is off; the effects keep their values either way.
-    // Ray tracing settings are shown only while Ray tracing is on (L, 2026-10-23). Hiding them changes no value.
-    for (const std::string* id : {
-        &ray_tracing_strength_option,
-        &ray_tracing_reflections_option,
-        &ray_tracing_water_reflections_option,
-        &ray_tracing_metal_option,
-        &ray_tracing_tiles_option,
-        &ray_tracing_smooth_option,
-        &ray_tracing_smoothing_option,
-        &ray_tracing_brdf_option,
-        &ray_tracing_subsurface_option,
-        &path_tracing_option,
-        &path_tracing_bounces_option,
-        &traced_beams_option,
-        &ray_tracing_player_shadows_option,
-        &ray_tracing_hit_colours_option,
-        &ray_tracing_resolution_option,
-        &ray_tracing_parallax_option,
-        &ray_detail_half_option,
-        &ray_detail_quarter_option }) {
-        graphics.add_option_hidden_dependency(*id, ray_tracing_option, false);
-    }
-    graphics.add_option_hidden_dependency(water_reflections_option, reflections_section_option, false);
-    graphics.add_option_hidden_dependency(toon_characters_option, toon_section_option, false);
-    graphics.add_option_hidden_dependency(toon_world_option, toon_section_option, false);
-    graphics.add_option_hidden_dependency(ice_reflections_option, reflections_section_option, false);
-    graphics.add_option_hidden_dependency(ssr_option, reflections_section_option, false);
-    graphics.add_option_hidden_dependency(ssr_stochastic_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(grass_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_height_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_distance_option, grass_section_option, false);
