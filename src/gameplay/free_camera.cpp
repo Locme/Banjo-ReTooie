@@ -42,7 +42,6 @@
 #include "funcs.h"
 #include "recompui/config.h"
 #include "recompinput/input_state.h"
-#include "recompinput/profiles.h"
 #include "tooie_debug.h"
 #include "tooie_free_camera.h"
 #include "tooie_photo_mode.h"
@@ -258,8 +257,6 @@ namespace {
         return 1.0f - std::exp(-rate * dt);
     }
 
-    // Whether C Down (RB) is held, from the last camera step; read by the sound log.
-    std::atomic<bool> r_held{false};
     // C Down tap or hold (see free_camera::apply_input): held past the threshold, the fine-tune is on.
     std::atomic<bool> fine_held{false};
     // Whether the free camera is running the game's camera now (not first person, a cutscene or a menu).
@@ -391,12 +388,6 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     const bool snap_pressed = (snap_down && !state.snap_was_down) || middle_clicked;
     state.snap_was_down = snap_down;
 
-    {
-        uint16_t buttons = 0;
-        float bx = 0.0f, by = 0.0f;
-        recompinput::profiles::get_n64_input(0, &buttons, &bx, &by);
-        r_held = (buttons & n64_r_button) != 0;
-    }
     const bool on = tooie::free_camera::enabled();
     const bool gameplay = updating && mode == mode_dynamic && valid_ptr(camera) && valid_ptr(transform) && valid_ptr(dynamic);
     // First person and the like: leave the camera alone but keep the held yaw for afterwards.
@@ -653,16 +644,6 @@ bool tooie::free_camera::sweep_line(uint8_t* rdram, recomp_context* ctx, const f
 extern "C" int tooie_free_camera_player_alpha(int alpha) {
     const float fade = player_fade.load();
     return fade >= 1.0f ? alpha : (int)((float)alpha * fade);
-}
-
-extern "C" void tooie_sound_log(uint8_t* rdram, recomp_context* ctx, int which) {
-    (void)rdram;
-    if (!r_held.load()) {
-        return;
-    }
-    static const char* const names[] = { "func_800DA298", "func_8009DE38", "func_800DA544" };
-    std::printf("[sfx-R] %s a0 %X a1 %X a2 %X\n", names[which], (unsigned)ctx->r4, (unsigned)ctx->r5, (unsigned)ctx->r6);
-    std::fflush(stdout);
 }
 
 void tooie::free_camera::apply_input(uint16_t* buttons) {
