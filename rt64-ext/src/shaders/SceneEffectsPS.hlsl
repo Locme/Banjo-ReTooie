@@ -3927,7 +3927,10 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
         body = lerp(body, flecks, fleckiness);
         // Snow is a thin powder, sand a thick haze.
         const float density = extra.x * (1.0f + 0.35f * wSand - 0.35f * wSnow);
-        const float thickness = density * body * (t1 - t0) / radius * 2.2f;
+        // Nothing at the cloud's rim: the chord through a ball falls off like a square root there, which with the noise left a
+        // sharp round edge (a green circle on grass), so the cloud also fades by how far from the rim the ray passes.
+        const float rim = smoothstep(0.0f, 0.65f, falloff);
+        const float thickness = density * body * rim * rim * (t1 - t0) / radius * 2.2f;
         // The side facing the sun is the brighter.
         const float side = dot(normalize(middle - cloud.xyz + 1e-3f), sunWorld);
         lightSum += base * (0.62f + 0.38f * saturate(0.5f + 0.5f * side)) * thickness;

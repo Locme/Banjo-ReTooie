@@ -58,6 +58,9 @@ namespace {
     Cloud clouds[max_clouds];
     int cloud_count = 0;
     uint32_t spawned = 0;
+    // Clouds made since the last tick: a landing makes a ring of puffs at once, and a ring of green clouds reads as a circle.
+    int spawned_this_frame = 0;
+    constexpr int max_per_frame = 5;
     std::atomic<bool> enabled{ false };
     bool log_puffs = false;
 
@@ -147,6 +150,7 @@ void tooie::dust::tick(uint8_t* rdram) {
     float speed = std::sqrt(velocity[0] * velocity[0] + velocity[2] * velocity[2]);
 
     std::lock_guard lock{ cloud_mutex };
+    spawned_this_frame = 0;
     if (!on) {
         cloud_count = 0;
     }
@@ -214,6 +218,11 @@ namespace {
         float position[3], velocity[3];
         const bool have_banjo = banjo(rdram, position, velocity);
         std::lock_guard lock{ cloud_mutex };
+        if (spawned_this_frame >= max_per_frame) {
+            // Taken (the game's puff is skipped) but not drawn.
+            return true;
+        }
+        spawned_this_frame++;
         if (cloud_count >= max_clouds) {
             // Full: the oldest makes way.
             std::memmove(clouds, clouds + 1, sizeof(Cloud) * (max_clouds - 1));
