@@ -188,7 +188,7 @@ namespace {
             }
         }
         if (lines.empty()) {
-            lines.push_back("# Volumetric mist, fog and clouds per level, written by Save Volumetric Settings (Controls > Volumetric). See the format at the top of src/gameplay/volumetric.cpp:");
+            lines.push_back("# Volumetric mist, fog and clouds per level, written by Save Volumetric Settings (Controls > Volumetrics). See the format at the top of src/gameplay/volumetric.cpp:");
             lines.push_back("# map (hex), then clouds= cover= height= thickness= speed= (0 to 100) mist= fog= (0 to 100) fog_preset= mist_offset=");
         }
         const std::string text = line_of(map, l);
@@ -217,7 +217,7 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(tooie::dev_files::folder(), ec);
         std::ofstream out(tooie::dev_files::path(file_name));
-        out << "# Volumetric mist, fog and clouds per level (Graphics > WIP > Volumetric). Read again whenever this file changes.\n"
+        out << "# Volumetric mist, fog and clouds per level (Graphics > WIP > Volumetrics). Read again whenever this file changes.\n"
                "# One level a line: map (hex), then any of these in any order. # starts a comment.\n"
                "#   clouds=off|fair|scattered|overcast|stormy|wispy|sunset|thunderstorm   the cloud type on this level\n"
                "#   cover= height= thickness= speed=   the cloud shape, 0 to 100 (50 the usual); left out, the type's own shape\n"
@@ -339,7 +339,7 @@ void tooie::volumetric::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         file_option,
         "Volumetric Level File",
-        "Reads Dev Files/volumetric.txt (made the first time any volumetric option is on, or by the Save Volumetric Settings key in Controls > Volumetric): per level mist, fog, cloud type and cloud shape that override the settings above, for the levels listed. Changes to the file apply within a second.",
+        "Reads Dev Files/volumetric.txt (made the first time any volumetric option is on, or by the Save Volumetric Settings key in Controls > Volumetrics): per level mist, fog, cloud type and cloud shape that override the settings above, for the levels listed. Changes to the file apply within a second.",
         true);
     for (const std::string* id : { &mist_option, &fog_option, &fog_preset_option, &clouds_option, &file_option }) {
         graphics.add_option_change_callback(*id,

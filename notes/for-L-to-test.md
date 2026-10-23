@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T565 Volumetric dust
+- Asked: 2026-10-23 09:46 UTC
+- Build: main @ db815bd
+- Steps:
+  1. Pull main and build on Windows; Graphics > WIP > Volumetrics > Volumetric Dust on
+  2. Warp to Spiral Mountain; run, hold Run (sprint), Talon Trot, quick-turn, jump and land on sand, snow and grass
+  3. Run with TOOIE_DUST_LOG=1 and send the [dust] lines
+- Look for: Soft dust clouds replace the flat puffs; they drift with your speed, rise, get pushed aside as you move through them and take the ground's colour. Puffs too small, too big or gone too fast: send the [dust] raw numbers (radius_per_scale and life_seconds in src/gameplay/dust.cpp are guesses). Frame cost with dust on vs off
+- Status: waiting for L
+
 ## T564 Upscalers: DLSS, DLAA, FSR 3, FSR 4, Temporal
 - Asked: 2026-10-23 09:37 UTC
 - Build: main @ eca73f4
