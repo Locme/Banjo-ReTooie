@@ -83,7 +83,7 @@ void tooie::hotkeys::register_inputs() {
     add(GameInput::SUN_SAVE, "Save Sun Location",
         "Saves where the sun stands in this level to sun.txt in the Dev Files folder next to the save files. The game reads it back at start, and you can send it in for the levels' built-in suns.", SDL_SCANCODE_UNKNOWN, "Ray Trace Debug");
     add(GameInput::VOLUMETRIC_SAVE, "Save Volumetric Settings",
-        "Press it to free the mouse and show a button for each volumetric setting (cloud type, cloud shape, mist, fog, fog preset) and Save All. Clicking one writes that setting, as showing now, into this level's line in volumetric.txt in the Dev Files folder next to the save files; the level uses it from then on, whatever the options say. Press the key again to close the buttons.", SDL_SCANCODE_UNKNOWN, "Volumetric");
+        "Press it to free the mouse and show a button for each volumetric setting (cloud type, cloud shape, mist, fog, fog preset) and Save All. Clicking one writes that setting, as showing now, into this level's line in volumetric.txt in the Dev Files folder next to the save files; the level uses it from then on, whatever the options say. Press the key again to close the buttons.", SDL_SCANCODE_UNKNOWN, "Volumetrics");
 }
 
 bool tooie::hotkeys::down(recompinput::GameInput input) {

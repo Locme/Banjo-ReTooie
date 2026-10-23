@@ -833,7 +833,11 @@ void tooie::init_config() {
         for (const std::string* id : { &vol::mist_option, &vol::fog_option, &vol::fog_preset_option, &vol::clouds_option, &vol::file_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
-        recompui::config::set_option_group(vol::mist_option, "Volumetric");
+        // Volumetrics (L, 2026-10-23): the Day and night cycle's Mist and Mist Time are this same mist, so they sit here too.
+        namespace dn = tooie::day_night;
+        recompui::config::set_option_display_before(dn::mist_option, vol::mist_option);
+        recompui::config::set_option_display_before(dn::mist_time_option, vol::mist_option);
+        recompui::config::set_option_group(dn::mist_option, "Volumetrics");
     }
     graphics.add_bool_option(
         tooie::draw_distance_option,
