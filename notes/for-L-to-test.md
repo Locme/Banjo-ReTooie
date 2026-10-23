@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T561 PBR re-sweep with the 11 rules
+- Asked: 2026-10-23 00:45 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; Ray tracing on, Ray traced BRDF on
+  2. Grunty Industries (green and hazard-striped panels, grimy grey walls), Mayahem Temple gold, a bushy level (Jolly Roger's or Terrydactyland) with the sun behind leaves
+- Look for: Painted panels look like painted plastic, not mirror metal; grimy grey metal is dull; gold and copper reflect in their own texture's colour, not an extra orange; bushes glow less with the sun behind, single leaves still do; icicles and ice crystals are left to Ice reflections
+- Status: waiting for L
+
 ## T560 Cheaper traced sun shadows
 - Asked: 2026-10-22 23:58 UTC
 - Build: main @ HEAD

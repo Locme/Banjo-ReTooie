@@ -88,6 +88,12 @@ RayPbr RayPbrNone() {
     return none;
 }
 
+// The colour a material tints its surface's own (diffuse) colour with: a metal's albedo is what it tints its reflection
+// with, and the texture already has its colour, so the more metal the less it is tinted twice.
+float3 DiffuseAlbedo(RayPbr material) {
+    return lerp(material.albedo, 1.0f, material.metalness);
+}
+
 // Ray Tracing Material Pick Mode: whether the traced scene holds a surface with a material of that mode's (lights word 9,
 // bit 2 (value 4); the traced scene's records follow its geometries).
 // The same word carries the Ray traced BRDF roughness (percent times 8) and the subsurface scattering strength (percent times 1024).
@@ -1390,7 +1396,7 @@ float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
     }
     if (RayPbrOn()) {
         const RayPbr hitMaterial = RayGeometryPbr(RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()));
-        colour = colour * hitMaterial.albedo * (1.0f + hitMaterial.emissive);
+        colour = colour * DiffuseAlbedo(hitMaterial) * (1.0f + hitMaterial.emissive);
     }
     if (!inView && HitColoursOn()) {
         // Off the screen or hidden: the colour the surface had when it was last seen.
@@ -1967,7 +1973,7 @@ float3 TracedGI(float3 center, float3 normal, uint cell, out float2 distances) {
         // emissive one gives off its own light into the ray's payload whether or not the picture shows it lit.
         if (RayPbrOn()) {
             const RayPbr hitMaterial = RayGeometryPbr(hitGeometry);
-            hitColour = hitColour * hitMaterial.albedo + hitMaterial.albedo * (hitMaterial.emissive * 0.35f);
+            hitColour = hitColour * DiffuseAlbedo(hitMaterial) + hitMaterial.albedo * (hitMaterial.emissive * 0.35f);
         }
         light += hitColour * trust * far;
         // The path's further hops. Each spot the path lands on also brings the sun's and the lamps' traced light
@@ -5103,7 +5109,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             (gConstants.view.w > 0.0f) ? HeatHaze(pixel, -ViewPosition(pixel, depth).z) : gColor.Load(int3(pixel, 0)).rgb;
         // Ray Tracing Material Pick Mode: the albedo tints the surface before anything lights it. A metal has no diffuse
         // colour of its own, only what it reflects (below).
-        scene *= pbr.albedo;
+        scene *= DiffuseAlbedo(pbr);
         if (gConstants.water.z > 0.0f) {
             // The surface's own colour lit by it, and a little of it straight on, so dark corners take on the
             // colour of what is around them.
