@@ -1439,15 +1439,17 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
     if (!valid_ptr(model)) {
         return;
     }
-    const bool on = option_bool(tooie::snout_jiggle::option);
-    const bool feathers_on = option_bool(tooie::snout_jiggle::kazooie_option);
+    // The Jiggle switch (off by default) turns every part off at once; the part switches keep their values.
+    const bool master = option_bool(tooie::snout_jiggle::master_option);
+    const bool on = master && option_bool(tooie::snout_jiggle::option);
+    const bool feathers_on = master && option_bool(tooie::snout_jiggle::kazooie_option);
     snout_on = on;
     nose_on = on && option_bool(tooie::snout_jiggle::nose_option);
-    const bool body_on = option_bool(tooie::snout_jiggle::body_option);
-    const bool mumbo_on = option_bool(tooie::snout_jiggle::mumbo_option);
-    const bool belly_option = option_bool(tooie::snout_jiggle::belly_option);
-    const bool ears_option = option_bool(tooie::snout_jiggle::ears_option);
-    const bool fur_option = option_bool(tooie::snout_jiggle::fur_option);
+    const bool body_on = master && option_bool(tooie::snout_jiggle::body_option);
+    const bool mumbo_on = master && option_bool(tooie::snout_jiggle::mumbo_option);
+    const bool belly_option = master && option_bool(tooie::snout_jiggle::belly_option);
+    const bool ears_option = master && option_bool(tooie::snout_jiggle::ears_option);
+    const bool fur_option = master && option_bool(tooie::snout_jiggle::fur_option);
     if (!fur_option && fur_sent) {
         RT64::SetSceneFurSway(0.0f, 0.0f, 0.0f);
         fur_sent = false;
