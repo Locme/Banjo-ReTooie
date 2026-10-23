@@ -933,6 +933,12 @@ void tooie::init_config() {
         recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
     }
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Difficulty");
+    // Difficulty goes to the top of the Gameplay tab, ahead of Boss Rush (L, 2026-10-23).
+    for (const std::string* id : { &tooie::damage::double_damage_option, &tooie::damage::aim_option,
+            &tooie::damage::aim_chance_option, &tooie::damage::homing_option, &tooie::damage::strafe_option,
+            &tooie::damage::faster_attacks_option, &tooie::canary_mary::mode_option }) {
+        recompui::config::set_option_display_before(*id, tooie::boss_rush::option);
+    }
     // Features and Back-Ports from General (L, 2026-10-23), with their headings. Saves, shaders, Discord and the
     // Developer switch stay in General.
     for (const std::string* id : { &tooie::boss_rush::option, &tooie::mirror_mode::option, &tooie::classic_sounds::option,
