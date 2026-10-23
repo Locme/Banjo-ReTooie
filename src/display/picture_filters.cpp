@@ -4869,6 +4869,10 @@ bool tooie::picture_filters::ray_tracing_active() {
     return traced_shadows_on();
 }
 
+bool tooie::picture_filters::ray_tracing_player_shadows_on() {
+    return value<bool>(ray_tracing_player_shadows_option, true);
+}
+
 bool tooie::picture_filters::traced_beams_on() {
     return ray_tracing_active() && (value<double>(traced_beams_option, 60.0) > 0.0);
 }
@@ -5571,7 +5575,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         ray_tracing_player_shadows_option,
         "Traced Shadows Of The Player",
-        "Whether Banjo and Kazooie (or whoever you are playing) cast traced shadows: from the sun, the lamps and fires, and straight down on the ground. Off, the player casts none of them, and light and shadows go on through as if they weren't there; everything else keeps its traced shadows. Use it with HD shadows for the game's own shadow under the player. Needs Ray tracing on.",
+        "Whether Banjo and Kazooie (or whoever you are playing) cast traced shadows: from the sun, the lamps and fires, and straight down on the ground. Off, the player casts none of them, and light and shadows go on through as if they weren't there; everything else keeps its traced shadows. On, the game's own hard-edged shadow under the player is left out (the traced ones take its place) unless HD shadows is on. Use Off with HD shadows for the game's own shadow under the player. Needs Ray tracing on.",
         true);
     graphics.add_bool_option(
         ray_tracing_hit_colours_option,
