@@ -694,7 +694,8 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::save_backups_option, "Saves");
     // At the end of the section before Back-Ports, with its own heading, so the options around it keep theirs.
     recompui::config::set_option_display_before(tooie::precompile_shaders_option, tooie::classic_sounds::option);
-    recompui::config::set_option_group(tooie::precompile_shaders_option, "Shaders");
+    recompui::config::set_option_group(tooie::precompile_shaders_option, "Saves");
+    recompui::config::set_option_group(tooie::timer_save_option, "Saves");
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports And Cut Content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
     recompui::config::set_option_group(tooie::mirror_mode::option, "Features");
