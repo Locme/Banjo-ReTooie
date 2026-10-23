@@ -30,6 +30,10 @@ namespace tooie::day_night {
     inline const std::string cloud_height_option = "day_night_cloud_height";
     inline const std::string cloud_thickness_option = "day_night_cloud_thickness";
     inline const std::string cloud_speed_option = "day_night_cloud_speed";
+    // Mist over low ground and round water: how thick (0 off to 100), and when it shows. It is the Volumetric Mist.
+    inline const std::string mist_option = "day_night_mist";
+    enum class MistTime : uint32_t { Mornings, MorningsAndNights, Always };
+    inline const std::string mist_time_option = "day_night_mist_time";
     // Wet, shiny ground in and after the rain, and raindrops running down the screen.
     inline const std::string wet_ground_option = "day_night_wet_ground";
     inline const std::string drops_option = "day_night_drops";
@@ -43,6 +47,9 @@ namespace tooie::day_night {
     // horizon. While the cycle is off or the map is not one that cycles, the sun moved with Move Sun or saved in
     // sun.txt for the map (sun_control.cpp); false when there is none: keep your own light then.
     bool sun_direction(float out[3]);
+    // How much of the cycle's mist shows now, 0 to 1 (0 while the cycle is off in the level): the Mist setting times how
+    // much of the morning or night it is. volumetric.cpp draws it as Volumetric Mist.
+    float mist_amount();
 }
 
 namespace tooie::night_sounds {

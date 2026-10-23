@@ -27,6 +27,7 @@
 #include "recompinput/recompinput.h"
 #include "recompui/config.h"
 
+#include "tooie_day_night.h"
 #include "tooie_debug.h"
 #include "tooie_dev_files.h"
 #include "tooie_toast.h"
@@ -366,6 +367,8 @@ void tooie::volumetric::tick(uint8_t* rdram) {
         preset = p;
         cloud_type = c;
     }
+    // The Day and Night cycle's Mist (its Mist and Mist Time settings) is this same mist while the cycle runs.
+    mist = std::max(mist, tooie::day_night::mist_amount());
     const bool use_file = flag(file_option, true);
     refresh((mist > 0.0f) || (fog > 0.0f) || (cloud_type > 0));
 

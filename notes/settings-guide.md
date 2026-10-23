@@ -489,6 +489,9 @@ their texture is drawn.
   half after. Default: on.
 - **Raindrops on Screen**: with Day and Night on, raindrops land on the screen
   in the rain (more when looking up) and run down it. Default: on.
+- **Mist** and **Mist Time**: with Day and Night on, the Volumetric Mist (see the Volumetric section) drifts in
+  mornings (the sun low in the east), also at night, or all day; not in the rain. 0 to 100; 0 turns it off. Default:
+  50, Mornings. With the cycle off, Volumetric Mist's own setting is used.
 - **Night Sounds**: with Day and Night on, crickets and the odd owl at night
   and birdsong in the morning, quietly under the music. Default: on.
 

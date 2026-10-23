@@ -206,6 +206,31 @@ namespace {
         }
     }
 
+    // The mist's strength (0 to 1) and when it shows. Test aid: TOOIE_MIST=<0 to 100>,<0 mornings, 1 and nights, 2 always>.
+    std::pair<float, uint32_t> mist_setting() {
+        if (const char* v = std::getenv("TOOIE_MIST")) {
+            float strength = 50.0f;
+            uint32_t when = 0;
+            sscanf(v, "%f,%u", &strength, &when);
+            return { strength / 100.0f, when };
+        }
+        try {
+            auto& config = recompui::config::get_config(recompui::config::graphics::id);
+            return { (float)(std::get<double>(config.get_option_value(tooie::day_night::mist_option)) / 100.0),
+                std::get<uint32_t>(config.get_option_value(tooie::day_night::mist_time_option)) };
+        } catch (...) {
+            return { 0.5f, 0 };
+        }
+    }
+
+    // How much of the cycle's mist shows now (0 to 1), for volumetric.cpp.
+    std::atomic<float> day_mist{ 0.0f };
+
+    float smooth_step(float a, float b, float x) {
+        const float t = std::clamp((x - a) / (b - a), 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
+    }
+
     tooie::day_night::Weather weather_setting() {
         // Test aid: TOOIE_WEATHER=<0 Clear, 1 Changing, 2 Rain, 3 Storm> whatever the setting says.
         if (const char* v = std::getenv("TOOIE_WEATHER")) {
@@ -395,6 +420,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
                 std::copy(std::begin(by_hand), std::end(by_hand), sun);
             }
         }
+        day_mist = 0.0f;
         tooie::night_sounds::set(0.0f, 0.0f, 0.0f, 0.0f);
         if (!sent_off || new_map || sun_moved) {
             // The level's own sun, if it has one (for the sun shadows and the sun in the sky).
@@ -486,6 +512,19 @@ void tooie::day_night::tick(uint8_t* rdram) {
     // heard faintly there. Lightning still flashes through.
     const float above_water = 1.0f - std::clamp(tooie::picture_filters::underwater(), 0.0f, 1.0f);
     RT64::SetSceneWeather(rain * amount * above_water, flash * amount, snow);
+    // The mist (Volumetric Mist, drawn by the scene effects): thickest in the early morning, with the sun low in the east,
+    // not at night or in the rain; Mist Time adds the nights or makes it all day.
+    {
+        const auto [strength, when_setting] = mist_setting();
+        const float brightest = std::max(look.tint[0], std::max(look.tint[1], look.tint[2]));
+        const float night = std::clamp((0.97f - brightest) / 0.3f, 0.0f, 1.0f);
+        const float shown_rain = rain * amount * above_water;
+        const float morning = std::clamp(sky[0] * 2.0f, 0.0f, 1.0f) * (1.0f - smooth_step(0.35f, 0.75f, sky[1])) *
+            smooth_step(-0.05f, 0.08f, sky[1]) * (1.0f - night) * (1.0f - shown_rain);
+        const float night_mist = night * (1.0f - shown_rain * 0.5f);
+        const float when = (when_setting >= 2) ? 1.0f : ((when_setting == 1) ? std::max(morning, night_mist * 0.8f) : morning);
+        day_mist = strength * when * amount;
+    }
     // The ground gets wet in the rain, in about 15 s of a storm, and dries over a minute and a half after.
     // A map change (behind its wipe) snaps it to the weather. No wet ground in snow.
     // Test aid: TOOIE_WET=<0 to 1> holds it there.
@@ -682,10 +721,31 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         "With Day and Night on, raindrops land on the screen in the rain, more when you look up, and run down it.",
         true);
     graphics.add_option_hidden_dependency(drops_option, option, Mode::Off);
+    graphics.add_number_option(
+        mist_option,
+        "Mist",
+        "With Day and Night on, the Volumetric Mist (a real volume along the ground, see the Volumetric section) drifts in on the days and nights Mist Time says. Used in place of the Mist setting while the cycle runs. 0 turns it off.",
+        0, 100, 5, 0, false, 50);
+    graphics.add_option_hidden_dependency(mist_option, option, Mode::Off);
+    graphics.add_enum_option(
+        mist_time_option,
+        "Mist Time",
+        "When the mist shows: in the early morning, also at night, or all day.",
+        {
+            {MistTime::Mornings, "Mornings", "Mornings"},
+            {MistTime::MorningsAndNights, "MorningsAndNights", "Mornings and Nights"},
+            {MistTime::Always, "Always", "Always"},
+        },
+        MistTime::Mornings);
+    graphics.add_option_hidden_dependency(mist_time_option, option, Mode::Off);
     graphics.add_bool_option(
         sounds_option,
         "Night Sounds",
         "With Day and Night on, crickets and the odd owl at night and birdsong in the morning, quietly under the music.",
         true);
     graphics.add_option_hidden_dependency(sounds_option, option, Mode::Off);
+}
+
+float tooie::day_night::mist_amount() {
+    return day_mist.load();
 }
