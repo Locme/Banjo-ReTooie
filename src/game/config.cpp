@@ -739,13 +739,13 @@ void tooie::init_config() {
     graphics.add_enum_option(
         tooie::free_camera_orbit_option,
         "Free camera: mouse and gyro",
-        "Moving the mouse (or tilting a controller with a gyro) turns and tilts the free camera, like the right stick. <recomp-color primary>Always</recomp-color>: whenever you play. <recomp-color primary>Hold a key</recomp-color>: only while the Camera Mouse Look key (Controls > Hotkeys) is held; the gyro is not held back. Strength is General > Mouse Sensitivity and Gyro Sensitivity; at 0 each does nothing. Invert left/right and up/down apply too. When it is on, the mouse wheel zooms the camera in and out and the middle button snaps it behind Banjo.",
+        "Moving the mouse (or tilting a controller with a gyro) turns and tilts the free camera, like the right stick. <recomp-color primary>Always</recomp-color>: whenever you play. <recomp-color primary>Hold a key</recomp-color>: only while the Camera Mouse Look key (Controls > Hotkeys) is held; the gyro is not held back. Strength is General > Mouse Sensitivity and Gyro Sensitivity; at 0 each does nothing, so raise Mouse Sensitivity (25 is a good start) for the mouse to work. Invert left/right and up/down apply too. When it is on, the mouse wheel zooms the camera in and out and the middle button snaps it behind Banjo.",
         {
             {tooie::FreeCameraMouse::Off, "Off", "Off"},
             {tooie::FreeCameraMouse::Always, "Always", "Always"},
             {tooie::FreeCameraMouse::Hold, "Hold", "Hold a key"},
         },
-        tooie::FreeCameraMouse::Off);
+        tooie::FreeCameraMouse::Always);
     graphics.add_bool_option(
         tooie::free_camera_rb_distance_option,
         "Free camera: hold RB to fine-tune distance",
