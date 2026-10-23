@@ -82,13 +82,13 @@ namespace {
         "HD Shadows: Enemies", "HD Shadows: Banjo",
         "Interpolation check", "Interpolation blend mode", "Effect debug view", "Effect compare",
         "Frame Read-Back", "Frame rate overlay",
-        "Free camera: ease back", "Free camera: floor clearance", "Free camera: look up",
+        
         // General.
-        "Save backups to keep", "Compile all shaders at start", "Enemy aim: aimed shots",
-        "Enemy aim: homing shots",
+        "Save backups to keep", "Compile all shaders at start", 
+        
         // QOL.
-        "Free camera speed", "Free camera: invert left/right", "Free camera: invert up/down",
-        "Free camera: smooth walls", "Fine aim speed", "Mouse and gyro aim: invert up/down",
+        
+        "Fine aim speed", "Mouse and gyro aim: invert up/down",
         "Photo mode camera collision",
     });
 
