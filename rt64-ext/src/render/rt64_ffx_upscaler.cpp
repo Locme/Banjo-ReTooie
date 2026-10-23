@@ -202,6 +202,8 @@ namespace RT64 {
 
         ffxContext ctx = context;
         const ffxReturnCode_t result = functions.Dispatch(&ctx, &dispatch.header);
+        // FSR sets its own descriptor heaps on the command list: plume must set its own again before its next draw.
+        d3dCommandList->notifyDescriptorHeapWasChangedExternally();
         if (result != FFX_API_RETURN_OK) {
             fail("FSR failed to run (" + code(result) + ")");
             return false;
