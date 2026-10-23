@@ -1181,7 +1181,7 @@ void tooie::init_config() {
 
     // Work-in-progress and developer features (L, 2026-10-13), shown with General > DEV tab.
     recomp::config::Config& wip = recompui::config::create_config_tab("DEV", tooie::wip_tab_id, false);
-    // Dumps moved here from General (L, 2026-10-15): they are read from the DEV tab.
+    // Dumps moved here from General (L, 2026-10-15): they are read from the DEV tab. One Dump heading (L, 2026-10-23).
     wip.add_enum_option(
         tooie::texture_dump_option,
         "Texture Dump",
@@ -1192,6 +1192,17 @@ void tooie::init_config() {
             {tooie::TextureDump::SweepAllMaps, "SweepAllMaps", "Sweep all maps"},
         },
         tooie::TextureDump::Off);
+    wip.add_bool_option(
+        tooie::asset_dump_option,
+        "Dump Assets",
+        "Writes every model, animation, sprite and other game asset to the asset_dump folder as asset_<id>.bin, with assets.txt listing them (kind 0 is a model). Takes a few seconds. To replace an asset, put an edited asset_<id>.bin in mods/assets: it loads in place of the game's, at any size, the next time the game loads it.",
+        false);
+    wip.add_bool_option(
+        tooie::sound_dump_option,
+        "Dump Sounds",
+        "Saves the game's sounds as WAV files to the sound_dump folder, sorted into a folder for each sound bank and instrument (bank0_0/inst3/snd12_rom01A2B40_22050hz_1ch.wav), with index.txt listing each one's place in the ROM. Each sound is written once, as banks load while you play, so visit different areas to collect more. Samples are saved at the bank's rate; the game bends some sounds' pitch when it plays them.",
+        false);
+    recompui::config::set_option_group(tooie::texture_dump_option, "Dump");
     tooie::texture_sweep::add_prompt(wip);
     tooie::memory_guard::add_option(wip);
     wip.add_bool_option(
@@ -1205,16 +1216,6 @@ void tooie::init_config() {
         "Blend Texture Seams",
         "Smooths the lines where the pieces of a picture drawn in parts meet, such as the title screen's logo. The game clamps each piece at its edge, which on the N64 is a fraction of a pixel but shows as a line at high resolutions; this carries each piece's shading on to its edge so the pieces blend.",
         true);
-    wip.add_bool_option(
-        tooie::asset_dump_option,
-        "Dump Assets",
-        "Writes every model, animation, sprite and other game asset to the asset_dump folder as asset_<id>.bin, with assets.txt listing them (kind 0 is a model). Takes a few seconds. To replace an asset, put an edited asset_<id>.bin in mods/assets: it loads in place of the game's, at any size, the next time the game loads it.",
-        false);
-    wip.add_bool_option(
-        tooie::sound_dump_option,
-        "Dump Sounds",
-        "Saves the game's sounds as WAV files to the sound_dump folder, sorted into a folder for each sound bank and instrument (bank0_0/inst3/snd12_rom01A2B40_22050hz_1ch.wav), with index.txt listing each one's place in the ROM. Each sound is written once, as banks load while you play, so visit different areas to collect more. Samples are saved at the bank's rate; the game bends some sounds' pitch when it plays them.",
-        false);
     // L, 2026-10-17: on by default; the game's own widescreen mode is for stretched TVs.
     wip.add_bool_option(
         tooie::hide_vanilla_widescreen_option,
