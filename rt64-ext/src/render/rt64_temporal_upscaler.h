@@ -14,6 +14,9 @@
 #include "rt64_ffx_upscaler.h"
 
 namespace RT64 {
+    struct RenderWorker;
+    struct RenderTarget;
+
     // Banjo-Tooie: the temporal upscaler chosen in Graphics (src/display/upscaler.cpp).
     // Mode: 0 off, 1 FSR 4, 2 FSR 4 native AA, 3 DLSS, 4 DLAA, 5 Arm ASR, 6 Snapdragon GSR (Android), 7 FSR 3, 8 the built-in temporal resolve.
     // 1 to 4 and 7 run in AMD's and NVIDIA's DLLs (Windows) and fall back to 8 when the DLL or card cannot do it.
@@ -48,6 +51,18 @@ namespace RT64 {
     // The camera's near and far planes and vertical field of view (radians), from the last projection seen.
     void UpscalerCameraRange(float &nearPlane, float &farPlane, float &fovY);
 
+    // Graphics > Upscaler > Keep the HUD out of the upscale: the 3D world is copied before the HUD is drawn, the
+    // upscaler works on the copy, and the HUD is put back after (UpscalerRenderer::composeHud).
+    void SetUpscalerHudSplit(bool enabled);
+    bool UpscalerHudSplitWanted();
+
+    // The framebuffer renderer, once the 3D world is drawn and before the HUD: copies the color target.
+    void UpscalerTakeWorldSnapshot(RenderWorker *worker, RenderTarget *colorTarget, const ShaderLibrary *shaderLibrary);
+
+    // The present queue: the copy for the frame being shown, or null if there is none or it is not width by height.
+    // A copy can be taken once.
+    RenderTexture *UpscalerWorldSnapshot(uint32_t width, uint32_t height);
+
     struct UpscalerRenderer {
         std::unique_ptr<RenderTexture> velocityTexture;
         std::unique_ptr<RenderFramebuffer> velocityFramebuffer;
@@ -76,6 +91,11 @@ namespace RT64 {
         DlssBackend dlss;
         FfxBackend ffx;
         bool depthFloatValid = false;
+        std::unique_ptr<RenderTexture> hudTexture;
+        std::unique_ptr<RenderFramebuffer> hudFramebuffer;
+        std::unique_ptr<SmaaDescriptorSet> hudDescriptorSet;
+        uint32_t hudWidth = 0;
+        uint32_t hudHeight = 0;
         uint32_t depthFloatWidth = 0;
         uint32_t depthFloatHeight = 0;
         uint32_t dlssOutputWidth = 0;
@@ -89,6 +109,11 @@ namespace RT64 {
 
         // The built-in temporal resolve: the jittered game image and its velocity, with the last result, make an image of
         // outputWidth by outputHeight (the same size or larger). Returns the input itself when it does not apply.
+        // Adds the HUD (the finished frame minus the world copy) to the upscaled world. Returns the upscaled world if it cannot.
+        RenderTexture *composeHud(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
+            RenderTexture *upscaled, RenderTexture *world, RenderTexture *finished, RenderFormat format,
+            uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight);
+
         RenderTexture *resolve(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
             RenderTexture *input, RenderFormat format, uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight);
     };

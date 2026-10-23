@@ -14,6 +14,7 @@ namespace RT64 {
     // rt64-ext/src/render/rt64_upscaler.h.
     void SetUpscalerMode(uint32_t mode);
     void SetUpscalerQuality(uint32_t quality);
+    void SetUpscalerHudSplit(bool enabled);
 }
 
 namespace {
@@ -51,6 +52,12 @@ void tooie::upscaler::apply() {
     } catch (...) {
     }
     RT64::SetUpscalerQuality(quality);
+    bool hud_outside = true;
+    try {
+        hud_outside = std::get<bool>(graphics_config().get_option_value(hud_option));
+    } catch (...) {
+    }
+    RT64::SetUpscalerHudSplit(hud_outside);
 }
 
 void tooie::upscaler::add_option(recomp::config::Config& graphics) {
@@ -87,6 +94,19 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
             {Quality::UltraPerformance, "Ultra Performance", "Ultra Performance"},
         },
         Quality::Quality);
+    graphics.add_bool_option(
+        hud_option,
+        "Upscaler: HUD Outside",
+        "Keeps the HUD out of the upscaler: the upscaler works on the 3D world alone and the HUD is added afterwards, so it cannot ghost or shimmer. The HUD is drawn at the game's lowered resolution. Off sends the whole picture through the upscaler.",
+        true);
+    graphics.add_option_change_callback(hud_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                graphics_config().save_config();
+            } else {
+                apply();
+            }
+        });
     graphics.add_option_change_callback(quality_option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
             if (context == recomp::config::OptionChangeContext::Temporary) {

@@ -190,6 +190,49 @@ namespace RT64 {
         }
     }
 
+    namespace {
+        std::atomic<bool> hudSplit{ true };
+        std::mutex snapshotMutex;
+        std::unique_ptr<RenderTarget> snapshotTarget;
+        bool snapshotFresh = false;
+    }
+
+    void SetUpscalerHudSplit(bool enabled) {
+        hudSplit = enabled;
+    }
+
+    bool UpscalerHudSplitWanted() {
+        return hudSplit.load() && UpscalerWanted() && (upscalerMode.load() != 6);
+    }
+
+    void UpscalerTakeWorldSnapshot(RenderWorker *worker, RenderTarget *colorTarget, const ShaderLibrary *shaderLibrary) {
+        if ((colorTarget == nullptr) || colorTarget->isEmpty() || (colorTarget->width == 0) || (colorTarget->height == 0)) {
+            return;
+        }
+        const std::scoped_lock lock(snapshotMutex);
+        if ((snapshotTarget == nullptr) || (snapshotTarget->multisampling.sampleCount != colorTarget->multisampling.sampleCount) ||
+            (snapshotTarget->usesHDR != colorTarget->usesHDR))
+        {
+            snapshotTarget = std::make_unique<RenderTarget>(0, Framebuffer::Type::Color, colorTarget->multisampling, colorTarget->usesHDR);
+        }
+        if ((snapshotTarget->texture == nullptr) || (snapshotTarget->width != colorTarget->width) || (snapshotTarget->height != colorTarget->height)) {
+            snapshotTarget->setupColor(worker, colorTarget->width, colorTarget->height);
+        }
+        snapshotTarget->copyFromTarget(worker, colorTarget, 0, 0, colorTarget->width, colorTarget->height, shaderLibrary);
+        snapshotTarget->resolveTarget(worker, shaderLibrary);
+        snapshotFresh = true;
+    }
+
+    RenderTexture *UpscalerWorldSnapshot(uint32_t width, uint32_t height) {
+        const std::scoped_lock lock(snapshotMutex);
+        if (!snapshotFresh || (snapshotTarget == nullptr) || (snapshotTarget->width != width) || (snapshotTarget->height != height)) {
+            snapshotFresh = false;
+            return nullptr;
+        }
+        snapshotFresh = false;
+        return snapshotTarget->getResolvedTexture();
+    }
+
     void UpscalerCameraRange(float &nearPlane, float &farPlane, float &fovY) {
         nearPlane = cameraNear.load();
         farPlane = cameraFar.load();
@@ -572,5 +615,55 @@ namespace RT64 {
         float jitterLog[4] = { currentJitter[0], currentJitter[1], 0.0f, 0.0f };
         logUpscaler("resolve", GetUpscalerMode(), inputWidth, inputHeight, outputWidth, outputHeight, motionWasKnown, jitterLog, historyResets, false);
         return resolved[target].get();
+    }
+}
+
+namespace RT64 {
+    RenderTexture *UpscalerRenderer::composeHud(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
+        RenderTexture *upscaled, RenderTexture *world, RenderTexture *finished, RenderFormat format,
+        uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight)
+    {
+        if ((upscaled == nullptr) || (world == nullptr) || (finished == nullptr) || (shaderLibrary->upscalerHud.pipeline == nullptr)) {
+            return upscaled;
+        }
+
+        if ((hudTexture == nullptr) || (hudWidth != outputWidth) || (hudHeight != outputHeight)) {
+            hudFramebuffer.reset();
+            hudTexture = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format));
+            hudTexture->setName("Upscaler HUD");
+            const RenderTexture *tex = hudTexture.get();
+            hudFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&tex, 1));
+            hudWidth = outputWidth;
+            hudHeight = outputHeight;
+        }
+        if (hudDescriptorSet == nullptr) {
+            hudDescriptorSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+                shaderLibrary->samplerLibrary.nearest.clampClamp.get(), device);
+        }
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture0, upscaled, RenderTextureLayout::SHADER_READ);
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture1, world, RenderTextureLayout::SHADER_READ);
+        hudDescriptorSet->setTexture(hudDescriptorSet->gTexture2, finished, RenderTextureLayout::SHADER_READ);
+
+        interop::UpscalerResolveCB constants;
+        constants.sizes = { float(inputWidth), float(inputHeight), float(outputWidth), float(outputHeight) };
+        constants.jitter = { shaderLibrary->usesHDR ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+
+        RenderTextureBarrier barriers[] = {
+            RenderTextureBarrier(upscaled, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(world, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(finished, RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(hudTexture.get(), RenderTextureLayout::COLOR_WRITE)
+        };
+        commandList->barriers(RenderBarrierStage::GRAPHICS, barriers, uint32_t(std::size(barriers)));
+        commandList->setFramebuffer(hudFramebuffer.get());
+        commandList->setPipeline(shaderLibrary->upscalerHud.pipeline.get());
+        commandList->setGraphicsPipelineLayout(shaderLibrary->upscalerHud.pipelineLayout.get());
+        commandList->setGraphicsDescriptorSet(hudDescriptorSet->get(), 0);
+        commandList->setGraphicsPushConstants(0, &constants);
+        commandList->setVertexBuffers(0, nullptr, 0, nullptr);
+        commandList->setViewports(RenderViewport(0.0f, 0.0f, float(outputWidth), float(outputHeight)));
+        commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));
+        commandList->drawInstanced(3, 1, 0, 0);
+        return hudTexture.get();
     }
 }
