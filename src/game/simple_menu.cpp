@@ -212,7 +212,7 @@ void tooie::simple_menu::classify() {
             std::vector<const std::string*> children;
         };
         const std::vector<Part> parts = {
-            { &option, { &stiffness_option, &damping_option, &mass_option, &squash_in_option, &squash_walk_option,
+            { &tooie::snout_jiggle::option, { &stiffness_option, &damping_option, &mass_option, &squash_in_option, &squash_walk_option,
                 &squash_out_option, &squash_across_option, &nose_option } },
             { &belly_option, { &belly_stiffness_option, &belly_damping_option, &belly_mass_option,
                 &belly_squash_in_option, &belly_squash_out_option, &belly_squash_across_option } },
