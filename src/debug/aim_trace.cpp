@@ -65,12 +65,12 @@ namespace {
 void tooie::aim_trace::add_option(recomp::config::Config& wip) {
     wip.add_bool_option(
         option,
-        "Aim trace",
+        "Aim Trace",
         "For testing. Writes aim_trace.txt in the Dev Files folder, listing which game code reads Banjo's position and how often, so enemy chase code can be found. Play a minute near the enemies in question, then send the file.",
         false);
     wip.add_bool_option(
         sweep_option,
-        "Aim sweep",
+        "Aim Sweep",
         "For testing. Needs a save being played. Spawns each enemy next to Banjo in turn (reloading the area between them), counts which game code reads his position while it is alive, and writes aim_sweep.txt in the Dev Files folder. It turns itself off when done (about 25 minutes). Stand somewhere open, such as Spiral Mountain.",
         false);
 }

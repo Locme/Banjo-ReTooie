@@ -43,9 +43,9 @@ void tooie::upscaler::api_changed(uint32_t api) {
         return;
     }
 #if !defined(__ANDROID__)
-    // FSR 3, FSR 4, FSR 4 Native AA (DLSS and DLAA have a Vulkan path).
-    for (uint32_t index = 2; index <= 4; index++) {
-        graphics_config().update_enum_option_disabled(option, index, vulkan_selected);
+    // FSR 4, FSR 4 Native AA and FSR 3 (DLSS and DLAA have a Vulkan path). Indexed by the Mode values.
+    for (uint32_t mode : { (uint32_t)Mode::Fsr4, (uint32_t)Mode::Fsr4NativeAA, (uint32_t)Mode::Fsr3 }) {
+        graphics_config().update_enum_option_disabled(option, mode, vulkan_selected);
     }
     apply();
 #endif
@@ -150,7 +150,7 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         quality_option,
         "Upscaler Quality",
-        "How much of your window's height the game renders at when Resolution is Auto and an upscaler is on: Quality about 67%, Balanced 58%, Performance 50%, Ultra Performance 33%. The upscaler makes up the rest. Native modes ignore it.",
+        "How much of your window's height the game renders at when Resolution is Auto and an upscaler is on: Quality about 67%, Balanced 58%, Performance 50%, Ultra Performance 33%, rounded to a whole multiple of the game's own height (so at small windows two choices can render at the same size). The upscaler makes up the rest. Native modes ignore it.",
         {
             {Quality::Quality, "Quality", "Quality"},
             {Quality::Balanced, "Balanced", "Balanced"},
@@ -160,22 +160,22 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
         Quality::Quality);
     graphics.add_bool_option(
         hud_option,
-        "Upscaler: HUD Outside",
+        "HUD Outside",
         "Keeps the HUD out of the upscaler: the upscaler works on the 3D world alone and the HUD is added afterwards, so it cannot ghost or shimmer. The HUD is drawn at the game's lowered resolution. Off sends the whole picture through the upscaler.",
         true);
     graphics.add_bool_option(
         hud_full_option,
-        "Upscaler: HUD Full Resolution (Experimental)",
+        "HUD Full Resolution (Experimental)",
         "Draws the HUD again at your window's resolution and puts it on the upscaled picture, so it stays sharp. Needs HUD Outside and no MSAA. Screens that show the 3D world inside the HUD (some menus) may look wrong; turn it off if so.",
         false);
     graphics.add_bool_option(
         reactive_option,
-        "Upscaler: Reactive Mask",
+        "Reactive Mask",
         "Marks particles, fire, spray and other see-through effects so the upscaler trusts its history less there, which cuts the trails they leave behind. Works with FSR and DLSS. Turn it off if effects look wrong.",
         true);
     graphics.add_enum_option(
         sharpness_option,
-        "Upscaler: Sharpness",
+        "Sharpness",
         "Sharpens the upscaled picture. Works with Temporal (built-in) and FSR; DLSS has its own and ignores this.",
         {
             {Sharpness::Off, "Off", "Off"},
@@ -186,7 +186,7 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
         Sharpness::Off);
     graphics.add_bool_option(
         object_motion_option,
-        "Upscaler: Object Motion",
+        "Object Motion",
         "Draws the 3D world's solid things a second time to tell the upscaler how characters and enemies move, which cuts smearing behind them. It costs frame rate; turn it off if the upscaler runs slower than no upscaler. The Reactive Mask needs it.",
         true);
     for (const std::string* id : { &reactive_option, &sharpness_option, &object_motion_option }) {

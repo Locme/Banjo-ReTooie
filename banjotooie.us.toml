@@ -750,23 +750,6 @@ func = "func_80026500"
 before_vram = 0x80026500
 text = "if (tooie_sound_event_full(rdram, ctx)) return;"
 
-# Sound play log (src/gameplay/free_camera.cpp): while the R button is held, prints the arguments of the
-# sound play functions, to find the camera distance sounds (RB fine-tune, 2026-10-23).
-[[patches.hook]]
-func = "func_800DA298"
-before_vram = 0x800DA298
-text = "tooie_sound_log(rdram, ctx, 0);"
-
-[[patches.hook]]
-func = "func_8009DE38"
-before_vram = 0x8009DE38
-text = "tooie_sound_log(rdram, ctx, 1);"
-
-[[patches.hook]]
-func = "func_800DA544"
-before_vram = 0x800DA544
-text = "tooie_sound_log(rdram, ctx, 2);"
-
 # func_8002ABE0 (a sequence's time to its next event) loops over as many tracks
 # as its first pointer's word +4 says; a broken count walked over all memory
 # above it (L's Mr. Patch crash, 2026-10-20). More than 32 answers no event.
@@ -2733,16 +2716,16 @@ func = "sumumbofx_entrypoint_9"
 before_vram = 0x80800DB0
 text = "tooie_aim_trace(rdram, ctx, \"sumumbofx_entrypoint_9\");"
 
-# --- Volumetric dust (src/gameplay/dust.cpp) ---------------------------------
-# badust_entrypoint_2 makes every textured dust puff (walking and running feet, the quick turn's skid, landings). With
-# Graphics > WIP > Volumetric Dust on, the puff is a volumetric cloud the renderer draws instead and the function returns.
+# --- Dust puff counts (src/gameplay/dust.cpp) --------------------------------
+# badust_entrypoint_2 makes every textured dust puff (walking and running feet, the quick turn's skid, landings): counted for the
+# dirty characters. (The volumetric dust that took the puff's place was removed, L, 2026-10-23.)
 [[patches.hook]]
 func = "badust_entrypoint_2"
 before_vram = 0x80800260
 text = "if (tooie_dust_spawn(rdram, ctx)) { return; }"
 
-# badust_entrypoint_4 makes the foot dust (walking, running, the Talon Trot): hooked just before its smoke object is made
-# ($s0 holds the puff's position), and when a cloud takes its place the function returns through its own epilogue.
+# badust_entrypoint_4 makes the foot dust (walking, running, the Talon Trot): counted just before its smoke object is made
+# ($s0 holds the puff's position). The hook can return through the function's own epilogue, but never does now.
 [[patches.hook]]
 func = "badust_entrypoint_4"
 before_vram = 0x8080048C

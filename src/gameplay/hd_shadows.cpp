@@ -111,6 +111,22 @@ extern "C" void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx) {
             last_model = model;
         }
     }
+    // Under ray tracing the player casts traced shadows (Traced shadows of the player), and the game's own
+    // flattened-model shadow, hard-edged and low-poly, lay over them as a second, blocky shadow (L,
+    // 2026-10-23). Turning its light to point up from below makes func_800A6250 return before it draws
+    // (its light-against-floor test at 0x800A62E8). HD shadows keeps the game's shadow, as asked for.
+    // TOOIE_GAME_PLAYER_SHADOW=1 keeps it under ray tracing too, to compare.
+    static const bool keep_game_shadow = std::getenv("TOOIE_GAME_PLAYER_SHADOW") != nullptr;
+    if (!keep_game_shadow && !hd_shadows_on() && tooie::picture_filters::ray_tracing_active() &&
+        tooie::picture_filters::ray_tracing_player_shadows_on()) {
+        const float below[3] = {0.0f, -1.0f, 0.0f};
+        for (int i = 0; i < 3; i++) {
+            uint32_t bits;
+            std::memcpy(&bits, &below[i], sizeof(bits));
+            MEM_W(i * 4, ctx->r16) = bits;
+        }
+        return;
+    }
     // "HD Shadows: Banjo" Off leaves the game's shadow model and light for the player.
     if (hd_shadows_on() && direction(tooie::hd_shadows::banjo_direction_option) != tooie::hd_shadows::Direction::Off) {
         MEM_W(0x1C8, ctx->r29) = MEM_W(0x1C4, ctx->r29);

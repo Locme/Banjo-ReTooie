@@ -44,9 +44,8 @@ Texture2D<float4> gFireflies : register(t10);
 Texture2D<float4> gColorHalf : register(t11);
 // The indirect pass (INDIRECT_PASS) at half size: SSGI's light (rgb) and GTAO's visibility (a), for IndirectAt.
 Texture2D<float4> gIndirect : register(t12);
-// Banjo-Tooie: Graphics > Volumetric Dust's clouds this frame (rt64_scene_effects.cpp SetSceneDust): the count as a float
-// in the first 16 bytes, then two float4s a cloud: x, y, z (world), radius; strength, seed, 0, 0. Bound whether or not
-// the device has ray queries.
+// Banjo-Tooie: the volumetric settings' extras (VolExtra): four floats in the first 16 bytes (SetSceneVolumetricExtra in
+// rt64_scene_effects.cpp). Bound whether or not the device has ray queries.
 ByteAddressBuffer gDust : register(t16);
 #ifdef RAY_TRACED
 // Banjo-Tooie: the 3D world's solid triangles in world space (Graphics > Ray tracing), rebuilt each frame; only in
@@ -1671,13 +1670,24 @@ float ModelShadow(float3 center, float3 normal) {
     const float3 start = ViewToWorldPoint(center + normal * max(-center.z * 0.002f + 1.0f, 2.0f));
     const float reach = 400.0f;
     float shade = 0.0f;
-    // Two rays, turned a different way each pixel (the noise smoothing evens them out).
+    // Two rays from opposite sides, turned a different way each pixel (the noise smoothing evens them out). Where only
+    // one meets a model (the shadow's edge) six more spread over the cone: two alone cast two hard copies of the model's
+    // low-poly outline, a blocky edge in two shades (L, 2026-10-23).
+    const int Rays = 8;
     const float turn = frac(52.9829189f * frac(dot(center.xy, float2(0.06711056f, 0.00583715f)) * 37.0f)) * 3.14159265f * (1.0f - RtSmoothing() * 0.8f);
-    [unroll] for (int k = 0; k < 2; k++) {
-        const float angle = float(k) * 3.14159265f + turn;
+    int traced = 0;
+    int hits = 0;
+    [loop] for (int k = 0; k < Rays; k++) {
+        if ((k == 2) && (hits != 1)) {
+            break;
+        }
+        // The first two across the cone, the rest spread over it (golden angle).
+        const float angle = turn + ((k < 2) ? float(k) * 3.14159265f : float(k) * 2.39996323f);
+        const float radius = (k < 2) ? 0.08f : sqrt((float(k - 2) + 0.5f) / float(Rays - 2)) * 0.1f;
+        traced++;
         RayDesc ray;
         ray.Origin = start;
-        ray.Direction = normalize(float3(cos(angle) * 0.08f, 1.0f, sin(angle) * 0.08f));
+        ray.Direction = normalize(float3(cos(angle) * radius, 1.0f, sin(angle) * radius));
         ray.TMin = 0.0f;
         ray.TMax = reach;
         // The first thing above decides: a model shades, the level (a roof, a ledge) stops the ray. The nearest model
@@ -1703,12 +1713,13 @@ float ModelShadow(float3 center, float3 normal) {
                 RayDesc below = ray;
                 below.TMax = t;
                 if (!TraceAny(below, RayLevelMask)) {
-                    shade += 0.5f * (1.0f - t / reach);
+                    shade += 1.0f - t / reach;
+                    hits++;
                 }
             }
         }
     }
-    return 1.0f - 0.55f * shade;
+    return 1.0f - 0.55f * shade / float(max(traced, 1));
 }
 
 // The indirect pass's traced rays: a cosine-spread direction round the normal (ray index of 32 in a 4x4 block's
@@ -3797,7 +3808,7 @@ float VolFloorDelta() {
     return (float((VolBits() >> 18) & 63u) - 32.0f) * 8.0f;
 }
 
-// The rest of the settings, in the dust buffer's header (SetSceneVolumetricExtra in rt64_scene_effects.cpp): [0] the fog's
+// The rest of the settings, in the buffer's header (SetSceneVolumetricExtra in rt64_scene_effects.cpp): [0] the fog's
 // start distance / 25 (8 bits), its colour (3 bits: 0 the preset's own, 1 to 4 Haze, Mist, Dusk, Gloom) and how high the mist
 // hangs over water / 4 (7); [1] the mist over water and at a waterfall's foot in hundredths (7 bits each) and how high the
 // fall's mist rises / 4 (7).
@@ -3877,110 +3888,6 @@ float3 VolLookView(int2 pixel) {
     return normalize(float3(ndc.x / gConstants.projection.x, ndc.y / gConstants.projection.y, -1.0f));
 }
 
-uint VolDustCount() {
-    return min(uint(asfloat(gDust.Load(0)) + 0.5f), 24u);
-}
-
-// The dust clouds along the pixel's ray (Graphics > Volumetric Dust): each is a soft sphere of dust, thickest through its
-// middle and eaten into by drifting noise, so a ray through it takes light by the chord it crosses; the clouds' thickness
-// along the ray is summed and the picture lost to them by Beer's law. They are lit from the sun's side. What kind of dust a
-// cloud is comes from the ground it sits over (the picture's own colour just under it, found where that spot is on screen):
-// grass throws green flecks and shards, snow a pale powder, sand a warm tan haze, dark earth brown clumps, anything else
-// a plain grey-tan dust.
-float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
-    const uint count = VolDustCount();
-    if (count == 0u) {
-        return color;
-    }
-    const float scale = length(gConstants.worldX.xyz);
-    const float3 look = VolLookView(pixel);
-    const float3 origin = float3(gConstants.worldX.w, gConstants.worldY.w, gConstants.worldZ.w);
-    const float3 direction = float3(dot(look, gConstants.worldX.xyz), dot(look, gConstants.worldY.xyz), dot(look, gConstants.worldZ.xyz)) / scale;
-    const float far = min(worldDistance, 6000.0f);
-    const float time = gConstants.view.z;
-    float3 sunWorld = float3(0.3f, 0.8f, 0.5f);
-    if (dot(gConstants.sun.xyz, gConstants.sun.xyz) > 0.25f) {
-        sunWorld = float3(dot(gConstants.sun.xyz, gConstants.worldX.xyz), dot(gConstants.sun.xyz, gConstants.worldY.xyz), dot(gConstants.sun.xyz, gConstants.worldZ.xyz));
-    }
-    sunWorld = normalize(sunWorld);
-    const float2 size = gConstants.projection.zw;
-    float opticalDepth = 0.0f;
-    float3 lightSum = 0.0f;
-    [loop]
-    for (uint i = 0u; i < count; i++) {
-        const float4 cloud = asfloat(gDust.Load4(16u + i * 32u));
-        const float2 extra = asfloat(gDust.Load2(32u + i * 32u));
-        const float radius = max(cloud.w, 1.0f);
-        const float3 toCloud = cloud.xyz - origin;
-        const float along = dot(toCloud, direction);
-        const float distanceSquared = dot(toCloud, toCloud) - along * along;
-        if (distanceSquared >= radius * radius) {
-            continue;
-        }
-        const float half = sqrt(radius * radius - distanceSquared);
-        const float t0 = max(along - half, 0.0f);
-        const float t1 = min(along + half, far);
-        if (t1 <= t0) {
-            continue;
-        }
-        // The ground under the cloud: its spot on screen (the world point to view space, then the projection).
-        float3 ground = color;
-        {
-            const float3 w = cloud.xyz - float3(0.0f, radius * 0.7f, 0.0f) - origin;
-            const float3 v = float3(dot(w, float3(gConstants.worldX.x, gConstants.worldY.x, gConstants.worldZ.x)),
-                dot(w, float3(gConstants.worldX.y, gConstants.worldY.y, gConstants.worldZ.y)),
-                dot(w, float3(gConstants.worldX.z, gConstants.worldY.z, gConstants.worldZ.z))) / (scale * scale);
-            if (v.z < -0.01f) {
-                const float2 ndc = float2(v.x * gConstants.projection.x, v.y * gConstants.projection.y) / -v.z;
-                const float2 uv = float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f);
-                if (all(uv > 0.0f) && all(uv < 1.0f)) {
-                    ground = gColor.SampleLevel(LinearSampler, uv, 0).rgb;
-                }
-            }
-        }
-        const float lum = dot(ground, float3(0.3f, 0.59f, 0.11f));
-        const float chroma = max(ground.r, max(ground.g, ground.b)) - min(ground.r, min(ground.g, ground.b));
-        const float wGrass = saturate((ground.g - max(ground.r, ground.b)) * 7.0f);
-        const float wSnow = (1.0f - wGrass) * saturate((lum - 0.62f) * 5.0f) * saturate(1.0f - chroma * 4.0f);
-        const float wSand = (1.0f - wGrass - wSnow) * saturate(lum * 2.0f - 0.5f) * saturate((ground.r - ground.b) * 5.0f);
-        const float wDirt = saturate(1.0f - wGrass - wSnow - wSand) * saturate((0.55f - lum) * 3.0f) * saturate((ground.r - ground.b) * 8.0f + 0.3f);
-        const float wPlain = saturate(1.0f - wGrass - wSnow - wSand - wDirt);
-        const float3 grassColour = lerp(saturate(ground * 1.25f + 0.05f), float3(0.38f, 0.58f, 0.16f), 0.45f);
-        const float3 snowColour = float3(0.93f, 0.96f, 1.0f);
-        const float3 sandColour = saturate(ground * 1.25f + 0.1f);
-        const float3 dirtColour = saturate(ground * 0.85f + 0.03f);
-        const float3 plainColour = lerp(float3(0.74f, 0.68f, 0.6f), saturate(ground * 1.35f + 0.12f), 0.4f);
-        const float3 base = (grassColour * wGrass + snowColour * wSnow + sandColour * wSand + dirtColour * wDirt + plainColour * wPlain) * tint;
-
-        const float3 middle = origin + direction * (0.5f * (t0 + t1));
-        const float falloff = 1.0f - distanceSquared / (radius * radius);
-        const float3 noiseAt = middle * (60.0f / radius) * 0.045f + extra.y + float3(0.0f, time * 0.35f, 0.0f);
-        const float noise = CloudNoise(noiseAt);
-        float body = saturate(1.35f * falloff + (noise - 0.5f) * 0.9f);
-        // Grass shards and earth clumps are flecks, not haze: finer noise, cut hard, only where the cloud is solid enough.
-        const float fleckiness = wGrass * 0.9f + wDirt * 0.45f;
-        const float flecks = saturate((CloudNoise(noiseAt * 4.0f + 7.0f) - 0.52f) * 4.0f) * saturate(falloff * 1.6f);
-        body = lerp(body, flecks, fleckiness);
-        // Snow is a thin powder, sand a thick haze.
-        const float density = extra.x * (1.0f + 0.35f * wSand - 0.35f * wSnow);
-        // A soft puff, not a ball: the thickness goes with the square of how far the ray is from the rim (zero slope there) and
-        // is never a plateau, so even where several clouds meet there is no round outline (a glass ball Banjo stood in, L,
-        // 2026-10-23: the chord through a ball falls off like a square root at its rim, and with the opacity cap that left a flat
-        // disc with a defined edge).
-        const float thickness = density * body * falloff * falloff * (t1 - t0) / radius * 1.1f;
-        // The side facing the sun is the brighter.
-        const float side = dot(normalize(middle - cloud.xyz + 1e-3f), sunWorld);
-        lightSum += base * (0.62f + 0.38f * saturate(0.5f + 0.5f * side)) * thickness;
-        opticalDepth += thickness;
-    }
-    if (opticalDepth <= 0.0f) {
-        return color;
-    }
-    // Never opaque: at most about 55% of the picture behind is replaced, so a puff stays see-through (L, 2026-10-23).
-    const float seen = 0.55f * (1.0f - exp(-opticalDepth));
-    return color * (1.0f - seen) + (lightSum / opticalDepth) * seen;
-}
-
 // Volumetric mist and fog along the pixel's ray from the camera to the surface (worldDistance in world units; the
 // sky passes a long one): the ray is marched in steps that are short near the camera, and at each the thickness
 // of a ground-hugging mist layer and of an even fog (both broken up by drifting noise) takes light from the
@@ -4045,7 +3952,7 @@ float3 VolScatter(float3 color, int2 pixel, float worldDistance, float3 tint) {
     const float waterMist = VolWaterMist();
     const float fallMist = VolFallMist();
     if ((mist <= 0.0f) && (fogAmount <= 0.0f) && (waterMist <= 0.0f) && (fallMist <= 0.0f)) {
-        return VolDust(color, pixel, worldDistance, tint);
+        return color;
     }
     const float scale = length(gConstants.worldX.xyz);
     const float3 look = VolLookView(pixel);
@@ -4128,7 +4035,7 @@ float3 VolScatter(float3 color, int2 pixel, float worldDistance, float3 tint) {
             transmittance *= step;
         }
     }
-    return VolDust(color * transmittance + light, pixel, worldDistance, tint);
+    return color * transmittance + light;
 }
 
 // Forced clouds (WIP): the cycle's clouds on any level without the cycle, over the sky. The cloud's shape comes
@@ -4609,6 +4516,39 @@ float3 TracedHalfLamp(int2 pixel, float3 center, float3 normal) {
 }
 #endif
 
+#ifdef RAY_TRACED
+// The models' share of the traced sun shadow (Banjo, enemies, NPCs). They are low-poly, and cast through the level's
+// narrow cone every flat face of them showed as a hard straight edge: blocky shadows (L, 2026-10-23). Their rays
+// spread over a wider cone, so the edge softens the further the shadow falls from the model and the faces blur into
+// one rounded shape, still sharp where a foot meets the ground. Two rays from opposite sides of the cone first; only
+// where they disagree (the soft edge) the rest. All in world space. Leaving Banjo out (Traced shadows of the player
+// off), a ray that meets him goes on.
+float SunModelShadow(float3 origin, float3 sunDirection, float3 side, float3 up, float jitter, float softness, bool onBanjo, uint detail) {
+    const int Rays = 10;
+    const float spread = lerp(0.05f, 0.12f, softness);
+    // Turned a different way each pixel; the noise smoothing turns them all more alike (on Banjo even more).
+    const float turn = jitter * 6.28318531f * (1.0f - RtSmoothing() * (onBanjo ? 1.0f : 0.8f));
+    float blocked = 0.0f;
+    int traced = 0;
+    [loop] for (int k = 0; k < Rays; k++) {
+        if ((k == 2) && ((detail > 0u) || (blocked == 0.0f) || (blocked == 2.0f))) {
+            break;
+        }
+        // The first two across the cone at most of its width, the rest spread over it (golden angle).
+        const float angle = turn + ((k < 2) ? float(k) * 3.14159265f : float(k) * 2.39996323f);
+        const float radius = ((k < 2) ? 0.8f : sqrt((float(k - 2) + 0.5f) / float(Rays - 2))) * spread;
+        RayDesc ray;
+        ray.Origin = origin;
+        ray.Direction = normalize(sunDirection + (side * cos(angle) + up * sin(angle)) * radius);
+        ray.TMin = 0.0f;
+        ray.TMax = 20000.0f;
+        blocked += (PlayerShadowsOff() ? TraceModels(ray, false) : TraceAny(ray, RayModelMask)) ? 1.0f : 0.0f;
+        traced++;
+    }
+    return blocked / float(max(traced, 1));
+}
+#endif
+
 // sunlight: with ray tracing, the sun's light let in through a cut-out's holes (a grate) onto what is under cover behind
 // it (SunThroughCutout). The game lit such spots as if in shade, so traced shadows alone could only darken them and
 // the light through the grate never showed (L, 2026-10-21).
@@ -4713,11 +4653,14 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
             ray.Direction = ViewToWorldDirection(direction);
             ray.TMin = 0.0f;
             ray.TMax = 20000.0f;
-            // Leaving Banjo out, a ray that meets him goes on to what lies beyond (a cliff's shadow he stands in).
-            // Under ray tracing, Traced shadows of the player decides (not Sun shadows on Banjo).
-            blocked += TraceOccluded(ray, PlayerShadowsOff() ? 1u : 0u) ? 1.0f : 0.0f;
+            // The level only: the models cast through their own wider cone below (SunModelShadow).
+            blocked += TraceOccluded(ray, 3u) ? 1.0f : 0.0f;
         }
         shadow = blocked / float(max(traced, 1));
+        if ((gSunHalf != 2) && !turnedFromSun && (shadow < 1.0f)) {
+            shadow = max(shadow, SunModelShadow(ViewToWorldPoint(start), ViewToWorldDirection(sunDirection), ViewToWorldDirection(side),
+                ViewToWorldDirection(up), jitter, softness, onBanjo, sunDetail));
+        }
         if ((gSunHalf != 2) && (shadow > 0.0f) && (facing >= 0.0f) && Enclosed(ViewToWorldPoint(start))) {
             return (gSunHalf == 1) ? 2.0f : 1.0f;
         }
@@ -5211,7 +5154,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             else if (VolCloudType() > 0u) {
                 scene = VolSky(scene, pixel);
             }
-            if ((VolBits() != 0u) || (VolDustCount() > 0u)) {
+            if (VolBits() != 0u) {
                 scene = VolScatter(scene, pixel, 6000.0f, daytime ? dayTint : float3(1.0f, 1.0f, 1.0f));
             }
             if (gConstants.bloom.z > 0.0f) {
@@ -5591,7 +5534,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             scene = DayWeatherLight(scene, weather.x, weather.z, 0.3f);
         }
         // WIP volumetric mist and fog along the ray to the nearest thing at the pixel (the water and falls write no depth).
-        if ((VolBits() != 0u) || (VolDustCount() > 0u)) {
+        if (VolBits() != 0u) {
             float volDepth = depth;
             float volWater;
             if ((gConstants.water.y > 0.5f) && LoadAnyWater(pixel, volWater)) {

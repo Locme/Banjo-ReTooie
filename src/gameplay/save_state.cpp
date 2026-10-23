@@ -439,7 +439,7 @@ void tooie::save_state::start() {
 void tooie::save_state::add_ram_dump_option(recomp::config::Config& wip) {
     wip.add_bool_option(
         ram_dump_option,
-        "RAM dump with screenshots",
+        "RAM Dump With Screenshots",
         "For bug reports. Each screenshot (F12) also saves the game's memory next to it in the screenshots folder (a 16 MB .ram file), so a stuck scene can be looked into. Send the .ram file with the screenshot.",
         false);
 }

@@ -26,7 +26,6 @@ namespace tooie::picture_filters {
 
     inline const std::string preset_option = "effects_preset";
     // Lighting, Water, Fog (Experimental) toggle: hides the effect options below it (they keep their values).
-    inline const std::string lighting_section_option = "lighting_water_fog";
     inline const std::string grass_section_option = "grass_section";
     inline const std::string reflections_section_option = "reflections_section";
     inline const std::string brightness_option = "brightness";
@@ -37,6 +36,8 @@ namespace tooie::picture_filters {
     inline const std::string dither16_option = "retro_16bit_colour";
     inline const std::string crt_option = "retro_crt";
     inline const std::string sharpen_option = "picture_sharpening";
+    // The Colour Grading header (L, 2026-10-23): a row with no switch, whose settings open under it.
+    inline const std::string colour_grading_option = "colour_grading_section";
     inline const std::string contrast_option = "picture_contrast";
     inline const std::string saturation_option = "picture_saturation";
     inline const std::string vignette_option = "picture_vignette";
@@ -55,6 +56,7 @@ namespace tooie::picture_filters {
     // Toon shading apart for the level and for characters (the old single "toon_shading" is carried over to both once, see
     // split_saved_toon_shading in src/game/config.cpp).
     inline const std::string toon_world_option = "toon_shading_world";
+    inline const std::string toon_section_option = "toon_shading_section";
     inline const std::string toon_characters_option = "toon_shading_characters";
     inline const std::string underwater_tint_option = "underwater_tint";
     inline const std::string underwater_haze_option = "underwater_haze";
@@ -127,6 +129,8 @@ namespace tooie::picture_filters {
     inline const std::string grass_ray_tracing_option = "grass_3d_ray_tracing";
     // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (rt64-ext/src/shaders/Snow.hlsli),
     // and how deep it is.
+    // The Tessellation switch (L, 2026-10-23): its Tessellated Snow and Tessellated Sand settings sit under it.
+    inline const std::string tessellation_section_option = "tessellation_section";
     inline const std::string deep_snow_option = "deep_snow";
     inline const std::string tessellated_sand_option = "tessellated_sand";
     inline const std::string snow_height_option = "deep_snow_height";
@@ -185,6 +189,8 @@ namespace tooie::picture_filters {
     bool sun_shadows_on();
     // Graphics > Ray tracing is on and the device has ray queries (the traced effects run).
     bool ray_tracing_active();
+    // Graphics > Traced shadows of the player.
+    bool ray_tracing_player_shadows_on();
     // Ray tracing on with Traced light beams above 0: they stand in for Window Light Beams' drawn ones.
     bool traced_beams_on();
     // Graphics > Sun shadow distance, in world units (0 while sun shadows are off).

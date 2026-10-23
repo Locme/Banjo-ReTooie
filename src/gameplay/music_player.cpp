@@ -159,7 +159,7 @@ void tooie::music_player::add_options(recomp::config::Config& sound) {
     for (uint32_t t = 0; t < track_count; t++) {
         entries.push_back(recomp::config::ConfigOptionEnumOption(first_number_entry + t, "track_" + std::to_string(t), "Track " + std::to_string(t)));
     }
-    sound.add_enum_option(option, "Music player",
+    sound.add_enum_option(option, "Music Player",
         "Plays any of the game's tracks: Jolly's jukebox songs by name, then every track by number. "
         "Level music goes back to the area's own music. Doors and cutscenes change the music as usual, "
         "and going to another area ends the chosen track.",

@@ -42,7 +42,6 @@
 #include "funcs.h"
 #include "recompui/config.h"
 #include "recompinput/input_state.h"
-#include "recompinput/profiles.h"
 #include "tooie_debug.h"
 #include "tooie_free_camera.h"
 #include "tooie_photo_mode.h"
@@ -150,6 +149,8 @@ namespace {
         bool has_wheel = false;
         float pivot_y = 0.0f;   // smooth stairs: the height the camera orbits, eased towards Banjo's
         bool has_pivot = false;
+        int fine_dir = 0;         // fine-tune: the way the push goes now (-1 closer, 1 further, 0 none)
+        bool fine_max_played = false;
         float look = 0.0f;      // look-up tilt: degrees the view is raised past the lowest eye height
         float idle = 0.0f;      // seconds since the stick was last used
         float wall = 1.0f;      // smooth walls: the camera's distance as a fraction of the wanted one
@@ -258,14 +259,13 @@ namespace {
         return 1.0f - std::exp(-rate * dt);
     }
 
-    // Whether C Down (RB) is held, from the last camera step; read by the sound log.
-    std::atomic<bool> r_held{false};
     // C Down tap or hold (see free_camera::apply_input): held past the threshold, the fine-tune is on.
     std::atomic<bool> fine_held{false};
     // Whether the free camera is running the game's camera now (not first person, a cutscene or a menu).
     std::atomic<bool> gameplay_camera{false};
     constexpr std::chrono::milliseconds tap_limit{250};
-    constexpr int tap_pulse_reads = 4;
+    // A tap reaches the game as a press this long (real time; the game reads the pad on its own tick).
+    constexpr std::chrono::milliseconds tap_pulse{150};
     // RB fine-tune: the distance range as a multiple of the game's, and the rate (per second, at a full
     // push) of the change.
     constexpr float rb_min_zoom = 0.5f;
@@ -273,6 +273,32 @@ namespace {
     constexpr float rb_zoom_rate = 0.8f;
     // The game's camera distance button: C Down, which a controller's RB is bound to (L, 2026-10-23).
     constexpr uint16_t n64_r_button = 0x0004;
+
+    // The game's camera distance sounds (found with the sound log, L 2026-10-23): func_8009DB04(player, id,
+    // pitch, volume) with ids 0x487 and 0x488, one for each way. Closer plays 0x487, further 0x488.
+    constexpr uint32_t sound_closer = 0x487;
+    constexpr uint32_t sound_further = 0x488;
+    constexpr int32_t sound_volume = 0x6000;
+    // Pitch of the sound as a push starts (the game's own) and at the limit (higher, so it sounds different).
+    constexpr float sound_pitch_start = 1.0f;
+    constexpr float sound_pitch_max = 1.2f;
+
+    void play_step_sound(uint8_t* rdram, recomp_context* ctx, uint32_t id, float pitch) {
+        const uint32_t player = read_word(rdram, player_table);
+        if (!valid_ptr(player)) {
+            return;
+        }
+        recomp_context saved = *ctx;
+        ctx->r29 = (int32_t)(((uint32_t)ctx->r29 - 0x100) & ~0xFu);
+        ctx->r4 = (int32_t)player;
+        ctx->r5 = (int32_t)id;
+        uint32_t pitch_bits;
+        std::memcpy(&pitch_bits, &pitch, sizeof(pitch_bits));
+        ctx->r6 = (int32_t)pitch_bits; // the float argument travels in $a2
+        ctx->r7 = sound_volume;
+        func_8009DB04(rdram, ctx);
+        *ctx = saved;
+    }
 
     // Scales the players' draw alpha (tooie_free_camera_player_alpha), 1 for whole.
     std::atomic<float> player_fade{1.0f};
@@ -391,12 +417,6 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     const bool snap_pressed = (snap_down && !state.snap_was_down) || middle_clicked;
     state.snap_was_down = snap_down;
 
-    {
-        uint16_t buttons = 0;
-        float bx = 0.0f, by = 0.0f;
-        recompinput::profiles::get_n64_input(0, &buttons, &bx, &by);
-        r_held = (buttons & n64_r_button) != 0;
-    }
     const bool on = tooie::free_camera::enabled();
     const bool gameplay = updating && mode == mode_dynamic && valid_ptr(camera) && valid_ptr(transform) && valid_ptr(dynamic);
     // First person and the like: leave the camera alone but keep the held yaw for afterwards.
@@ -477,8 +497,27 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             // Right turns the view right (yaw grows to the left). Up looks up, so the camera drops.
             // C Down held, stick up: closer; down: further. Steps toward the range's limits only.
             if (rb_zoom_input != 0.0f) {
-                const float wanted_zoom = state.zoom * std::exp(-rb_zoom_input * rb_zoom_rate * dt);
+                const float before = state.zoom;
+                const float wanted_zoom = before * std::exp(-rb_zoom_input * rb_zoom_rate * dt);
                 state.zoom = std::clamp(wanted_zoom, rb_min_zoom, rb_max_zoom);
+                // Two sounds for each way: one as the push starts that way, one as the distance reaches its limit.
+                const int dir = rb_zoom_input > 0.0f ? -1 : 1; // -1 closer, 1 further
+                if (state.fine_dir != dir) {
+                    state.fine_dir = dir;
+                    state.fine_max_played = false;
+                    if (state.zoom != before) {
+                        play_step_sound(rdram, ctx, dir < 0 ? sound_closer : sound_further, sound_pitch_start);
+                    }
+                }
+                const bool at_limit = dir < 0 ? state.zoom <= rb_min_zoom : state.zoom >= rb_max_zoom;
+                if (at_limit && !state.fine_max_played) {
+                    state.fine_max_played = true;
+                    play_step_sound(rdram, ctx, dir < 0 ? sound_closer : sound_further, sound_pitch_max);
+                }
+            }
+            else {
+                state.fine_dir = 0;
+                state.fine_max_played = false;
             }
             // Mouse wheel: each notch changes the distance by 10%, up zooms in.
             if (wheel_notches != 0) {
@@ -583,7 +622,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             }
             const float full = std::sqrt((want[0] - pivot[0]) * (want[0] - pivot[0]) +
                 (want[1] - pivot[1]) * (want[1] - pivot[1]) + (want[2] - pivot[2]) * (want[2] - pivot[2]));
-            if (option<bool>(tooie::free_camera_smooth_walls_option, false) && full > 1.0f) {
+            if (option<bool>(tooie::free_camera_smooth_walls_option, true) && full > 1.0f) {
                 const float reach = std::sqrt((hit[0] - pivot[0]) * (hit[0] - pivot[0]) +
                     (hit[1] - pivot[1]) * (hit[1] - pivot[1]) + (hit[2] - pivot[2]) * (hit[2] - pivot[2]));
                 const float target = blocked ? std::clamp(reach / full, 0.0f, 1.0f) : 1.0f;
@@ -655,20 +694,10 @@ extern "C" int tooie_free_camera_player_alpha(int alpha) {
     return fade >= 1.0f ? alpha : (int)((float)alpha * fade);
 }
 
-extern "C" void tooie_sound_log(uint8_t* rdram, recomp_context* ctx, int which) {
-    (void)rdram;
-    if (!r_held.load()) {
-        return;
-    }
-    static const char* const names[] = { "func_800DA298", "func_8009DE38", "func_800DA544" };
-    std::printf("[sfx-R] %s a0 %X a1 %X a2 %X\n", names[which], (unsigned)ctx->r4, (unsigned)ctx->r5, (unsigned)ctx->r6);
-    std::fflush(stdout);
-}
-
 void tooie::free_camera::apply_input(uint16_t* buttons) {
     static bool down = false;
     static bool holding = false;
-    static int pulse = 0;
+    static std::chrono::steady_clock::time_point pulse_until{};
     static std::chrono::steady_clock::time_point since;
     const bool tune = wip_option<bool>(tooie::free_camera_rb_distance_option, false);
     const bool physical = (*buttons & n64_r_button) != 0;
@@ -676,7 +705,7 @@ void tooie::free_camera::apply_input(uint16_t* buttons) {
         // Passed through as it is; nothing pending.
         down = false;
         holding = false;
-        pulse = 0;
+        pulse_until = {};
         fine_held = false;
         return;
     }
@@ -696,13 +725,12 @@ void tooie::free_camera::apply_input(uint16_t* buttons) {
     else if (down) {
         down = false;
         if (!holding) {
-            pulse = tap_pulse_reads; // a tap: the game sees a short press now
+            pulse_until = now + tap_pulse; // a tap: the game sees a press now
         }
         holding = false;
     }
-    if (!physical && pulse > 0) {
+    if (!physical && now < pulse_until) {
         *buttons = (uint16_t)(*buttons | n64_r_button);
-        pulse--;
     }
     fine_held = holding;
 }

@@ -197,7 +197,7 @@ void tooie::effect_views::add_option(recomp::config::Config& graphics) {
     }
     graphics.add_enum_option(
         option,
-        "Effect debug view",
+        "Effect Debug View",
         "For testing. Shows one picture effect or filter on its own, with every other one off: at its setting, or at a default strength when it is off. "
         "<recomp-color primary>All effects off</recomp-color> shows the picture with none of them, to compare against. The first views show the scene effects' depth, normals and water mask. "
         "Water view: red is water (yellower where it reflects), purple a waterfall, blue ice, grey everything else. "
@@ -207,7 +207,7 @@ void tooie::effect_views::add_option(recomp::config::Config& graphics) {
         0u);
     graphics.add_bool_option(
         compare_option,
-        "Effect compare",
+        "Effect Compare",
         "Splits the picture for testing: the effect or filter on the left, the original on the right. F8 switches it on and off while you play. Starts Off each launch.",
         false);
     graphics.add_option_change_callback(compare_option,

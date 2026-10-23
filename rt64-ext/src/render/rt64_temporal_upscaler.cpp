@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <unordered_map>
 
 #include "shared/rt64_temporal_upscaler.h"
 
@@ -198,12 +199,16 @@ namespace RT64 {
 
     namespace {
         std::atomic<bool> hudSplit{ true };
+        struct WorldSnapshot {
+            std::unique_ptr<RenderTexture> texture;
+            uint32_t width = 0;
+            uint32_t height = 0;
+            RenderFormat format = RenderFormat::UNKNOWN;
+            bool fresh = false;
+        };
         std::mutex snapshotMutex;
-        std::unique_ptr<RenderTexture> snapshotTexture;
-        uint32_t snapshotWidth = 0;
-        uint32_t snapshotHeight = 0;
-        RenderFormat snapshotFormat = RenderFormat::UNKNOWN;
-        bool snapshotFresh = false;
+        // One per color target (the game double buffers, so at least two): see UpscalerWorldSnapshot.
+        std::unordered_map<const RenderTarget *, WorldSnapshot> snapshots;
     }
 
     void SetUpscalerHudSplit(bool enabled) {
@@ -226,30 +231,33 @@ namespace RT64 {
         }
         GpuSectionScope timed(WorkloadGpuSections(), GpuSection::UpscalerSnapshot, worker->commandList.get());
         const std::scoped_lock lock(snapshotMutex);
-        if ((snapshotTexture == nullptr) || (snapshotWidth != colorTarget->width) || (snapshotHeight != colorTarget->height) || (snapshotFormat != colorTarget->format)) {
-            snapshotTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format));
-            snapshotTexture->setName("Upscaler World Snapshot");
-            snapshotWidth = colorTarget->width;
-            snapshotHeight = colorTarget->height;
-            snapshotFormat = colorTarget->format;
+        WorldSnapshot &snapshot = snapshots[colorTarget];
+        if ((snapshot.texture == nullptr) || (snapshot.width != colorTarget->width) || (snapshot.height != colorTarget->height) || (snapshot.format != colorTarget->format)) {
+            snapshot.texture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format));
+            snapshot.texture->setName("Upscaler World Snapshot");
+            snapshot.width = colorTarget->width;
+            snapshot.height = colorTarget->height;
+            snapshot.format = colorTarget->format;
         }
         RenderTextureBarrier barriers[] = {
             RenderTextureBarrier(source, RenderTextureLayout::COPY_SOURCE),
-            RenderTextureBarrier(snapshotTexture.get(), RenderTextureLayout::COPY_DEST)
+            RenderTextureBarrier(snapshot.texture.get(), RenderTextureLayout::COPY_DEST)
         };
         worker->commandList->barriers(RenderBarrierStage::COPY, barriers, uint32_t(std::size(barriers)));
-        worker->commandList->copyTexture(snapshotTexture.get(), source);
-        snapshotFresh = true;
+        worker->commandList->copyTexture(snapshot.texture.get(), source);
+        snapshot.fresh = true;
     }
 
-    RenderTexture *UpscalerWorldSnapshot(uint32_t width, uint32_t height) {
+    RenderTexture *UpscalerWorldSnapshot(const RenderTarget *colorTarget, uint32_t width, uint32_t height) {
         const std::scoped_lock lock(snapshotMutex);
-        if (!snapshotFresh || (snapshotTexture == nullptr) || (snapshotWidth != width) || (snapshotHeight != height)) {
-            snapshotFresh = false;
+        auto it = snapshots.find(colorTarget);
+        if (it == snapshots.end()) {
             return nullptr;
         }
-        snapshotFresh = false;
-        return snapshotTexture.get();
+        WorldSnapshot &snapshot = it->second;
+        const bool usable = snapshot.fresh && (snapshot.texture != nullptr) && (snapshot.width == width) && (snapshot.height == height);
+        snapshot.fresh = false;
+        return usable ? snapshot.texture.get() : nullptr;
     }
 
     void UpscalerCameraRange(float &nearPlane, float &farPlane, float &fovY) {

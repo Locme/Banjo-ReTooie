@@ -55,6 +55,12 @@ so the submodules stay pinned to their upstream commits.
 To change a patch: edit the files in `lib/N64ModernRuntime`, then
 `git -C lib/N64ModernRuntime diff > lib-patches/N64ModernRuntime.patch`.
 
+* **Menu layers** (`librecomp/src/config.cpp`, `librecomp/include/librecomp/config.hpp`): display-only
+  layers on top of the hidden dependencies (which each option has only one of): "advanced" options hidden in
+  Simple mode, parent options whose children stay hidden until the parent is expanded
+  (`set_option_parent`, `set_option_expanded`), and button options (a bool shown as a button).
+  `is_config_option_hidden` takes `ignore_menu_layers` for Search.
+
 ## RecompFrontend.patch
 
 * **Option display order** (`recompui/include/recompui/config.h`, `ui_config.cpp`, `ui_config_page_options_menu.cpp`): `set_option_display_before(id, before_id)` shows an option above another in its tab without changing the config schema (used to show MS Anti-Aliasing under Anti-aliasing and scaling).
@@ -152,6 +158,11 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.
+
+* **Menu layers** (`recompui/src/config/ui_config_option.*`, `ui_config.cpp`, `ui_config_page_options_menu.cpp`,
+  `assets/icons/CaretUp.svg`): a row with children gets a down/up arrow that opens its children on a darker,
+  indented panel; a number option with children is shown as an on/off switch (off is 0, on the last non-zero
+  value); a button option shows a Button instead of the switch; Search rows ignore all of it.
 
 ## rt64.patch
 

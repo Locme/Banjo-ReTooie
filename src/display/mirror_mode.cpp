@@ -44,8 +44,8 @@ void tooie::mirror_mode::add_option(recomp::config::Config& general) {
         "Flips the whole picture left to right, as a mirror would show it. The HUD, counters, dialogue and menu text stay readable. Writing on the world's own surfaces, such as signs, is mirrored with the world.",
         false);
     general.add_option_change_callback(option,
-        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant value, recomp::config::OptionChangeContext) {
-            // Live: the new value goes straight to RT64 (the config may not hold it yet).
+        [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            // Live: the new value (the first argument; the second is the old one) goes straight to RT64.
             if (const bool* on = std::get_if<bool>(&value)) {
                 mirrored.store(*on);
                 RT64::SetMirrorMode(*on);

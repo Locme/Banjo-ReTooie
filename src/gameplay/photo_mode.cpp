@@ -761,7 +761,7 @@ void tooie::photo_mode::start() {
 }
 
 void tooie::photo_mode::add_options(recomp::config::Config& qol) {
-    qol.add_enum_option(look_option, "Photo filter",
+    qol.add_enum_option(look_option, "Photo Filter",
         "A colour look for photo mode (F10). Only shown while photo mode is on, and in its screenshots.",
         {
             {0, "none", "None"},
@@ -776,13 +776,13 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
             {9, "dream", "Dream"},
         },
         0u, true);
-    qol.add_number_option(exposure_option, "Photo exposure", "Brightens or darkens photo mode's picture, in tenths of a stop.", -20, 20, 1, 0, false, 0, true);
-    qol.add_number_option(contrast_option, "Photo contrast", "Photo mode's contrast, in percent.", -50, 50, 5, 0, false, 0, true);
-    qol.add_number_option(saturation_option, "Photo saturation", "Photo mode's colour strength, in percent. -100 is black and white.", -100, 100, 5, 0, false, 0, true);
-    qol.add_number_option(warmth_option, "Photo warmth", "Tints photo mode's picture warmer (up) or cooler (down).", -100, 100, 5, 0, false, 0, true);
-    qol.add_number_option(vignette_option, "Photo vignette", "Darkens the corners of photo mode's picture.", 0, 100, 5, 0, false, 0, true);
-    qol.add_number_option(grain_option, "Photo film grain", "Adds film grain to photo mode's picture.", 0, 100, 5, 0, false, 0, true);
-    qol.add_enum_option(crop_option, "Photo crop",
+    qol.add_number_option(exposure_option, "Photo Exposure", "Brightens or darkens photo mode's picture, in tenths of a stop.", -20, 20, 1, 0, false, 0, true);
+    qol.add_number_option(contrast_option, "Photo Contrast", "Photo mode's contrast, in percent.", -50, 50, 5, 0, false, 0, true);
+    qol.add_number_option(saturation_option, "Photo Saturation", "Photo mode's colour strength, in percent. -100 is black and white.", -100, 100, 5, 0, false, 0, true);
+    qol.add_number_option(warmth_option, "Photo Warmth", "Tints photo mode's picture warmer (up) or cooler (down).", -100, 100, 5, 0, false, 0, true);
+    qol.add_number_option(vignette_option, "Photo Vignette", "Darkens the corners of photo mode's picture.", 0, 100, 5, 0, false, 0, true);
+    qol.add_number_option(grain_option, "Photo Film Grain", "Adds film grain to photo mode's picture.", 0, 100, 5, 0, false, 0, true);
+    qol.add_enum_option(crop_option, "Photo Crop",
         "Frames photo mode's picture to a shape: outside the frame is shaded, and screenshots keep only the frame.",
         {
             {0, "none", "None"},
@@ -794,7 +794,7 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
             {6, "9_16", "9:16"},
         },
         0u, true);
-    qol.add_enum_option(border_option, "Photo border",
+    qol.add_enum_option(border_option, "Photo Border",
         "A frame round photo mode's picture (inside the crop), kept in its screenshots.",
         {
             {0, "none", "None"},
@@ -805,18 +805,18 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
             {5, "wooden", "Wooden"},
         },
         0u, true);
-    qol.add_number_option(tilt_option, "Photo tilt",
+    qol.add_number_option(tilt_option, "Photo Tilt",
         "Tilts photo mode's camera, in degrees. 0 is level.",
         -45, 45, 1, 0, false, 0, true);
-    qol.add_number_option(dof_option, "Photo depth of field",
+    qol.add_number_option(dof_option, "Photo Depth Of Field",
         "Blurs what is nearer or further than the focus point (the middle of photo mode's picture, unless the photo panel's Focus point row moves it), which stays sharp. 0 is off.",
         0, 100, 5, 0, false, 0, true);
-    qol.add_bool_option(shutter_option, "Photo shutter",
+    qol.add_bool_option(shutter_option, "Photo Shutter",
         "Plays a camera click and flashes the screen when photo mode takes a photo. The flash is never in the photo.", true, true);
-    qol.add_bool_option(grid_option, "Photo grid",
+    qol.add_bool_option(grid_option, "Photo Grid",
         "Draws a rule-of-thirds grid in photo mode, inside the crop frame. It is never in screenshots.", false, true);
     // Was QOL > Photo mode camera collision until L moved it to the photo panel (2026-10-21); same key.
-    qol.add_bool_option(tooie::photo_mode_collision_option, "Photo mode camera collision",
+    qol.add_bool_option(tooie::photo_mode_collision_option, "Photo Mode Camera Collision",
         "In photo mode the camera stops at the ground and slides along walls. Off lets it fly through everything.", true, true);
 }
 

@@ -628,7 +628,7 @@ bool tooie::day_night::sun_direction(float out[3]) {
 void tooie::day_night::add_options(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         option,
-        "Day and Night",
+        "Day And Night",
         "A day and night cycle in the levels that are daytime under an open sky: Spiral Mountain, the Isle o' Hags outside, Mayahem Temple, Jolly Roger's Lagoon, Terrydactyland, Hailfire Peaks and Cloud Cuckooland. Sunrise and sunset turn the light warm, and at night the world goes dark blue under a starry sky. <recomp-color primary>Cycle</recomp-color> runs the clock while you play; the others hold one time of day. Rooms, underwater areas and the levels that are already night keep their own look.",
         {
             {Mode::Off, "Off", "Off"},
@@ -717,7 +717,7 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(wet_ground_option, option, Mode::Off);
     graphics.add_bool_option(
         drops_option,
-        "Raindrops on Screen",
+        "Raindrops On Screen",
         "With Day and Night on, raindrops land on the screen in the rain, more when you look up, and run down it.",
         true);
     graphics.add_option_hidden_dependency(drops_option, option, Mode::Off);

@@ -53,6 +53,18 @@ namespace {
     }
 }
 
+bool tooie::dev_file_present() {
+    static const bool present = [] {
+        std::error_code ec;
+        if (fs::exists("dev.txt", ec)) {
+            return true;
+        }
+        const fs::path exe_dir = get_exe_dir();
+        return !exe_dir.empty() && fs::exists(exe_dir / "dev.txt", ec);
+    }();
+    return present;
+}
+
 fs::path tooie::resolve_app_folder() {
     // The runtime's own choice: portable.txt in the working directory, else the per-user folder.
     const fs::path legacy = recompui::file::get_app_folder_path();

@@ -262,12 +262,14 @@ namespace {
 }
 
 void tooie::boss_rush::add_option(recomp::config::Config& general) {
-    general.add_bool_option(option, "Boss rush",
+    general.add_bool_option(option, "Boss Rush",
         "Fight all 13 bosses one after another, from Klungo to Hag 1, with the moves each fight needs, whatever "
         "your save file has reached (the game's own Boss Replay, chained). Your file is saved first and the fights "
         "don't change it. If you lose, Yes tries that boss again and No ends the rush. Turns itself off when the "
-        "rush ends; turning it off stops after the current fight.",
+        "rush ends; pressing the button again stops after the current fight.",
         false);
+    // A button (L, 2026-10-23): the value is true while a rush runs, and the button's text follows it.
+    general.set_option_button(option, "Start boss rush", "Stop boss rush");
     general.add_option_change_callback(option,
         // The callback gets (new value, previous value, context).
         [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {

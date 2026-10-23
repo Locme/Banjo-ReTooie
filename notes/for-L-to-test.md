@@ -1,5 +1,39 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T571 Blocky shadows with ray tracing
+- Asked: 2026-10-23 22:56 UTC
+- Build: main @ 155c892
+- Steps:
+  1. Ray tracing on, Traced shadows of the player on, HD shadows off
+  2. Stand Banjo on grass in sunlight (Spiral Mountain)
+  3. Walk around and look at his shadow
+- Look for: Is the hard, blocky shadow under Banjo gone, with only a soft-edged traced shadow left?
+- Status: waiting for L
+
+## T570 Openable settings, Jiggle, Boss rush button
+- Asked: 2026-10-23 21:09 UTC
+- Build: claude/project-thread-8oifqv
+- Steps:
+  2. Graphics: Fog / 3D grass / Banjo fur have a down arrow and a switch, press the arrow and the sliders open on a darker panel
+  3. Bloom stays a plain slider
+  4. Gameplay > Enhancements: Jiggle switch is off; turn it on, press its arrow, then a part's arrow
+  5. Search for Fog start distance
+  6. General Features: Boss rush is a Start boss rush button
+- Look for: Does opening a switch feel different enough? Any row misaligned because of the arrows? Does the Boss rush button start the rush and say Stop while it runs?
+- Status: waiting for L
+
+## T569 Character surface round 3: gradual build-up
+- Asked: 2026-10-23 17:45 UTC
+- Build: main after PR #22
+- Steps:
+  1. Pull main and build on Windows; WIP > Character surface: all sliders 100
+  2. Roll once on dirt: about 5% dirty, not 100%; roll again and again to build it up; wait: 1% off every 8 seconds
+  3. Run on sand and in snow: 5% a step-group; jump in water: dirt, sand and snow wash off quickly
+  4. Swim: fur goes darker, no drips; get out: drips, dry in 8 to 20 seconds (random)
+  5. At high dirt, the chest and head get spots too
+- Look for: Is 5% per trigger the right pace (a roll, a landing, a run of steps)? Does the upper body get covered at high amounts?
+- Status: waiting for L
+
 ## T568 Character surface round 2: spots, feet and shorts, drips
 - Asked: 2026-10-23 16:55 UTC
 - Build: main after PR #21
@@ -53,7 +87,7 @@
   2. Warp to Spiral Mountain; run, hold Run (sprint), Talon Trot, quick-turn, jump and land on sand, snow and grass
   3. Run with TOOIE_DUST_LOG=1 and send the [dust] lines
 - Look for: Soft dust clouds replace the flat puffs; they drift with your speed, rise, get pushed aside as you move through them and take the ground's colour. Puffs too small, too big or gone too fast: send the [dust] raw numbers (radius_per_scale and life_seconds in src/gameplay/dust.cpp are guesses). Frame cost with dust on vs off
-- Status: waiting for L
+- Status: withdrawn: volumetric dust was removed on L's request (2026-10-23)
 
 ## T565 Find Bargasaurus (actor and model)
 - Asked: 2026-10-23
