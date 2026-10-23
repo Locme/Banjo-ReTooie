@@ -69,6 +69,7 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/FsrPS.hlsl" "src/shaders/Fs
 
 # Camera motion for the temporal upscalers (RT64::SetUpscalerMode, src/display/upscaler.cpp).
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerVelocityPS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerResolvePS.hlsl")
 
 # Photo mode's filters and sharpening (RT64::SetPhotoGrade, src/gameplay/photo_mode.cpp).
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/PhotoGradePS.hlsl")

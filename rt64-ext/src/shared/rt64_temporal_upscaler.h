@@ -27,6 +27,14 @@ namespace interop {
         // the depth is the colour copy of RT64's depth target (1) or a plain float depth (0).
         float4 flags;
     };
+
+    struct UpscalerResolveCB {
+        // The game image's size, then the output's.
+        float4 sizes;
+        // x, y: the jitter the image was drawn with, in input pixels (x right, y down); z: 1 when there is a
+        // history to blend with; w: how much of the new image goes into the result when there is.
+        float4 jitter;
+    };
 #ifdef HLSL_CPU
 };
 #endif

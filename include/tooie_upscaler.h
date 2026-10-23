@@ -21,6 +21,7 @@ namespace tooie::upscaler {
         ArmAsr,
         SnapdragonGsr,
         Fsr3,
+        Temporal,
     };
 
     void add_option(recomp::config::Config& graphics);
