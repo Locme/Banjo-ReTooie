@@ -17,6 +17,8 @@ namespace tooie::aim_trace {
     // Banjo in turn and uses these to count the player-position readers that run while it is alive.
     inline const std::string sweep_option = "aim_sweep";
     bool sweep_requested();
+    // The Aim trace option is on (also makes the enemy spawner log the actors near Banjo).
+    bool trace_requested();
     void sweep_finished();
     void capture_begin();
     std::map<std::string, uint64_t> capture_end();
