@@ -22,8 +22,11 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <variant>
+
 #include "recomp.h"
 #include "funcs.h"
+#include "recompui/config.h"
 
 #include "tooie_achievements.h"
 #include "tooie_game.h"
@@ -68,6 +71,20 @@ namespace {
         { tooie::game_settings::pause_sub_page, 0x0C, "SETTINGS" },
     };
     constexpr uint32_t entry_count = sizeof(entries) / sizeof(entries[0]);
+
+    // DEV > Stability And Features > Hide Custom Settings In Start Menu (L, 2026-10-23, on by default)
+    // leaves the SETTINGS entry out. Read when the menu opens, so a change shows the next time it does.
+    bool hide_settings_entry() {
+        try {
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::hide_pause_settings_option));
+        } catch (...) {
+            return true;
+        }
+    }
+
+    bool entry_shown(const Entry& e, bool hide_settings) {
+        return !(hide_settings && e.id == tooie::game_settings::pause_sub_page);
+    }
 
     // The variants that get the entry: 0..3, the normal pause menu (+1 with items, +2 with Jinjos).
     // 4..6 are the menus of special modes (decomp func_80800534 case 1), left as they are.
@@ -155,27 +172,51 @@ namespace {
         return addr >= (gpr)it->second && addr < (gpr)it->second + (gpr)size;
     }
 
+    // Each normal variant's own options (offset in the overlay) and count, kept when its copy is
+    // built, so the copy can be built again when Hide Custom Settings changes.
+    struct Original {
+        bool known = false;
+        uint32_t offset = 0;
+        uint32_t count = 0;
+        bool hide_settings = false;
+    };
+    Original originals[normal_variants];
+
     // Points each normal variant at its copy with our rows. A pointer outside the overlay is
     // one of ours: the game moves the overlay with its heap and shifts every pointer in its data by
-    // as much, ours included, so it is set back.
-    void patch_table(uint8_t* rdram, gpr table) {
+    // as much, ours included, so it is set back. With rebuild (the menu opening), a copy built
+    // under the other Hide Custom Settings choice is built again from the game's own options.
+    void patch_table(uint8_t* rdram, gpr table, bool rebuild) {
+        const bool hide_settings = hide_settings_entry();
+        gpr overlay_code = 0;
+        if (const auto overlays = tooie::mapped_overlays(); overlays.find(overlay_index) != overlays.end()) {
+            overlay_code = (gpr)overlays.at(overlay_index);
+        }
         for (int variant = 0; variant < normal_variants; variant++) {
             const gpr entry = table + variant * variant_size;
-            const gpr options = (gpr)(int32_t)MEM_W(variant_options_offset, entry);
-            const uint32_t count = MEM_BU(variant_count_offset, entry);
+            gpr options = (gpr)(int32_t)MEM_W(variant_options_offset, entry);
+            uint32_t count = MEM_BU(variant_count_offset, entry);
             const gpr copy = option_area + variant * option_area_variant;
-            if (options == copy) {
-                continue;
-            }
-            if (!in_overlay(options)) {
+            Original& original = originals[variant];
+            if (options != copy && !in_overlay(options)) {
                 MEM_W(variant_options_offset, entry) = (int32_t)copy;
                 if (logging()) {
                     fprintf(stderr, "[pause-settings] variant %d pointer 0x%08X set back\n", variant, (uint32_t)options);
                 }
-                continue;
+                options = copy;
+            }
+            if (options == copy) {
+                if (!rebuild || !original.known || original.hide_settings == hide_settings || overlay_code == 0) {
+                    continue;
+                }
+                options = overlay_code + (gpr)original.offset;
+                count = original.count;
             }
             if (count + entry_count > max_options) {
                 continue;
+            }
+            if (overlay_code != 0) {
+                original = { true, (uint32_t)(options - overlay_code), count, hide_settings };
             }
 
             if (logging()) {
@@ -196,6 +237,9 @@ namespace {
                     // Achievements has King Jingaling's talking head (L picked it; Cheato has none in
                     // gczoomboxdata's portrait list, swept 0x00..0xD1 headless); the text and function are ours.
                     for (const Entry& e : entries) {
+                        if (!entry_shown(e, hide_settings)) {
+                            continue;
+                        }
                         const gpr dst = copy + out * option_size;
                         MEM_H(option_icon, dst) = e.icon;
                         MEM_B(option_text, dst) = e.id;
@@ -216,7 +260,10 @@ namespace {
                 out++;
             }
             MEM_W(variant_options_offset, entry) = (int32_t)copy;
-            MEM_B(variant_count_offset, entry) = (int8_t)(count + entry_count);
+            MEM_B(variant_count_offset, entry) = (int8_t)out;
+            if (logging()) {
+                fprintf(stderr, "[pause-settings] variant %d built: %u rows (settings entry %s)\n", variant, out, hide_settings ? "hidden" : "shown");
+            }
         }
     }
 }
@@ -247,7 +294,7 @@ extern "C" void tooie_pause_settings_setup(uint8_t* rdram, recomp_context* ctx) 
     if (overlay_index == 0) {
         return;
     }
-    patch_table(rdram, table);
+    patch_table(rdram, table, true);
 }
 
 // Start of gcnewpause_entrypoint_2 (the pause menu's update, which picks options): the table's
@@ -262,7 +309,7 @@ extern "C" void tooie_pause_settings_update(uint8_t* rdram, recomp_context* /*ct
         overlay_index = 0;
         return;
     }
-    patch_table(rdram, (gpr)it->second + table_offset);
+    patch_table(rdram, (gpr)it->second + table_offset, false);
 }
 
 // func_80800A08 before it sets how many option boxes are shown ($a1): gcnewoption has room for

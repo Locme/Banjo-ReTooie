@@ -1200,6 +1200,8 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::texture_dump_option, "Dump");
     tooie::texture_sweep::add_prompt(wip);
     tooie::memory_guard::add_option(wip);
+    // Pass Over Crashes through the two Force Interpolation options (L, 2026-10-23): one heading on the first.
+    recompui::config::set_option_group(tooie::memory_guard::option, "Stability And Features");
     wip.add_bool_option(
         tooie::more_memory::option,
         "More Game Memory",
@@ -1218,6 +1220,12 @@ void tooie::init_config() {
         "Hides the settings entries this port makes unnecessary: Wide-screen Mode and Screen Alignment in the global settings on the save select screen (the TV) and in the Start menu's Settings page, leaving Speaker Mode, and while it is on keeps the game's own widescreen mode off and the picture centred: the game's widescreen squashes the picture for a stretched TV, and this port's widescreen is Aspect Ratio in the Graphics tab. The menu change shows the next time it opens.",
         true);
     tooie::game_frame_rate::add_dev_options(wip);
+    // L, 2026-10-23: the last entry under Stability And Features, on by default.
+    wip.add_bool_option(
+        tooie::hide_pause_settings_option,
+        "Hide Custom Settings In Start Menu",
+        "Leaves out the SETTINGS entry this port adds to the Start menu (the pause menu). Speaker Mode stays in the global settings on the save select screen (the TV). The change shows the next time the Start menu opens.",
+        true);
     // Debug options (under the Debug heading): they moved here from Graphics.
     tooie::effect_views::add_option(wip);
     // Picker Save Only Current Active sits under the same Debug heading (L, 2026-10-23).
