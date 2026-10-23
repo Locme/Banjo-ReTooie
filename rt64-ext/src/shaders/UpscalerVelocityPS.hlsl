@@ -50,6 +50,8 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 
     const float4 previous = view.x * gConstants.reproject0 + view.y * gConstants.reproject1 + view.z * gConstants.reproject2 + gConstants.reproject3;
     float2 velocity = float2(0.0f, 0.0f);
+    // The see-through draws' reactive value, for the built-in resolve (it has no slot for the mask itself).
+    float reactive = 0.0f;
     if ((gConstants.flags.w < 0.5f) && (abs(previous.w) > 1e-6f)) {
         const float2 previousNdc = previous.xy / previous.w;
         velocity = float2((previousNdc.x - ndc.x) * 0.5f * size.x, (ndc.y - previousNdc.y) * 0.5f * size.y);
@@ -61,11 +63,12 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         if (object.a > 0.5f) {
             velocity = object.xy;
         }
+        reactive = object.z;
     }
 
     if (gConstants.flags.x > 0.5f) {
         const float scale = max(gConstants.flags.y, 1e-3f);
         return float4(0.5f + velocity.x / (2.0f * scale), 0.5f + velocity.y / (2.0f * scale), 0.5f, 1.0f);
     }
-    return float4(velocity, 0.0f, 0.0f);
+    return float4(velocity, reactive, 0.0f);
 }

@@ -402,7 +402,7 @@ namespace RT64 {
         if ((this->width != inputWidth) || (this->height != inputHeight) || (velocityTexture == nullptr)) {
             velocityFramebuffer.reset();
             debugFramebuffer.reset();
-            velocityTexture = device->createTexture(RenderTextureDesc::ColorTarget(inputWidth, inputHeight, RenderFormat::R16G16_FLOAT));
+            velocityTexture = device->createTexture(RenderTextureDesc::ColorTarget(inputWidth, inputHeight, RenderFormat::R16G16B16A16_FLOAT));
             velocityTexture->setName("Upscaler Velocity");
             debugTexture = device->createTexture(RenderTextureDesc::ColorTarget(inputWidth, inputHeight, format));
             debugTexture->setName("Upscaler Velocity View");
@@ -505,7 +505,7 @@ namespace RT64 {
         const bool useFfx = ((mode == 1) || (mode == 2) || (mode == 7)) && !ffx.unavailable();
         if ((useDlss || useFfx) && depthFloatValid) {
             if ((dlssOutput == nullptr) || (dlssOutputWidth != outputWidth) || (dlssOutputHeight != outputHeight)) {
-                dlssOutput = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format, RenderMultisampling(), nullptr, RenderTextureFlag::UNORDERED_ACCESS));
+                dlssOutput = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format, RenderMultisampling(), nullptr, RenderTextureFlag::STORAGE | RenderTextureFlag::UNORDERED_ACCESS));
                 dlssOutput->setName("Upscaler DLSS Output");
                 dlssOutputWidth = outputWidth;
                 dlssOutputHeight = outputHeight;

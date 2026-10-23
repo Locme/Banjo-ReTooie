@@ -1,4 +1,6 @@
 #include <filesystem>
+#include <type_traits>
+#include <variant>
 #include <fstream>
 
 #include <json/json.hpp>
@@ -186,6 +188,31 @@ namespace {
         }
         if (changed) {
             graphics.save_config();
+        }
+    }
+
+    // Mouse Sensitivity starts at 10 (L, 2026-10-23) instead of off, so the mouse camera works out of the box:
+    // set it once while general.json has no saved value for it. The option's own number type is kept.
+    void default_mouse_sensitivity() {
+        const std::filesystem::path file = recomp::get_config_path() / "general.json";
+        if (std::filesystem::exists(file)) {
+            std::ifstream in(file);
+            const nlohmann::json json = nlohmann::json::parse(in, nullptr, false);
+            if (json.is_object() && json.contains("mouse_sensitivity")) {
+                return;
+            }
+        }
+        try {
+            recomp::config::Config& general = recompui::config::get_general_config();
+            const auto current = general.get_option_value("mouse_sensitivity");
+            std::visit([&](auto value) {
+                using T = decltype(value);
+                if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
+                    general.set_option_value("mouse_sensitivity", T(10));
+                    general.save_config();
+                }
+            }, current);
+        } catch (...) {
         }
     }
 
@@ -843,6 +870,14 @@ void tooie::init_config() {
         recompui::config::set_option_group(vol::file_option, "Volumetric Levels");
         recompui::config::set_option_group(tooie::dust::option, "Volumetric Dust");
     }
+    {
+        // Wet, snowy and dirty characters are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
+        namespace pf = tooie::picture_filters;
+        for (const std::string* id : { &pf::char_wet_option, &pf::char_snow_option, &pf::char_dirt_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        recompui::config::set_option_group(pf::char_wet_option, "Character surface");
+    }
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
@@ -1054,6 +1089,7 @@ void tooie::init_config() {
     move_saved_cutscene_skip();
     turn_on_transform_anywhere_once();
     move_saved_options_to_wip();
+    default_mouse_sensitivity();
     // The settings menu's layout (L, 2026-10-16): tabs in a sidebar on the left, descriptions along the bottom.
     recompui::config::set_sidebar_layout(true);
     tooie::picture_filters::apply();

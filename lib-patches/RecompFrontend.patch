@@ -92,7 +92,7 @@ index 1961e29..e4b14fa 100644
 +    int32_t get_game_mouse_wheel();
  }
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..bbec3e9 100644
+index f5ed6c0..b6a847f 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
 @@ -37,10 +37,56 @@ namespace recompinput {
@@ -153,7 +153,7 @@ index f5ed6c0..bbec3e9 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -72,6 +115,9 @@ namespace recompinput {
+@@ -72,6 +118,9 @@ namespace recompinput {
          InputType input_type;
          // Represents a single source input. e.g. A keyboard's shift key, or a controller's R trigger
          int32_t input_id;
@@ -163,7 +163,7 @@ index f5ed6c0..bbec3e9 100644
          std::string to_string() const;
          auto operator<=>(const InputField& rhs) const = default;
  
-@@ -90,15 +136,33 @@ namespace recompinput {
+@@ -90,15 +139,33 @@ namespace recompinput {
          bool is_empty() const {
              return input_type == InputType::None;
          }
@@ -197,7 +197,7 @@ index f5ed6c0..bbec3e9 100644
      }
  
      // Represents the types of mapping/profiles that can be done.
-@@ -127,6 +191,10 @@ namespace recompinput {
+@@ -127,6 +194,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);
@@ -1602,7 +1602,7 @@ index 6c84c05..730fa43 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("Config modal has not been initialized.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..5a44688 100644
+index 86428c9..07bc0bc 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
 @@ -1,4 +1,7 @@
@@ -1770,18 +1770,22 @@ index 86428c9..5a44688 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -176,6 +255,10 @@ void ConfigOptionEnum::update_enum_details() {
- 
+@@ -177,6 +256,14 @@ void ConfigOptionEnum::update_enum_details() {
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
+     auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
 +    if (select != nullptr) {
 +        select->set_enabled(!all_disabled);
++        // Single entries can be greyed out in a drop-down list too.
++        for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
++            select->set_option_enabled(int(i), !config->get_enum_option_disabled(option_index, i));
++        }
 +        return;
 +    }
-     auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
-@@ -199,6 +282,7 @@ ConfigOptionNumber::ConfigOptionNumber(
+         auto opt_element = radio->get_option_element(i);
+@@ -199,6 +286,7 @@ ConfigOptionNumber::ConfigOptionNumber(
      auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
  
      slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
@@ -1789,7 +1793,7 @@ index 86428c9..5a44688 100644
      slider->set_width(100.0f, Unit::Percent);
      slider->set_max_width(512.0f, Unit::Dp);
  
-@@ -245,6 +329,7 @@ ConfigOptionString::ConfigOptionString(
+@@ -245,6 +333,7 @@ ConfigOptionString::ConfigOptionString(
  
      ContextId context = recompui::get_current_context();
      text_input = context.create_element<TextInput>(this);
@@ -1797,7 +1801,7 @@ index 86428c9..5a44688 100644
      text_input->set_width(100.0f, Unit::Percent);
      text_input->set_max_width(100.0f, Unit::Percent);
      update_value();
-@@ -284,6 +369,8 @@ ConfigOptionBool::ConfigOptionBool(
+@@ -284,6 +373,8 @@ ConfigOptionBool::ConfigOptionBool(
  
      ContextId context = recompui::get_current_context();
      toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
@@ -2962,7 +2966,7 @@ index d065a14..0b68f37 100644
          std::string_view get_type_name() override { return "TabbedModal"; }
          void on_tab_change(int tab_index);
 diff --git a/recompui/src/elements/ui_select.cpp b/recompui/src/elements/ui_select.cpp
-index e289e9e..d79a4a1 100644
+index e289e9e..4676f73 100644
 --- a/recompui/src/elements/ui_select.cpp
 +++ b/recompui/src/elements/ui_select.cpp
 @@ -2,6 +2,7 @@
@@ -3021,7 +3025,7 @@ index e289e9e..d79a4a1 100644
              queue_update();
              break;
          }
-@@ -297,6 +321,28 @@ namespace recompui {
+@@ -297,10 +321,38 @@ namespace recompui {
          }
      }
  
@@ -3050,8 +3054,18 @@ index e289e9e..d79a4a1 100644
      void Select::add_change_callback(std::function<void(SelectOption& option, int option_index)> callback) {
          change_callbacks.emplace_back(callback);
      }
+ 
++    void Select::set_option_enabled(int option_index, bool enabled) {
++        if ((option_index >= 0) && (option_index < static_cast<int>(option_elements.size()))) {
++            option_elements[option_index]->set_enabled(enabled);
++        }
++    }
++
+     void Select::add_option_elements() {
+         clear_children();
+         option_elements.clear();
 diff --git a/recompui/src/elements/ui_select.h b/recompui/src/elements/ui_select.h
-index cc4932c..4140c08 100644
+index cc4932c..916cf04 100644
 --- a/recompui/src/elements/ui_select.h
 +++ b/recompui/src/elements/ui_select.h
 @@ -52,6 +52,11 @@ namespace recompui {
@@ -3066,6 +3080,15 @@ index cc4932c..4140c08 100644
  
          Style hover_style;
          Style focus_style;
+@@ -75,6 +80,8 @@ namespace recompui {
+         Style* get_focus_style() { return &focus_style; }
+         Style* get_disabled_style() { return &disabled_style; }
+         Style* get_hover_disabled_style() { return &hover_disabled_style; }
++        // Greys out one entry of the list (it can't be picked while disabled).
++        void set_option_enabled(int option_index, bool enabled);
+         void set_selection(std::string_view option_value) {
+             select_set_selection(option_value);
+         }
 diff --git a/recompui/src/elements/ui_sidebar_style.h b/recompui/src/elements/ui_sidebar_style.h
 new file mode 100644
 index 0000000..e5b6a0c

@@ -1214,6 +1214,7 @@ RECOMP_FUNC void badust_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
     // 0x80800488: swc1        $f4, 0x50($sp)
     MEM_W(0X50, ctx->r29) = ctx->f4.u32l;
     after_3:
+    if (tooie_dust_spawn_foot(rdram, ctx)) { ctx->r31 = MEM_W(0X2C, ctx->r29); ctx->r16 = MEM_W(0X28, ctx->r29); ctx->r29 = ADD32(ctx->r29, 0X58); return; }
     // 0x8080048C: jal         0x80088970
     // 0x80800490: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
