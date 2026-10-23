@@ -1028,13 +1028,13 @@ extern "C" int tooie_klungo_fade(uint8_t* rdram, recomp_context* ctx, int fade_i
 void tooie::game_frame_rate::add_dev_options(recomp::config::Config& dev) {
     dev.add_bool_option(
         force_scene_interpolation_option,
-        "Force Interpolation in cutscenes",
+        "Force Interpolation In Cutscenes",
         "While the opening cutscene plays, runs it at the game's own frame rate when Game Frame Rate is above Original, so its pacing is right, "
         "and Interpolation blends in-between frames up to its rate. Does nothing while Interpolation is Original.",
         true);
     dev.add_bool_option(
         force_demo_interpolation_option,
-        "Force Interpolation in the gameplay demo",
+        "Force Interpolation In The Gameplay Demo",
         "The same for the gameplay demo that plays when you don't press Start (and the other recorded scenes): "
         "Interpolation blends it up to its rate. The demo keeps its own speed either way.",
         false);

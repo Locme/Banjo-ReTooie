@@ -39,7 +39,7 @@ namespace RT64 {
 
     constexpr uint32_t SceneMaxLights = 32;
     // Banjo-Tooie: volumetric dust clouds (SetSceneDust).
-    constexpr uint32_t SceneMaxDust = 24;
+    constexpr uint32_t SceneMaxDust = 48;
 
     struct SceneEffectsSettings {
         // Banjo-Tooie: the level's lights (lamps, fires) the traced shadows cast from: world x, y, z and the outer range of each.
@@ -286,6 +286,7 @@ namespace RT64 {
     // Banjo-Tooie: Graphics > Volumetric Dust: the dust clouds this frame (count of them, up to SceneMaxDust), eight floats each:
     // world x, y, z, radius, strength (0 to 1), a seed, then two spare. The march in VolDust draws them with the mist.
     void SetSceneDust(const float *clouds, uint32_t count);
+    void SetSceneDustDebug(uint32_t mode);
     void SetSceneVolumetric(float mist, float fog, uint32_t fogPreset, uint32_t cloudType, float mistOffset);
     // The rest of the volumetric settings, riding in the dust buffer's header (SceneEffectsPS.hlsl VolExtra): the fog's start
     // distance (world units) and colour (0 the preset's own, 1 to 4 Haze, Mist, Dusk, Gloom), and the mist over water and at a

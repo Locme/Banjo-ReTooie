@@ -30,6 +30,7 @@
 namespace RT64 {
     // rt64-ext/src/render/rt64_scene_effects.h: up to 24 clouds, eight floats each (x, y, z, radius, strength, seed, 0, 0).
     void SetSceneDust(const float* clouds, uint32_t count);
+    void SetSceneDustDebug(uint32_t mode);
 }
 
 namespace {
@@ -37,12 +38,13 @@ namespace {
     using tooie::rdram::read_word;
     using tooie::rdram::valid_ptr;
 
-    constexpr int max_clouds = 24;
+    constexpr int max_clouds = 48;
     constexpr uint32_t player_table = 0x80135490;
     // World units of radius for one unit of the game's puff scale, and the cloud's life: tuned by eye (L's test).
     constexpr float radius_per_scale = 22.0f;
     constexpr float life_seconds = 0.9f;
     constexpr float max_radius = 55.0f;
+    constexpr int wisps_per_puff = 3;
 
     struct Cloud {
         float pos[3];
@@ -65,6 +67,7 @@ namespace {
     // Dust Banjo has been in since take_exposure (see tooie_dust.h).
     std::atomic<float> exposure{ 0.0f };
     bool log_puffs = false;
+    int debug_mode = 0;
 
     uint32_t player_pointer(uint8_t* rdram) {
         const uint32_t player = read_word(rdram, player_table);
@@ -140,6 +143,12 @@ void tooie::dust::tick(uint8_t* rdram) {
     if (first) {
         first = false;
         log_puffs = std::getenv("TOOIE_DUST_LOG") != nullptr;
+        // TOOIE_DUST_DEBUG: 1 the clouds are made but the renderer draws none, 2 they are flat magenta, 3 the game's own puffs
+        // stay as well as the clouds. To tell what a stray shape on screen is (L, 2026-10-23, a black disc).
+        if (const char* mode = std::getenv("TOOIE_DUST_DEBUG")) {
+            debug_mode = std::atoi(mode);
+            RT64::SetSceneDustDebug(uint32_t(std::clamp(debug_mode, 0, 2)));
+        }
     }
     const double now = tooie::game_frame_rate::game_seconds();
     const float dt = (last < 0.0) ? 0.0f : float(std::clamp(now - last, 0.0, 0.1));
@@ -236,32 +245,41 @@ namespace {
             return true;
         }
         spawned_this_frame++;
-        if (cloud_count >= max_clouds) {
-            // Full: the oldest makes way.
-            std::memmove(clouds, clouds + 1, sizeof(Cloud) * (max_clouds - 1));
-            cloud_count = max_clouds - 1;
-        }
-        Cloud& c = clouds[cloud_count++];
-        const uint32_t n = ++spawned;
-        for (int i = 0; i < 3; i++) {
-            c.pos[i] = read_float(rdram, at + 4 * i);
-        }
-        // Part of Banjo's speed, a sideways scatter and a lift.
-        const float scatter = 14.0f;
-        c.vel[0] = (have_banjo ? velocity[0] * 0.3f : 0.0f) + (hash(n * 3 + 1) - 0.5f) * 2.0f * scatter;
-        c.vel[1] = 18.0f + hash(n * 3 + 2) * 14.0f;
-        c.vel[2] = (have_banjo ? velocity[2] * 0.3f : 0.0f) + (hash(n * 3 + 3) - 0.5f) * 2.0f * scatter;
         const float start = std::clamp(scale_start, 0.05f, 4.0f);
         const float end = std::clamp(std::max(scale_end, scale_start), 0.1f, 6.0f);
-        c.radius_start = std::max(8.0f, start * radius_per_scale);
-        c.radius_end = std::max(c.radius_start * 1.5f, end * radius_per_scale);
-        // The big landing puffs (the ground pound) would be a wide soft ball: capped so none reads as a circle.
-        c.radius_start = std::min(c.radius_start, max_radius * 0.6f);
-        c.radius_end = std::min(c.radius_end, max_radius);
-        c.age = 0.0f;
-        c.life = life_seconds * (0.8f + 0.4f * hash(n * 7 + 5));
-        c.seed = hash(n * 11 + 9) * 64.0f;
-        return true;
+        float whole_start = std::max(8.0f, start * radius_per_scale);
+        float whole_end = std::max(whole_start * 1.5f, end * radius_per_scale);
+        // The big landing puffs (the ground pound) would be a wide soft ball: capped.
+        whole_start = std::min(whole_start, max_radius * 0.6f);
+        whole_end = std::min(whole_end, max_radius);
+        // One game puff is a handful of small wisps scattered round its spot, each its own cloud (a single big blob read as a
+        // ball): different sizes, speeds and lives, so the dust billows and thins unevenly.
+        for (int w = 0; w < wisps_per_puff; w++) {
+            if (cloud_count >= max_clouds) {
+                // Full: the oldest makes way.
+                std::memmove(clouds, clouds + 1, sizeof(Cloud) * (max_clouds - 1));
+                cloud_count = max_clouds - 1;
+            }
+            Cloud& c = clouds[cloud_count++];
+            const uint32_t n = ++spawned;
+            const float spread = whole_end * 0.5f;
+            for (int i = 0; i < 3; i++) {
+                c.pos[i] = read_float(rdram, at + 4 * i) + (hash(n * 13 + i * 5 + 1) - 0.5f) * 2.0f * spread * (i == 1 ? 0.4f : 1.0f);
+            }
+            // Part of Banjo's speed, a sideways scatter and a lift.
+            const float scatter = 14.0f;
+            c.vel[0] = (have_banjo ? velocity[0] * 0.3f : 0.0f) + (hash(n * 3 + 1) - 0.5f) * 2.0f * scatter;
+            c.vel[1] = 18.0f + hash(n * 3 + 2) * 14.0f;
+            c.vel[2] = (have_banjo ? velocity[2] * 0.3f : 0.0f) + (hash(n * 3 + 3) - 0.5f) * 2.0f * scatter;
+            const float size = 0.4f + 0.35f * hash(n * 17 + 3);
+            c.radius_start = std::max(5.0f, whole_start * size);
+            c.radius_end = std::max(c.radius_start * 1.4f, whole_end * size);
+            c.age = 0.0f;
+            c.life = life_seconds * (0.7f + 0.6f * hash(n * 7 + 5));
+            c.seed = hash(n * 11 + 9) * 64.0f;
+        }
+        // Debug 3: the clouds are made and the game's puff is made too.
+        return debug_mode != 3;
     }
 }
 

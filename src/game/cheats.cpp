@@ -194,7 +194,7 @@ namespace {
 void tooie::cheats::create_tab() {
     recomp::config::Config& config = recompui::config::create_config_tab("Cheats", tab_id, false);
 
-    config.add_bool_option(enabled_option, "Enable cheats",
+    config.add_bool_option(enabled_option, "Enable Cheats",
         "Turns on the cheat options below. Achievements cannot be earned while this is on.", false);
     // Speed-up first: it is the cheat people reach for most (src/game/speedup.cpp).
     tooie::speedup::add_options(config, enabled_option);
@@ -216,9 +216,9 @@ void tooie::cheats::create_tab() {
     tooie::replays::add_options(config, enabled_option);
 
     // Section headings (they hide with their rows while the master switch is off).
-    recompui::config::set_option_group("infinite_eggs", "Infinite items");
+    recompui::config::set_option_group("infinite_eggs", "Infinite Items");
     recompui::config::set_option_group("cheat_infinite_jumps", "Moves");
-    recompui::config::set_option_group("cheato_feathers", "Cheato codes");
+    recompui::config::set_option_group("cheato_feathers", "Cheato Codes");
     recompui::config::set_option_group("cheat_one_hit", "Enemies");
     recompui::config::set_option_group("cheat_big_head", "Size");
     recompui::config::set_option_group("cheat_stop_n_swop", "Unlocks");

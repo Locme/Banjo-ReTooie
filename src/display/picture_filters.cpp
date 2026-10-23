@@ -4575,9 +4575,12 @@ void tooie::picture_filters::apply() {
         return (setting != (decltype(setting))off) ? setting : (decltype(setting))fallback;
     };
 
-    // Graphics > Shaders off (L, 2026-10-16): the effects of its section are off, their settings kept.
-    const bool shaders = value<bool>(lighting_section_option, true);
+    // The Shaders switch is gone (L, 2026-10-23): the effects below are always on.
+    const bool shaders = true;
     auto shader = [shaders](double v) { return shaders ? v : 0.0; };
+    // Reflections is an enable switch (L, 2026-10-23): off, its four reflection effects are off.
+    const bool reflections_on = value<bool>(reflections_section_option, true);
+    auto reflection = [shaders, reflections_on](double v) { return (shaders && reflections_on) ? v : 0.0; };
 
     RT64::SetPictureFilters(
         (int)value<double>(brightness_option, 0.0),
@@ -4641,7 +4644,7 @@ void tooie::picture_filters::apply() {
     if (!ray_tracing) {
         ray_tracing_notified.store(false);
     }
-    RT64::SetSceneScreenSpaceReflections((float)(shader(value<double>(ssr_option, 0.0)) / 100.0), (traced_brdf > 0.0f) ? 0.0f : (float)(shader(value<double>(ssr_stochastic_option, 0.0)) / 100.0));
+    RT64::SetSceneScreenSpaceReflections((float)(reflection(value<double>(ssr_option, 0.0)) / 100.0), (traced_brdf > 0.0f) ? 0.0f : (float)(reflection(value<double>(ssr_stochastic_option, 0.0)) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
     sun_shadows = value<double>(sun_shadows_option, 0.0) > 0.0;
     RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true),
@@ -4662,7 +4665,9 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneGrassLod((float)(value<double>(grass_lod_option, 0.0) / 100.0), value<bool>(grass_half_rate_option, true));
     RT64::SetSceneGrassRayTracing(value<bool>(grass_ray_tracing_option, true));
     send_effect_textures();
-    double fur = value<double>(banjo_fur_option, 0.0);
+    // The Character Shaders switch turns all of the character shaders off; their settings stay as they are.
+    const bool character_on = value<bool>(character_section_option, true);
+    double fur = character_on ? value<double>(banjo_fur_option, 0.0) : 0.0;
     if (const char* forced = std::getenv("TOOIE_BANJO_FUR")) {
         fur = std::atof(forced);
     }
@@ -4789,12 +4794,14 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneShoreFoam(shore_foam);
     water_waves_on = (shader(value<double>(water_waves_option, 0.0)) > 0.0) || modern_water;
     RT64::SetSceneWaterWaves((float)(shader(value<double>(water_waves_option, 0.0)) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
-    water_reflections_set = (float)(shader(value<double>(water_reflections_option, 0.0)) / 100.0);
+    water_reflections_set = (float)(reflection(value<double>(water_reflections_option, 0.0)) / 100.0);
     RT64::SetSceneWaterReflections(water_reflections_set.load());
-    RT64::SetSceneIceReflections((float)(shader(value<double>(ice_reflections_option, 0.0)) / 100.0));
+    RT64::SetSceneIceReflections((float)(reflection(value<double>(ice_reflections_option, 0.0)) / 100.0));
     water_settings_changed = true;
     RT64::SetSceneRimLight((float)(shader(value<double>(rim_light_option, 0.0)) / 100.0));
-    RT64::SetSceneToonShading((float)(shader(value<double>(toon_world_option, 0.0)) / 100.0), (float)(shader(value<double>(toon_characters_option, 0.0)) / 100.0));
+    // Toon Shading is an enable switch (L, 2026-10-23): off, both sliders count as 0.
+    const bool toon_on = value<bool>(toon_section_option, true);
+    RT64::SetSceneToonShading((float)(toon_on ? shader(value<double>(toon_world_option, 0.0)) : 0.0) / 100.0f, (float)(toon_on ? shader(value<double>(toon_characters_option, 0.0)) : 0.0) / 100.0f);
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
     RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0), bloom_threshold);
 
@@ -4837,7 +4844,7 @@ void tooie::picture_filters::set_preset(Preset preset) {
 }
 
 bool tooie::picture_filters::toon_characters_on() {
-    return value<double>(toon_characters_option, 0.0) > 0.0;
+    return value<bool>(toon_section_option, true) && value<double>(toon_characters_option, 0.0) > 0.0;
 }
 
 bool tooie::picture_filters::banjo_fur_on() {
@@ -4860,6 +4867,10 @@ static bool traced_shadows_on() {
 
 bool tooie::picture_filters::ray_tracing_active() {
     return traced_shadows_on();
+}
+
+bool tooie::picture_filters::ray_tracing_player_shadows_on() {
+    return value<bool>(ray_tracing_player_shadows_option, true);
 }
 
 bool tooie::picture_filters::traced_beams_on() {
@@ -5267,7 +5278,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
 
     graphics.add_enum_option(
         preset_option,
-        "Effects preset",
+        "Effects Preset",
         "Sets all the picture effects below at once. <recomp-color primary>Vanilla</recomp-color> turns them all off, so none of the effect shaders run. <recomp-color primary>Enhanced</recomp-color> adds SMAA, ambient occlusion and sharpening. <recomp-color primary>Retro</recomp-color> gives N64 16-bit colour and a CRT look. Changing any of them yourself makes it <recomp-color primary>Custom</recomp-color>.",
         {
             {Preset::Custom, "Custom", "Custom"},
@@ -5296,12 +5307,12 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         -5, 5, 1, 0, false, 0);
     graphics.add_bool_option(
         brightness_pattern_option,
-        "Brightness test pattern",
+        "Brightness Test Pattern",
         "Shows ten grey boxes over the game. Close the menu, then set Brightness so the first box just disappears into the black and the second one is just visible. Turn it off when done.",
         false);
     graphics.add_enum_option(
         colourblind_option,
-        "Colourblind filter",
+        "Colourblind Filter",
         "Moves the colours you can't tell apart into ones you can. <recomp-color primary>Deuteranopia</recomp-color> and <recomp-color primary>Protanopia</recomp-color> are red-green, <recomp-color primary>Tritanopia</recomp-color> is blue-yellow.",
         {
             {Colourblind::Off, "Off", "Off"},
@@ -5312,19 +5323,19 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         Colourblind::Off);
     graphics.add_number_option(
         colourblind_strength_option,
-        "Colourblind filter strength",
+        "Colourblind Filter Strength",
         "How strongly the colourblind filter shifts the colours.",
         0, 100, 10, 0, true, 100);
     graphics.add_option_hidden_dependency(colourblind_strength_option, colourblind_option, Colourblind::Off);
 
     graphics.add_bool_option(
         three_point_option,
-        "Retro: N64 3-point filtering",
+        "Retro: N64 3-Point Filtering",
         "The N64's own texture smoothing, as on the console. Off uses plain bilinear smoothing instead.",
         true);
     graphics.add_enum_option(
         dither16_option,
-        "Retro: N64 16-bit colour",
+        "Retro: N64 16-Bit Colour",
         "Cuts the colours down to the N64's 16-bit colour, with its dither pattern at the game's original resolution. <recomp-color primary>Console</recomp-color> smooths the dither as the N64 does on its way to the TV, leaving its colour banding. <recomp-color primary>Raw dither</recomp-color> shows the dither pattern itself.",
         {
             {Colour16::Off, "Off", "Off"},
@@ -5340,7 +5351,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
 
     graphics.add_enum_option(
         texture_upscale_option,
-        "Texture upscaling",
+        "Texture Upscaling",
         "Draws the game's textures at 2 or 4 times their size, smoothing the stair steps on their edges and lines while keeping them sharp. Texture packs take priority."
         "<br /><br />"
         "<recomp-color primary>2x</recomp-color> runs one pass of an xBR-style edge-directed filter (a compute shader on the GPU). <recomp-color primary>4x</recomp-color> runs the same filter twice, so it is sharper on lines but uses more video memory and loading time. Neither uses AI; both only smooth edges.",
@@ -5355,15 +5366,10 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Sharpening",
         "Sharpens the picture's fine detail, most where it is soft. 0 is off.",
         0, 100, 5, 0, false, 0);
-    graphics.add_bool_option(
-        lighting_section_option,
-        "Shaders",
-        "Turns on the lighting, water and other effects below and shows their settings. Off plays the game without them (their settings are kept for when you turn it back on).",
-        true);
 
     graphics.add_number_option(
         ambient_occlusion_option,
-        "Ambient occlusion",
+        "Ambient Occlusion",
         "Soft shading where surfaces meet: in corners, under ledges and around things standing on the ground (Ground Truth Ambient Occlusion). 50 is GTAO as it is; higher deepens it. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
@@ -5373,62 +5379,67 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         bounce_light_option,
-        "Bounce light",
+        "Bounce Light",
         "Light bounced off nearby surfaces: colourful walls and floors tint and brighten what is next to them a little. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         outlines_option,
-        "Toon outlines",
+        "Toon Outlines",
         "Draws dark outlines around characters and objects, on the edge in front of whatever is behind them, and lighter ones along ridges and the top edges of cliffs. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         outline_thickness_option,
-        "Toon outline thickness",
+        "Toon Outline Thickness",
         "How thick the toon outlines are: 25 is a thin line, 100 a heavy one and 200 a very bold cartoon line. They keep the same thickness at any resolution.",
         10, 200, 5, 0, false, 25);
     graphics.add_number_option(
         rim_light_option,
-        "Rim light",
+        "Rim Light",
         "A soft light along the edges of nearby characters and objects, so they stand out from what is behind them. 0 is off.",
         0, 100, 5, 0, false, 0);
+    graphics.add_bool_option(
+        toon_section_option,
+        "Toon Shading",
+        "Cel shading for characters and for the world: the two sliders below. Off turns it off; the sliders keep their values.",
+        true);
     graphics.add_number_option(
         toon_characters_option,
-        "Toon shading: Characters",
+        "Toon Shading: Characters",
         "Cel shading for Banjo, Kazooie and the game's other characters and enemies (not rocks or other objects, which follow World): the lit picture is split into a few flat bands of light and shadow with soft steps between them, shadows cool and lit parts warm. Works well with the toon outlines and Rim light. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         toon_world_option,
-        "Toon shading: World",
+        "Toon Shading: World",
         "The same cel shading for everything that isn't a character: the ground, walls, buildings, rocks, other objects and the sky. Set it apart from the characters' to have one without the other. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         underwater_tint_option,
-        "Underwater tint",
+        "Underwater Tint",
         "While under water, the 3D world turns light blue. The HUD isn't changed. 0 is off, 100 strongest.",
         0, 100, 5, 0, false, 25);
     graphics.add_number_option(
         underwater_haze_option,
-        "Underwater haze",
+        "Underwater Haze",
         "While under water, things further away fade into a light blue haze. Works with Underwater tint at 0 too. 0 is off.",
         0, 100, 5, 0, false, 15);
     graphics.add_number_option(
         underwater_distortion_option,
-        "Underwater distortion",
+        "Underwater Distortion",
         "While under water, the 3D world wobbles gently, more in the distance. 0 is off.",
         0, 100, 5, 0, false, 30);
     graphics.add_number_option(
         water_waves_option,
-        "Water waves",
+        "Water Waves",
         "Waves roll across the game's water: the water seen through bends with them, and their slopes catch the light. Drawn on the picture, so Banjo still floats at the same height. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         wave_speed_option,
-        "Water wave speed",
+        "Water Wave Speed",
         "How fast the water waves move, in percent. 100 is normal.",
         25, 200, 5, 0, false, 100);
     graphics.add_number_option(
         water_detail_option,
-        "Water detail",
+        "Water Detail",
         "With Water on <recomp-color primary>Modern</recomp-color> or <recomp-color primary>Stylised</recomp-color>: the water round the player is cut into fine moving geometry, so the swell and the rings the player pushes out are real bumps in the surface. Higher cuts it finer and further out, which costs more. 0 keeps the flat surface with drawn-on waves. Needs a graphics card with tessellation; without it the drawn-on waves are used.",
         0, 100, 5, 0, false, 50);
     graphics.add_enum_option(
@@ -5443,37 +5454,37 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         Water::Original);
     graphics.add_bool_option(
         shore_foam_option,
-        "Shore foam",
+        "Shore Foam",
         "With Water on <recomp-color primary>Original</recomp-color>: a broken white line of foam drifts along the edges of the game's water, where it gets shallow, as in Modern water. Modern water always has it.",
         false);
     graphics.add_bool_option(
         deep_snow_option,
-        "Deep snow",
+        "Deep Snow",
         "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and the dents stay (or fill back in, with Snow fills back in). Drawn on the picture, so nothing in the game changes.",
         false);
     graphics.add_bool_option(
         tessellated_sand_option,
-        "Tessellated sand",
+        "Tessellated Sand",
         "Sandy ground takes footprints: Banjo, the NPCs and the enemies press shallow, detailed prints into it wherever they touch it, and the wind has left low ripples over it. As Deep snow, with its detail, fills back in and distance settings. Needs a graphics card with tessellation.",
         false);
     graphics.add_number_option(
         snow_height_option,
-        "Snow height",
+        "Snow Height",
         "How deep the deep snow is, in percent. 100 is about ankle deep on Banjo, 300 up to his knees. Deeper snow costs a little more.",
         25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         snow_detail_option,
-        "Snow detail",
+        "Snow Detail",
         "How fine the dents in the deep snow are, in percent. 100 is the finest; 50 is as coarse as it first was, and lower still is coarser. Lower is lighter on weaker graphics cards.",
         25, 100, 5, 0, false, 100);
     graphics.add_number_option(
         snow_refill_option,
-        "Snow fills back in",
+        "Snow Fills Back In",
         "How many seconds prints in the deep snow stay before they fill back in (then sooner while it snows). 0 is off: they stay until you leave the area (going into a hut counts). On is a little lighter on the graphics card, as the snow is only cut finely where prints still show.",
         0, 600, 5, 0, false, 0);
     graphics.add_number_option(
         snow_lod_option,
-        "Snow LOD distance",
+        "Snow LOD Distance",
         "How far from the camera the deep snow keeps its full detail. Further away it is drawn smoother and smoother, which is cheaper. Higher shows the dents in full from further off.",
         250, 10000, 250, 0, false, 2000);
     graphics.add_number_option(
@@ -5483,97 +5494,97 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         parallax_original_option,
-        "Parallax on original textures",
+        "Parallax On Original Textures",
         "Parallax on the game's own stone, brick and rock textures, whose depth is worked out from how dark each part is. Off, only a texture pack's textures that come with a height map get parallax (a pack's \"wall.png\" with \"wall_height.png\" beside it, white high and black deep).",
         true);
     graphics.add_number_option(
         ground_displacement_option,
-        "Displaced ground",
+        "Displaced Ground",
         "The ground's cracks, gaps and grooves become real dips: floors with a Parallax texture (cracked flagstones, cobbles, paving, dirt) are cut into fine triangles near the camera and the dark parts of the texture pushed down, so the surface has a real outline and depth, not only a painted-on look. Higher numbers are deeper. Walls are left alone, and so is the ground near the edge of each piece. Uses Parallax's list of textures and their shapes and depths (Parallax on original textures must be on). Needs a graphics card with tessellation. Drawn on the picture, so nothing in the game changes. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         ground_displacement_distance_option,
-        "Displaced ground distance",
+        "Displaced Ground Distance",
         "How far from the camera the ground is displaced, in the game's units. The dips fade out over the last quarter. Further costs more: every displaced floor in reach is cut into fine triangles.",
         2000, 20000, 500, 0, false, 8000);
     graphics.add_bool_option(
         ray_tracing_option,
-        "Ray tracing",
+        "Ray Tracing",
         "Ray traced effects: reflections on shiny surfaces and water, sun shadows and shadows from lamps and fires, ambient occlusion, and bounce and sky light, all found by tracing rays through the level's triangles instead of marching the picture. It is a switch of its own, apart from the shader effects: while it is on each of those shows at least as strongly as Ray tracing strength says, even with its own setting at 0 (a higher setting wins). Needs the Vulkan renderer and a graphics card with hardware ray tracing (ray queries): without them this shows a notice and the effects carry on as you have set them. Heavy on the graphics card.",
         false);
     graphics.add_number_option(
         ray_tracing_strength_option,
-        "Ray tracing strength",
+        "Ray Tracing Strength",
         "How strongly the ray traced effects show while Ray tracing is on: the least each of them is drawn at (sun shadows at this, ambient occlusion and bounce light a little under it; the reflections have sliders of their own below). An effect's own slider still wins when it is higher. 60 is the default; 100 makes them plain.",
         0, 100, 5, 0, false, 60);
     graphics.add_number_option(
         ray_tracing_reflections_option,
-        "Traced reflections",
+        "Traced Reflections",
         "How much shiny surfaces reflect while Ray tracing is on: metal, tiles and the other shiny textures, and whatever Parallax pick mode marks Metal, Tiles or Smooth. The Screen-space reflections slider still wins when it is higher. 0 turns the traced reflections off. 60 is the default.",
         0, 100, 5, 0, false, 60);
     graphics.add_number_option(
         ray_tracing_water_reflections_option,
-        "Traced water reflections",
+        "Traced Water Reflections",
         "How much water reflects while Ray tracing is on (traced, so what is off screen shows too). The Water reflections slider still wins when it is higher. 60 is the default.",
         0, 100, 5, 0, false, 60);
     graphics.add_number_option(
         ray_tracing_metal_option,
-        "Metal reflection",
+        "Metal Reflection",
         "How mirror-like the surfaces Parallax calls Metal are, in percent of Traced reflections. 100 is the default.",
         0, 100, 5, 0, false, 100);
     graphics.add_number_option(
         ray_tracing_tiles_option,
-        "Tiles reflection",
+        "Tiles Reflection",
         "How much the surfaces Parallax calls Tiles reflect, in percent of Traced reflections. 60 is the default.",
         0, 100, 5, 0, false, 60);
     graphics.add_number_option(
         ray_tracing_smooth_option,
-        "Smooth surface reflection",
+        "Smooth Surface Reflection",
         "How much the surfaces Parallax calls Smooth reflect, in percent of Traced reflections. 35 is the default; stone, wood, dirt and the rest never reflect.",
         0, 100, 5, 0, false, 35);
     graphics.add_number_option(
         ray_tracing_smoothing_option,
-        "Ray tracing noise smoothing",
+        "Ray Tracing Noise Smoothing",
         "How much the ray traced light and shadows are smoothed out where they get grainy: the soft edges of sun, lamp and model shadows everywhere (higher turns every pixel's rays more alike: calmer, the edge in fine steps), and most on Banjo's fur (whose surface turns every pixel, so each pixel caught different rays and the fur crawled as he moved). 0 is the raw rays. 50 is the default. Needs Ray tracing on.",
         0, 100, 5, 0, false, 50);
     graphics.add_number_option(
         ray_tracing_brdf_option,
-        "Ray traced BRDF",
+        "Ray Traced BRDF",
         "Every traced reflection becomes a physically based one: rays are scattered over a GGX lobe (Smith visibility, weighted by the BRDF over each ray's probability), as wide as this setting, so reflections go from a sharp mirror to a soft brushed blur on shiny surfaces and on materials from Ray Tracing Material Pick Mode (which set their own roughness). Turns the screen-space Stochastic reflections off while it is above 0. Grainier the higher it goes. Needs Ray tracing on. 0 is off: mirror reflections.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         ray_tracing_subsurface_option,
-        "Ray traced subsurface scattering",
+        "Ray Traced Subsurface Scattering",
         "Light that gets into a thin or soft surface and comes out the other side: leaves and grass glow with the sun or a lamp behind them (traced rays check the light reaches the back of the surface and how much solid there is to pass through), and shadowed parts keep a soft coloured glow instead of going flat dark. Textures given Subsurface in Ray Tracing Material Pick Mode use it at their own strength whatever this is set to. Needs Ray tracing on. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         path_tracing_option,
-        "Path tracing",
+        "Path Tracing",
         "The traced bounce light goes on bouncing: a ray that lands on a surface turns off it and carries on, picking up the colours along the way, so light reaches round corners and deeper into rooms and caves. Needs Ray tracing on and the bounce light showing (Ray tracing strength above 0 or Screen-space GI on). Heavy on the graphics card: each bounce traces three more rays a pixel.",
         false);
     graphics.add_number_option(
         path_tracing_bounces_option,
-        "Path tracing bounces",
+        "Path Tracing Bounces",
         "How many more times light bounces with Path tracing on, after the first. More reaches further into shadowed places but costs more. 2 is the default.",
         1, 4, 1, 0, false, 2);
     graphics.add_number_option(
         traced_beams_option,
-        "Traced light beams",
+        "Traced Light Beams",
         "Shafts of light through the air, found by tracing rays towards the light: in a room the light only gets in at the windows, so the beams take the windows' shapes and anything standing in them (Banjo too) cuts its shadow through them; outdoors it is a thin haze with shafts between trees and under arches. Where beams are drawn (Mumbo's Skulls, and the rooms Window Light Beams covers while it is on), those are kept instead. Needs Ray tracing on. 0 is off. Costs a dozen rays a pixel.",
         0, 100, 5, 0, false, 60);
     graphics.add_bool_option(
         ray_tracing_player_shadows_option,
-        "Traced shadows of the player",
-        "Whether Banjo and Kazooie (or whoever you are playing) cast traced shadows: from the sun, the lamps and fires, and straight down on the ground. Off, the player casts none of them, and light and shadows go on through as if they weren't there; everything else keeps its traced shadows. Use it with HD shadows for the game's own shadow under the player. Needs Ray tracing on.",
+        "Traced Shadows Of The Player",
+        "Whether Banjo and Kazooie (or whoever you are playing) cast traced shadows: from the sun, the lamps and fires, and straight down on the ground. Off, the player casts none of them, and light and shadows go on through as if they weren't there; everything else keeps its traced shadows. On, the game's own hard-edged shadow under the player is left out (the traced ones take its place) unless HD shadows is on. Use Off with HD shadows for the game's own shadow under the player. Needs Ray tracing on.",
         true);
     graphics.add_bool_option(
         ray_tracing_hit_colours_option,
-        "Ray tracing hit colours",
+        "Ray Tracing Hit Colours",
         "Experimental. A traced reflection or bounce that lands on something the picture can't see (off the screen, or hidden behind something) uses the colour that spot had when it was last on screen, remembered in the world as you look around, instead of smearing the nearest colour from the picture. Adds a small cost every frame. Needs Ray tracing on. Starts off: if you see flicker, wrong colours or a crash, leave it off and tell me.",
         false);
     graphics.add_enum_option(
         ray_tracing_resolution_option,
-        "Ray tracing resolution",
+        "Ray Tracing Resolution",
         "How many rays the traced shadows, lamp light and light beams use. <recomp-color primary>Half</recomp-color> traces them once for every 2x2 pixels and fills in each pixel from the ones round it on the same surface: about a quarter of the rays, for higher frame rates; shadow edges a little softer. <recomp-color primary>Medium</recomp-color> (the default) traces every pixel, with fewer rays far off (Ray detail distances). <recomp-color primary>High</recomp-color> traces every pixel with all its rays at any distance: the sun's four rays everywhere, four rays a lamp and the beams' eight steps, so less noise and finer shadow edges, at a lower frame rate. Needs Ray tracing on.",
         {
             {RayResolution::Half, "Half", "Half"},
@@ -5583,192 +5594,192 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         RayResolution::Medium);
     graphics.add_bool_option(
         ray_tracing_parallax_option,
-        "Ray tracing uses Parallax materials",
+        "Ray Tracing Uses Parallax Materials",
         "Lets ray tracing read what Parallax knows of each texture: metal, glazed tiles and smooth surfaces reflect (the Metal, Tiles and Smooth sliders), and leaves and grass let light through (Ray traced subsurface). Off (the default), ray tracing ignores the Parallax list; Ray Tracing Material picks still apply. Needs Ray tracing on.",
         false);
     graphics.add_number_option(
         ray_detail_half_option,
-        "Ray detail distance (half)",
+        "Ray Detail Distance (Half)",
         "Past this far from the camera, the traced shadows and light beams use half their rays (the sun one ray instead of two to four, the lamps one ray each and at most three, the beams half their steps): far shadows are only a few pixels wide, so it hardly shows. 0 keeps all the rays at any distance. Needs Ray tracing on.",
         0, 8000, 250, 0, false, 2000);
     graphics.add_number_option(
         ray_detail_quarter_option,
-        "Ray detail distance (quarter)",
+        "Ray Detail Distance (Quarter)",
         "Past this far, a quarter of the rays (one lamp, one ray). The traced shadows fade out from 4000 to 7000 anyway. 0 for never. Needs Ray tracing on.",
         0, 8000, 250, 0, false, 4000);
     graphics.add_bool_option(
         reflections_section_option,
         "Reflections",
-        "Shows the reflection settings below. Hiding them does not turn the reflections off.",
+        "Turns the screen-space, stochastic, water and ice reflections on or off. Off also hides their settings below.",
         true);
     graphics.add_number_option(
         ssr_option,
-        "Screen-space reflections",
+        "Screen-Space Reflections",
         "Shiny surfaces (metal and tiles, and water and ice when their own reflections are off) reflect what is on screen, most at grazing angles. Only what is on screen can be reflected, so reflections fade out near the edges of the picture. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         ssr_stochastic_option,
-        "Stochastic reflections",
+        "Stochastic Reflections",
         "Makes Screen-space reflections glossy instead of mirror-sharp (a port of simeonradivoev's Compute Stochastic Reflections, MIT): each pixel sends a few rays spread over a lobe that widens with this setting, and blends what they find. The result is slightly grainy and blurrier the higher it goes. Needs Screen-space reflections above 0. Starts at 0, which keeps the mirror reflections.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         water_reflections_option,
-        "Water reflections",
+        "Water Reflections",
         "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         ice_reflections_option,
-        "Ice reflections",
+        "Ice Reflections",
         "Ice mirrors what is around it: frozen water, ice floors and walls, and the blocks of ice round notes, from any camera height. Only what is on screen can be reflected. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         character_section_option,
         "Character Shaders",
-        "Shows Banjo's fur and Kazooie's feather shaders below. Hiding them does not turn any of them off.",
+        "Turns Banjo's fur, Kazooie's feathers and the other character shaders on or off. Off also hides their settings below.",
         true);
     graphics.add_number_option(
         banjo_fur_option,
-        "Banjo fur",
+        "Banjo Fur",
         "Banjo's brown fur grows real strands: layers of short hairs stand out of his model and move with him, darker at the roots, in play and in cutscenes. Kazooie, his shorts, feet and backpack are left as they are, and so is everyone else. Higher numbers give a thicker coat. Drawn on the picture, so nothing in the game changes. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         char_wet_option,
-        "Wet characters",
+        "Wet Characters",
         "Banjo and Kazooie get wet: darker, with a sheen, and Banjo's fur clumps into locks, after swimming or wading. They dry off over about ten seconds. Drawn on the picture, so nothing in the game changes. The number is how wet they can get; 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         char_snow_option,
-        "Snowy characters",
+        "Snowy Characters",
         "Banjo and Kazooie gather snow on their heads, shoulders and backs while they are out in the snow, and it melts away in a while indoors or in the water. The number is how much can settle; 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         char_dirt_option,
-        "Dirty characters",
+        "Dirty Characters",
         "Banjo and Kazooie get dirty as they run about: mud on the legs and undersides that builds up as they run about and kick up dust (Volumetric dust or the game's own puffs), and a pale coat of sand after they walk on sand. Both wash off in water. The number is how dirty they can get; 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         banjo_fur_length_option,
-        "Banjo fur length",
+        "Banjo Fur Length",
         "How long Banjo's fur is, in percent. 100 is short and fluffy; 1500 is very long, for fun.",
         25, 1500, 5, 0, false, 100);
     graphics.add_number_option(
         banjo_fur_density_option,
-        "Banjo fur density",
+        "Banjo Fur Density",
         "How many hairs Banjo's fur has, in percent: higher is more, finer hairs, lower is fewer, thicker ones.",
         25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         banjo_fur_noisiness_option,
-        "Banjo fur noisiness",
+        "Banjo Fur Noisiness",
         "How uneven Banjo's fur is: higher gives tufts that stand taller or lower and hairs lighter or darker than their neighbours, 0 an even coat.",
         0, 100, 5, 0, false, 50);
     graphics.add_number_option(
         kazooie_feathers_option,
-        "Kazooie feathers",
+        "Kazooie Feathers",
         "Kazooie's red feathers grow real feathers: lots of little flat ones lying over each other down her body, each in her own colour there, so she looks feathered instead of smooth. Her beak and legs stay as they are. Higher numbers pack them more thickly. Needs a graphics card with geometry shaders (not on Mac). 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         kazooie_feather_size_option,
-        "Kazooie feather size",
+        "Kazooie Feather Size",
         "How big Kazooie's feathers are, in percent.",
         50, 200, 5, 0, false, 100);
     graphics.add_number_option(
         kazooie_feather_length_option,
-        "Kazooie feather length",
+        "Kazooie Feather Length",
         "How long Kazooie's feathers are, in percent, keeping their width.",
         25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         kazooie_feather_density_option,
-        "Kazooie feather density",
+        "Kazooie Feather Density",
         "How many feathers Kazooie has, in percent: higher packs them more thickly.",
         25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         kazooie_feather_noisiness_option,
-        "Kazooie feather noisiness",
+        "Kazooie Feather Noisiness",
         "How uneven Kazooie's feathers are: higher turns them more different ways and makes them more different in size and shade, 0 an even coat.",
         0, 100, 5, 0, false, 50);
     graphics.add_number_option(
         kazooie_feather_transparency_option,
-        "Kazooie feather transparency",
+        "Kazooie Feather Transparency",
         "How see-through Kazooie's feathers are, so more of her own colours show through them. 0 is solid.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         npc_fur_option,
-        "NPC fur",
+        "NPC Fur",
         "Furry characters grow white fur like Banjo's: the yetis on Hailfire Peaks' Icy Side, not on their faces or hands. Higher numbers give a thicker coat. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         npc_fur_length_option,
-        "NPC fur length",
+        "NPC Fur Length",
         "How long the NPCs' fur is, in percent. 100 is short and fluffy.",
         25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         npc_fur_density_option,
-        "NPC fur density",
+        "NPC Fur Density",
         "How many hairs the NPCs' fur has, in percent: higher is more, finer hairs, lower is fewer, thicker ones.",
         25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         npc_fur_noisiness_option,
-        "NPC fur noisiness",
+        "NPC Fur Noisiness",
         "How uneven the NPCs' fur is: higher gives tufts that stand taller or lower, 0 an even coat.",
         0, 100, 5, 0, false, 50);
     graphics.add_number_option(
         npc_feathers_option,
-        "NPC feathers",
+        "NPC Feathers",
         "Feathered characters grow feathers like Kazooie's in their own colours: Canary Mary, not on her face, hair or beak. Higher numbers pack them more thickly. Needs a graphics card with geometry shaders (not on Mac). 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         npc_feather_size_option,
-        "NPC feather size",
+        "NPC Feather Size",
         "How big the NPCs' feathers are, in percent.",
         50, 200, 5, 0, false, 100);
     graphics.add_number_option(
         npc_feather_length_option,
-        "NPC feather length",
+        "NPC Feather Length",
         "How long the NPCs' feathers are, in percent, keeping their width.",
         25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         npc_feather_density_option,
-        "NPC feather density",
+        "NPC Feather Density",
         "How many feathers the NPCs have, in percent: higher packs them more thickly.",
         25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         npc_feather_noisiness_option,
-        "NPC feather noisiness",
+        "NPC Feather Noisiness",
         "How uneven the NPCs' feathers are: higher turns them more different ways and makes them more different in size and shade, 0 an even coat.",
         0, 100, 5, 0, false, 50);
     graphics.add_number_option(
         npc_feather_transparency_option,
-        "NPC feather transparency",
+        "NPC Feather Transparency",
         "How see-through the NPCs' feathers are, so more of their own colours show through them. 0 is solid.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         heat_haze_option,
-        "Heat haze",
+        "Heat Haze",
         "Near lava (Hailfire Peaks' lava side, Chilli Billi, inside the volcano), the air shimmers above hot things such as lava and fire, more in the distance. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         sun_shadows_option,
-        "Sun shadows",
+        "Sun Shadows",
         "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. The whole level casts one, on screen or not. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         sun_shadow_banjo_option,
-        "Sun shadow on Banjo",
+        "Sun Shadow On Banjo",
         "Whether Banjo casts a sun shadow too. Off leaves his to HD shadows or the game's own. With Ray tracing on, Traced shadows of the player decides instead.",
         true);
     graphics.add_number_option(
         sun_shadow_softness_option,
-        "Sun shadow softness",
+        "Sun Shadow Softness",
         "How smooth the sun shadows are. Higher blends the light across a character's body instead of shading it face by face, and gives shadow edges a softer fade. 0 is the sharpest.",
         0, 100, 5, 0, false, 60);
     graphics.add_number_option(
         sun_shadow_distance_option,
-        "Sun shadow distance",
+        "Sun Shadow Distance",
         "How far from the camera sun shadows are sharp, in game units; past it the level's shadows carry on, softer. The whole level casts, and characters and objects within this distance, on screen or not, so shadows stay put as the camera turns. Past 6000 each shadow is a little blurrier, and higher costs more.",
         1500, 20000, 500, 0, false, 3000);
     graphics.add_number_option(
         light_shafts_option,
-        "Light shafts",
+        "Light Shafts",
         "Sunlight streams through gaps between trees, cliffs and buildings where they stand against a bright sky. Indoors and under night skies there is none. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
@@ -5778,17 +5789,17 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         eye_adaptation_option,
-        "Eye adaptation",
+        "Eye Adaptation",
         "Like your eyes adjusting: coming out into daylight glares for a moment, going into a cave is dark for a few seconds and then opens up. Once settled, dark places stay a little brighter and very bright ones a little darker. Fades between areas don't set it off. The HUD isn't changed. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         cutscene_dof_option,
-        "Cutscene depth of field",
+        "Cutscene Depth Of Field",
         "In letterboxed cutscenes, blurs what is nearer or further than the middle of the picture, like a film camera. Text and the HUD stay sharp. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         gameplay_dof_option,
-        "Depth of field",
+        "Depth Of Field",
         "While you play, Banjo stays in focus and what is well in front of or behind him blurs, more the further it is. In first person the middle of the picture is in focus. Gentler than the cutscene one at the same number. The HUD stays sharp. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
@@ -5798,12 +5809,12 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         fog_start_option,
-        "Fog start distance",
+        "Fog Start Distance",
         "How far from Banjo the fog begins, in the game's units (Banjo is about 150 tall).",
         0, 6000, 250, 0, false, 1500);
     graphics.add_enum_option(
         fog_colour_option,
-        "Fog colour",
+        "Fog Colour",
         "The fog's colour.",
         {
             {FogColour::Haze, "Haze", "Haze"},
@@ -5819,7 +5830,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         -50, 50, 5, 0, false, 0);
     graphics.add_number_option(
         saturation_option,
-        "Colour saturation",
+        "Colour Saturation",
         "Stronger or paler colours. 0 leaves them as they are.",
         -100, 100, 5, 0, false, 0);
     graphics.add_number_option(
@@ -5829,7 +5840,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         grain_option,
-        "Film grain",
+        "Film Grain",
         "Adds moving film grain over the picture. 0 is off.",
         0, 100, 5, 0, false, 0);
 
@@ -5841,77 +5852,77 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
 
     graphics.add_number_option(
         grass_option,
-        "3D grass",
+        "3D Grass",
         "Real blades of grass grow out of the green ground of the levels (Spiral Mountain, Isle o' Hags, Mayahem Temple and others): wind rolls across them in waves, and they bend away from Banjo and spring back up behind him. Higher numbers grow more of them. Drawn on the picture, so nothing in the game changes. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         grass_height_option,
-        "3D grass height",
+        "3D Grass Height",
         "How tall the 3D grass grows, in percent. 100 is about knee high on Banjo.",
         25, 200, 5, 0, false, 100);
     graphics.add_number_option(
         grass_distance_option,
-        "3D grass distance",
+        "3D Grass Distance",
         "How far from the camera the 3D grass reaches before it shrinks away, in the game's units (Banjo is about 150 tall). Further costs more.",
         500, 6000, 250, 0, false, 1800);
     graphics.add_number_option(
         grass_density_option,
-        "3D grass density",
+        "3D Grass Density",
         "How closely the 3D grass blades grow, in percent. Lower is sparser and cheaper, higher is thicker and costs more.",
         10, 200, 5, 0, false, 100);
     graphics.add_number_option(
         grass_patches_option,
-        "3D grass patches",
+        "3D Grass Patches",
         "How much of the green ground the 3D grass grows on: it grows in patches here and there, with short grass at their edges. Lower is fewer, smaller patches, 100 is grass everywhere.",
         5, 100, 5, 0, false, 50);
     graphics.add_number_option(
         grass_thickness_option,
-        "3D grass thickness",
+        "3D Grass Thickness",
         "How wide each 3D grass blade is, in percent of the normal width. Higher gives thicker, chunkier strands.",
         50, 400, 10, 0, false, 100);
     graphics.add_number_option(
         grass_random_length_option,
-        "3D grass random length",
+        "3D Grass Random Length",
         "How much the 3D grass blades' lengths differ from each other, in percent. 0 makes every blade as long as 3D grass height; 100 makes them anything from very short to full length.",
         0, 100, 5, 0, false, 40);
     graphics.add_number_option(
         grass_blend_option,
-        "3D grass blending",
+        "3D Grass Blending",
         "How much the 3D grass takes on the colour of the ground it grows from, so it blends in instead of standing out: most at the roots (no dark line where the blades meet the ground) and further away. 0 is off.",
         0, 100, 5, 0, false, 50);
     graphics.add_bool_option(
         grass_chunky_option,
-        "Chunky 3D grass",
+        "Chunky 3D Grass",
         "Low-poly 3D grass to suit the N64 look: fewer, wider blades, each a single flat-coloured triangle. Also cheaper to draw.",
         false);
     graphics.add_number_option(
         grass_chunk_size_option,
-        "Chunk size",
+        "Chunk Size",
         "With Chunky 3D grass: how big the chunky blades are, in percent of a normal blade. They also grow further apart, so the grass gets coarser. Higher is chunkier and cheaper.",
         100, 400, 25, 0, false, 200);
     graphics.add_bool_option(
         grass_pixelated_option,
-        "Pixelated 3D grass",
+        "Pixelated 3D Grass",
         "Draws the 3D grass blades in blocks the size of the N64's own pixels, so they look blocky and pixel-sharp at any resolution. Works with or without Chunky 3D grass.",
         false);
     graphics.add_number_option(
         grass_pixel_size_option,
-        "Pixel size",
+        "Pixel Size",
         "With Pixelated 3D grass: how big the blocks are, in N64 pixels. 1 matches the game's own pixels; lower is finer (0.5 is half an N64 pixel), higher is blockier. A block is never smaller than one pixel of your screen.",
         0.25, 8, 0.25, 2, false, 1);
     graphics.add_bool_option(
         grass_edges_option,
-        "3D grass on edges",
+        "3D Grass On Edges",
         "Also grow 3D grass on the grassy parts of textures that are only partly grass: the grass fringe along cliff tops and banks, and grass at the foot of rocks and walls. The blades lean out from slopes and walls.",
         true);
     graphics.add_bool_option(
         grass_frustum_cull_option,
-        "Frustum culling",
+        "Frustum Culling",
         "Skips 3D grass blades that are off the edges of the screen before they are drawn. Looks the same; faster.",
         true);
     graphics.add_bool_option(
         grass_occlusion_cull_option,
-        "Occlusion culling",
+        "Occlusion Culling",
         "With Chunking: skips whole chunks of 3D grass hidden behind walls, hills and other nearer things, using the depth of the frame before. Single blades are never hidden this way, so grass doesn't vanish behind Banjo as he moves. Turns itself off for a frame when the camera cuts or turns fast.",
         true);
     graphics.add_bool_option(
@@ -5921,17 +5932,17 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         true);
     graphics.add_number_option(
         grass_lod_option,
-        "3D grass LOD",
+        "3D Grass LOD",
         "How much the 3D grass thins out with distance, in percent: fewer, wider blades further away. 0 is off: every blade is placed once, stays where it is and is drawn all the way out to 3D grass distance (slowest). Higher thins it out sooner and is faster; each blade still keeps its place.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         grass_half_rate_option,
-        "30 FPS 3D grass",
+        "30 FPS 3D Grass",
         "Works out which 3D grass blades to draw, and their sway in the wind, 30 times a second instead of every frame, and draws them again in between. Faster above 30 FPS; the wind and the grass parting round Banjo update at 30 FPS.",
         true);
     graphics.add_bool_option(
         grass_ray_tracing_option,
-        "3D grass in ray tracing",
+        "3D Grass In Ray Tracing",
         "With Ray tracing on: the 3D grass near Banjo casts traced shadows (sun, lamps, light beams) and shows in traced reflections. Off leaves the grass out of the rays (faster).",
         true);
 
@@ -5939,7 +5950,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5962,27 +5973,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
 
 
     // Hidden when the Shaders toggle is off; the effects keep their values either way.
-    graphics.add_option_hidden_dependency(ambient_occlusion_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(bounce_light_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(ssgi_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(outlines_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(outline_thickness_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(rim_light_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(toon_characters_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(toon_world_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(underwater_tint_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(underwater_haze_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(underwater_distortion_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(reflections_section_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(water_reflections_option, reflections_section_option, false);
-    graphics.add_option_hidden_dependency(ice_reflections_option, reflections_section_option, false);
-    graphics.add_option_hidden_dependency(ssr_option, reflections_section_option, false);
-    graphics.add_option_hidden_dependency(ssr_stochastic_option, reflections_section_option, false);
-    graphics.add_option_hidden_dependency(water_waves_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(wave_speed_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(water_detail_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(water_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(shore_foam_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_height_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_distance_option, grass_section_option, false);
@@ -6002,33 +5992,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_lod_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_half_rate_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_ray_tracing_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(tessellated_sand_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(snow_detail_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(snow_refill_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(snow_lod_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(parallax_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(parallax_original_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(ground_displacement_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(ground_displacement_distance_option, lighting_section_option, false);
-    // Banjo's fur and Kazooie's feathers sit in their own Character Shaders section (L, 2026-10-16).
-    for (const std::string* option : { &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option }) {
-        graphics.add_option_hidden_dependency(*option, character_section_option, false);
-    }
-    graphics.add_option_hidden_dependency(heat_haze_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(sun_shadows_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(sun_shadow_banjo_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(sun_shadow_softness_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(sun_shadow_distance_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(light_shafts_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(bloom_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(eye_adaptation_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(cutscene_dof_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(gameplay_dof_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(fog_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(fog_start_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(fog_colour_option, lighting_section_option, false);
 }
 
 std::vector<tooie::picture_filters::CostEffect> tooie::picture_filters::cost_effects() {

@@ -35,7 +35,7 @@ void tooie::texture_slide::add_option(recomp::config::Config& wip) {
     }
     wip.add_bool_option(
         option,
-        "Texture slide blending",
+        "Texture Slide Blending",
         "For testing. With frame smoothing, slides textures the game moves (scrolling water, animated smoke) between game frames. "
         "Off, they step at the game's own rate. Turn it off if smoke, splashes or droplets show stripes or the wrong picture while moving.",
         on.load());

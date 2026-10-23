@@ -662,7 +662,7 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..4c8b1b4 100644
+index 3227ab1..aa8bc42 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,10 +4,18 @@
@@ -953,7 +953,7 @@ index 3227ab1..4c8b1b4 100644
 +                    const uint32_t outputHeight = (scale > 1.05f) ? uint32_t(std::lround(renderParams.textureHeight * scale)) : renderParams.textureHeight;
 +                    GpuSectionScope timed(presentSections, GpuSection::Fsr, commandList);
 +                    // With the HUD kept out of the upscale, the upscaler is given the 3D world alone and the HUD is added after.
-+                    RenderTexture *worldSnapshot = UpscalerWorldSnapshot(renderParams.textureWidth, renderParams.textureHeight);
++                    RenderTexture *worldSnapshot = UpscalerWorldSnapshot(colorTarget, renderParams.textureWidth, renderParams.textureHeight);
 +                    RenderTexture *resolveInput = (worldSnapshot != nullptr) ? worldSnapshot : renderParams.texture;
 +                    RenderTexture *resolved = upscalerRenderer->resolve(ext.device, commandList, ext.shaderLibrary, resolveInput,
 +                        renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight, outputWidth, outputHeight);
@@ -1753,7 +1753,7 @@ index 8ea27d5..50ebf26 100644
          std::vector<uint16_t> worldIndices;
          std::vector<uint16_t> fogIndices;
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..b9e39a2 100644
+index 5a331aa..baf0992 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -4,9 +4,14 @@
@@ -1795,19 +1795,22 @@ index 5a331aa..b9e39a2 100644
          renderFramebufferManager = std::make_unique<RenderFramebufferManager>(ext.device);
          queryPool = ext.device->createQueryPool(2);
  
-@@ -189,6 +200,11 @@ namespace RT64 {
+@@ -189,6 +200,14 @@ namespace RT64 {
          case UserConfiguration::Resolution::WindowIntegerScale:
              if (ext.sharedResources->swapChainHeight > 0) {
                  resolutionMultiplier = std::max(float((ext.sharedResources->swapChainHeight + referenceHeight - 1) / referenceHeight), 1.0f);
 +                // Banjo-Tooie: with a temporal upscaler on, Auto renders at a fraction of the window and the upscaler makes up the rest.
 +                const float renderFraction = UpscalerRenderFraction();
 +                if (renderFraction < 1.0f) {
-+                    resolutionMultiplier = std::max(float(ext.sharedResources->swapChainHeight) * renderFraction / float(referenceHeight), 1.0f);
++                    // A whole multiple: RT64 lines the picture up by whole steps of the scale, and a scale like 2.5 left a strip
++                    // at the left edge and moved some layered draws and the ray traced picture.
++                    const float fractional = float(ext.sharedResources->swapChainHeight) * renderFraction / float(referenceHeight);
++                    resolutionMultiplier = std::clamp(std::round(fractional), 1.0f, resolutionMultiplier);
 +                }
              }
              else {
                  resolutionMultiplier = 1.0f;
-@@ -301,6 +317,14 @@ namespace RT64 {
+@@ -301,6 +320,14 @@ namespace RT64 {
          const bool usingMSAA = (targetManager.multisampling.sampleCount > 1);
  
          rendererCPUProfiler.start();
@@ -1822,7 +1825,7 @@ index 5a331aa..b9e39a2 100644
  
          const bool aspectRatioAdjustment = (abs(workloadConfig.aspectRatioScale - 1.0f) > 1e-6f);
          const bool processProjections = aspectRatioAdjustment || prevFrame.matched|| curFrame.isDebuggerCameraEnabled(*this);
-@@ -387,7 +411,9 @@ namespace RT64 {
+@@ -387,7 +414,9 @@ namespace RT64 {
                  rspProcessor->process(rspParams);
              }
  
@@ -1833,7 +1836,7 @@ index 5a331aa..b9e39a2 100644
              if (processWorldVertices) {
                  workload.resetWorldOutputBuffers();
  
-@@ -414,6 +440,24 @@ namespace RT64 {
+@@ -414,6 +443,24 @@ namespace RT64 {
              RenderTarget *colorTarget;
              RenderTarget *depthTarget;
              RenderFramebufferKey fbKey;
@@ -1858,7 +1861,7 @@ index 5a331aa..b9e39a2 100644
              auto getTargetsFromPair = [&](uint32_t f) {
                  const FramebufferPair &fbPair = workload.fbPairs[f];
                  const auto &colorImg = fbPair.colorImage;
-@@ -474,8 +518,10 @@ namespace RT64 {
+@@ -474,8 +521,10 @@ namespace RT64 {
                          fbKey.depthTargetKey = RenderTargetKey(depthFb->addressStart, depthFb->width, depthFb->siz, Framebuffer::Type::Depth);
                          depthTarget = &targetManager.get(fbKey.depthTargetKey);
                          depthTarget->resolutionScale = fixedResScale;
@@ -1871,7 +1874,7 @@ index 5a331aa..b9e39a2 100644
                          chosenRt = depthTarget;
                      }
                      else {
-@@ -483,8 +529,10 @@ namespace RT64 {
+@@ -483,8 +532,10 @@ namespace RT64 {
                      }
  
                      if (colorTarget != nullptr) {
@@ -1884,7 +1887,7 @@ index 5a331aa..b9e39a2 100644
                          chosenRt = colorTarget;
                      }
  
-@@ -502,11 +550,6 @@ namespace RT64 {
+@@ -502,11 +553,6 @@ namespace RT64 {
                  }
              };
  
@@ -1896,7 +1899,7 @@ index 5a331aa..b9e39a2 100644
              const uint32_t fbPairCount = (debuggerRenderer.framebufferIndex >= 0) ? (debuggerRenderer.framebufferIndex + 1) : workload.fbPairCount;
              for (uint32_t f = 0; f < fbPairCount; f++) {
                  const FramebufferPair &fbPair = workload.fbPairs[f];
-@@ -538,7 +581,7 @@ namespace RT64 {
+@@ -538,7 +584,7 @@ namespace RT64 {
                          depthFb->nativeTarget.resetBufferHistory();
                      }
  
@@ -1905,7 +1908,7 @@ index 5a331aa..b9e39a2 100644
                          resizedTargets.emplace(colorTarget);
                          colorFb->readHeight = 0;
                      }
-@@ -550,7 +593,7 @@ namespace RT64 {
+@@ -550,7 +596,7 @@ namespace RT64 {
                              dummyDepthTarget->setupDepth(ext.workloadGraphicsWorker, rtWidth, rtHeight);
                          }
  
@@ -1914,7 +1917,7 @@ index 5a331aa..b9e39a2 100644
                              resizedTargets.emplace(dummyDepthTarget.get());
                          }
  
-@@ -563,11 +606,16 @@ namespace RT64 {
+@@ -563,11 +609,16 @@ namespace RT64 {
                              colorDepthPairs.emplace_back(colorTarget, depthTarget);
                          }
  
@@ -1932,7 +1935,7 @@ index 5a331aa..b9e39a2 100644
                  }
  
                  fbManager.setupOperations(ext.workloadGraphicsWorker, fbPair.startFbOperations, fixedResScale, targetManager, &resizedTargets);
-@@ -645,6 +693,8 @@ namespace RT64 {
+@@ -645,6 +696,8 @@ namespace RT64 {
                  gameCallCursor += fbPair.gameCallCount;
              }
  
@@ -1941,7 +1944,7 @@ index 5a331aa..b9e39a2 100644
              // Create all GPU tile mappings and upload them.
              if (!workload.drawData.gpuTiles.empty()) {
                  std::pair<size_t, size_t> gpuTileRange;
-@@ -701,7 +751,11 @@ namespace RT64 {
+@@ -701,7 +754,11 @@ namespace RT64 {
              ext.workloadGraphicsWorker->commandList->begin();
              ext.workloadGraphicsWorker->commandList->resetQueryPool(queryPool.get(), 0, 2);
              ext.workloadGraphicsWorker->commandList->writeTimestamp(queryPool.get(), 0);
@@ -1953,7 +1956,7 @@ index 5a331aa..b9e39a2 100644
              framebufferRenderer->recordSetup(ext.workloadGraphicsWorker, bufferUploaders, processRSP ? rspProcessor.get() : nullptr, processWorldVertices ? vertexProcessor.get() : nullptr, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              
              // Record all framebuffer pairs.
-@@ -789,6 +843,11 @@ namespace RT64 {
+@@ -789,6 +846,11 @@ namespace RT64 {
                          }
                      }
                      
@@ -1965,7 +1968,7 @@ index 5a331aa..b9e39a2 100644
                      framebufferRenderer->recordFramebuffer(ext.workloadGraphicsWorker, framebufferIndex++);
  
                      // Transition the render targets in case the present queue will show them so it doesn't have to perform transitions.
-@@ -837,17 +896,23 @@ namespace RT64 {
+@@ -837,17 +899,23 @@ namespace RT64 {
                      fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
@@ -1989,7 +1992,7 @@ index 5a331aa..b9e39a2 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -858,6 +923,8 @@ namespace RT64 {
+@@ -858,6 +926,8 @@ namespace RT64 {
          }
  
          framebufferRenderer->advanceFrame(workloadConfig.raytracingEnabled);
@@ -1998,7 +2001,7 @@ index 5a331aa..b9e39a2 100644
          rendererCPUProfiler.end();
          rendererCPUProfiler.log();
          rendererCPUProfiler.reset();
-@@ -867,6 +934,7 @@ namespace RT64 {
+@@ -867,6 +937,7 @@ namespace RT64 {
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();

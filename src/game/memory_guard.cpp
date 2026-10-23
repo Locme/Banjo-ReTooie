@@ -244,7 +244,7 @@ namespace {
 void tooie::memory_guard::add_option(recomp::config::Config& config) {
     config.add_bool_option(
         option,
-        "Pass over crashes",
+        "Pass Over Crashes",
         "When game code reads or writes memory that isn't there (a missing pointer, the most common crash), the game carries on as if it read 0 instead of closing. "
         "Each place this happens is written to logs/PassedOver.txt and console.log as a MAJOR line saying where, with a notice on screen, so it can be fixed properly. "
         "During a texture sweep, any other crash or a hang of 60 seconds starts the game again and the sweep carries on from the next entrance.",

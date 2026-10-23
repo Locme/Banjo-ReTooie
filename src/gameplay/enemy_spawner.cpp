@@ -664,7 +664,7 @@ void tooie::enemy_spawner::add_options(recomp::config::Config& cheats, const std
         std::snprintf(key, sizeof(key), "enemy_%X", enemy.id);
         entries.push_back(recomp::config::ConfigOptionEnumOption(enemy.id, key, enemy.name));
     }
-    cheats.add_enum_option(option, "Enemy spawner",
+    cheats.add_enum_option(option, "Enemy Spawner",
         "Pick an enemy, then press Spawn: each press puts one in front of Banjo (when the menu pauses the game, they appear as it closes). Enemies marked (only where it lives) would crash anywhere else, so they only spawn in an area that already has one; elsewhere Spawn does nothing.",
         entries, (uint32_t)default_enemy);
     cheats.add_option_hidden_dependency(option, master_option, false);

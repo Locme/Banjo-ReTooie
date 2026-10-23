@@ -84,9 +84,10 @@ namespace RT64 {
     // The framebuffer renderer, once the 3D world is drawn and before the HUD: copies the color target.
     void UpscalerTakeWorldSnapshot(RenderWorker *worker, RenderTarget *colorTarget, const ShaderLibrary *shaderLibrary);
 
-    // The present queue: the copy for the frame being shown, or null if there is none or it is not width by height.
-    // A copy can be taken once.
-    RenderTexture *UpscalerWorldSnapshot(uint32_t width, uint32_t height);
+    // The present queue: the copy of colorTarget (the framebuffer being shown), or null if there is none or it is not
+    // width by height. Each framebuffer has its own copy, so the game drawing the next frame into its other framebuffer
+    // while this one is shown does not swap the copy under it. A copy can be taken once.
+    RenderTexture *UpscalerWorldSnapshot(const RenderTarget *colorTarget, uint32_t width, uint32_t height);
 
     // Graphics > Upscaler > HUD at full resolution (experimental): after the 3D world the framebuffer renderer draws the HUD
     // again at the upscaler's output size, once over black and once over white, and the present queue puts it on the upscaled

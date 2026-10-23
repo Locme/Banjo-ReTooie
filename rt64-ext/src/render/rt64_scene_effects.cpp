@@ -533,6 +533,13 @@ namespace RT64 {
     static float dustClouds[SceneMaxDust * 8] = {};
     static uint32_t dustCount = 0;
 
+    // Debug (TOOIE_DUST_DEBUG): 1 the shader draws no dust, 2 flat magenta clouds (no ground colour, no noise).
+    static std::atomic<uint32_t> dustDebug{ 0 };
+
+    void SetSceneDustDebug(uint32_t mode) {
+        dustDebug = mode;
+    }
+
     void SetSceneDust(const float *clouds, uint32_t count) {
         const std::scoped_lock lock(dustMutex);
         dustCount = std::min(count, SceneMaxDust);
@@ -3714,6 +3721,7 @@ namespace RT64 {
             memset(dust, 0, 16 * (1 + 2 * SceneMaxDust));
             const std::scoped_lock lock(dustMutex);
             dust[0] = float(dustCount);
+            dust[3] = float(dustDebug.load());
             {
                 const std::scoped_lock extraLock(volExtraMutex);
                 dust[1] = volExtra[0];
