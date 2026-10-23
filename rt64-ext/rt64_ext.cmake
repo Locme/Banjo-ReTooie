@@ -20,7 +20,7 @@ target_sources(rt64 PRIVATE
     ${RT64_EXT_DIR}/src/render/rt64_mirror.cpp
     ${RT64_EXT_DIR}/src/render/rt64_texture_marks.cpp
     ${RT64_EXT_DIR}/src/render/rt64_fsr.cpp
-    ${RT64_EXT_DIR}/src/render/rt64_upscaler.cpp
+    ${RT64_EXT_DIR}/src/render/rt64_temporal_upscaler.cpp
     ${RT64_EXT_DIR}/src/render/rt64_photo_grade.cpp
     ${RT64_EXT_DIR}/src/hle/rt64_present_queue_ext.cpp
     ${RT64_EXT_DIR}/src/render/rt64_texture_cache_ext.cpp
@@ -66,6 +66,9 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/MirrorPS.hlsl")
 # FSR 1 (RT64::SetFsrMode, src/display/fsr.cpp): EASU upscale and RCAS sharpen.
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/FsrPS.hlsl" "src/shaders/FsrEasuPS.hlsl" "-I${RT64_FSR_DIR}" "-D FSR_PASS_EASU" "-HV 2018")
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/FsrPS.hlsl" "src/shaders/FsrRcasPS.hlsl" "-I${RT64_FSR_DIR}" "-D FSR_PASS_RCAS" "-HV 2018")
+
+# Camera motion for the temporal upscalers (RT64::SetUpscalerMode, src/display/upscaler.cpp).
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/UpscalerVelocityPS.hlsl")
 
 # Photo mode's filters and sharpening (RT64::SetPhotoGrade, src/gameplay/photo_mode.cpp).
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/PhotoGradePS.hlsl")

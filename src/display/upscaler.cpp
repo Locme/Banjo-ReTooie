@@ -1,6 +1,6 @@
 // Temporal upscaler setting (FSR 4, DLSS and their native-resolution modes).
 //
-// Only the setting lives here. RT64 receives the mode (rt64-ext/src/render/rt64_upscaler.cpp) and leaves the picture
+// Only the setting lives here. RT64 receives the mode (rt64-ext/src/render/rt64_temporal_upscaler.cpp) and leaves the picture
 // alone until the motion-vector pass and the vendor libraries are in; Off is the default and changes nothing.
 
 #include <variant>

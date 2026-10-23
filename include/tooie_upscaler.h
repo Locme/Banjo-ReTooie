@@ -8,7 +8,7 @@
 
 // Arm ASR and Snapdragon GSR are for Android; on other platforms they are listed as such and act as Off.
 // Temporal upscaler choice (src/display/upscaler.cpp): a Graphics option, Off by default. FSR 4, DLSS and
-// their native-resolution modes need motion vectors, depth and camera jitter from RT64 (rt64-ext/src/render/rt64_upscaler.*).
+// their native-resolution modes need motion vectors, depth and camera jitter from RT64 (rt64-ext/src/render/rt64_temporal_upscaler.*).
 namespace tooie::upscaler {
     inline const std::string option = "upscaler";
 
