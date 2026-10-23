@@ -115,7 +115,7 @@ namespace RT64 {
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
     void SetSceneCharSurface(float wet, float snow, float dirt, float sand);
-    void SetSceneCharDrip(float drip, float seconds, float soaked);
+    void SetSceneCharDrip(float drip, float seconds, float soaked, float icy);
     bool SceneSandUnderfoot();
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand);
@@ -5132,6 +5132,7 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     // over a minute elsewhere, quickly in water; dirt builds slowly while he runs about on the ground and washes off in water.
     {
         static float amounts[4] = {};
+        static bool icy_water = false;
         static std::chrono::steady_clock::time_point last{};
         static float last_pos[3] = {};
         static bool had_pos = false;
@@ -5169,6 +5170,13 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
                 dry_seconds = 8.0f + 12.0f * float(std::chrono::steady_clock::now().time_since_epoch().count() % 1000) / 1000.0f;
             }
             was_wet_in_water = in_water;
+            // Icy water leaves him ice blue until he has dried off.
+            if (in_water && snowy_map(map)) {
+                icy_water = true;
+            }
+            else if (amounts[0] <= 0.0f) {
+                icy_water = false;
+            }
             amounts[0] = std::clamp(amounts[0] + (in_water ? 3.0f : -1.0f / dry_seconds) * dt, 0.0f, 1.0f);
             // Dirt and sand come in little by little: 5% at each trigger, and go at 1% every 8 seconds. Water cleans all three fast.
             // Triggers: the dust he kicks up (a roll, a landing, a run of steps: one every 0.75 s at most) gives dirt; steps on
@@ -5225,7 +5233,7 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         swimming_now = char_surface.load() && in_water_state(state);
         const bool forced_wet = char_forced[0].load() > 0.0f;
         RT64::SetSceneCharDrip(forced_wet ? 1.0f : (char_wet_max.load() > 0.0f && !swimming_now ? amounts[0] : 0.0f),
-            (float)std::fmod(std::chrono::duration<double>(now.time_since_epoch()).count(), 1000.0), swimming_now ? 1.0f : 0.0f);
+            (float)std::fmod(std::chrono::duration<double>(now.time_since_epoch()).count(), 1000.0), swimming_now ? 1.0f : 0.0f, icy_water ? 1.0f : 0.0f);
     }
     // The fog is measured from Banjo.
     {
