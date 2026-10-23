@@ -1671,13 +1671,24 @@ float ModelShadow(float3 center, float3 normal) {
     const float3 start = ViewToWorldPoint(center + normal * max(-center.z * 0.002f + 1.0f, 2.0f));
     const float reach = 400.0f;
     float shade = 0.0f;
-    // Two rays, turned a different way each pixel (the noise smoothing evens them out).
+    // Two rays from opposite sides, turned a different way each pixel (the noise smoothing evens them out). Where only
+    // one meets a model (the shadow's edge) six more spread over the cone: two alone cast two hard copies of the model's
+    // low-poly outline, a blocky edge in two shades (L, 2026-10-23).
+    const int Rays = 8;
     const float turn = frac(52.9829189f * frac(dot(center.xy, float2(0.06711056f, 0.00583715f)) * 37.0f)) * 3.14159265f * (1.0f - RtSmoothing() * 0.8f);
-    [unroll] for (int k = 0; k < 2; k++) {
-        const float angle = float(k) * 3.14159265f + turn;
+    int traced = 0;
+    int hits = 0;
+    [loop] for (int k = 0; k < Rays; k++) {
+        if ((k == 2) && (hits != 1)) {
+            break;
+        }
+        // The first two across the cone, the rest spread over it (golden angle).
+        const float angle = turn + ((k < 2) ? float(k) * 3.14159265f : float(k) * 2.39996323f);
+        const float radius = (k < 2) ? 0.08f : sqrt((float(k - 2) + 0.5f) / float(Rays - 2)) * 0.1f;
+        traced++;
         RayDesc ray;
         ray.Origin = start;
-        ray.Direction = normalize(float3(cos(angle) * 0.08f, 1.0f, sin(angle) * 0.08f));
+        ray.Direction = normalize(float3(cos(angle) * radius, 1.0f, sin(angle) * radius));
         ray.TMin = 0.0f;
         ray.TMax = reach;
         // The first thing above decides: a model shades, the level (a roof, a ledge) stops the ray. The nearest model
@@ -1703,12 +1714,13 @@ float ModelShadow(float3 center, float3 normal) {
                 RayDesc below = ray;
                 below.TMax = t;
                 if (!TraceAny(below, RayLevelMask)) {
-                    shade += 0.5f * (1.0f - t / reach);
+                    shade += 1.0f - t / reach;
+                    hits++;
                 }
             }
         }
     }
-    return 1.0f - 0.55f * shade;
+    return 1.0f - 0.55f * shade / float(max(traced, 1));
 }
 
 // The indirect pass's traced rays: a cosine-spread direction round the normal (ray index of 32 in a 4x4 block's
@@ -3889,7 +3901,9 @@ uint VolDustCount() {
 // a plain grey-tan dust.
 float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
     const uint count = VolDustCount();
-    if (count == 0u) {
+    // Debug (header float 3, TOOIE_DUST_DEBUG): 1 draws nothing, 2 flat magenta clouds.
+    const uint debugMode = uint(asfloat(gDust.Load(12)) + 0.5f);
+    if ((count == 0u) || (debugMode == 1u)) {
         return color;
     }
     const float scale = length(gConstants.worldX.xyz);
@@ -3954,7 +3968,8 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
         const float3 sandColour = saturate(ground * 1.25f + 0.1f);
         const float3 dirtColour = saturate(ground * 0.85f + 0.03f);
         const float3 plainColour = lerp(float3(0.74f, 0.68f, 0.6f), saturate(ground * 1.35f + 0.12f), 0.4f);
-        const float3 base = (grassColour * wGrass + snowColour * wSnow + sandColour * wSand + dirtColour * wDirt + plainColour * wPlain) * tint;
+        const float3 baseColour = (grassColour * wGrass + snowColour * wSnow + sandColour * wSand + dirtColour * wDirt + plainColour * wPlain) * tint;
+        const float3 base = (debugMode == 2u) ? float3(1.0f, 0.0f, 1.0f) : baseColour;
 
         const float3 middle = origin + direction * clamp(along, 0.0f, far);
         // The Gaussian, taken to nothing at its reach (so it ends smoothly, with no step).
@@ -3978,7 +3993,9 @@ float3 VolDust(float3 color, int2 pixel, float worldDistance, float3 tint) {
     }
     // Never opaque: at most about 55% of the picture behind is replaced, so a puff stays see-through (L, 2026-10-23).
     const float seen = 0.55f * (1.0f - exp(-opticalDepth));
-    return color * (1.0f - seen) + (lightSum / opticalDepth) * seen;
+    const float3 result = color * (1.0f - seen) + (lightSum / max(opticalDepth, 1e-6f)) * seen;
+    // Never a black or broken pixel from a bad number.
+    return (all(result >= 0.0f) && all(result < 1e6f)) ? result : color;
 }
 
 // Volumetric mist and fog along the pixel's ray from the camera to the surface (worldDistance in world units; the
@@ -4609,6 +4626,39 @@ float3 TracedHalfLamp(int2 pixel, float3 center, float3 normal) {
 }
 #endif
 
+#ifdef RAY_TRACED
+// The models' share of the traced sun shadow (Banjo, enemies, NPCs). They are low-poly, and cast through the level's
+// narrow cone every flat face of them showed as a hard straight edge: blocky shadows (L, 2026-10-23). Their rays
+// spread over a wider cone, so the edge softens the further the shadow falls from the model and the faces blur into
+// one rounded shape, still sharp where a foot meets the ground. Two rays from opposite sides of the cone first; only
+// where they disagree (the soft edge) the rest. All in world space. Leaving Banjo out (Traced shadows of the player
+// off), a ray that meets him goes on.
+float SunModelShadow(float3 origin, float3 sunDirection, float3 side, float3 up, float jitter, float softness, bool onBanjo, uint detail) {
+    const int Rays = 10;
+    const float spread = lerp(0.05f, 0.12f, softness);
+    // Turned a different way each pixel; the noise smoothing turns them all more alike (on Banjo even more).
+    const float turn = jitter * 6.28318531f * (1.0f - RtSmoothing() * (onBanjo ? 1.0f : 0.8f));
+    float blocked = 0.0f;
+    int traced = 0;
+    [loop] for (int k = 0; k < Rays; k++) {
+        if ((k == 2) && ((detail > 0u) || (blocked == 0.0f) || (blocked == 2.0f))) {
+            break;
+        }
+        // The first two across the cone at most of its width, the rest spread over it (golden angle).
+        const float angle = turn + ((k < 2) ? float(k) * 3.14159265f : float(k) * 2.39996323f);
+        const float radius = ((k < 2) ? 0.8f : sqrt((float(k - 2) + 0.5f) / float(Rays - 2))) * spread;
+        RayDesc ray;
+        ray.Origin = origin;
+        ray.Direction = normalize(sunDirection + (side * cos(angle) + up * sin(angle)) * radius);
+        ray.TMin = 0.0f;
+        ray.TMax = 20000.0f;
+        blocked += (PlayerShadowsOff() ? TraceModels(ray, false) : TraceAny(ray, RayModelMask)) ? 1.0f : 0.0f;
+        traced++;
+    }
+    return blocked / float(max(traced, 1));
+}
+#endif
+
 // sunlight: with ray tracing, the sun's light let in through a cut-out's holes (a grate) onto what is under cover behind
 // it (SunThroughCutout). The game lit such spots as if in shade, so traced shadows alone could only darken them and
 // the light through the grate never showed (L, 2026-10-21).
@@ -4713,11 +4763,14 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
             ray.Direction = ViewToWorldDirection(direction);
             ray.TMin = 0.0f;
             ray.TMax = 20000.0f;
-            // Leaving Banjo out, a ray that meets him goes on to what lies beyond (a cliff's shadow he stands in).
-            // Under ray tracing, Traced shadows of the player decides (not Sun shadows on Banjo).
-            blocked += TraceOccluded(ray, PlayerShadowsOff() ? 1u : 0u) ? 1.0f : 0.0f;
+            // The level only: the models cast through their own wider cone below (SunModelShadow).
+            blocked += TraceOccluded(ray, 3u) ? 1.0f : 0.0f;
         }
         shadow = blocked / float(max(traced, 1));
+        if ((gSunHalf != 2) && !turnedFromSun && (shadow < 1.0f)) {
+            shadow = max(shadow, SunModelShadow(ViewToWorldPoint(start), ViewToWorldDirection(sunDirection), ViewToWorldDirection(side),
+                ViewToWorldDirection(up), jitter, softness, onBanjo, sunDetail));
+        }
         if ((gSunHalf != 2) && (shadow > 0.0f) && (facing >= 0.0f) && Enclosed(ViewToWorldPoint(start))) {
             return (gSunHalf == 1) ? 2.0f : 1.0f;
         }

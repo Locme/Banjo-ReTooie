@@ -36,8 +36,9 @@ namespace tooie {
     // App-data root (app_data.cpp): the exe's folder when writable (migrating the old per-user
     // folder once), else the runtime's default location.
     std::filesystem::path resolve_app_folder();
-    // dev.txt next to the exe (or in the working directory, like portable.txt): every hidden tab
-    // shows (DEV, Cheats, Warp, Achievements), whatever their switches say (L, 2026-10-23).
+    // dev.txt next to the exe (or in the working directory, like portable.txt): every tab hidden by a
+    // switch shows (DEV, Cheats, Warp, Achievements and any added later), whatever the switches say
+    // (L, 2026-10-23; recompui::config::set_show_all_tabs in init_config).
     bool dev_file_present();
 
     // Save backups (save_backup.cpp): at launch and every 120 s, copies the save file to
@@ -99,6 +100,8 @@ namespace tooie {
     inline const std::string cheats_tab_option = "cheats_tab";
     // DEV > Hide Unnecessary Settings Entry (src/game/hide_vanilla_widescreen.cpp).
     inline const std::string hide_vanilla_widescreen_option = "hide_vanilla_widescreen";
+    // DEV: leaves the Start menu's SETTINGS entry out (pause_settings.cpp; L, 2026-10-23, on by default).
+    inline const std::string hide_pause_settings_option = "hide_pause_settings";
     // Once a frame: keeps the game's own widescreen mode off while that switch is on.
     void vanilla_widescreen_tick(uint8_t* rdram, recomp_context* ctx);
     // The pause menu's Settings page (src/gameplay/pause_settings.cpp opens it as a Totals sub page,

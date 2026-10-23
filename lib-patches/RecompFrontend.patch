@@ -885,7 +885,7 @@ index 4dce8e0..15bd9e3 100644
  endif()
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..4a8367a 100644
+index 38b84f5..dc7cbcc 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
 @@ -1,6 +1,7 @@
@@ -905,10 +905,13 @@ index 38b84f5..4a8367a 100644
              void toggle_fullscreen();
          }
  
-@@ -133,10 +136,49 @@ namespace recompui {
+@@ -133,10 +136,52 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
++        // Shows every tab hidden with set_tab_visible, now and later, whatever is asked (a developer file).
++        void set_show_all_tabs(bool enabled);
++
 +        // Adds a Search tab that finds options in every other tab. Call it after all other tabs are created.
 +        void create_search_tab();
 +
@@ -1362,7 +1365,7 @@ index 277a421..676066d 100644
      ui_state->unload();
      ui_state.reset();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..6f2e821 100644
+index 6c84c05..1656e86 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
 @@ -1,7 +1,14 @@
@@ -1491,7 +1494,7 @@ index 6c84c05..6f2e821 100644
      void config::create_tab(
          const std::string &name,
          const std::string &id,
-@@ -121,6 +225,80 @@ namespace recompui {
+@@ -121,7 +225,93 @@ namespace recompui {
          loaded_configs = true;
      }
  
@@ -1569,10 +1572,23 @@ index 6c84c05..6f2e821 100644
 +        return config_name;
 +    }
 +
++    static bool show_all_tabs = false;
++
++    void config::set_show_all_tabs(bool enabled) {
++        show_all_tabs = enabled;
++        for (auto &tab : pending_tabs) {
++            if (enabled && tab.hidden) {
++                set_tab_visible(tab.id, true);
++            }
++        }
++    }
++
      void config::set_tab_visible(const std::string &id, bool is_visible) {
++        is_visible = is_visible || show_all_tabs;
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
-@@ -177,6 +355,14 @@ namespace recompui {
+                 if (tab.id == id) {
+@@ -177,6 +367,14 @@ namespace recompui {
          return config_modal->modal_root_context;
      }
  
@@ -1587,7 +1603,7 @@ index 6c84c05..6f2e821 100644
      void config::set_tab(const std::string &id) {
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
-@@ -185,6 +371,16 @@ namespace recompui {
+@@ -185,6 +383,16 @@ namespace recompui {
          config_modal->set_selected_tab(id);
      }
  

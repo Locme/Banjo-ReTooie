@@ -30,6 +30,7 @@
 namespace RT64 {
     // rt64-ext/src/render/rt64_scene_effects.h: up to 24 clouds, eight floats each (x, y, z, radius, strength, seed, 0, 0).
     void SetSceneDust(const float* clouds, uint32_t count);
+    void SetSceneDustDebug(uint32_t mode);
 }
 
 namespace {
@@ -66,6 +67,7 @@ namespace {
     // Dust Banjo has been in since take_exposure (see tooie_dust.h).
     std::atomic<float> exposure{ 0.0f };
     bool log_puffs = false;
+    int debug_mode = 0;
 
     uint32_t player_pointer(uint8_t* rdram) {
         const uint32_t player = read_word(rdram, player_table);
@@ -141,6 +143,12 @@ void tooie::dust::tick(uint8_t* rdram) {
     if (first) {
         first = false;
         log_puffs = std::getenv("TOOIE_DUST_LOG") != nullptr;
+        // TOOIE_DUST_DEBUG: 1 the clouds are made but the renderer draws none, 2 they are flat magenta, 3 the game's own puffs
+        // stay as well as the clouds. To tell what a stray shape on screen is (L, 2026-10-23, a black disc).
+        if (const char* mode = std::getenv("TOOIE_DUST_DEBUG")) {
+            debug_mode = std::atoi(mode);
+            RT64::SetSceneDustDebug(uint32_t(std::clamp(debug_mode, 0, 2)));
+        }
     }
     const double now = tooie::game_frame_rate::game_seconds();
     const float dt = (last < 0.0) ? 0.0f : float(std::clamp(now - last, 0.0, 0.1));
@@ -270,7 +278,8 @@ namespace {
             c.life = life_seconds * (0.7f + 0.6f * hash(n * 7 + 5));
             c.seed = hash(n * 11 + 9) * 64.0f;
         }
-        return true;
+        // Debug 3: the clouds are made and the game's puff is made too.
+        return debug_mode != 3;
     }
 }
 
