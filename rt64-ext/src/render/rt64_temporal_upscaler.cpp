@@ -319,6 +319,16 @@ namespace RT64 {
         jitterFrame++;
     }
 
+    float UpscalerNoiseOffset() {
+        if (!UpscalerJitterActive()) {
+            return 0.0f;
+        }
+        // Golden-ratio steps: each frame's turn lands between the earlier ones. Wrapped so the float stays exact.
+        const uint32_t frame = jitterFrame.load() % 1024U;
+        const float offset = float(frame) * 0.618034f;
+        return offset - std::floor(offset);
+    }
+
     void UpscalerJitterNdc(uint32_t framesBack, float &x, float &y) {
         x = 0.0f;
         y = 0.0f;

@@ -38,7 +38,7 @@ namespace RT64 {
         // Records the pass and returns the smoothed image, or the input itself when Mirror Mode is off or the
         // image is in a format the pass wasn't made for.
         RenderTexture *apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
-            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height);
+            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, uint32_t usedWidth = 0);
     };
 };
 

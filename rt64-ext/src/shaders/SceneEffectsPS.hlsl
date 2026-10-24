@@ -590,9 +590,16 @@ float2 ViewToPixel(float3 view) {
     return float2((ndc.x + 1.0f) * 0.5f * gConstants.projection.z, (1.0f - ndc.y) * 0.5f * gConstants.projection.w);
 }
 
+// While a temporal upscaler (DLSS, FSR, Temporal) jitters the camera: a new turn of the noise each frame (0 to 1, in
+// golden-ratio steps, the dust buffer's last float), so the upscaler averages the rays over frames instead of seeing a
+// fixed pattern that the picture slides across, which flickers (L, 2026-10-24). 0 with no upscaler.
+float NoiseFrameOffset() {
+    return asfloat(gDust.Load(12u));
+}
+
 // Interleaved gradient noise (Jimenez 2014): 0 to 1, different from each pixel to the next.
 float InterleavedNoise(int2 pixel) {
-    return frac(52.9829189f * frac(0.06711056f * float(pixel.x) + 0.00583715f * float(pixel.y)));
+    return frac(52.9829189f * frac(0.06711056f * float(pixel.x) + 0.00583715f * float(pixel.y)) + NoiseFrameOffset());
 }
 
 // A 4x4 ordered pattern (0 to 15): neighbouring pixels of the indirect pass get directions far apart, so each 4x4
@@ -1554,7 +1561,7 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
     // A turn of the disc's points for each pixel (interleaved gradient noise), so two rays a light over neighbouring
     // pixels cover the disc as four did, at half the cost (L, 2026-10-22: Bottles' House at 20 fps).
     // Noise smoothing takes the turn towards the same for every pixel.
-    const float turn = frac(52.9829189f * frac(0.06711056f * float(pixel.x) + 0.00583715f * float(pixel.y))) * 6.2831853f * (1.0f - RtSmoothing() * 0.8f);
+    const float turn = InterleavedNoise(pixel) * 6.2831853f * (1.0f - RtSmoothing() * 0.8f);
     uint traced = 0u;
     // Fewer lights and rays far off (Ray detail distances): six lights at two rays, three at one, then one at one.
     const uint detail = RayDetail(-center.z);
@@ -1674,7 +1681,7 @@ float ModelShadow(float3 center, float3 normal) {
     // one meets a model (the shadow's edge) six more spread over the cone: two alone cast two hard copies of the model's
     // low-poly outline, a blocky edge in two shades (L, 2026-10-23).
     const int Rays = 8;
-    const float turn = frac(52.9829189f * frac(dot(center.xy, float2(0.06711056f, 0.00583715f)) * 37.0f)) * 3.14159265f * (1.0f - RtSmoothing() * 0.8f);
+    const float turn = frac(52.9829189f * frac(dot(center.xy, float2(0.06711056f, 0.00583715f)) * 37.0f) + NoiseFrameOffset()) * 3.14159265f * (1.0f - RtSmoothing() * 0.8f);
     int traced = 0;
     int hits = 0;
     [loop] for (int k = 0; k < Rays; k++) {
@@ -3988,7 +3995,7 @@ float3 VolScatter(float3 color, int2 pixel, float worldDistance, float3 tint) {
     const float fallHeight = VolFallHeight();
 
     const int steps = 20;
-    const float jitter = DayHash(float3(pixel, 3.0f));
+    const float jitter = frac(DayHash(float3(pixel, 3.0f)) + NoiseFrameOffset());
     const float3 wind = float3(time * 6.0f, 0.0f, time * 2.5f);
     float transmittance = 1.0f;
     float3 light = 0.0f;
@@ -4276,7 +4283,7 @@ float3 LightShafts(int2 pixel) {
     const int Samples = 24;
     const float2 delta = (sunScreen - float2(pixel)) * (0.9f / float(Samples));
     // A different start for each pixel hides the steps.
-    const float jitter = frac(52.9829189f * frac(dot(float2(pixel), float2(0.06711056f, 0.00583715f))));
+    const float jitter = InterleavedNoise(pixel);
     float2 p = float2(pixel) + delta * jitter;
     float3 gathered = 0.0f;
     float weight = 1.0f;
@@ -4594,7 +4601,7 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
     const bool mapView = SunMapView(gConstants.shadows.y);
     const float reach = SunMapReach(gConstants.shadows.y);
     // A different start for each pixel hides the steps.
-    const float jitter = frac(52.9829189f * frac(dot(float2(pixel), float2(0.06711056f, 0.00583715f))));
+    const float jitter = InterleavedNoise(pixel);
     // Banjo's own shadow can be left out: what is drawn inside a capsule around him casts none.
     const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
     float shadow = 0.0f;

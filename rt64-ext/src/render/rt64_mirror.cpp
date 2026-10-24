@@ -71,7 +71,7 @@ namespace RT64 {
     }
 
     RenderTexture *MirrorRenderer::apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
-        RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height)
+        RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, uint32_t usedWidth)
     {
         if (!mirrorMode.load() || (input == nullptr) || (width == 0) || (height == 0) || (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR))) {
             return input;
@@ -98,7 +98,9 @@ namespace RT64 {
         descriptorSet->setTexture(descriptorSet->gTexture2, input, RenderTextureLayout::SHADER_READ);
 
         interop::SmaaCB constants;
-        constants.rtMetrics = { 1.0f / float(width), 1.0f / float(height), float(width), float(height) };
+        // z: the width the picture takes up (a render target can be wider than what it holds): it is flipped within that.
+        const uint32_t flipWidth = ((usedWidth > 0) && (usedWidth < width)) ? usedWidth : width;
+        constants.rtMetrics = { 1.0f / float(width), 1.0f / float(height), float(flipWidth), float(height) };
 
         RenderTextureBarrier barriers[] = {
             RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),

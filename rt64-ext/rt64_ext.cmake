@@ -146,6 +146,20 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/s
 rt64_ext_shader(build_vertex_shader rt64 "src/shaders/SunShadowMapVS.hlsl")
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SunShadowMapPS.hlsl")
 
+# Volumetric shadows (rt64_volumetric_shadows.cpp, WIP tab): the light's map, the lit air's mesh, the composite.
+target_sources(rt64 PRIVATE ${RT64_EXT_DIR}/src/render/rt64_volumetric_shadows.cpp)
+rt64_ext_shader(build_vertex_shader rt64 "src/shaders/VolumetricShadowMapVS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/VolumetricShadowMapPS.hlsl")
+rt64_ext_shader(build_vertex_shader rt64 "src/shaders/VolumetricShadowVolumeVS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/VolumetricShadowVolumePS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/VolumetricShadowVolumePS.hlsl" "src/shaders/VolumetricShadowVolume2XPS.hlsl" "-D SAMPLES_2X")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/VolumetricShadowVolumePS.hlsl" "src/shaders/VolumetricShadowVolume4XPS.hlsl" "-D SAMPLES_4X")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/VolumetricShadowVolumePS.hlsl" "src/shaders/VolumetricShadowVolume8XPS.hlsl" "-D SAMPLES_8X")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/VolumetricShadowCompositePS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/VolumetricShadowCompositePS.hlsl" "src/shaders/VolumetricShadowComposite2XPS.hlsl" "-D SAMPLES_2X")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/VolumetricShadowCompositePS.hlsl" "src/shaders/VolumetricShadowComposite4XPS.hlsl" "-D SAMPLES_4X")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/VolumetricShadowCompositePS.hlsl" "src/shaders/VolumetricShadowComposite8XPS.hlsl" "-D SAMPLES_8X")
+
 # The traced variant of the scene effects (Graphics > Ray tracing): a ray query over the world's triangles in
 # place of the reflections' depth march. Vulkan only (SPIR-V), where the device has ray queries; shader model 6.5
 # for the ray query, and SPIR-V 1.5 (Vulkan 1.2) for the ray query capability. build_shader_spirv takes its

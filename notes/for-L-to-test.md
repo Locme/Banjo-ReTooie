@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T572 Mirror Mode: save select numbers
+- Asked: 2026-10-24 06:22 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on
+  2. Go to the save select screen
+  3. Look at the numbers 1, 2 and 3 by the files
+- Look for: The numbers read normally (not mirrored) while the rest of the 3D screen is mirrored. If one is still mirrored, pick its texture as Text in Shader Effects Pick Mode. Not built or run.
+- Status: waiting for L
+
 ## T571 Blocky shadows with ray tracing
 - Asked: 2026-10-23 22:56 UTC
 - Build: main @ 155c892

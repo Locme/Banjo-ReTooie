@@ -39,6 +39,7 @@
 #include "tooie_gfx_budget.h"
 #include "tooie_day_night.h"
 #include "tooie_picture_filters.h"
+#include "tooie_volumetric_shadows.h"
 
 namespace RT64 {
     // rt64-ext/src/render/rt64_scene_effects.h.
@@ -110,22 +111,6 @@ extern "C" void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx) {
             last_shadow = shadow;
             last_model = model;
         }
-    }
-    // Under ray tracing the player casts traced shadows (Traced shadows of the player), and the game's own
-    // flattened-model shadow, hard-edged and low-poly, lay over them as a second, blocky shadow (L,
-    // 2026-10-23). Turning its light to point up from below makes func_800A6250 return before it draws
-    // (its light-against-floor test at 0x800A62E8). HD shadows keeps the game's shadow, as asked for.
-    // TOOIE_GAME_PLAYER_SHADOW=1 keeps it under ray tracing too, to compare.
-    static const bool keep_game_shadow = std::getenv("TOOIE_GAME_PLAYER_SHADOW") != nullptr;
-    if (!keep_game_shadow && !hd_shadows_on() && tooie::picture_filters::ray_tracing_active() &&
-        tooie::picture_filters::ray_tracing_player_shadows_on()) {
-        const float below[3] = {0.0f, -1.0f, 0.0f};
-        for (int i = 0; i < 3; i++) {
-            uint32_t bits;
-            std::memcpy(&bits, &below[i], sizeof(bits));
-            MEM_W(i * 4, ctx->r16) = bits;
-        }
-        return;
     }
     // "HD Shadows: Banjo" Off leaves the game's shadow model and light for the player.
     if (hd_shadows_on() && direction(tooie::hd_shadows::banjo_direction_option) != tooie::hd_shadows::Direction::Off) {
@@ -266,8 +251,8 @@ namespace {
         return found;
     }
 
-    // Sends the level's active lights (lamps, fires: position and outer range) to RT64 for the traced shadows, the
-    // list level_light walks, once a frame while ray tracing is on.
+    // Sends the level's active lights (lamps, fires: position and outer range) to RT64 for the traced shadows and the
+    // lamps' volumetric shadows, the list level_light walks, once a frame while either is on.
     void send_level_lights(uint8_t* rdram, recomp_context* ctx, gpr frame) {
         const gpr light_pos = frame + 0x1A0;  // vec3
         const gpr light_range = frame + 0x1B0;  // inner, outer range, intensity
@@ -579,7 +564,7 @@ extern "C" void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx) {
     if (!draw_callbacks.empty() || in_shadow_pass) {
         return;
     }
-    if (!lights_sent_this_frame && tooie::picture_filters::ray_tracing_active()) {
+    if (!lights_sent_this_frame && (tooie::picture_filters::ray_tracing_active() || tooie::volumetric_shadows::lamps_on())) {
         lights_sent_this_frame = true;
         recomp_context light_ctx = *ctx;
         const gpr light_frame = (ctx->r29 - 0x200) & ~(gpr)0xF;

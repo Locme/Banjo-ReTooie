@@ -42,6 +42,10 @@ namespace RT64 {
     // Called once for each frame the projections are worked out for (ProjectionProcessor::process).
     void UpscalerNextFrame();
 
+    // 0 to 1, a new value each frame while the camera is jittered (else 0): the scene effects' ray noise is turned by it
+    // (SceneEffectsPS.hlsl NoiseFrameOffset), so the upscaler averages the noise over frames instead of flickering.
+    float UpscalerNoiseOffset();
+
     // The jitter, in clip space, of the frame this many frames back (0 is the one being worked out). Zero when jitter is off.
     void UpscalerJitterNdc(uint32_t framesBack, float &x, float &y);
 

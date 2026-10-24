@@ -528,6 +528,13 @@ namespace {
         { 0x34edb75eecfadfe4, fx(effect_disable) },
     };
 
+    // Mirror Mode: the textures of the game's digits 0 to 3 and 5 to 9, drawn on the 3D world's own surfaces (the save select
+    // screen's file numbers), flipped back so they read normally. More come from Text picks (Shader Effects Pick Mode).
+    constexpr uint64_t mirror_text_textures[] = {
+        0x73d4a2e6dbced417, 0x0d57da2bd95679ec, 0xa8938432a4c262ce, 0x8b24adb3ac804e9f, 0x00f44f78b1d89072,
+        0xe9a2577402d253bb, 0xcb86124895a0f5a5, 0xb85a884d57f0e35f, 0x7b9eebf2c5f1c079,
+    };
+
     // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
     // eye on 2026-10-20 from the dump's 2,618 textures the parallax sweep left out): shiny metal, gold and machine
     // parts, crystals and gems, glass and windows. No ice: Ice reflections cover it (ice_textures are left out
@@ -4397,7 +4404,7 @@ namespace {
         RT64::SetSceneIceAnywhereTextures(ice_anywhere.data(), ice_anywhere.size());
         RT64::SetSceneShinyTextures(shiny.data(), shiny.size());
         // Mirror Mode: textures picked as Text are flipped back on the mirrored world.
-        std::vector<uint64_t> mirror_text = build(nullptr, nullptr, tooie::effect_pick::effect_text, true);
+        std::vector<uint64_t> mirror_text = build(std::begin(mirror_text_textures), std::end(mirror_text_textures), tooie::effect_pick::effect_text, true);
         RT64::SetMirrorTextTextures(mirror_text.data(), mirror_text.size());
         std::vector<uint64_t> lamps = build(std::begin(lamp_textures), std::end(lamp_textures), tooie::effect_pick::effect_lamp, true);
         RT64::SetSceneLampTextures(lamps.data(), lamps.size());
@@ -4868,10 +4875,6 @@ static bool traced_shadows_on() {
 
 bool tooie::picture_filters::ray_tracing_active() {
     return traced_shadows_on();
-}
-
-bool tooie::picture_filters::ray_tracing_player_shadows_on() {
-    return value<bool>(ray_tracing_player_shadows_option, true);
 }
 
 bool tooie::picture_filters::traced_beams_on() {
@@ -5590,7 +5593,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         ray_tracing_player_shadows_option,
         "Traced Shadows Of The Player",
-        "Whether Banjo and Kazooie (or whoever you are playing) cast traced shadows: from the sun, the lamps and fires, and straight down on the ground. Off, the player casts none of them, and light and shadows go on through as if they weren't there; everything else keeps its traced shadows. On, the game's own hard-edged shadow under the player is left out (the traced ones take its place) unless HD shadows is on. Use Off with HD shadows for the game's own shadow under the player. Needs Ray tracing on.",
+        "Whether Banjo and Kazooie (or whoever you are playing) cast traced shadows: from the sun, the lamps and fires, and straight down on the ground. Off, the player casts none of them, and light and shadows go on through as if they weren't there; everything else keeps its traced shadows. Use it with HD shadows for the game's own shadow under the player. Needs Ray tracing on.",
         true);
     graphics.add_bool_option(
         ray_tracing_hit_colours_option,

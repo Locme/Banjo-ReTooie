@@ -15,5 +15,8 @@ SamplerState LinearSampler : register(s4);
 SamplerState PointSampler : register(s5);
 
 float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
-    return gTexture0.SampleLevel(PointSampler, float2(1.0f - uv.x, uv.y), 0);
+    // Flipped within the width the picture takes up (rtMetrics.z), which can be less than the texture's.
+    const float used = gConstants.rtMetrics.z;
+    const float x = (pos.x < used) ? (used - pos.x) : pos.x;
+    return gTexture0.SampleLevel(PointSampler, float2(x * gConstants.rtMetrics.x, uv.y), 0);
 }
