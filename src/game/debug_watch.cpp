@@ -1,7 +1,7 @@
 // Developer aid for headless runs: with TOOIE_WATCH set to a comma-separated
 // list of RDRAM addresses (hex), prints those words every two seconds. An
 // entry `addr+len` (both hex) prints every word in that range.
-//     TOOIE_WATCH=80079138,80128B00+90 ./BanjoTooieN64Recomp --game bt
+//     TOOIE_WATCH=80079138,80128B00+90 ./BanjoReTooie --game bt
 
 #include <chrono>
 #include <cstdio>

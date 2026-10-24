@@ -8,7 +8,7 @@ cd "${RUN_DIR:-/home/claude/run}" || exit 1
 for p in $(pgrep -x BanjoTooieN64Re); do kill -9 $p; done  # never pkill -f: it matches this shell
 rm -f $tag-*.png
 TOOIE_WATCH=$TOOIE_WATCH DISPLAY=:99 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json SDL_AUDIODRIVER=dummy \
-    timeout -s KILL $((secs + 30)) ./BanjoTooieN64Recomp --game bt ${PAD:+--pad-script "$PAD"} > $tag.log 2>&1 &
+    timeout -s KILL $((secs + 30)) ./BanjoReTooie --game bt ${PAD:+--pad-script "$PAD"} > $tag.log 2>&1 &
 n=$(( secs / 20 ))
 for i in $(seq 1 $n); do sleep 20; DISPLAY=:99 import -window root $tag-$i.png; done
 pid=$(pgrep -x BanjoTooieN64Re | head -1)

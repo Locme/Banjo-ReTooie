@@ -41,7 +41,7 @@ run_map() {  # map key, style number
     rm -rf screenshots
     TOOIE_MODERN_WATER=$style TOOIE_WARP=$warp TOOIE_TELEPORT="$teleports" TOOIE_SCREENSHOT_AT="$shots" \
         LP_NUM_THREADS=0 DISPLAY=:99 VK_ICD_FILENAMES=${ICD:-/usr/share/vulkan/icd.d/lvp_icd.json} LD_LIBRARY_PATH=${ICD_LIBS:-$LD_LIBRARY_PATH} SDL_AUDIODRIVER=dummy \
-        timeout -s KILL $secs ./BanjoTooieN64Recomp --game bt ${pad:+--pad-script "$pad"} > "$out/$key-$(style_name $style).log" 2>&1
+        timeout -s KILL $secs ./BanjoReTooie --game bt ${pad:+--pad-script "$pad"} > "$out/$key-$(style_name $style).log" 2>&1
     # Screenshots are named by time, so in order: two per spot, keep the second.
     local files=($(ls screenshots/*.png 2>/dev/null | sort))
     for j in "${!names[@]}"; do

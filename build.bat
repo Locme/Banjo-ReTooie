@@ -79,16 +79,18 @@ cmake --build "%BUILD%" --target BanjoTooieN64Recomp || goto :fail
 
 rem Gather everything the game needs to run into its Release folder.
 if not exist "%OUT%" mkdir "%OUT%"
-copy /y "%BUILD%\BanjoTooieN64Recomp.exe" "%OUT%" >nul || goto :fail
+copy /y "%BUILD%\BanjoReTooie.exe" "%OUT%" >nul || goto :fail
 copy /y "%BUILD%\*.dll" "%OUT%" >nul || goto :fail
-if exist "%BUILD%\BanjoTooieN64Recomp.pdb" copy /y "%BUILD%\BanjoTooieN64Recomp.pdb" "%OUT%" >nul
+if exist "%BUILD%\BanjoReTooie.pdb" copy /y "%BUILD%\BanjoReTooie.pdb" "%OUT%" >nul
+rem The exe was BanjoTooieN64Recomp.exe before the game was renamed Banjo Re-Tooie.
+del /q "%OUT%\BanjoTooieN64Recomp.exe" "%OUT%\BanjoTooieN64Recomp.pdb" 2>nul
 copy /y recompcontrollerdb.txt "%OUT%" >nul || goto :fail
 xcopy /e /i /y /q assets "%OUT%\assets" >nul || goto :fail
 git rev-parse --short HEAD > "%OUT%\built_from.txt" 2>nul
 
 call :migrate
 echo.
-echo Built BanjoTooieN64Recomp.exe in:
+echo Built BanjoReTooie.exe in:
 echo   %CD%\%OUT%
 if not defined NOPAUSE pause
 exit /b 0

@@ -10,8 +10,9 @@
 #include "recomp.h"
 
 namespace tooie {
+    // The folder saves and settings live in, so it keeps the old name; program_name is the title shown.
     inline const std::u8string program_id = u8"BanjoTooieN64Recomp";
-    inline const std::string program_name = "Banjo-Tooie N64 Recomp";
+    inline const std::string program_name = "Banjo Re-Tooie";
 
     // Registers the recompiled code sections with the runtime (register_overlays.cpp).
     void register_overlays();

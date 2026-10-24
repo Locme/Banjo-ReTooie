@@ -56,19 +56,19 @@ jobs:
           cmake --build cmake-build --config ${{ matrix.type }} --target BanjoTooieN64Recomp -j $cpuCores
       - name: Prepare archive
         run: |
-          Move-Item -Path "cmake-build/BanjoTooieN64Recomp.exe" -Destination "BanjoTooieN64Recomp.exe"
+          Move-Item -Path "cmake-build/BanjoReTooie.exe" -Destination "BanjoReTooie.exe"
           Move-Item -Path "cmake-build/dxcompiler.dll" -Destination "dxcompiler.dll"
           Move-Item -Path "cmake-build/dxil.dll" -Destination "dxil.dll"
           Move-Item -Path "cmake-build/SDL2.dll" -Destination "SDL2.dll"
           Move-Item -Path "cmake-build/SDL3.dll" -Destination "SDL3.dll"
-          Move-Item -Path "cmake-build/BanjoTooieN64Recomp.pdb" -Destination "BanjoTooieN64Recomp.pdb"
+          Move-Item -Path "cmake-build/BanjoReTooie.pdb" -Destination "BanjoReTooie.pdb"
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: BanjoTooieN64Recomp-Windows-${{ matrix.label }}
+          name: BanjoReTooie-Windows-${{ matrix.label }}
           path: |
-            BanjoTooieN64Recomp.exe
-            BanjoTooieN64Recomp.pdb
+            BanjoReTooie.exe
+            BanjoReTooie.pdb
             dxcompiler.dll
             dxil.dll
             SDL2.dll
@@ -113,10 +113,10 @@ jobs:
           cmake --build cmake-build --config Release --target BanjoTooieN64Recomp -j $(nproc)
       - name: Prepare archive
         run: |
-          mv cmake-build/BanjoTooieN64Recomp BanjoTooieN64Recomp
-          tar -czf BanjoTooieN64Recomp.tar.gz BanjoTooieN64Recomp assets/ recompcontrollerdb.txt COPYING README.md
+          mv cmake-build/BanjoReTooie BanjoReTooie
+          tar -czf BanjoReTooie.tar.gz BanjoReTooie assets/ recompcontrollerdb.txt COPYING README.md
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: BanjoTooieN64Recomp-Linux-X64-Release
-          path: BanjoTooieN64Recomp.tar.gz
+          name: BanjoReTooie-Linux-X64-Release
+          path: BanjoReTooie.tar.gz

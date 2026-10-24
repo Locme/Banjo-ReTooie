@@ -1,4 +1,4 @@
-# Banjo-Tooie N64 Recomp
+# Banjo Re-Tooie
 
 A native PC port of **Banjo-Tooie (USA, N64)** made by statically recompiling the
 game's MIPS code to C with [N64Recomp](https://github.com/N64Recomp/N64Recomp),
@@ -34,7 +34,7 @@ You need your own legally obtained Banjo-Tooie (US) ROM. On Windows, `build.bat`
 (or `update_and_build.bat`) leaves the finished game in a `Release` subfolder:
 `Release\Any 64-bit PC (2008 and up)` works on any 64-bit PC from 2008 on, and
 `Release\Optimized for newer CPUs (2013 and up)` is faster but needs a CPU from
-2013 or newer. See [`BUILDING.md`](BUILDING.md). Run `BanjoTooieN64Recomp.exe` in
+2013 or newer. See [`BUILDING.md`](BUILDING.md). Run `BanjoReTooie.exe` in
 the folder you want. The first time you
 start the game, choose **Start Game** in the launcher and pick the ROM file;
 it is remembered afterwards. To skip the launcher and go straight into the

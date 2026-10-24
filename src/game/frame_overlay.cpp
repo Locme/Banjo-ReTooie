@@ -831,7 +831,7 @@ namespace {
         std::vector<float> sorted = b.intervals;
         std::sort(sorted.begin(), sorted.end());
         char line[256];
-        std::string text = "Banjo-Tooie N64 Recomp benchmark\n\n";
+        std::string text = "Banjo Re-Tooie benchmark\n\n";
         text += std::string("Build ") + TOOIE_GIT_COMMIT + " (" + TOOIE_GIT_DATE + ")\n";
         std::snprintf(line, sizeof(line), "Length %.1f s, started in %s, ended in %s\n\n", seconds,
             b.map_at_start.c_str(), game_rdram != nullptr ? map_line(game_rdram).c_str() : "Map unknown");
@@ -1043,7 +1043,7 @@ namespace {
 
         char line[512];
         cost_lines.clear();
-        std::string text = "Banjo-Tooie N64 Recomp effect cost check\n\n";
+        std::string text = "Banjo Re-Tooie effect cost check\n\n";
         text += std::string("Build ") + TOOIE_GIT_COMMIT + " (" + TOOIE_GIT_DATE + ")\n" + c.map + "\n";
         if (base_gpu < 0.0) {
             cost_lines.push_back("Effect cost check: no frames drawn, nothing measured");
