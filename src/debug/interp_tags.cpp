@@ -64,7 +64,13 @@ namespace {
     };
     // Models drawn without the screen effects by default.
     const uint32_t default_no_effects[] = {
-        0,
+        // The opening's N64 and Rare logos (map 18B): faded in and out by their alpha, so drawn over the finished picture.
+        // Drawn before the effects, a logo's faint pixels were dropped (see-through draws, alpha under 0.2) and the rest hazed
+        // by its depth, so with Volumetric Shadows on the fades popped (L, 2026-10-24).
+        0xBB3B4002, // N64 green glow
+        0xD2A9E6F6, // N64 logo
+        0x116D58F2, // N64 logo fading out
+        0xB5047C23, // Rare logo
     };
     // Models drawn in their place, under the effects, with their see-through draws not writing depth.
     const uint32_t default_no_depth[] = {

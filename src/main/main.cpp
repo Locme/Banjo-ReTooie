@@ -43,6 +43,9 @@
 #include "recompinput/input_events.h"
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
+#include "tooie_hand_cursor.h"
+#include "tooie_launcher_background.h"
+#include "tooie_launcher_title.h"
 #include "tooie_asset_mods.h"
 #include "tooie_boot_screen.h"
 #include "tooie_frame_overlay.h"
@@ -247,6 +250,8 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
 void update_gfx(void*) {
     tooie::watchdog::note_window_update();
     recompinput::handle_events();
+    // The cursor's picture (the hand, src/input/hand_cursor.cpp); the 3D hand steps through its frames here.
+    tooie::hand_cursor::update();
     // The menus are drawn, and read their input, only when a frame is shown. While one is open, RT64 shows
     // the last frame again when the game sends none (a map change or a load), so the menu keeps responding.
     // Checked every 50 ms: it takes the UI's lock, which the UI holds while it draws.
@@ -501,7 +506,7 @@ std::vector<recomp::GameEntry> supported_games = {
     {
         .rom_hash = 0x00F70DE5F2D70EA2ULL,
         .internal_name = "BANJO TOOIE",
-        .display_name = "Banjo-Tooie",
+        .display_name = "Banjo Re-Tooie",
         .game_id = u8"bt.n64.us.1.0",
         .mod_game_id = "bt",
         .save_type = recomp::SaveType::Eep16k,
@@ -669,6 +674,7 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
         supported_games[0].thumbnail_bytes,
         recompui::GameOptionsMenuLayout::Center
     );
+    tooie::launcher_background::init(menu);
 
     // The launcher's options, with the start option named Play. Left and right on it pick the effects
     // preset (Graphics > Effects preset), applied when Play is pressed (L, 2026-10-16).
@@ -692,6 +698,8 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
         // Custom keeps the effects as they are set.
         tooie::picture_filters::set_preset(presets[play->get_choice()]);
     });
+
+    tooie::launcher_title::init(menu);
 
     if (autostart_game && recomp::is_rom_valid(supported_games[0].game_id)) {
         // Start a moment later, as the launcher's own option does: the VI
@@ -879,7 +887,7 @@ int main(int argc, char** argv) {
         static bool at_boot = true;
         tooie::unpack_mod_zips(game_started, at_boot);
         if (at_boot) {
-            tooie::boot_screen::show("Compiling Shaders", "");
+            tooie::boot_screen::show("Loading", "");
             tooie::boot_screen::close();
         }
         at_boot = false;
@@ -888,6 +896,10 @@ int main(int argc, char** argv) {
     tooie::start_save_backups();
 
     recompui::register_launcher_init_callback(on_launcher_init);
+    recompui::register_launcher_update_callback([](recompui::LauncherMenu* menu) {
+        tooie::launcher_background::update(menu);
+        tooie::launcher_title::update(menu);
+    });
 
     recomp::rsp::callbacks_t rsp_callbacks{
         .get_rsp_microcode = get_rsp_microcode,

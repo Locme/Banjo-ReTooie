@@ -15,4 +15,4 @@ cmake -S . -B build-trace -G Ninja -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_C_COMPILER=${CC:-clang} -DCMAKE_CXX_COMPILER=${CXX:-clang++} \
     -DRECOMP_FUNCS_DIR="$PWD/build-trace/RecompiledFuncs"
 cmake --build build-trace --target BanjoTooieN64Recomp
-echo "Built build-trace/BanjoTooieN64Recomp"
+echo "Built build-trace/BanjoReTooie"

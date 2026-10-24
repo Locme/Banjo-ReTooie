@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -31,6 +32,8 @@ namespace tooie::asset_mods {
     std::vector<uint8_t> asset_bytes(uint32_t id);
     // Asset `id` from the ROM, whatever replaces it.
     std::vector<uint8_t> rom_asset_bytes(uint32_t id);
+    // Asset `id` from the given ROM image (such as the stored ROM read before the game has started).
+    std::vector<uint8_t> rom_asset_bytes(std::span<const uint8_t> rom, uint32_t id);
 }
 
 #endif

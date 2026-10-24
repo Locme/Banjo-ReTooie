@@ -340,6 +340,10 @@ std::vector<uint8_t> tooie::asset_mods::rom_asset_bytes(uint32_t id) {
     return rom_asset(rom, read_table(rom), id);
 }
 
+std::vector<uint8_t> tooie::asset_mods::rom_asset_bytes(std::span<const uint8_t> rom, uint32_t id) {
+    return rom_asset(rom, read_table(rom), id);
+}
+
 // Hooked in func_800D5B34 (load asset by id) before it fetches the asset. Returns 1 when a
 // replacement was loaded: $a3 then holds its address and the game carries on as if it loaded it.
 extern "C" int tooie_asset_replace(uint8_t* rdram, recomp_context* ctx) {

@@ -28,7 +28,7 @@ __pycache__/
 *.pyc
 *.log
 banjotooie.us.elf
-/BanjoTooieN64Recomp.exe
+/BanjoReTooie.exe
 /*.dll
 
 # Runtime output and local data (never commit)

@@ -196,8 +196,8 @@ namespace {
 
     void read_settings() {
         using namespace tooie::snout_jiggle;
-        settings.stiffness = std::clamp((float)option_number(stiffness_option, 300.0), 1.0f, 2000.0f);
-        settings.damping = std::clamp((float)option_number(damping_option, 12.0), 0.0f, 200.0f);
+        settings.stiffness = std::clamp((float)option_number(stiffness_option, 500.0), 1.0f, 2000.0f);
+        settings.damping = std::clamp((float)option_number(damping_option, 14.0), 0.0f, 200.0f);
         settings.mass = std::clamp((float)option_number(mass_option, 1.0), 0.05f, 20.0f);
         settings.inwards = std::clamp((float)option_number(squash_in_option, 50.0), 0.0f, 95.0f) / 100.0f;
         settings.outwards = std::clamp((float)option_number(squash_out_option, 50.0), 0.0f, 300.0f) / 100.0f;
@@ -1165,12 +1165,12 @@ namespace {
     struct FeatherSettings { Feel feel{ 300.0f, 12.0f, 1.0f }; Limits lim{ 0.5f, 0.5f, 0.5f }; } feather_settings;
     void read_feather_settings() {
         using namespace tooie::snout_jiggle;
-        feather_settings.feel.stiffness = std::clamp((float)option_number(kazooie_stiffness_option, 300.0), 1.0f, 2000.0f);
-        feather_settings.feel.damping = std::clamp((float)option_number(kazooie_damping_option, 12.0), 0.0f, 200.0f);
+        feather_settings.feel.stiffness = std::clamp((float)option_number(kazooie_stiffness_option, 500.0), 1.0f, 2000.0f);
+        feather_settings.feel.damping = std::clamp((float)option_number(kazooie_damping_option, 16.0), 0.0f, 200.0f);
         feather_settings.feel.mass = std::clamp((float)option_number(kazooie_mass_option, 1.0), 0.05f, 20.0f);
-        feather_settings.lim.inwards = std::clamp((float)option_number(kazooie_squash_in_option, 50.0), 0.0f, 95.0f) / 100.0f;
-        feather_settings.lim.outwards = std::clamp((float)option_number(kazooie_squash_out_option, 50.0), 0.0f, 300.0f) / 100.0f;
-        feather_settings.lim.across = std::clamp((float)option_number(kazooie_squash_across_option, 50.0), 0.0f, 300.0f) / 100.0f;
+        feather_settings.lim.inwards = std::clamp((float)option_number(kazooie_squash_in_option, 40.0), 0.0f, 95.0f) / 100.0f;
+        feather_settings.lim.outwards = std::clamp((float)option_number(kazooie_squash_out_option, 40.0), 0.0f, 300.0f) / 100.0f;
+        feather_settings.lim.across = std::clamp((float)option_number(kazooie_squash_across_option, 40.0), 0.0f, 300.0f) / 100.0f;
     }
     constexpr int max_feather_bones = 20, max_bones = 64;
 

@@ -10,8 +10,9 @@
 #include "recomp.h"
 
 namespace tooie {
+    // The folder saves and settings live in, so it keeps the old name; program_name is the title shown.
     inline const std::u8string program_id = u8"BanjoTooieN64Recomp";
-    inline const std::string program_name = "Banjo-Tooie N64 Recomp";
+    inline const std::string program_name = "Banjo Re-Tooie";
 
     // Registers the recompiled code sections with the runtime (register_overlays.cpp).
     void register_overlays();
@@ -98,6 +99,8 @@ namespace tooie {
     // The Warp tab's toggle is there too (src/game/level_warp.cpp). Cheats tab was in General before.
     inline const std::string achievements_tab_option = "achievements_tab";
     inline const std::string cheats_tab_option = "cheats_tab";
+    // DEV > Additional Tabs > WIP Tab (L, 2026-10-24): shows the WIP tab (Graphics page), off by default.
+    inline const std::string work_in_progress_tab_option = "work_in_progress_tab";
     // DEV > Hide Unnecessary Settings Entry (src/game/hide_vanilla_widescreen.cpp).
     inline const std::string hide_vanilla_widescreen_option = "hide_vanilla_widescreen";
     // DEV: leaves the Start menu's SETTINGS entry out (pause_settings.cpp; L, 2026-10-23, on by default).

@@ -171,6 +171,8 @@ function(apply_nested_patch name dir)
     endif()
 endfunction()
 apply_nested_patch(plume lib/rt64/src/contrib/plume)
+# RmlUi (inside RecompFrontend): SVG textures are handed over as straight alpha, which the UI renderer blends.
+apply_nested_patch(RmlUi lib/RecompFrontend/recompui/lib/RmlUi)
 # re-spirv (RT64's SPIR-V specialiser): its sort copes with loops, which the raster shaders now have.
 apply_nested_patch(re-spirv lib/rt64/src/contrib/re-spirv)
 
@@ -277,6 +279,8 @@ if (ANDROID)
     set_target_properties(BanjoTooieN64Recomp PROPERTIES OUTPUT_NAME main)
 else()
     add_executable(BanjoTooieN64Recomp)
+    # The game is called Banjo Re-Tooie (L, 2026-10-24); the target keeps its old name for the scripts that build it.
+    set_target_properties(BanjoTooieN64Recomp PROPERTIES OUTPUT_NAME BanjoReTooie)
 endif()
 
 set (SOURCES
@@ -322,6 +326,8 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/save_state.cpp
     ${CMAKE_SOURCE_DIR}/src/input/motion_aim.cpp
     ${CMAKE_SOURCE_DIR}/src/input/menu_mouse.cpp
+    ${CMAKE_SOURCE_DIR}/src/input/hand_cursor.cpp
+    ${CMAKE_SOURCE_DIR}/src/input/hand_model_cursor.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/classic_sounds.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/progress_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/totals_checklist.cpp
@@ -401,6 +407,8 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/debug/heap_check.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/aim_trace.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/toast.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/launcher_background.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/launcher_title.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/shader_progress.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/photo_panel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/brightness_panel.cpp

@@ -1,5 +1,46 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T576 Faster start-up Loading screen
+- Asked: 2026-10-24 09:06 UTC
+- Build: main (round 2 from 2026-10-24 10:00: the ambient occlusion, SSGI and reflection pipelines also build all at once; switching MSAA should be quicker too)
+- Steps:
+  1. Build and start the game the way you normally do
+  2. Watch the screen that used to say Compiling Shaders
+  3. Play a little in a grassy area and somewhere with deep snow
+- Look for: The screen now says Loading and goes away noticeably sooner than before, both on a first start after a build and on later starts. The game's first picture also comes sooner. Grass, fur and deep snow still look the same as before. If it still feels slow, send logs/console.log so we can see which pipelines took longest. Checked: builds on Linux; headless on a software GPU the renderer was ready at 10 s instead of 61 s and the first game frame came at 114 s instead of 156 s. Not tried on a real GPU.
+- Status: waiting for L
+
+## T575 3D hand cursor, glove and Show/Hide Cursor
+- Asked: 2026-10-24 08:01 UTC
+- Build: main @ 56a8bd7
+- Steps:
+  1. Start menu (before Play): move the mouse
+  2. Esc menu and the save select: move the mouse, click
+  3. DEV > Stability And Features > 3D Hand Cursor off, then on
+  4. In game, press Tab, move the mouse, press Tab again
+- Look for: The cursor is the save select's 3D hand, back of the hand towards you, thumb on the left, the sleeve fading out; a click plays a grab. It never turns back into the arrow, even over buttons. With 3D Hand Cursor off it is the flat glove. Tab shows the cursor in game and the camera does not move with the mouse while it shows. Checked: builds on Linux, the hand's frames are made on the start menu (log). Not seen on screen headless (an X screenshot leaves the cursor out).
+- Status: waiting for L
+
+## T574 Esc menu with a controller: top entry and remembered entry
+- Asked: 2026-10-24 07:50 UTC
+- Build: main, the push after 5d8335f
+- Steps:
+  1. Open the Esc menu with a controller and go into a long tab (Graphics)
+  2. Press Down a few times, then Up back to the first entry
+  3. Go far down the list, close the menu with the controller, then open it again
+- Look for: Step 2: the list scrolls right to the top, so the tab title and first heading show. Step 3: the menu reopens on the entry you left, not on the tab. Compiled only, not run.
+- Status: waiting for L
+
+## T573 JPEG-like blocks on the ground with ray tracing
+- Asked: 2026-10-24 06:44 UTC
+- Build: main @ 6b900c7
+- Steps:
+  1. Ray tracing on
+  2. Stand Banjo on grass (Spiral Mountain) and look at the ground in front of Kazooie
+  3. Turn the camera slowly
+- Look for: Are the square, JPEG-like blocks in the ground's shading gone?
+- Status: waiting for L
+
 ## T572 Mirror Mode: save select numbers
 - Asked: 2026-10-24 06:22 UTC
 - Build: main, next push (untested)
@@ -18,7 +59,8 @@
   2. Stand Banjo on grass in sunlight (Spiral Mountain)
   3. Walk around and look at his shadow
 - Look for: Is the hard, blocky shadow under Banjo gone, with only a soft-edged traced shadow left?
-- Status: waiting for L
+- Status: answered 2026-10-24 06:45 UTC
+- L's result: Withdrawn: change reverted at L's request (d36fd18); the blockiness was the ground (T573)
 
 ## T570 Openable settings, Jiggle, Boss rush button
 - Asked: 2026-10-23 21:09 UTC

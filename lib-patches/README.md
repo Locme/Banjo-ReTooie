@@ -353,4 +353,14 @@ To change it: edit the files in `lib/rt64/src/contrib/plume`, then
 `git -C lib/rt64/src/contrib/plume diff > lib-patches/plume.patch`.
 * **Context lifetime lock** (`recompui/include/recompui/recompui.h`, `src/core/ui_context.cpp`): `lock_context_lifetime()` and `contexts_alive()`; `destroy_all_contexts` takes the lock and marks contexts gone, so the port's overlay, notice and photo panel threads never open a context after exit tears them down.
 * **Clicks after keyboard or controller use** (`recompui/src/base/ui_state.cpp`): mouse motion isn't passed to RmlUi while the controller is active or after small moves, so a mouse button press first sends RmlUi a move to the click's position; otherwise a click (on Alt+F4's quit prompt, say) could land on the old position.
+* **Mouse buttons in the Keyboard controls** (`recompinput/src/input_events.cpp`, `input_state.cpp`, `input_types.cpp`): while a Keyboard section binding waits for input, a mouse button press binds that button (left, right, middle, side buttons 4 and 5, up to 8), also as half of a button combination. The click is used up by the binding, so it does not also press a menu button. Bound buttons are read with `SDL_GetMouseState` and shown with PromptFont's mouse glyphs. The menu's own inputs (Toggle Menu, Accept and so on) stay keys only, since the menu reads keys from RmlUi.
 * **No red "!" box** (`recompui/src/base/ui_state.cpp`): the RmlUi debugger starts on the first F8 press (Developer Mode on) instead of at start. Once started, it shows a red "!" beacon in the top-right corner of every menu and notification whenever RmlUi logs a warning, even with the debugger closed.
+
+## RmlUi.patch
+
+Applied in `lib/RecompFrontend/recompui/lib/RmlUi`.
+
+* **SVG alpha** (`Source/SVG/ElementSVG.cpp`): LunaSVG renders premultiplied pixels, but the
+  recompui renderer blends straight alpha, so every antialiased SVG edge was multiplied by its
+  alpha twice and showed as a thin seam (the start menu's layers, 2026-10-24). The bitmap is now
+  converted to straight RGBA (`Bitmap::convertToRGBA`) before it becomes a texture.

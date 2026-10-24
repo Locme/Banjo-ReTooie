@@ -55,7 +55,7 @@ def main():
             tiers[m.group(1)] = m.group(2).split()[0].strip("*")
     old = read_existing(a.merge) if a.merge else {}
 
-    out = ["# Banjo-Tooie N64 recomp: roadmap checklist", "",
+    out = ["# Banjo Re-Tooie: roadmap checklist", "",
            "Every item has two boxes:", "",
            "- **Done**: Claude ticks this only when the work has landed on `main`. Partial work stays unticked, with a note.",
            "- **Approved by L**: only L ticks this, and only when happy. Claude ticks it only when L says to.", "",

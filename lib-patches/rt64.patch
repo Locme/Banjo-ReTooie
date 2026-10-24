@@ -443,6 +443,30 @@ index 20c0d4d..c1f4899 100644
              MapInitialized = true;
          }
      }
+diff --git a/src/hle/rt64_application.cpp b/src/hle/rt64_application.cpp
+index 785de27..bb680a0 100644
+--- a/src/hle/rt64_application.cpp
++++ b/src/hle/rt64_application.cpp
+@@ -345,15 +345,18 @@ namespace RT64 {
+         const RenderMultisampling multisampling = RasterShader::generateMultisamplingPattern(userConfig.msaaSampleCount(), device->getCapabilities().sampleLocations);
+         shaderLibrary = std::make_unique<ShaderLibrary>(usesHDR, usesHardwareResolve);
+         shaderLibrary->setupCommonShaders(renderInterface.get(), device.get());
+-        shaderLibrary->setupMultisamplingShaders(renderInterface.get(), device.get(), multisampling);
+ 
+         // Create the shader caches.
+         // Estimate the amount of shader compiler threads by trying to use about half of the system's available threads.
+         // We need the ubershader pipelines done as soon as possible, so we use a different thread count that demands more of the system.
++        // Banjo-Tooie: made before the multisampling shaders below (the ubershader only needs the common ones' samplers),
++        // so its pipelines compile on their threads while this thread builds the scene effects' pipelines, instead of
++        // after them: that was several seconds of the start-up "Loading" screen.
+         const uint32_t rasterShaderThreads = std::max(threadsAvailable / 2U, 1U);
+         const uint32_t ubershaderThreads = uint32_t(std::max(int(threadsAvailable) - 2, 1));
+         rasterShaderCache = std::make_unique<RasterShaderCache>(rasterShaderThreads, ubershaderThreads);
+         rasterShaderCache->setup(device.get(), renderInterface->getCapabilities().shaderFormat, shaderLibrary.get(), multisampling);
++        shaderLibrary->setupMultisamplingShaders(renderInterface.get(), device.get(), multisampling);
+ 
+ #   if RT_ENABLED
+         if (device->getCapabilities().raytracing) {
 diff --git a/src/hle/rt64_application_window.cpp b/src/hle/rt64_application_window.cpp
 index 08f83e5..2bfdba4 100755
 --- a/src/hle/rt64_application_window.cpp
@@ -7043,7 +7067,7 @@ index e842dcc..8b8c63a 100644
  
              interop::float4x4 &prevViewProjTransform = drawData.prevViewProjTransforms[proj.transformsIndex];
 diff --git a/src/render/rt64_raster_shader.cpp b/src/render/rt64_raster_shader.cpp
-index 721a01e..d5cb970 100644
+index 721a01e..5c26bb0 100644
 --- a/src/render/rt64_raster_shader.cpp
 +++ b/src/render/rt64_raster_shader.cpp
 @@ -5,6 +5,7 @@
@@ -7355,7 +7379,7 @@ index 721a01e..d5cb970 100644
          layoutBuilder.addDescriptorSet(descriptorCommonSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
-@@ -483,6 +584,146 @@ namespace RT64 {
+@@ -483,6 +584,152 @@ namespace RT64 {
              threadIndex = (threadIndex + 1) % threadCount;
          }
  
@@ -7380,7 +7404,9 @@ index 721a01e..d5cb970 100644
 +                grassCreation.zCmp = true;
 +                grassCreation.zUpd = true;
 +                grassCreation.cvgAdd = false;
-+                grassBladePipeline = RasterShader::createBanjoPipeline(grassCreation, "3D grass blades");
++                startBanjoPipeline([this, grassCreation]() {
++                    grassBladePipeline = RasterShader::createBanjoPipeline(grassCreation, "3D grass blades");
++                });
 +            }
 +        }
 +
@@ -7403,7 +7429,9 @@ index 721a01e..d5cb970 100644
 +                instanceCreation.zCmp = true;
 +                instanceCreation.zUpd = true;
 +                instanceCreation.cvgAdd = false;
-+                grassInstancePipeline = RasterShader::createPipeline(instanceCreation);
++                startBanjoPipeline([this, instanceCreation]() {
++                    grassInstancePipeline = RasterShader::createPipeline(instanceCreation);
++                });
 +            }
 +        }
 +
@@ -7431,7 +7459,9 @@ index 721a01e..d5cb970 100644
 +                snowCreation.zCmp = true;
 +                snowCreation.zUpd = true;
 +                snowCreation.cvgAdd = false;
-+                snowTessPipeline = RasterShader::createBanjoPipeline(snowCreation, "tessellated deep snow");
++                startBanjoPipeline([this, snowCreation]() {
++                    snowTessPipeline = RasterShader::createBanjoPipeline(snowCreation, "tessellated deep snow");
++                });
 +            }
 +
 +            // Banjo-Tooie: Modern and Stylised water's tessellated surface (WaterTess.hlsl), drawn into the water mask:
@@ -7502,7 +7532,7 @@ index 721a01e..d5cb970 100644
          // Spawn the threads that will compile all the pipelines.
          pipelineThreads.clear();
          pipelineThreads.resize(pipelineThreadCreations.size());
-@@ -554,8 +795,26 @@ namespace RT64 {
+@@ -554,8 +801,40 @@ namespace RT64 {
          postBlendDitherNoiseSubNegativePipeline = device->createGraphicsPipeline(postBlendDesc);
      }
  
@@ -7526,22 +7556,51 @@ index 721a01e..d5cb970 100644
 +        if ((groundTessThreadMutable != nullptr) && groundTessThreadMutable->joinable()) {
 +            groundTessThreadMutable->join();
 +        }
++    }
++
++    void RasterShaderUber::startBanjoPipeline(std::function<void()> create) {
++        banjoPipelineThreads.emplace_back(std::make_unique<std::thread>([this, create = std::move(create)]() {
++            // Like the ubershader's own threads: after its first pipeline, so the driver reuses that compile.
++            {
++                std::unique_lock<std::mutex> lock(firstPipelineMutex);
++                firstPipelineCondition.wait(lock, [this]() {
++                    return (pipelines[0] != nullptr);
++                });
++            }
++
++            create();
++        }));
      }
  
      void RasterShaderUber::threadCreatePipelines(uint32_t threadIndex) {
+@@ -590,7 +869,12 @@ namespace RT64 {
+                 thread->join();
+             }
+ 
++            for (std::unique_ptr<std::thread> &thread : banjoPipelineThreads) {
++                thread->join();
++            }
++
+             pipelineThreads.clear();
++            banjoPipelineThreads.clear();
+             pipelineThreadCreations.clear();
+             vertexShader.reset();
+             pixelShader.reset();
 diff --git a/src/render/rt64_raster_shader.h b/src/render/rt64_raster_shader.h
-index 3b991ff..48b0986 100644
+index 3b991ff..66d8ed5 100644
 --- a/src/render/rt64_raster_shader.h
 +++ b/src/render/rt64_raster_shader.h
-@@ -6,6 +6,7 @@
+@@ -6,7 +6,9 @@
  
  #include "rt64_shader_common.h"
  
 +#include <atomic>
  #include <condition_variable>
++#include <functional>
  #include <mutex>
  #include <thread>
-@@ -44,6 +45,13 @@ namespace RT64 {
+ 
+@@ -44,6 +46,13 @@ namespace RT64 {
          const RenderPipelineLayout *pipelineLayout;
          const RenderShader *vertexShader;
          const RenderShader *pixelShader;
@@ -7555,7 +7614,7 @@ index 3b991ff..48b0986 100644
          bool alphaBlend;
          bool culling;
          bool NoN;
-@@ -71,6 +79,8 @@ namespace RT64 {
+@@ -71,6 +80,8 @@ namespace RT64 {
          ~RasterShader();
          static RasterShaderText generateShaderText(const ShaderDescription &desc, bool multisampling);
          static std::unique_ptr<RenderPipeline> createPipeline(const PipelineCreation &c);
@@ -7564,7 +7623,7 @@ index 3b991ff..48b0986 100644
          static RenderMultisampling generateMultisamplingPattern(uint32_t sampleCount, bool sampleLocationsSupported);
      };
  
-@@ -90,6 +100,41 @@ namespace RT64 {
+@@ -90,6 +101,47 @@ namespace RT64 {
          std::vector<std::unique_ptr<std::thread>> pipelineThreads;
          std::unique_ptr<RenderShader> vertexShader;
          std::unique_ptr<RenderShader> pixelShader;
@@ -7603,6 +7662,12 @@ index 3b991ff..48b0986 100644
 +        mutable std::once_flag groundTessOnce;
 +        mutable std::unique_ptr<std::thread> groundTessThreadMutable;
 +        void startGroundTess() const;
++        // Banjo-Tooie: the 3D grass and deep snow pipelines are built on threads of their own beside the ubershader's
++        // (they took about 10 s one after another at start on an RTX 5080 with no pipeline cache, before the
++        // ubershader's own threads even began). Joined in waitForPipelineCreation, so they are ready before the
++        // first frame is drawn, as before.
++        std::vector<std::unique_ptr<std::thread>> banjoPipelineThreads;
++        void startBanjoPipeline(std::function<void()> create);
  
          RasterShaderUber(RenderDevice *device, RenderShaderFormat shaderFormat, const RenderMultisampling &multisampling, const ShaderLibrary *shaderLibrary, uint32_t threadCount);
          ~RasterShaderUber();
@@ -7931,18 +7996,21 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..612667e 100644
+index d1c5273..00d2919 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,10 @@
  //
  
  #include "rt64_shader_library.h"
++#include <memory>
++#include <thread>
++#include <vector>
 +#include "rt64_object_velocity.h"
  
  #include "common/rt64_common.h"
  #include "shared/rt64_render_target_copy.h"
-@@ -17,6 +18,23 @@
+@@ -17,6 +21,23 @@
  #include "shaders/FbWriteColorCS.hlsl.spirv.h"
  #include "shaders/FbWriteDepthCS.hlsl.spirv.h"
  #include "shaders/FbWriteDepthCSMS.hlsl.spirv.h"
@@ -7966,7 +8034,7 @@ index d1c5273..612667e 100644
  #include "shaders/GaussianFilterRGB3x3CS.hlsl.spirv.h"
  #include "shaders/BoxFilterCS.hlsl.spirv.h"
  #include "shaders/BicubicScalingCS.hlsl.spirv.h"
-@@ -40,7 +58,53 @@
+@@ -40,7 +61,53 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -8020,7 +8088,7 @@ index d1c5273..612667e 100644
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
-@@ -48,6 +112,11 @@
+@@ -48,6 +115,11 @@
  #include "shaders/VideoInterfacePSPixel.hlsl.spirv.h"
  #include "shaders/FullScreenVS.hlsl.spirv.h"
  #include "shaders/Im3DVS.hlsl.spirv.h"
@@ -8032,7 +8100,7 @@ index d1c5273..612667e 100644
  #include "shaders/ComposePS.hlsl.spirv.h"
  #include "shaders/DebugPS.hlsl.spirv.h"
  #include "shaders/Im3DPS.hlsl.spirv.h"
-@@ -86,7 +155,40 @@
+@@ -86,7 +158,40 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -8073,7 +8141,7 @@ index d1c5273..612667e 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
-@@ -94,6 +196,11 @@
+@@ -94,6 +199,11 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.dxil.h"
  #   include "shaders/FullScreenVS.hlsl.dxil.h"
  #   include "shaders/Im3DVS.hlsl.dxil.h"
@@ -8085,7 +8153,7 @@ index d1c5273..612667e 100644
  #   include "shaders/ComposePS.hlsl.dxil.h"
  #   include "shaders/DebugPS.hlsl.dxil.h"
  #   include "shaders/Im3DPS.hlsl.dxil.h"
-@@ -131,7 +238,40 @@
+@@ -131,7 +241,40 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -8126,7 +8194,7 @@ index d1c5273..612667e 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
-@@ -139,6 +279,11 @@
+@@ -139,6 +282,11 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.metal.h"
  #   include "shaders/FullScreenVS.hlsl.metal.h"
  #   include "shaders/Im3DVS.hlsl.metal.h"
@@ -8138,7 +8206,7 @@ index d1c5273..612667e 100644
  #   include "shaders/ComposePS.hlsl.metal.h"
  #   include "shaders/DebugPS.hlsl.metal.h"
  #   include "shaders/Im3DPS.hlsl.metal.h"
-@@ -148,10 +293,17 @@
+@@ -148,10 +296,17 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
@@ -8156,7 +8224,7 @@ index d1c5273..612667e 100644
  
  #ifdef _WIN32
  #   define CREATE_SHADER_INPUTS(DXIL_BLOB, SPIRV_BLOB, MSL_BLOB, ENTRY_NAME, SHADER_FORMAT)\
-@@ -204,7 +356,7 @@ namespace RT64 {
+@@ -204,7 +359,7 @@ namespace RT64 {
              samplerDesc.addressW = RenderTextureAddressMode::CLAMP;
  
              // This matches the bias used in the shader when native samplers are not used.
@@ -8165,7 +8233,7 @@ index d1c5273..612667e 100644
  
              // WRAP.
              samplerDesc.addressU = RenderTextureAddressMode::WRAP;
-@@ -549,6 +701,38 @@ namespace RT64 {
+@@ -549,6 +704,38 @@ namespace RT64 {
              rspWorld.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -8204,7 +8272,7 @@ index d1c5273..612667e 100644
          // Texture Copy.
          {
              TextureCopyDescriptorSet descriptorSet;
-@@ -569,6 +753,98 @@ namespace RT64 {
+@@ -569,6 +756,98 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -8303,7 +8371,7 @@ index d1c5273..612667e 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +859,20 @@ namespace RT64 {
+@@ -583,6 +862,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -8324,7 +8392,34 @@ index d1c5273..612667e 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +1122,243 @@ namespace RT64 {
+@@ -634,6 +927,26 @@ namespace RT64 {
+         // Create shaders shared across all pipelines.
+         std::unique_ptr<RenderShader> fullScreenVertexShader = device->createShader(CREATE_SHADER_INPUTS(FullScreenVSBlobDXIL, FullScreenVSBlobSPIRV, FullScreenVSBlobMSL, "VSMain", shaderFormat));
+ 
++        // Banjo-Tooie: the scene effects' pipelines are the slowest here (seconds each with no pipeline cache), so each is
++        // compiled on a thread of its own, all at once instead of one after another. They are all done before this
++        // function returns (the joiner below goes before fullScreenVertexShader, which they use); each keeps its own
++        // pixel shader alive.
++        struct PipelineJoiner {
++            std::vector<std::thread> threads;
++            ~PipelineJoiner() {
++                for (std::thread &thread : threads) {
++                    thread.join();
++                }
++            }
++        } pipelineJoiner;
++
++        auto createPipelineOnThread = [&](std::unique_ptr<RenderPipeline> &out, const RenderGraphicsPipelineDesc &desc, std::unique_ptr<RenderShader> &shader) {
++            std::shared_ptr<RenderShader> keptShader(std::move(shader));
++            pipelineJoiner.threads.emplace_back([device, &out, desc, keptShader]() {
++                out = device->createGraphicsPipeline(desc);
++            });
++        };
++
+         // Select shader blobs based on sample count.
+         const void *TextureResolvePSBlob = nullptr;
+         const void *RtCopyDepthToColorPSBlob = nullptr;
+@@ -832,6 +1145,243 @@ namespace RT64 {
              }
          }
  
@@ -8372,7 +8467,7 @@ index d1c5273..612667e 100644
 +            pipelineDesc.vertexShader = fullScreenVertexShader.get();
 +            pipelineDesc.pixelShader = pixelShader.get();
 +            pipelineDesc.multisampling = multisampling;
-+            sceneEffects.pipeline = device->createGraphicsPipeline(pipelineDesc);
++            createPipelineOnThread(sceneEffects.pipeline, pipelineDesc, pixelShader);
 +
 +            // The same with the reflections traced (ray queries over the world's triangles), Vulkan only.
 +#           ifndef __APPLE__
@@ -8413,7 +8508,7 @@ index d1c5273..612667e 100644
 +                RenderGraphicsPipelineDesc tracedDesc = pipelineDesc;
 +                tracedDesc.pipelineLayout = sceneEffectsTraced.pipelineLayout.get();
 +                tracedDesc.pixelShader = tracedShader.get();
-+                sceneEffectsTraced.pipeline = device->createGraphicsPipeline(tracedDesc);
++                createPipelineOnThread(sceneEffectsTraced.pipeline, tracedDesc, tracedShader);
 +            }
 +#           endif
 +
@@ -8441,7 +8536,7 @@ index d1c5273..612667e 100644
 +            tableDesc.renderTargetCount = 1;
 +            tableDesc.vertexShader = fullScreenVertexShader.get();
 +            tableDesc.pixelShader = tableShader.get();
-+            fireflyTable.pipeline = device->createGraphicsPipeline(tableDesc);
++            createPipelineOnThread(fireflyTable.pipeline, tableDesc, tableShader);
 +
 +            // The indirect pass (SceneEffectsPS.hlsl, INDIRECT_PASS): the same layout and constants, into a half-size
 +            // float target; built at the depth target's sample count, as it reads it.
@@ -8467,7 +8562,7 @@ index d1c5273..612667e 100644
 +            indirectDesc.renderTargetCount = 1;
 +            indirectDesc.vertexShader = fullScreenVertexShader.get();
 +            indirectDesc.pixelShader = indirectShader.get();
-+            sceneIndirect.pipeline = device->createGraphicsPipeline(indirectDesc);
++            createPipelineOnThread(sceneIndirect.pipeline, indirectDesc, indirectShader);
 +
 +            // The same with the occlusion and bounce light traced (and Half-resolution ray tracing's sun shadows and light
 +            // beams below them), Vulkan only, with the traced pass's layout: its rays read the textures of what they meet.
@@ -8494,7 +8589,7 @@ index d1c5273..612667e 100644
 +                std::unique_ptr<RenderShader> tracedIndirect = device->createShader(tracedBlob, tracedSize, "PSMain", shaderFormat);
 +                indirectDesc.pixelShader = tracedIndirect.get();
 +                indirectDesc.pipelineLayout = sceneEffectsTraced.pipelineLayout.get();
-+                sceneIndirectTraced.pipeline = device->createGraphicsPipeline(indirectDesc);
++                createPipelineOnThread(sceneIndirectTraced.pipeline, indirectDesc, tracedIndirect);
 +            }
 +#           endif
 +        }

@@ -8,6 +8,7 @@
 #include "tooie_brightness_panel.h"
 #include "tooie_photo_album.h"
 #include "tooie_game.h"
+#include "tooie_hand_cursor.h"
 #include "tooie_menu_tree.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_day_night.h"
@@ -94,6 +95,18 @@ namespace {
         }
         try {
             recompui::config::set_tab_visible(tooie::wip_tab_id, on);
+        } catch (...) {
+        }
+    }
+
+    void show_work_in_progress_tab() {
+        bool on = false;
+        try {
+            on = std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::work_in_progress_tab_option));
+        } catch (...) {
+        }
+        try {
+            recompui::config::set_tab_visible(tooie::work_in_progress_tab_id, on);
         } catch (...) {
         }
     }
@@ -480,11 +493,12 @@ void tooie::init_config() {
         "Banjo's snout wobbles as he runs, turns, jumps, falls and lands: it trails behind the way he moves and folds back towards his eyes in a dive. It stays mid-wobble in Photo Mode. Works with player model mods that keep his skeleton, such as Smash Banjo.",
         true);
     {
+        // Defaults from L's tuned settings (2026-10-24): stiffness 500, damping 14.
         using namespace tooie::snout_jiggle;
         general.add_number_option(stiffness_option, "Snout Jiggle: Stiffness",
-            "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
+            "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 500);
         general.add_number_option(damping_option, "Snout Jiggle: Damping",
-            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
+            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 14);
         general.add_number_option(mass_option, "Snout Jiggle: Mass",
             "How heavy the snout is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
         general.add_number_option(squash_in_option, "Snout Jiggle: Max Squash & Stretch Inwards",
@@ -582,19 +596,20 @@ void tooie::init_config() {
         "Kazooie's crest and tail feathers wobble on springs as she moves, whether she rides in the backpack or walks alone after Split Up. Separate from Snout jiggle. They stay mid-wobble in Photo Mode.",
         true);
     {
+        // Defaults from L's tuned settings (2026-10-24): stiffness 500, damping 16, squash and stretch 40%.
         using namespace tooie::snout_jiggle;
         general.add_number_option(kazooie_stiffness_option, "Kazooie Jiggle: Stiffness",
-            "How hard her feathers spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
+            "How hard her feathers spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 500);
         general.add_number_option(kazooie_damping_option, "Kazooie Jiggle: Damping",
-            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
+            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 16);
         general.add_number_option(kazooie_mass_option, "Kazooie Jiggle: Mass",
             "How heavy her feathers are: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
         general.add_number_option(kazooie_squash_in_option, "Kazooie Jiggle: Max Squash & Stretch Inwards",
-            "How far each feather may squash back on itself, as a share of its length.", 0, 95, 5, 0, true, 50);
+            "How far each feather may squash back on itself, as a share of its length.", 0, 95, 5, 0, true, 40);
         general.add_number_option(kazooie_squash_out_option, "Kazooie Jiggle: Max Squash & Stretch Outwards",
-            "How far each feather may stretch out, as a share of its length.", 0, 300, 5, 0, true, 50);
+            "How far each feather may stretch out, as a share of its length.", 0, 300, 5, 0, true, 40);
         general.add_number_option(kazooie_squash_across_option, "Kazooie Jiggle: Max Squash & Stretch Up And Down",
-            "How far each feather may swing up and down (and to the side), as a share of its length.", 0, 300, 5, 0, true, 50);
+            "How far each feather may swing up and down (and to the side), as a share of its length.", 0, 300, 5, 0, true, 40);
         for (const std::string* id : { &kazooie_stiffness_option, &kazooie_damping_option, &kazooie_mass_option,
                                        &kazooie_squash_in_option, &kazooie_squash_out_option, &kazooie_squash_across_option }) {
             general.add_option_hidden_dependency(*id, kazooie_option, false);
@@ -703,8 +718,10 @@ void tooie::init_config() {
         });
 
     // Section headings in the General tab (the controls and sliders above them have none).
-    // One section in General for the saves and the other switches (L, 2026-10-23).
-    recompui::config::set_option_group(tooie::save_backups_option, "Saves And Others");
+    // Saves is one section in General (L, 2026-10-24), and Discord Status is in Others, with Compile All Shaders at Start.
+    recompui::config::set_option_group(tooie::save_backups_option, "Saves");
+    recompui::config::set_option_display_before(tooie::discord::presence_option, tooie::precompile_shaders_option);
+    recompui::config::set_option_group(tooie::discord::presence_option, "Others");
     // At the end of the section before Back-Ports, with its own heading, so the options around it keep theirs.
     recompui::config::set_option_display_before(tooie::precompile_shaders_option, tooie::classic_sounds::option);
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports And Cut Content");
@@ -1106,12 +1123,11 @@ void tooie::init_config() {
     // The Water entry (Original, Modern, Stylised) is WIP (L, 2026-10-23): it sits in the WIP tab.
     recompui::config::set_option_page(tooie::picture_filters::water_option, tooie::work_in_progress_tab_id);
     {
-        // The upscalers are WIP (L, 2026-10-23): their own "Upscaler" section in the WIP tab. Still Graphics
-        // options, so they save to graphics.json.
+        // The upscalers are WIP (L, 2026-10-23): in the WIP tab. Still Graphics options, so they save to
+        // graphics.json. The Upscaler drop-down is a collapsible menu over the rest (L, 2026-10-24).
         for (const std::string* id : { &tooie::upscaler::option, &tooie::upscaler::quality_option, &tooie::upscaler::hud_option, &tooie::upscaler::hud_full_option, &tooie::upscaler::reactive_option, &tooie::upscaler::object_motion_option, &tooie::upscaler::sharpness_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
-        recompui::config::set_option_group(tooie::upscaler::option, "Upscaler");
     }
     tooie::game_frame_rate::add_option(graphics);
     recompui::config::graphics::add_interpolation_options(graphics);
@@ -1250,12 +1266,14 @@ void tooie::init_config() {
         "Hides the settings entries this port makes unnecessary: Wide-screen Mode and Screen Alignment in the global settings on the save select screen (the TV) and in the Start menu's Settings page, leaving Speaker Mode, and while it is on keeps the game's own widescreen mode off and the picture centred: the game's widescreen squashes the picture for a stretched TV, and this port's widescreen is Aspect Ratio in the Graphics tab. The menu change shows the next time it opens.",
         true);
     tooie::game_frame_rate::add_dev_options(wip);
-    // L, 2026-10-23: the last entry under Stability And Features, on by default.
+    // L, 2026-10-23: under Stability And Features, on by default.
     wip.add_bool_option(
         tooie::hide_pause_settings_option,
         "Hide Custom Settings In Start Menu",
         "Leaves out the SETTINGS entry this port adds to the Start menu (the pause menu). Speaker Mode stays in the global settings on the save select screen (the TV). The change shows the next time the Start menu opens.",
         true);
+    // L, 2026-10-24: under Stability And Features, on by default.
+    tooie::hand_cursor::add_option(wip);
     // Debug options (under the Debug heading): they moved here from Graphics.
     tooie::effect_views::add_option(wip);
     // Picker Save Only Current Active sits under the same Debug heading (L, 2026-10-23).
@@ -1285,6 +1303,15 @@ void tooie::init_config() {
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             show_cheats_tab();
         });
+    wip.add_bool_option(
+        tooie::work_in_progress_tab_option,
+        "WIP Tab",
+        "Shows the WIP tab: features still being worked on. Turn it off to hide it; what is set there stays as it is. A dev.txt file next to the game's exe shows it whatever this says.",
+        false);
+    wip.add_option_change_callback(tooie::work_in_progress_tab_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            show_work_in_progress_tab();
+        });
     tooie::level_warp::add_option(wip);
     recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
@@ -1302,6 +1329,7 @@ void tooie::init_config() {
     turn_off_cheats_tab_once();
     show_cheats_tab();
     show_achievements_tab();
+    show_work_in_progress_tab();
     tooie::level_warp::refresh();
     move_saved_cutscene_skip();
     turn_on_transform_anywhere_once();

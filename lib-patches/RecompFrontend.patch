@@ -44,7 +44,7 @@ index f39ad89..3d7e354 100644
      }
  }
 diff --git a/recompinput/include/recompinput/input_state.h b/recompinput/include/recompinput/input_state.h
-index 1961e29..e4b14fa 100644
+index 1961e29..a09d2df 100644
 --- a/recompinput/include/recompinput/input_state.h
 +++ b/recompinput/include/recompinput/input_state.h
 @@ -35,11 +35,18 @@ namespace recompinput {
@@ -66,7 +66,7 @@ index 1961e29..e4b14fa 100644
      bool game_input_disabled();
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
-@@ -49,4 +56,24 @@ namespace recompinput {
+@@ -49,4 +56,33 @@ namespace recompinput {
      void add_rotation_deltas(SDL_JoystickID joystick_id, float rot_x, float rot_y);
      void add_mouse_deltas(float delta_x, float delta_y);
      void add_mouse_wheel_delta(int32_t delta);
@@ -80,6 +80,15 @@ index 1961e29..e4b14fa 100644
 +    void set_game_menu_mouse(bool on);
 +    bool game_menu_mouse();
 +    // Banjo-Tooie: the game draws the cursor itself (the save select's hand), so the system one is hidden.
++    // Banjo-Tooie: Show/Hide Cursor (Tab): while on, the cursor is freed and shown over the game.
++    void set_cursor_shown_by_key(bool on);
++    bool cursor_shown_by_key();
++    // Banjo-Tooie: inputs bound on the keyboard only; the Controls tab hides them in the controller view.
++    void set_game_input_keyboard_only(GameInput input, bool keyboard_only);
++    bool game_input_keyboard_only(GameInput input);
++    // Banjo-Tooie: an SDL_Cursor* that shows while the cursor is visible (not in pick mode), null for the system's.
++    void set_custom_cursor(void* sdl_cursor);
++    void* custom_cursor();
 +    void set_game_menu_cursor_hidden(bool hidden);
 +    bool game_menu_cursor_hidden();
 +    // Banjo-Tooie: the cursor over the game window in pixels with the window's size (false before the
@@ -92,10 +101,10 @@ index 1961e29..e4b14fa 100644
 +    int32_t get_game_mouse_wheel();
  }
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..b6a847f 100644
+index f5ed6c0..31b1c18 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,56 @@ namespace recompinput {
+@@ -37,10 +37,57 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
@@ -142,7 +151,8 @@ index f5ed6c0..b6a847f 100644
 +    DEFINE_INPUT(MATERIAL_PICK, 0, "Ray Tracing Material Pick Mode") \
 +    DEFINE_INPUT(CAMERA_SNAP_BEHIND, 0, "Camera Snap Behind") \
 +    DEFINE_INPUT(CAMERA_MOUSE_LOOK, 0, "Camera Mouse Look") \
-+    DEFINE_INPUT(VOLUMETRIC_SAVE, 0, "Save Volumetric Settings")
++    DEFINE_INPUT(VOLUMETRIC_SAVE, 0, "Save Volumetric Settings") \
++    DEFINE_INPUT(TOGGLE_CURSOR, 0, "Show/Hide Cursor")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \
@@ -153,7 +163,7 @@ index f5ed6c0..b6a847f 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -72,6 +118,9 @@ namespace recompinput {
+@@ -72,6 +119,9 @@ namespace recompinput {
          InputType input_type;
          // Represents a single source input. e.g. A keyboard's shift key, or a controller's R trigger
          int32_t input_id;
@@ -163,7 +173,7 @@ index f5ed6c0..b6a847f 100644
          std::string to_string() const;
          auto operator<=>(const InputField& rhs) const = default;
  
-@@ -90,15 +139,33 @@ namespace recompinput {
+@@ -90,15 +140,33 @@ namespace recompinput {
          bool is_empty() const {
              return input_type == InputType::None;
          }
@@ -197,7 +207,7 @@ index f5ed6c0..b6a847f 100644
      }
  
      // Represents the types of mapping/profiles that can be done.
-@@ -127,6 +194,10 @@ namespace recompinput {
+@@ -127,6 +195,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);
@@ -372,7 +382,7 @@ index 45d55a7..b7c867d 100644
              profiles::get_input_profile_for_player(BindingState.player_index, BindingState.device),
              BindingState.game_input,
 diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
-index c76a1dc..a2c79fc 100644
+index c76a1dc..26be8fc 100644
 --- a/recompinput/src/input_events.cpp
 +++ b/recompinput/src/input_events.cpp
 @@ -1,10 +1,14 @@
@@ -390,7 +400,7 @@ index c76a1dc..a2c79fc 100644
  static struct {
      std::list<std::filesystem::path> files_dropped;
  } DropState;
-@@ -38,6 +42,55 @@ void purge_deferred_controller_profiles() {
+@@ -38,6 +42,57 @@ void purge_deferred_controller_profiles() {
      deferred_controller_profiles.clear();
  }
  
@@ -405,6 +415,8 @@ index c76a1dc..a2c79fc 100644
 +static std::chrono::steady_clock::time_point warp_time{};
 +static int warp_x = -1;
 +static int warp_y = -1;
++// Banjo-Tooie: the cursor is showing while the game runs (update_cursor_lock); the mouse then leaves the camera alone.
++static bool cursor_shown_in_game = false;
 +
 +static void note_game_mouse_position(Uint32 window_id, int x, int y) {
 +    SDL_Window* window = SDL_GetWindowFromID(window_id);
@@ -446,7 +458,7 @@ index c76a1dc..a2c79fc 100644
  bool sdl_event_filter(void* userdata, SDL_Event* event) {
      switch (event->type) {
      case SDL_EventType::SDL_KEYDOWN:
-@@ -79,6 +132,7 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -79,6 +134,7 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              printf("  Instance ID: %d\n", SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)));
              printf("  Path: %s\n", SDL_JoystickPath(SDL_GameControllerGetJoystick(controller)));
              recompinput::add_controller_state(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)), controller);
@@ -454,7 +466,7 @@ index c76a1dc..a2c79fc 100644
  
              if (SDL_GameControllerHasSensor(controller, SDL_SensorType::SDL_SENSOR_GYRO) && SDL_GameControllerHasSensor(controller, SDL_SensorType::SDL_SENSOR_ACCEL)) {
                  SDL_GameControllerSetSensorEnabled(controller, SDL_SensorType::SDL_SENSOR_GYRO, SDL_TRUE);
-@@ -118,6 +172,9 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -118,6 +174,9 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
      {
          SDL_MouseWheelEvent* wheel_event = &event->wheel;
          recompinput::add_mouse_wheel_delta(wheel_event->y * (wheel_event->direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1));
@@ -464,7 +476,7 @@ index c76a1dc..a2c79fc 100644
      }
      queue_if_enabled(event);
      break;
-@@ -151,6 +208,22 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -151,6 +210,22 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              queue_if_enabled(event);
          }
          break;
@@ -487,7 +499,7 @@ index c76a1dc..a2c79fc 100644
      case SDL_EventType::SDL_CONTROLLERAXISMOTION:
          if (binding::is_controller_being_bound(event->caxis.which)) {
              GameInput scanning_game_input = binding::get_scanning_game_input();
-@@ -208,20 +281,41 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -208,22 +283,53 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              ControllerState& state = recompinput::get_controller_state(event->csensor.which);
              uint64_t cur_timestamp = event->csensor.timestamp;
              uint32_t delta_ms = cur_timestamp - state.prev_gyro_timestamp;
@@ -509,7 +521,8 @@ index c76a1dc..a2c79fc 100644
          break;
      case SDL_EventType::SDL_MOUSEMOTION:
 -        if (!recompinput::game_input_disabled()) {
-+        if (!recompinput::game_input_disabled() && !recompinput::pick_mode()) {
++        // Banjo-Tooie: while the cursor shows over the game, the mouse does not turn the camera.
++        if (!recompinput::game_input_disabled() && !recompinput::pick_mode() && !cursor_shown_in_game) {
              SDL_MouseMotionEvent* motion_event = &event->motion;
              recompinput::add_mouse_deltas(motion_event->xrel, motion_event->yrel);
          }
@@ -522,17 +535,28 @@ index c76a1dc..a2c79fc 100644
 +                game_mouse_moves.fetch_add(1);
 +            }
 +        }
-+        queue_if_enabled(event);
-+        break;
-+    case SDL_EventType::SDL_MOUSEBUTTONDOWN:
-+        note_game_mouse_position(event->button.windowID, event->button.x, event->button.y);
-+        if (!recompinput::game_input_disabled() && event->button.button < 8) {
-+            game_mouse_clicks[event->button.button].fetch_add(1);
-+        }
          queue_if_enabled(event);
          break;
++    case SDL_EventType::SDL_MOUSEBUTTONDOWN:
++        note_game_mouse_position(event->button.windowID, event->button.x, event->button.y);
++        // Banjo-Tooie: mouse buttons bind in the Keyboard section like keys. The click is used up by the binding
++        // (set_scanned_input stops scanning and skips the queued events), so it doesn't also press a menu button.
++        // The menu's own inputs stay keys only: the menu reads its keys from RmlUi, so a mouse binding there would do nothing.
++        if (binding::is_binding() && binding::get_scanning_device() == InputDevice::Keyboard &&
++            !get_game_input_is_menu(binding::get_scanning_game_input())) {
++            binding::set_scanned_input({ InputType::Mouse, event->button.button });
++        }
++        else {
++            if (!recompinput::game_input_disabled() && event->button.button < 8) {
++                game_mouse_clicks[event->button.button].fetch_add(1);
++            }
++            queue_if_enabled(event);
++        }
++        break;
      case SDL_EventType::SDL_DROPBEGIN:
-@@ -246,26 +340,73 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+         DropState.files_dropped.clear();
+         break;
+@@ -246,26 +352,86 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
      return false;
  }
  
@@ -553,6 +577,11 @@ index c76a1dc..a2c79fc 100644
 +        cursor_locked = false;
 +        cursor_visible = recompui::get_cursor_visible() && !recompinput::game_menu_cursor_hidden();
 +    }
++    // Banjo-Tooie: Show/Hide Cursor (Tab) frees and shows the cursor over the game.
++    if (recompinput::cursor_shown_by_key() && !recompinput::game_input_disabled()) {
++        cursor_locked = false;
++        cursor_visible = true;
++    }
 +    // Banjo-Tooie: pick mode frees and shows the cursor, as a crosshair over the game.
 +    static SDL_Cursor *crosshair = nullptr;
 +    static bool was_picking = false;
@@ -561,16 +590,24 @@ index c76a1dc..a2c79fc 100644
 +        cursor_locked = false;
 +        cursor_visible = true;
 +    }
-+    if (picking != was_picking) {
-+        if (picking && (crosshair == nullptr)) {
-+            crosshair = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
-+        }
-+        SDL_SetCursor(picking && (crosshair != nullptr) ? crosshair : SDL_GetDefaultCursor());
++    // Banjo-Tooie: the picture the cursor has outside pick mode (the game's hand), or null for the system's.
++    static SDL_Cursor *shown_cursor = nullptr;
++    SDL_Cursor *custom = static_cast<SDL_Cursor *>(recompinput::custom_cursor());
++    if (picking && (crosshair == nullptr)) {
++        crosshair = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
++    }
++    SDL_Cursor *wanted = (picking && crosshair != nullptr) ? crosshair : (custom != nullptr ? custom : SDL_GetDefaultCursor());
++    // A picture of our own is put back when something else (the menus) has put up another since.
++    const bool replaced = (picking || custom != nullptr) && SDL_GetCursor() != wanted;
++    if (picking != was_picking || wanted != shown_cursor || replaced) {
++        SDL_SetCursor(wanted);
++        shown_cursor = wanted;
 +        was_picking = picking;
 +    }
 +
 +    SDL_ShowCursor(cursor_visible ? SDL_ENABLE : SDL_DISABLE);
 +    SDL_SetRelativeMouseMode(cursor_locked ? SDL_TRUE : SDL_FALSE);
++    cursor_shown_in_game = cursor_visible && ultramodern::is_game_started();
 +
 +    // While locked, SDL's idea of where the cursor is stops following the real one, so the menu opened
 +    // over the game aimed every click at that old spot. Putting the cursor in the middle of the window on
@@ -621,7 +658,7 @@ index c76a1dc..a2c79fc 100644
  
      binding::stop_skipping_events();
 diff --git a/recompinput/src/input_state.cpp b/recompinput/src/input_state.cpp
-index 03ed871..424e914 100644
+index 03ed871..11162cd 100644
 --- a/recompinput/src/input_state.cpp
 +++ b/recompinput/src/input_state.cpp
 @@ -7,6 +7,8 @@
@@ -687,19 +724,35 @@ index 03ed871..424e914 100644
                  for (SDL_GameController *controller : InputState.detected_controllers) {
                      float controller_state = gather_axis_state(controller);
                      if (fabsf(controller_state) > fabsf(ret)) {
-@@ -215,7 +237,10 @@ bool recompinput::should_override_keystate(SDL_Scancode key, SDL_Keymod mod) {
+@@ -215,7 +237,18 @@ bool recompinput::should_override_keystate(SDL_Scancode key, SDL_Keymod mod) {
      return false;
  }
  
 -float recompinput::get_input_analog(int controller_num, const InputField& field) {
 +static bool raw_input_digital(int controller_num, const recompinput::InputField& field);
 +
++// Mouse buttons (Keyboard section bindings): input_id is the SDL button number (SDL_BUTTON_LEFT ..).
++static bool mouse_button_state(int32_t button) {
++    if (button < SDL_BUTTON_LEFT || button > 32) {
++        return false;
++    }
++    return (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON(button)) != 0;
++}
++
 +static float raw_input_analog(int controller_num, const recompinput::InputField& field) {
 +    using namespace recompinput;
      switch (field.input_type) {
      case InputType::Keyboard:
          if (InputState.keys && field.input_id >= 0 && field.input_id < InputState.numkeys) {
-@@ -237,6 +262,31 @@ float recompinput::get_input_analog(int controller_num, const InputField& field)
+@@ -230,13 +263,37 @@ float recompinput::get_input_analog(int controller_num, const InputField& field)
+     case InputType::ControllerAnalog:
+         return controller_axis_state(controller_num, field.input_id, true);
+     case InputType::Mouse:
+-        // TODO mouse support
+-        return 0.0f;
++        return mouse_button_state(field.input_id) ? 1.0f : 0.0f;
+     case InputType::None:
+         return false;
      }
  }
  
@@ -731,7 +784,7 @@ index 03ed871..424e914 100644
  float recompinput::get_input_analog(int controller_num, const std::span<const InputField> fields) {
      float ret = 0.0f;
      for (const auto& field : fields) {
-@@ -245,7 +295,8 @@ float recompinput::get_input_analog(int controller_num, const std::span<const In
+@@ -245,7 +302,8 @@ float recompinput::get_input_analog(int controller_num, const std::span<const In
      return std::clamp(ret, 0.0f, 1.0f);
  }
  
@@ -741,7 +794,17 @@ index 03ed871..424e914 100644
      switch (field.input_type) {
      case InputType::Keyboard:
          if (InputState.keys && field.input_id >= 0 && field.input_id < InputState.numkeys) {
-@@ -411,6 +462,40 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
+@@ -261,8 +319,7 @@ bool recompinput::get_input_digital(int controller_num, const InputField& field)
+         // TODO adjustable threshold
+         return controller_axis_state(controller_num, field.input_id, true) >= recompinput::axis_digital_threshold;
+     case InputType::Mouse:
+-        // TODO mouse support
+-        return false;
++        return mouse_button_state(field.input_id);
+     case InputType::None:
+         return false;
+     }
+@@ -411,6 +468,72 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
      InputState.pending_mouse_delta[0] += delta_x;
      InputState.pending_mouse_delta[1] += delta_y;
  }
@@ -769,6 +832,38 @@ index 03ed871..424e914 100644
 +    return game_menu_mouse_on.load();
 +}
 +
++static std::atomic_bool cursor_shown_by_key_on = false;
++
++void recompinput::set_cursor_shown_by_key(bool on) {
++    cursor_shown_by_key_on.store(on);
++}
++
++bool recompinput::cursor_shown_by_key() {
++    return cursor_shown_by_key_on.load();
++}
++
++static std::array<std::atomic_bool, (size_t)recompinput::GameInput::COUNT> keyboard_only_inputs{};
++
++void recompinput::set_game_input_keyboard_only(GameInput input, bool keyboard_only) {
++    if ((size_t)input < keyboard_only_inputs.size()) {
++        keyboard_only_inputs[(size_t)input].store(keyboard_only);
++    }
++}
++
++bool recompinput::game_input_keyboard_only(GameInput input) {
++    return (size_t)input < keyboard_only_inputs.size() && keyboard_only_inputs[(size_t)input].load();
++}
++
++static std::atomic<void*> custom_cursor_ptr = nullptr;
++
++void recompinput::set_custom_cursor(void* sdl_cursor) {
++    custom_cursor_ptr.store(sdl_cursor);
++}
++
++void* recompinput::custom_cursor() {
++    return custom_cursor_ptr.load();
++}
++
 +static std::atomic_bool game_menu_cursor_hidden_on = false;
 +
 +void recompinput::set_game_menu_cursor_hidden(bool hidden) {
@@ -783,7 +878,7 @@ index 03ed871..424e914 100644
      InputState.mouse_wheel_pos.fetch_add(delta);
  }
 diff --git a/recompinput/src/input_types.cpp b/recompinput/src/input_types.cpp
-index c6786e6..36eeb81 100644
+index c6786e6..afb543a 100644
 --- a/recompinput/src/input_types.cpp
 +++ b/recompinput/src/input_types.cpp
 @@ -81,6 +81,30 @@ bool get_game_input_is_menu(GameInput input) {
@@ -817,7 +912,37 @@ index c6786e6..36eeb81 100644
  const std::string& get_game_input_enum_name(GameInput input) {
      return game_input_enum_names.at(static_cast<size_t>(input));
  }
-@@ -251,6 +275,9 @@ static std::string controller_axis_to_string(int axis) {
+@@ -227,6 +251,29 @@ static std::string keyboard_input_to_string(SDL_Scancode key) {
+     return recompinput::unknown_device_input;
+ }
+ 
++static std::string mouse_button_to_string(int button) {
++    switch (button) {
++    case SDL_BUTTON_LEFT:
++        return PF_MOUSE_LEFT;
++    case SDL_BUTTON_RIGHT:
++        return PF_MOUSE_RIGHT;
++    case SDL_BUTTON_MIDDLE:
++        return PF_MOUSE_MIDDLE;
++    case SDL_BUTTON_X1:
++        return PF_MOUSE_4;
++    case SDL_BUTTON_X2:
++        return PF_MOUSE_5;
++    case 6:
++        return PF_MOUSE_6;
++    case 7:
++        return PF_MOUSE_7;
++    case 8:
++        return PF_MOUSE_8;
++    default:
++        return recompinput::unknown_device_input;
++    }
++}
++
+ static std::string controller_axis_to_string(int axis) {
+     bool positive = axis > 0;
+     SDL_GameControllerAxis actual_axis = SDL_GameControllerAxis(abs(axis) - 1);
+@@ -251,6 +298,9 @@ static std::string controller_axis_to_string(int axis) {
  }
  
  std::string recompinput::InputField::to_string() const {
@@ -827,6 +952,15 @@ index c6786e6..36eeb81 100644
      switch (input_type) {
      case InputType::None:
          return "";
+@@ -260,6 +310,8 @@ std::string recompinput::InputField::to_string() const {
+         return controller_axis_to_string(input_id);
+     case InputType::Keyboard:
+         return keyboard_input_to_string((SDL_Scancode)input_id);
++    case InputType::Mouse:
++        return mouse_button_to_string(input_id);
+     default:
+         return recompinput::unknown_device_input;
+     }
 diff --git a/recompinput/src/profiles.cpp b/recompinput/src/profiles.cpp
 index c89956e..12b7644 100644
 --- a/recompinput/src/profiles.cpp
@@ -1158,10 +1292,38 @@ index eb8833e..acd435b 100644
          void add_default_options() {
              add_start_game_or_load_rom_option();
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..676066d 100644
+index 277a421..cabadda 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
-@@ -244,7 +244,8 @@ public:
+@@ -202,6 +202,18 @@ struct ContextDetails {
+     Rml::ElementDocument* document;
+ };
+ 
++// Banjo-Tooie: while the game gives the cursor its own picture (the hand, recompinput::set_custom_cursor),
++// the menus' cursor changes (an arrow, a pointer over buttons) would put the system's back; they are skipped.
++class TooieSystemInterface : public SystemInterface_SDL {
++public:
++    void SetMouseCursor(const Rml::String& cursor_name) override {
++        if (recompinput::custom_cursor() != nullptr) {
++            return;
++        }
++        SystemInterface_SDL::SetMouseCursor(cursor_name);
++    }
++};
++
+ class UIState {
+     bool mouse_is_active_changed = false;
+     std::vector<ContextDetails> shown_contexts{};
+@@ -224,7 +236,7 @@ public:
+ 
+     UIState(SDL_Window* window, plume::RenderInterface* interface, plume::RenderDevice* device) {
+ 
+-        system_interface = std::make_unique<SystemInterface_SDL>();
++        system_interface = std::make_unique<TooieSystemInterface>();
+         system_interface->SetWindow(window);
+         render_interface.init(interface, device);
+ 
+@@ -244,7 +256,8 @@ public:
          
          context = Rml::CreateContext("main", Rml::Vector2i(width, height));
  
@@ -1171,7 +1333,7 @@ index 277a421..676066d 100644
          {
              struct FontFace {
                  const char* filename;
-@@ -311,6 +312,14 @@ public:
+@@ -311,6 +324,14 @@ public:
              recompui::set_cursor_visible(mouse_is_active);
          }
  
@@ -1186,7 +1348,7 @@ index 277a421..676066d 100644
          Rml::ElementDocument* current_document = top_mouse_document();
          if (current_document == nullptr) {
              return;
-@@ -346,6 +355,13 @@ public:
+@@ -346,6 +367,13 @@ public:
                  // Check if not focused or focused element is not focusable.
                  if (focused_el == nullptr || focused_el->is_focusable() != recompui::Element::CanFocus::Yes) {
                      auto recompui_doc = top_context.get_root_element();
@@ -1200,7 +1362,7 @@ index 277a421..676066d 100644
                      auto last_hovered = recompui_doc->get_last_focusable_hovered_element();
                      if (last_hovered && last_hovered->is_focusable() == recompui::Element::CanFocus::Yes) {
                          last_hovered->focus();
-@@ -493,6 +509,7 @@ public:
+@@ -493,6 +521,7 @@ public:
  };
  
  std::unique_ptr<UIState> ui_state;
@@ -1208,7 +1370,7 @@ index 277a421..676066d 100644
  std::recursive_mutex ui_state_mutex{};
  
  // TODO make this not be global
-@@ -570,6 +587,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
+@@ -570,6 +599,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
      return identifier;
  }
  
@@ -1249,7 +1411,7 @@ index 277a421..676066d 100644
  bool check_menu_button_pressed(int profile_index, recompinput::GameInput input, int32_t event_button) {
      auto menuBinding0 = recompinput::profiles::get_input_binding(profile_index, input, 0);
      auto menuBinding1 = recompinput::profiles::get_input_binding(profile_index, input, 1);
-@@ -696,6 +747,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -696,6 +759,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
          if (!all_input_is_disabled) {
              bool is_mouse_input = false;
@@ -1260,7 +1422,7 @@ index 277a421..676066d 100644
              // Implement some additional behavior for specific events on top of what RmlUi normally does with them.
              switch (cur_event.type) {
              case SDL_EventType::SDL_MOUSEMOTION: {
-@@ -705,6 +760,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -705,6 +772,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                      float xD = cur_event.motion.x - last_mouse_pos[0];
                      float yD = cur_event.motion.y - last_mouse_pos[1];
                      if (sqrt(xD * xD + yD * yD) < 100) {
@@ -1268,7 +1430,7 @@ index 277a421..676066d 100644
                          break;
                      }
                  }
-@@ -713,6 +769,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -713,6 +781,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                  // if controller is the primary input, don't use mouse movement to allow cursor to reactivate
                  if (recompui::get_cont_active()) {
@@ -1276,7 +1438,7 @@ index 277a421..676066d 100644
                      break;
                  }
              }
-@@ -731,7 +788,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -731,7 +800,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              case SDL_EventType::SDL_CONTROLLERBUTTONDOWN: {
                  int sdl_key = cont_button_to_key(cur_event.cbutton);
                  if (context_capturing_input && sdl_key) {
@@ -1285,7 +1447,7 @@ index 277a421..676066d 100644
                      latest_controller_key_pressed = sdl_key;
                      next_repeat_time = clock::now() + start_repeat_delay;
                  }
-@@ -747,6 +804,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -747,6 +816,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                      if (cur_event.key.keysym.scancode == SDL_Scancode::SDL_SCANCODE_F8) {
                          if (recompui::config::general::get_debug_mode_enabled()) {
@@ -1295,7 +1457,7 @@ index 277a421..676066d 100644
                              Rml::Debugger::SetVisible(!Rml::Debugger::IsVisible());
                          }
                      }
-@@ -776,7 +836,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -776,7 +848,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                          non_mouse_interacted = true;
                          int sdl_key = cont_axis_to_key(cur_event.caxis, axis_value);
                          if (context_capturing_input && sdl_key) {
@@ -1304,7 +1466,7 @@ index 277a421..676066d 100644
                              latest_controller_key_pressed = sdl_key;
                              next_repeat_time = clock::now() + start_repeat_delay;
                          }
-@@ -796,14 +856,30 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -796,14 +868,30 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
  
              // Send the event to RmlUi if this type of event is being captured.
@@ -1337,7 +1499,7 @@ index 277a421..676066d 100644
                  }
              }
          }
-@@ -837,7 +913,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -837,7 +925,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
              }
  
@@ -1346,7 +1508,7 @@ index 277a421..676066d 100644
                  recompui::config::open();
              }
          }
-@@ -847,7 +923,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -847,7 +935,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      if (latest_controller_key_pressed != SDLK_UNKNOWN) {
          clock::time_point now = clock::now();
          if (now >= next_repeat_time) {
@@ -1355,7 +1517,7 @@ index 277a421..676066d 100644
              next_repeat_time += repeat_rate;
          }
      }
-@@ -893,7 +969,10 @@ void deinit_hook() {
+@@ -893,7 +981,10 @@ void deinit_hook() {
      recompui::destroy_all_contexts();
  
      std::lock_guard lock {ui_state_mutex};
@@ -1634,7 +1796,7 @@ index 6c84c05..fcad6e9 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("Config modal has not been initialized.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..b6d50a7 100644
+index 86428c9..7247e22 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
 @@ -1,4 +1,7 @@
@@ -1645,7 +1807,7 @@ index 86428c9..b6d50a7 100644
  
  namespace recompui {
  
-@@ -35,6 +38,19 @@ ConfigOptionElement::ConfigOptionElement(
+@@ -35,6 +38,30 @@ ConfigOptionElement::ConfigOptionElement(
      const recomp::config::ConfigOption &option = config->get_option(option_index);
  
      ContextId context = recompui::get_current_context();
@@ -1661,11 +1823,22 @@ index 86428c9..b6d50a7 100644
 +        };
 +        expand_button = make_expander("icons/Caret.svg", true);
 +        collapse_button = make_expander("icons/CaretUp.svg", false);
++    } else {
++        // A row with no options under it keeps the arrow's space, hidden, so its name and switch line up with the
++        // rows that have arrows (L, 2026-10-24).
++        auto make_spacer = [&](const char* svg) {
++            IconButton *button = context.create_element<IconButton>(this, svg, ButtonStyle::Basic, IconButtonSize::Small);
++            button->set_flex_shrink(0.0f);
++            button->set_visibility(Visibility::Hidden);
++            return button;
++        };
++        expand_button = make_spacer("icons/Caret.svg");
++        collapse_button = make_spacer("icons/CaretUp.svg");
 +    }
      auto name_text = option.name;
      if (!name_text.empty()) {
          name_label = context.create_element<Label>(this, name_text, theme::Typography::LabelMD);
-@@ -59,7 +75,11 @@ bool ConfigOptionElement::get_disabled() {
+@@ -59,7 +86,11 @@ bool ConfigOptionElement::get_disabled() {
  }
  
  bool ConfigOptionElement::get_hidden() {
@@ -1678,7 +1851,17 @@ index 86428c9..b6d50a7 100644
  }
  
  void ConfigOptionElement::process_event(const Event &e) {
-@@ -87,14 +107,72 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -76,6 +107,9 @@ void ConfigOptionElement::process_event(const Event &e) {
+         if (active) {
+             on_hover(option_id);
+             scroll_into_view();
++            if (on_focus) {
++                on_focus(this);
++            }
+         }
+         break;
+     }
+@@ -87,14 +121,72 @@ void ConfigOptionElement::process_event(const Event &e) {
      }
  }
  
@@ -1752,7 +1935,7 @@ index 86428c9..b6d50a7 100644
  }
  
  // ConfigOptionEnum
-@@ -110,6 +188,7 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -110,6 +202,7 @@ ConfigOptionEnum::ConfigOptionEnum(
  {
      ContextId context = recompui::get_current_context();
      Element *wrapper = context.create_element<Element>(this, 0, "div", false);
@@ -1760,7 +1943,7 @@ index 86428c9..b6d50a7 100644
      wrapper->set_display(Display::Flex);
      wrapper->set_flex_direction(FlexDirection::Row);
      wrapper->set_align_items(AlignItems::Center);
-@@ -120,25 +199,48 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -120,25 +213,48 @@ ConfigOptionEnum::ConfigOptionEnum(
      // Negates the extra padding that radio tabs automatically add.
      name_label->set_margin_bottom(4.0f);
  
@@ -1826,7 +2009,7 @@ index 86428c9..b6d50a7 100644
      }
  
      update_value();
-@@ -153,12 +255,18 @@ void ConfigOptionEnum::update_value() {
+@@ -153,12 +269,18 @@ void ConfigOptionEnum::update_value() {
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(this->option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          if (enum_opt.options[i].value == option_value) {
@@ -1847,7 +2030,7 @@ index 86428c9..b6d50a7 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -177,6 +285,14 @@ void ConfigOptionEnum::update_enum_details() {
+@@ -177,6 +299,14 @@ void ConfigOptionEnum::update_enum_details() {
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
@@ -1862,7 +2045,7 @@ index 86428c9..b6d50a7 100644
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
          auto opt_element = radio->get_option_element(i);
-@@ -199,6 +315,7 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -199,6 +329,7 @@ ConfigOptionNumber::ConfigOptionNumber(
      auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
  
      slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
@@ -1870,7 +2053,7 @@ index 86428c9..b6d50a7 100644
      slider->set_width(100.0f, Unit::Percent);
      slider->set_max_width(512.0f, Unit::Dp);
  
-@@ -214,14 +331,29 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -214,14 +345,29 @@ ConfigOptionNumber::ConfigOptionNumber(
              this->on_hover(this->option_id);
          }
      });
@@ -1900,7 +2083,7 @@ index 86428c9..b6d50a7 100644
  };
  
  void ConfigOptionNumber::update_disabled() {
-@@ -229,6 +361,15 @@ void ConfigOptionNumber::update_disabled() {
+@@ -229,6 +375,15 @@ void ConfigOptionNumber::update_disabled() {
      set_enabled(!disabled);
  };
  
@@ -1916,7 +2099,7 @@ index 86428c9..b6d50a7 100644
  // ConfigOptionString
  ConfigOptionString::ConfigOptionString(
      ResourceId rid,
-@@ -245,6 +386,7 @@ ConfigOptionString::ConfigOptionString(
+@@ -245,6 +400,7 @@ ConfigOptionString::ConfigOptionString(
  
      ContextId context = recompui::get_current_context();
      text_input = context.create_element<TextInput>(this);
@@ -1924,7 +2107,7 @@ index 86428c9..b6d50a7 100644
      text_input->set_width(100.0f, Unit::Percent);
      text_input->set_max_width(100.0f, Unit::Percent);
      update_value();
-@@ -284,16 +426,41 @@ ConfigOptionBool::ConfigOptionBool(
+@@ -284,16 +440,41 @@ ConfigOptionBool::ConfigOptionBool(
  
      ContextId context = recompui::get_current_context();
      toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
@@ -1967,7 +2150,7 @@ index 86428c9..b6d50a7 100644
  
  void ConfigOptionBool::update_disabled() {
 diff --git a/recompui/src/config/ui_config_option.h b/recompui/src/config/ui_config_option.h
-index 0561657..0dbdef8 100644
+index 0561657..7be3ec2 100644
 --- a/recompui/src/config/ui_config_option.h
 +++ b/recompui/src/config/ui_config_option.h
 @@ -4,9 +4,12 @@
@@ -2004,7 +2187,7 @@ index 0561657..0dbdef8 100644
  
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "ConfigOptionElement"; }
-@@ -42,12 +55,22 @@ namespace recompui {
+@@ -42,12 +55,25 @@ namespace recompui {
          virtual void update_value() = 0;
          virtual void update_disabled() = 0;
          void update_hidden();
@@ -2012,6 +2195,9 @@ index 0561657..0dbdef8 100644
 +        bool ignore_simple = false;
 +        // The group heading shown above this option (hidden together with it).
 +        Element *group_heading = nullptr;
++        // Called after the option takes focus and scrolls itself into view (the page fixes up its scroll).
++        std::function<void(ConfigOptionElement *)> on_focus;
++        bool is_shown() { return !get_hidden(); }
          const std::string &get_option_id() { return option_id; }
 +        // Sidebar layout: the name on the left and the control on the right, on one line.
 +        void set_compact(bool compact);
@@ -2027,7 +2213,7 @@ index 0561657..0dbdef8 100644
      Label *details_label = nullptr;
  
      std::string_view get_type_name() override { return "ConfigOptionEnum"; }
-@@ -72,7 +95,12 @@ public:
+@@ -72,7 +98,12 @@ public:
  class ConfigOptionNumber : public ConfigOptionElement {
  protected:
      Slider *slider = nullptr;
@@ -2040,7 +2226,7 @@ index 0561657..0dbdef8 100644
      std::string_view get_type_name() override { return "ConfigOptionNumber"; }
  public:
      ConfigOptionNumber(
-@@ -87,6 +115,7 @@ public:
+@@ -87,6 +118,7 @@ public:
  
      void update_value() override;
      void update_disabled() override;
@@ -2048,7 +2234,7 @@ index 0561657..0dbdef8 100644
  };
  
  class ConfigOptionString : public ConfigOptionElement {
-@@ -112,7 +141,10 @@ public:
+@@ -112,7 +144,10 @@ public:
  class ConfigOptionBool : public ConfigOptionElement {
  protected:
      Toggle *toggle = nullptr;
@@ -2059,7 +2245,7 @@ index 0561657..0dbdef8 100644
      std::string_view get_type_name() override { return "ConfigOptionBool"; }
  public:
      ConfigOptionBool(
-@@ -127,6 +159,7 @@ public:
+@@ -127,6 +162,7 @@ public:
  
      void update_value() override;
      void update_disabled() override;
@@ -2068,7 +2254,7 @@ index 0561657..0dbdef8 100644
  
  } // namespace recompui
 diff --git a/recompui/src/config/ui_config_page_controls.cpp b/recompui/src/config/ui_config_page_controls.cpp
-index f379a6f..388d5a2 100644
+index f379a6f..7bbf136 100644
 --- a/recompui/src/config/ui_config_page_controls.cpp
 +++ b/recompui/src/config/ui_config_page_controls.cpp
 @@ -206,6 +206,22 @@ void ConfigPageControls::create_game_input_contexts() {
@@ -2110,8 +2296,26 @@ index f379a6f..388d5a2 100644
          auto reset_to_defaults_button = context.create_element<Button>(footer_right, "Reset to defaults", ButtonStyle::Warning);
          reset_to_defaults_button->add_pressed_callback([this]() {
              recompinput::profiles::reset_profile_bindings(this->selected_profile_index, this->get_player_input_device());
+@@ -590,6 +615,17 @@ void ConfigPageControls::update_control_mappings() {
+         }
+     }
+ 
++    // Banjo-Tooie: inputs that only a key can trigger (Show/Hide Cursor) are left out of the controller view.
++    for (auto *row : game_input_rows) {
++        if (recompinput::game_input_keyboard_only(row->get_input_id())) {
++            if (get_player_input_device() == recompinput::InputDevice::Keyboard) {
++                row->display_show();
++            } else {
++                row->display_hide();
++            }
++        }
++    }
++
+     recompui::GameInputRowsWrapper *first = nullptr;
+     recompui::GameInputRowsWrapper *last = nullptr;
+     for (auto *wrapper : rows_wrappers) {
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..a05df0f 100644
+index 6ba64e2..1990325 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,10 @@
@@ -2296,10 +2500,12 @@ index 6ba64e2..a05df0f 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -173,7 +281,19 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -172,8 +280,21 @@ void ConfigPageOptionsMenu::render_config_options() {
+         body_left_scroll->set_padding(16.0f);
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
- 
++        options_scroll = body_left_scroll;
++
 +        // The tab's name as a heading, shown with the sidebar layout.
 +        page_title = context.create_element<Label>(body_left_scroll, page_id.empty() ? config->name : page_name, theme::Typography::Header2);
 +        page_title->set_display(Display::None);
@@ -2310,13 +2516,13 @@ index 6ba64e2..a05df0f 100644
 +        page_title->set_color(sidebar_style::gold);
 +        page_title->set_margin_bottom(12.0f);
 +        page_title->set_padding_left(8.0f);
-+
+ 
          config_option_elements.clear();
 +        highlighted_option = nullptr;
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
          };
-@@ -181,8 +301,46 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +302,46 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
@@ -2363,17 +2569,44 @@ index 6ba64e2..a05df0f 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +391,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +392,10 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
 +            element->group_heading = group_heading;
++            element->on_focus = [this](ConfigOptionElement *focused) {
++                this->on_option_focus(focused);
++            };
              element->update_disabled();
              element->update_hidden();
              config_option_elements.push_back(element);
-@@ -241,6 +400,18 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -240,7 +403,42 @@ void ConfigPageOptionsMenu::render_config_options() {
+     }
  }
  
++void ConfigPageOptionsMenu::on_option_focus(ConfigOptionElement *focused) {
++    // Controller (L, 2026-10-24): an option scrolls only far enough to show itself, so Up onto the first one
++    // left the page's title and its group heading cut off above it. The first shown option now scrolls the
++    // page right to the top, and any other option brings its group heading into view with it.
++    // Mouse and keyboard keep the plain scroll.
++    if (!recompui::get_cont_active() || options_scroll == nullptr) {
++        return;
++    }
++    for (ConfigOptionElement *element : config_option_elements) {
++        if (element->is_shown()) {
++            if (element == focused) {
++                options_scroll->set_scroll_top(0.0f);
++                return;
++            }
++            break;
++        }
++    }
++    if (focused->group_heading != nullptr) {
++        focused->group_heading->scroll_into_view();
++        focused->scroll_into_view();
++    }
++}
++
  void ConfigPageOptionsMenu::on_option_hover(const std::string &option_id) {
 +    if (description_strip) {
 +        ConfigOptionElement *element = get_element_from_option_id(option_id);
@@ -2391,7 +2624,7 @@ index 6ba64e2..a05df0f 100644
          description_option_id = option_id;
          set_description_text(config->get_option(option_id).description);
 diff --git a/recompui/src/config/ui_config_page_options_menu.h b/recompui/src/config/ui_config_page_options_menu.h
-index 49e05db..a9dce3a 100644
+index 49e05db..b0d067b 100644
 --- a/recompui/src/config/ui_config_page_options_menu.h
 +++ b/recompui/src/config/ui_config_page_options_menu.h
 @@ -1,5 +1,7 @@
@@ -2402,7 +2635,7 @@ index 49e05db..a9dce3a 100644
  #include "config/ui_config_option.h"
  #include "elements/ui_config_page.h"
  #include "elements/ui_modal.h"
-@@ -12,11 +14,23 @@ namespace recompui {
+@@ -12,11 +14,25 @@ namespace recompui {
      protected:
          recomp::config::Config *config;
          bool is_internal = false;
@@ -2421,12 +2654,19 @@ index 49e05db..a9dce3a 100644
          Button *apply_button = nullptr;
 +        bool description_strip = false;
 +        Element *page_title = nullptr;
++        // The scrolling column the options sit in.
++        Element *options_scroll = nullptr;
 +        // The option marked with the hover band (sidebar layout).
 +        ConfigOptionElement *highlighted_option = nullptr;
  
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "ConfigPageOptionsMenu"; }
-@@ -31,12 +45,16 @@ namespace recompui {
+@@ -27,16 +43,21 @@ namespace recompui {
+         void render_config_options();
+         void render_confirmation_footer();
+         void on_option_hover(const std::string &option_id);
++        void on_option_focus(ConfigOptionElement *focused);
+         void on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value);
          ConfigOptionElement* get_element_from_option_id(const std::string &option_id);
          void perform_option_render_updates();
          void set_description_text(const std::string &text);
@@ -2889,7 +3129,7 @@ index 34eec3f..cedce38 100644
      Element *select_add_option(std::string_view text, std::string_view value);
      void select_set_selection(std::string_view option_value);
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..0a580b3 100644
+index b057f46..377b86a 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
 @@ -3,6 +3,9 @@
@@ -2902,7 +3142,39 @@ index b057f46..0a580b3 100644
  
  namespace recompui {
  
-@@ -311,6 +314,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
+@@ -123,12 +126,21 @@ void Modal::open() {
+ }
+ 
+ void TabbedModal::open() {
++    // The page is kept while the menu is closed (L, 2026-10-24): a controller goes back to the entry it was on,
++    // not the tab. The document forgets its last focused element when that element is removed.
++    Element *page_focus = reopen_in_page ? modal_root_context.get_last_focused_element() : nullptr;
++    reopen_in_page = false;
++
+     Modal::open();
+ 
+     if (tabs != nullptr) {
+         tabs->focus_on_active_tab();
+         on_tab_change(tabs->get_active_tab());
+     }
++    if (page_focus != nullptr && previous_tab_index == current_tab_index && body->contains_element(page_focus) &&
++        page_focus->is_focusable() == CanFocus::Yes) {
++        page_focus->focus();
++    }
+ }
+ 
+ bool Modal::close() {
+@@ -155,6 +167,9 @@ bool TabbedModal::close() {
+         }
+     }
+ 
++    Element *focused = modal_root_context.get_last_focused_element();
++    reopen_in_page = get_cont_active() && focused != nullptr && body->contains_element(focused);
++
+     return Modal::close();
+ }
+ 
+@@ -311,6 +326,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
      return modal;
  }
  
@@ -2991,7 +3263,7 @@ index b057f46..0a580b3 100644
  TabbedModal::TabbedModal(
      ResourceId rid,
      Document *parent,
-@@ -319,6 +404,12 @@ TabbedModal::TabbedModal(
+@@ -319,6 +416,12 @@ TabbedModal::TabbedModal(
  ) : Modal(rid, parent, modal_root_context, modal_type)
  {
      set_menu_action_callback(MenuAction::Back, [this]() {
@@ -3004,7 +3276,7 @@ index b057f46..0a580b3 100644
          if (this->tabs != nullptr) {
              this->tabs->focus_on_active_tab();
          }
-@@ -331,9 +422,124 @@ TabbedModal::TabbedModal(
+@@ -331,9 +434,124 @@ TabbedModal::TabbedModal(
      }, "Next Tab");
  }
  
@@ -3129,7 +3401,7 @@ index b057f46..0a580b3 100644
              if (previous_tab_index != current_tab_index) {
                  body->clear_children();
                  if (current_tab_index >= 0 && current_tab_index < tab_contexts.size()) {
-@@ -341,6 +547,9 @@ void TabbedModal::process_event(const Event &e) {
+@@ -341,6 +559,9 @@ void TabbedModal::process_event(const Event &e) {
                  }
                  previous_tab_index = current_tab_index;
              }
@@ -3139,7 +3411,7 @@ index b057f46..0a580b3 100644
              queue_update();
              break;
          }
-@@ -362,7 +571,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
+@@ -362,7 +583,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
          return;
      }
      int next_index = tabs->get_next_tab_in_direction(tabs->get_active_tab(), direction);
@@ -3160,7 +3432,7 @@ index b057f46..0a580b3 100644
      // Only focus if the tab changed to the intended tab, otherwise the tab change was cancelled.
      if (current_tab_index == next_index) {
          tabs->focus_on_active_tab();
-@@ -404,6 +626,12 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+@@ -404,6 +638,12 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
      ContextId context = get_current_context();
      if (tabs == nullptr) {
          header->set_padding_left(0.0f); // tabs hug to left side
@@ -3174,10 +3446,10 @@ index b057f46..0a580b3 100644
          tabs->set_change_tab_callback([this](int tab_index) {
              this->on_tab_change(tab_index);
 diff --git a/recompui/src/elements/ui_modal.h b/recompui/src/elements/ui_modal.h
-index d065a14..0b68f37 100644
+index d065a14..047bc18 100644
 --- a/recompui/src/elements/ui_modal.h
 +++ b/recompui/src/elements/ui_modal.h
-@@ -102,6 +102,14 @@ namespace recompui {
+@@ -102,6 +102,16 @@ namespace recompui {
          TabSet *tabs = nullptr;
          int previous_tab_index = -1;
          int current_tab_index = -1;
@@ -3186,6 +3458,8 @@ index d065a14..0b68f37 100644
 +        Element *autofocus_target = nullptr;
 +        bool sidebar_search_active = false;
 +        int page_focus_pending = 0;
++        // The menu was closed from a controller while it was on an entry inside the page.
++        bool reopen_in_page = false;
 +        void enter_page();
 +        int get_tab_index(const std::string &id) const;
 +        void apply_sidebar_layout(bool sidebar);
