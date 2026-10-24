@@ -51,8 +51,8 @@ To build by hand, open an "x64 Native Tools Command Prompt for VS 2022" (or
 the version you have) and run:
 
 ```bat
-git clone --recursive https://github.com/Locme/Banjo-Tooie-N64-Recomp.git
-cd Banjo-Tooie-N64-Recomp
+git clone --recursive https://github.com/Locme/Banjo-ReTooie.git
+cd Banjo-ReTooie
 cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTOOIE_CPU=compatible -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_CXX_FLAGS="-Xclang -fexceptions -Xclang -fcxx-exceptions"
 cmake --build build-cmake --target BanjoTooieN64Recomp
 ```
