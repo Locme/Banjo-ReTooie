@@ -258,14 +258,14 @@ namespace {
         return value;
     }
 
-    // func_800E084C: the three rotations (degrees) as a quaternion (x, y, z, w).
+    // func_800E084C: the three rotations (degrees) as a quaternion (x, y, z, w). Its sine helper
+    // (func_800137AC) returns the cosine in f0 and the sine in f2, so this is the turn Rz * Ry * Rx.
     std::array<float, 4> euler_quat(float rx, float ry, float rz) {
         constexpr float half_rad = 3.14159265f / 360.0f;
         const float sx = std::sin(rx * half_rad), cx = std::cos(rx * half_rad);
         const float sy = std::sin(ry * half_rad), cy = std::cos(ry * half_rad);
         const float sz = std::sin(rz * half_rad), cz = std::cos(rz * half_rad);
-        const float f4 = sx * sy, f8 = cx * sy, f6 = sx * cy, f10 = cx * cy;
-        return { f8 * sz - f6 * cz, f6 * sz + f8 * cz, f4 * cz - f10 * sz, f4 * sz + f10 * cz };
+        return { sx * cy * cz - cx * sy * sz, cx * sy * cz + sx * cy * sz, cx * cy * sz - sx * sy * cz, cx * cy * cz + sx * sy * sz };
     }
 
     std::vector<Mat> pose(const Model& model, const Anim& anim, float frame, bool loop) {
@@ -282,12 +282,11 @@ namespace {
             const std::array<float, 9>& p = parts[std::clamp(b.id, 0, 255)];
             const auto q = euler_quat(p[0], p[1], p[2]);
             const float x = q[0], y = q[1], z = q[2], w = q[3];
-            // The game's matrices take row vectors (v * M), so for column vectors the turn is the transpose of
-            // the usual quaternion matrix (with the plain one the fingers bent backwards).
+            // func_800D965C writes the transpose of this, as the game's matrices take row vectors (v * M).
             const float R[3][3] = {
-                { 1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w) },
-                { 2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w) },
-                { 2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y) },
+                { 1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w) },
+                { 2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w) },
+                { 2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y) },
             };
             Mat local;
             const float piv[3] = { b.pivot.x, b.pivot.y, b.pivot.z };
@@ -462,7 +461,10 @@ namespace {
     Vec3 view(const Vec3& p) {
         constexpr float lean = 25.0f * 3.14159265f / 180.0f;
         // Model +y (the back of the hand) towards the viewer, model -z (the fingers) up the screen.
-        const float sx = p.x, sy = -p.z, sz = p.y;
+        const float sx = p.x, y = -p.z, z = p.y;
+        // Seen from above the fingertips (tipped 50 degrees), so the nails stay in sight while the fingers curl.
+        constexpr float tip = -50.0f * 3.14159265f / 180.0f;
+        const float sy = y * std::cos(tip) + z * std::sin(tip), sz = z * std::cos(tip) - y * std::sin(tip);
         return { sx * std::cos(lean) - sy * std::sin(lean), sx * std::sin(lean) + sy * std::cos(lean), sz };
     }
 
@@ -605,25 +607,37 @@ bool tooie::hand_cursor::make_model_frames(int size, ModelFrames& frames) {
         return false;
     }
 
-    // One framing for every frame, so the hand moves within the cursor as it does in the game: the idle's
-    // bounds, with the click allowed to reach past them (it is cut at the edge).
-    float min_x = 1e30f, max_x = -1e30f, min_y = 1e30f, max_y = -1e30f;
-    for (const auto& tris : idle_tris) {
-        for (const Tri& t : tris) {
-            for (const Corner& c : t.c) {
-                const Vec3 v = view(c.pos);
-                min_x = std::min(min_x, v.x);
-                max_x = std::max(max_x, v.x);
-                min_y = std::min(min_y, v.y);
-                max_y = std::max(max_y, v.y);
+    // One framing for every frame, so the hand moves within the cursor as it does in the game. The idle's
+    // bounds set the scale (the idle hand fills the asked size); the picture grows to take in the click too,
+    // so the click is never cut at the edge.
+    struct Bounds {
+        float min_x = 1e30f, max_x = -1e30f, min_y = 1e30f, max_y = -1e30f;
+        void add(const std::vector<std::vector<Tri>>& frames_tris) {
+            for (const auto& tris : frames_tris) {
+                for (const Tri& t : tris) {
+                    for (const Corner& c : t.c) {
+                        const Vec3 v = view(c.pos);
+                        min_x = std::min(min_x, v.x);
+                        max_x = std::max(max_x, v.x);
+                        min_y = std::min(min_y, v.y);
+                        max_y = std::max(max_y, v.y);
+                    }
+                }
             }
         }
-    }
-    const float span = std::max(max_x - min_x, max_y - min_y);
+    };
+    Bounds idle_bounds, all;
+    idle_bounds.add(idle_tris);
+    all.add(idle_tris);
+    all.add(click_tris);
+    const float span = std::max(idle_bounds.max_x - idle_bounds.min_x, idle_bounds.max_y - idle_bounds.min_y);
     if (span <= 0) {
         return false;
     }
-    const Framing fr{ min_x, max_y, (float)(size - 1) / span };
+    const float scale = (float)(size - 1) / span;
+    const float all_span = std::max(all.max_x - all.min_x, all.max_y - all.min_y);
+    size = std::min((int)std::ceil(all_span * scale) + 1, size * 2);
+    const Framing fr{ all.min_x, all.max_y, scale };
 
     // The hot spot: the highest point on screen in the idle's first frame (the first finger's tip).
     {
