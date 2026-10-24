@@ -5314,6 +5314,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Brightness Test Pattern",
         "Shows ten grey boxes over the game. Close the menu, then set Brightness so the first box just disappears into the black and the second one is just visible. Turn it off when done.",
         false);
+    // A button (L, 2026-10-24): it shows or hides the pattern. The menu's own layout for it is still to come.
+    graphics.set_option_button(brightness_pattern_option, "Show Brightness Test Pattern", "Hide Brightness Test Pattern");
     graphics.add_enum_option(
         colourblind_option,
         "Colourblind Filter",
