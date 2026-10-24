@@ -39,6 +39,7 @@
 #include "tooie_gfx_budget.h"
 #include "tooie_day_night.h"
 #include "tooie_picture_filters.h"
+#include "tooie_volumetric_shadows.h"
 
 namespace RT64 {
     // rt64-ext/src/render/rt64_scene_effects.h.
@@ -266,8 +267,8 @@ namespace {
         return found;
     }
 
-    // Sends the level's active lights (lamps, fires: position and outer range) to RT64 for the traced shadows, the
-    // list level_light walks, once a frame while ray tracing is on.
+    // Sends the level's active lights (lamps, fires: position and outer range) to RT64 for the traced shadows and the
+    // lamps' volumetric shadows, the list level_light walks, once a frame while either is on.
     void send_level_lights(uint8_t* rdram, recomp_context* ctx, gpr frame) {
         const gpr light_pos = frame + 0x1A0;  // vec3
         const gpr light_range = frame + 0x1B0;  // inner, outer range, intensity
@@ -579,7 +580,7 @@ extern "C" void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx) {
     if (!draw_callbacks.empty() || in_shadow_pass) {
         return;
     }
-    if (!lights_sent_this_frame && tooie::picture_filters::ray_tracing_active()) {
+    if (!lights_sent_this_frame && (tooie::picture_filters::ray_tracing_active() || tooie::volumetric_shadows::lamps_on())) {
         lights_sent_this_frame = true;
         recomp_context light_ctx = *ctx;
         const gpr light_frame = (ctx->r29 - 0x200) & ~(gpr)0xF;

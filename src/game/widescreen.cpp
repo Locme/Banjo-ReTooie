@@ -31,6 +31,7 @@
 #include "tooie_gfx_budget.h"
 #include "tooie_hooks.h"
 #include "tooie_picture_filters.h"
+#include "tooie_volumetric_shadows.h"
 #include "tooie_rdram.h"
 
 namespace {
@@ -50,7 +51,7 @@ namespace {
     constexpr float sun_shadow_margin_degrees = 25.0f;
 
     float sun_margin() {
-        return tooie::picture_filters::sun_shadows_on() ? sun_shadow_margin_degrees : 0.0f;
+        return (tooie::picture_filters::sun_shadows_on() || (tooie::volumetric_shadows::sun_distance() > 0.0f)) ? sun_shadow_margin_degrees : 0.0f;
     }
 
     float side_angle(float aspect_times_half_fov) {
@@ -229,7 +230,8 @@ namespace {
                 return 0.0f;
             }
         }
-        return tooie::picture_filters::sun_shadow_distance();
+        // Volumetric shadows' sun shafts need the same (their own map holds only what the game drew too).
+        return std::max(tooie::picture_filters::sun_shadow_distance(), tooie::volumetric_shadows::sun_distance());
     }
 
     // The camera's position (the culling planes are relative to it), false if there is no camera.

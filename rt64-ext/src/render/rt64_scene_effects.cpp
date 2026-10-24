@@ -30,6 +30,7 @@
 #include "shared/rt64_scene_effects.h"
 
 #include "rt64_render_target.h"
+#include "rt64_volumetric_shadows.h"
 
 namespace RT64 {
     namespace {
@@ -2595,7 +2596,7 @@ namespace RT64 {
         const SceneEffectsSettings settings = GetSceneEffects();
         return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
             (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0) || (settings.view != 0)) && (settings.depthAddress != 0);
+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0) || VolumetricShadowsOn() || (settings.view != 0)) && (settings.depthAddress != 0);
     }
 
     bool SceneEffectsWanted(const RenderTarget *depthTarget) {
@@ -3867,5 +3868,50 @@ namespace RT64 {
 
         // The HUD drawn next changes the picture again, so the target needs resolving again for display.
         colorTarget->markForResolve();
+
+        // Volumetric shadows (WIP tab): their own maps and passes, drawn over the effects. They are handed only what the
+        // pass knows of the frame (its camera, the sun's direction, the level's lights), none of the effects' own maps.
+        if (VolumetricShadowsOn()) {
+            VolumetricShadowFrame volFrame;
+            const interop::float4 *rows[3] = { &constants.worldX, &constants.worldY, &constants.worldZ };
+            float *outRows[3] = { volFrame.worldX, volFrame.worldY, volFrame.worldZ };
+            for (int r = 0; r < 3; r++) {
+                outRows[r][0] = rows[r]->x;
+                outRows[r][1] = rows[r]->y;
+                outRows[r][2] = rows[r]->z;
+                outRows[r][3] = rows[r]->w;
+            }
+            volFrame.depthTerms[0] = constants.depthTerms.x;
+            volFrame.depthTerms[1] = constants.depthTerms.y;
+            volFrame.depthTerms[2] = constants.depthTerms.z;
+            volFrame.depthTerms[3] = constants.depthTerms.w;
+            volFrame.projectionScale[0] = constants.projection.x;
+            volFrame.projectionScale[1] = constants.projection.y;
+            // World to clip (row vectors: clip = world * V * P); column c of V * P gives clip's component c.
+            float vp[4][4];
+            for (int r = 0; r < 4; r++) {
+                for (int c = 0; c < 4; c++) {
+                    float sum = 0.0f;
+                    for (int k = 0; k < 4; k++) {
+                        const float vrk = rowVector ? view.m[r][k] : view.m[k][r];
+                        const float pkc = rowVector ? m[k][c] : m[c][k];
+                        sum += vrk * pkc;
+                    }
+                    vp[r][c] = sum;
+                }
+            }
+            for (int c = 0; c < 4; c++) {
+                for (int r = 0; r < 4; r++) {
+                    volFrame.clip[c][r] = vp[r][c];
+                }
+            }
+            const float *sunWorld = settings.customSun ? settings.sunDirection : FixedSun;
+            std::copy(sunWorld, sunWorld + 3, volFrame.sun);
+            std::copy(settings.dayTint, settings.dayTint + 3, volFrame.sunTint);
+            volFrame.lights = settings.lights;
+            volFrame.lightCount = std::min(settings.lightCount, SceneMaxLights);
+            volFrame.area = area;
+            RecordVolumetricShadows(worker, colorTarget, depthTarget, volFrame, drawSunCasters);
+        }
     }
 };
