@@ -180,16 +180,6 @@ namespace {
         }
     }
 
-    // The WIP tab's options live in the Graphics config (graphics.json).
-    template <typename T>
-    T wip_option(const std::string& id, T fallback) {
-        try {
-            return std::get<T>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(id));
-        } catch (...) {
-            return fallback;
-        }
-    }
-
     float deadzone(float v) {
         if (v > stick_deadzone) return (v - stick_deadzone) / (1.0f - stick_deadzone);
         if (v < -stick_deadzone) return (v + stick_deadzone) / (1.0f - stick_deadzone);
@@ -429,7 +419,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     // Holding C Down (RB) with the option on: the stick's up and down change the distance instead of tilting.
     float rb_zoom_input = 0.0f;
     gameplay_camera = on && gameplay && !paused;
-    if (fine_held && wip_option<bool>(tooie::free_camera_rb_distance_option, false)) {
+    if (fine_held && option<bool>(tooie::free_camera_rb_distance_option, false)) {
         rb_zoom_input = stick_y;
         stick_y = 0.0f;
     }
@@ -699,7 +689,7 @@ void tooie::free_camera::apply_input(uint16_t* buttons) {
     static bool holding = false;
     static std::chrono::steady_clock::time_point pulse_until{};
     static std::chrono::steady_clock::time_point since;
-    const bool tune = wip_option<bool>(tooie::free_camera_rb_distance_option, false);
+    const bool tune = option<bool>(tooie::free_camera_rb_distance_option, false);
     const bool physical = (*buttons & n64_r_button) != 0;
     if (!tune || !gameplay_camera.load()) {
         // Passed through as it is; nothing pending.

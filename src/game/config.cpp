@@ -772,6 +772,11 @@ void tooie::init_config() {
         "Free Camera",
         "The right stick turns the camera smoothly around Banjo and tilts it, instead of the game's stepped camera swings. The camera stays where you turned it until a cutscene or another area. Its settings show below it.",
         true);
+    qol.add_bool_option(
+        tooie::free_camera_rb_distance_option,
+        "Hold C Down To Fine-Tune Distance",
+        "Hold C Down (RB on a controller, the game's camera distance button) and push the camera stick up or down to move the free camera closer or further away, in small steps, from about half to twice the game's distance. A quick tap still does the game's own camera distance step; only a hold (about a quarter of a second) fine-tunes, and the game does not see it.",
+        true);
     qol.add_enum_option(
         tooie::free_camera_speed_option,
         "Free Camera Speed",
@@ -990,15 +995,9 @@ void tooie::init_config() {
         "Dive",
         "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and lies there until you jump. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
         false);
-    graphics.add_bool_option(
-        tooie::free_camera_rb_distance_option,
-        "Hold C Down To Fine-Tune Distance",
-        "Hold C Down (RB on a controller, the game's camera distance button) and push the camera stick up or down to move the free camera closer or further away, in small steps, from about half to twice the game's distance. A quick tap still does the game's own camera distance step; only a hold (about a quarter of a second) fine-tunes, and the game does not see it.",
-        false);
     {
         namespace pf = tooie::picture_filters;
-        for (const std::string* id : { &tooie::dive::option,
-                &tooie::free_camera_rb_distance_option, &pf::grass_section_option,
+        for (const std::string* id : { &tooie::dive::option, &pf::grass_section_option,
                 &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
                 &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
                 &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
@@ -1010,10 +1009,8 @@ void tooie::init_config() {
         // Dive first, then the Grass toggle and its settings, all under one
         // WIP heading.
         recompui::config::set_option_display_before(tooie::dive::option, pf::grass_section_option);
-        recompui::config::set_option_display_before(tooie::free_camera_rb_distance_option, pf::grass_section_option);
         // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
         recompui::config::set_option_group(tooie::dive::option, "Dive");
-        recompui::config::set_option_group(tooie::free_camera_rb_distance_option, "Free Camera");
         recompui::config::set_option_group(pf::grass_section_option, "3D Grass");
     }
     graphics.add_bool_option(

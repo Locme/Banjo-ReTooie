@@ -31,7 +31,7 @@ namespace tooie {
 namespace tooie::free_camera {
     bool enabled();
 
-    // From the pad read (src/debug/pad_script.cpp): with WIP > hold C Down to fine-tune distance on and the
+    // From the pad read (src/debug/pad_script.cpp): with QOL > hold C Down to fine-tune distance on and the
     // free camera running, C Down tells a tap from a hold. A tap goes to the game as a short C Down press
     // when the button is let go (so the game's camera distance step works as before); a hold is kept from
     // the game and only fine-tunes the distance.
