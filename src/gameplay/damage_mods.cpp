@@ -440,12 +440,25 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
         float active_for = 0.0f; // seconds in the current 1.5 s window of sliding or dodging
         float window_pos[2] = {};// where it was when the window began
         float pause = 0.0f;      // while above 0 the effect leaves this enemy alone (a loop breaker)
+        float yaw_before = 0.0f; // the facing the enemy had before this wrote one, and the one written:
+        float yaw_written = 0.0f;
+        bool yaw_set = false;
+        float yaw_off = 0.0f;    // the turn added to its own facing, eased
     };
     static std::unordered_map<uint32_t, Track> tracks;
     if (tracks.size() > 512) {
         tracks.clear();
     }
     Track& t = tracks[actor];
+    // Undo last frame's turn first. An enemy that walks along its facing would otherwise follow the turn written
+    // here, which turns it again next frame (the loop L saw): if the facing is still exactly what was written the
+    // enemy's own code did not touch it, so its own facing goes back and it works from that.
+    if (t.yaw_set) {
+        if (tooie::rdram::read_float(rdram, actor + 0x48) == t.yaw_written) {
+            tooie::rdram::write_float(rdram, actor + 0x48, t.yaw_before);
+        }
+        t.yaw_set = false;
+    }
     const float x = tooie::rdram::read_float(rdram, actor + 4);
     const float z = tooie::rdram::read_float(rdram, actor + 0xC);
     const float moved = t.have ? std::hypot(x - t.pos[0], z - t.pos[1]) : 0.0f;
@@ -486,6 +499,7 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
         t.vel = 0.0f;
         t.evel[0] = t.evel[1] = 0.0f;
         t.active_for = 0.0f;
+        t.yaw_off = 0.0f;
         return;
     }
     // Banjo's attacks that an enemy should step out of (ScriptHawk's movement state names): the roll (49) from up
@@ -557,6 +571,7 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
     const bool dodging = std::hypot(t.evel[0], t.evel[1]) >= 0.5f;
     if (!sliding && !dodging) {
         t.active_for = 0.0f;
+        t.yaw_off = 0.0f;
         return;
     }
     if (t.active_for == 0.0f) {
@@ -602,8 +617,14 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
         } else if (diff < -180.0f) {
             diff += 360.0f;
         }
-        yaw += diff * std::min(1.0f, dt * 12.0f);
-        tooie::rdram::write_float(rdram, actor + 0x48, std::fmod(yaw + 360.0f, 360.0f));
+        // The turn is kept as an offset from the enemy's own facing and eased, since that facing is restored
+        // each frame (above).
+        t.yaw_off += (diff - t.yaw_off) * std::min(1.0f, dt * 12.0f);
+        t.yaw_before = yaw;
+        const float written = std::fmod(yaw + t.yaw_off + 720.0f, 360.0f);
+        tooie::rdram::write_float(rdram, actor + 0x48, written);
+        t.yaw_written = written;
+        t.yaw_set = true;
     }
 }
 
