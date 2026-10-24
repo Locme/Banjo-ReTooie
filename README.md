@@ -105,10 +105,6 @@ Every keyboard and controller shortcut is in [`notes/keys.md`](notes/keys.md).
 What each cheat does is in [`notes/cheats.md`](notes/cheats.md).
 What changed, newest first, is in [`notes/changelog.md`](notes/changelog.md).
 
-### Reporting problems
-
-Headless testing in a container is described in [`notes/headless-testing.md`](notes/headless-testing.md).
-Notes for AI agents working on the code are in [`AGENTS.md`](AGENTS.md).
 
 ## Foundations, History, and Documentation
 
