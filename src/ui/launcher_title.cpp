@@ -23,8 +23,8 @@ namespace {
     // The title: its top and height as fractions of the window (it is centred across), and its letters'
     // bounce: when the first starts, the gap between letters, how long each falls and settles.
     constexpr float title_top = 0.02f;
-    constexpr float title_height = 0.22f;
-    constexpr float title_box_height = 338.0f; // Title units, as in title_letters below.
+    constexpr float title_height = 0.46f;
+    constexpr float title_box_height = 339.0f; // Title units, as in title_letters below.
     constexpr float title_start = 0.4f;
     constexpr float title_letter_gap = 0.12f;
     constexpr float title_fall_time = 0.35f;
@@ -43,21 +43,22 @@ namespace {
         float left = 0, top = 0, width = 0, height = 0; // In window pixels.
     };
 
-    // BANJO over RE-TOOIE, each row centred; traced from u/Plebian_Donkey_Konga's lettering sheet.
+    // BANJO over RE-TOOIE, each row centred, the letters packed and the rows overlapping as on the N64
+    // box art; traced from u/Plebian_Donkey_Konga's lettering sheet.
     TitleLetter title_letters[] = {
-        { "launcher/title_b.svg", -342.8f, 22.8f, 133.8f, 163.8f, -6.0f },
-        { "launcher/title_a.svg", -217.0f, 45.5f, 195.0f, 145.0f, 4.0f },
-        { "launcher/title_n.svg", -30.0f, 46.5f, 145.0f, 140.0f, -3.0f },
-        { "launcher/title_j.svg", 107.0f, 0.0f, 93.8f, 212.5f, 5.0f },
-        { "launcher/title_o.svg", 192.8f, 63.5f, 150.0f, 125.0f, -4.0f },
-        { "launcher/title_r_blue.svg", -391.1f, 211.1f, 139.7f, 125.4f, -5.0f },
-        { "launcher/title_e_blue.svg", -259.5f, 217.9f, 108.3f, 120.6f, 4.0f },
-        { "launcher/title_hyphen.svg", -163.2f, 272.5f, 74.0f, 48.0f, -4.0f },
-        { "launcher/title_t_blue.svg", -103.2f, 206.3f, 126.3f, 130.2f, -3.0f },
-        { "launcher/title_o_blue.svg", 15.2f, 244.4f, 114.0f, 94.0f, 4.0f },
-        { "launcher/title_o_blue.svg", 121.2f, 242.4f, 114.0f, 94.0f, -4.0f },
-        { "launcher/title_i_blue.svg", 227.2f, 197.8f, 63.6f, 138.7f, 3.0f },
-        { "launcher/title_e_blue.svg", 282.8f, 217.9f, 108.3f, 120.6f, -5.0f },
+        { "launcher/title_b.svg", -325.2f, 16.9f, 139.1f, 170.3f, -6.0f },
+        { "launcher/title_a.svg", -213.5f, 41.6f, 202.8f, 150.8f, 4.0f },
+        { "launcher/title_n.svg", -38.9f, 41.6f, 150.8f, 145.6f, -3.0f },
+        { "launcher/title_j.svg", 92.0f, 0.0f, 97.5f, 221.0f, 5.0f },
+        { "launcher/title_o.svg", 169.2f, 59.8f, 156.0f, 130.0f, -4.0f },
+        { "launcher/title_r_blue.svg", -410.0f, 194.6f, 158.8f, 142.6f, -5.0f },
+        { "launcher/title_e_blue.svg", -273.8f, 202.2f, 123.1f, 137.2f, 4.0f },
+        { "launcher/title_hyphen.svg", -170.4f, 268.1f, 79.9f, 51.8f, -4.0f },
+        { "launcher/title_t_blue.svg", -113.9f, 189.2f, 143.6f, 148.0f, -3.0f },
+        { "launcher/title_o_blue.svg", 7.8f, 232.4f, 129.6f, 106.9f, 4.0f },
+        { "launcher/title_o_blue.svg", 116.7f, 230.3f, 129.6f, 106.9f, -4.0f },
+        { "launcher/title_i_blue.svg", 230.1f, 179.5f, 72.4f, 157.7f, 3.0f },
+        { "launcher/title_e_blue.svg", 286.9f, 202.2f, 123.1f, 137.2f, -5.0f },
     };
 
     recompui::Element* layer = nullptr;
