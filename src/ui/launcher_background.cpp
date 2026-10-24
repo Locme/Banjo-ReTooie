@@ -70,8 +70,6 @@ namespace {
     constexpr float hop_squash = 0.15f;
     // Seconds for a cloud to cross the artboard.
     constexpr float cloud_crossing_time = 120.0f;
-    // The launcher was hidden if no update came for this long; the intro plays again when it is back.
-    constexpr float restart_gap = 1.0f;
 
     enum class Motion {
         Hill,
@@ -121,7 +119,6 @@ namespace {
     float scale = 1.0f;
     float origin_x = 0.0f;
     clock::time_point start_time;
-    clock::time_point last_update;
     bool started = false;
 
     float clamp01(float t) {
@@ -200,11 +197,12 @@ namespace tooie::launcher_background {
         }
 
         clock::time_point now = clock::now();
-        if (!started || std::chrono::duration<float>(now - last_update).count() > restart_gap) {
+        // The intro plays once per run; after it, only the idle motion (drift, sway, hops) carries on,
+        // also when coming back to the menu (L, 2026-10-24).
+        if (!started) {
             start_time = now;
             started = true;
         }
-        last_update = now;
         float t = std::chrono::duration<float>(now - start_time).count();
 
         wrapper->set_opacity(smoothstep(t / fade_time));
