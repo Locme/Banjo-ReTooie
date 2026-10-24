@@ -28,7 +28,8 @@
   2. Stand Banjo on grass in sunlight (Spiral Mountain)
   3. Walk around and look at his shadow
 - Look for: Is the hard, blocky shadow under Banjo gone, with only a soft-edged traced shadow left?
-- Status: waiting for L
+- Status: answered 2026-10-24 06:45 UTC
+- L's result: Withdrawn: change reverted at L's request (d36fd18); the blockiness was the ground (T573)
 
 ## T570 Openable settings, Jiggle, Boss rush button
 - Asked: 2026-10-23 21:09 UTC
