@@ -7,6 +7,7 @@
 
 #include "tooie_photo_album.h"
 #include "tooie_game.h"
+#include "tooie_hand_cursor.h"
 #include "tooie_menu_tree.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_day_night.h"
@@ -1116,6 +1117,11 @@ void tooie::init_config() {
     tooie::low_latency::add_option(graphics);
     tooie::frame_readback::add_option(graphics);
     tooie::frame_overlay::add_option(graphics);
+    // L, 2026-10-24: the cursor is the save select's hand, on by default; it sits in the WIP tab (a Graphics
+    // option shown there, so it saves to graphics.json).
+    tooie::hand_cursor::add_option(graphics);
+    recompui::config::set_option_page(tooie::hand_cursor::option, tooie::work_in_progress_tab_id);
+    recompui::config::set_option_page(tooie::hand_cursor::model_option, tooie::work_in_progress_tab_id);
 
     // Section headings in the Graphics tab. The options of a group sit next to each other above, and a
     // heading hides with its option.

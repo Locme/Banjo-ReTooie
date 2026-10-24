@@ -2139,6 +2139,36 @@ float4 IndirectAt(int2 pixel, float3 center, float3 normal, int softReach = 0) {
     const int reach = soft ? softReach : 1;
     float4 sum = 0.0f;
     float weight = 0.0f;
+#ifdef RAY_TRACED
+    // Traced, each texel holds its own one or two rays, so the gather is what smooths them. A window fixed to the 2x2
+    // pixels a texel stands for gave all four the same light and jumped a whole texel column at the next: the ground
+    // showed in square blocks, like a compressed picture (L, 2026-10-24). The window now slides with the pixel itself,
+    // the same width (the 4x4 ray pattern's, so all its rays still count equally), texels at its edges counting for
+    // the part of them inside it.
+    const float2 at = (float2(pixel) + 0.5f) * 0.5f;
+    const float halfWidth = float(reach) + 1.0f;
+    const int2 first = int2(floor(at - halfWidth));
+    [loop] for (int y = 0; y <= 2 * reach + 2; y++) {
+        [loop] for (int x = 0; x <= 2 * reach + 2; x++) {
+            const int2 cell = first + int2(x, y);
+            const float2 inside = saturate(min(float2(cell) + 1.0f, at + halfWidth) - max(float2(cell), at - halfWidth));
+            const float share = inside.x * inside.y;
+            if (share <= 0.0f) {
+                continue;
+            }
+            const int2 q = clamp(cell, int2(0, 0), halfSize - 1);
+            const float sampleDepth = LoadDepth(q * 2);
+            if (sampleDepth >= 0.99999f) {
+                continue;
+            }
+            const float3 offset = ViewPosition(q * 2, sampleDepth) - center;
+            const float planeDistance = soft ? length(offset) * 0.25f : abs(dot(offset, normal));
+            const float w = saturate(1.0f - planeDistance / tolerance) * share;
+            sum += gIndirect.Load(int3(q, 0)) * w;
+            weight += w;
+        }
+    }
+#else
     [loop] for (int y = -reach; y <= reach + 1; y++) {
         [loop] for (int x = -reach; x <= reach + 1; x++) {
             const int2 q = clamp(base + int2(x, y), int2(0, 0), halfSize - 1);
@@ -2153,6 +2183,7 @@ float4 IndirectAt(int2 pixel, float3 center, float3 normal, int softReach = 0) {
             weight += w;
         }
     }
+#endif
     if (weight < 1e-3f) {
         return gIndirect.Load(int3(clamp(base, int2(0, 0), halfSize - 1), 0));
     }

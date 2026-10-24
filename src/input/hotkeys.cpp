@@ -10,6 +10,7 @@
 #include "recompinput/recompinput.h"
 #include "recompinput/input_binding.h"
 #include "recompinput/profiles.h"
+#include "recompinput/input_state.h"
 
 #include "tooie_hotkeys.h"
 
@@ -76,6 +77,10 @@ void tooie::hotkeys::register_inputs() {
         "In a pick mode, takes back the last change to a texture or model (clicks, pastes, Shift + wheel depth, Delete Saved Pick), one at a time.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
     add(GameInput::SUN_MOVE, "Move Sun",
         "Hold it and turn the mouse wheel to move the level's sun, for the ray traced light and the sun shadows: the wheel turns it round the compass, Ctrl + wheel raises or lowers it, Shift for fine steps. It stays where you put it until the game closes; Save Sun Location keeps it. With Day and Night on it stands there all day (the moon keeps its own path at night).", SDL_SCANCODE_UNKNOWN, "Ray Trace Debug");
+    // L, 2026-10-24: Tab by default, keyboard only (the controller view leaves it out).
+    add(GameInput::TOGGLE_CURSOR, "Show/Hide Cursor",
+        "Shows the cursor over the game, or hides it again. While it shows, the mouse does not move the camera.", SDL_SCANCODE_TAB, "Hotkeys");
+    recompinput::set_game_input_keyboard_only(GameInput::TOGGLE_CURSOR, true);
     add(GameInput::CAMERA_SNAP_BEHIND, "Camera Snap Behind",
         "Swings the free camera round to the spot behind Banjo, the same smooth glide as Free camera: ease back. Unbound by default; bind it to a key or a button.", SDL_SCANCODE_UNKNOWN, "Hotkeys");
     add(GameInput::CAMERA_MOUSE_LOOK, "Camera Mouse Look",

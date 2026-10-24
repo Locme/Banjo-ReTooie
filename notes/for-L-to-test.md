@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T573 JPEG-like blocks on the ground with ray tracing
+- Asked: 2026-10-24 06:44 UTC
+- Build: main @ 6b900c7
+- Steps:
+  1. Ray tracing on
+  2. Stand Banjo on grass (Spiral Mountain) and look at the ground in front of Kazooie
+  3. Turn the camera slowly
+- Look for: Are the square, JPEG-like blocks in the ground's shading gone?
+- Status: waiting for L
+
 ## T572 Mirror Mode: save select numbers
 - Asked: 2026-10-24 06:22 UTC
 - Build: main, next push (untested)
@@ -18,7 +28,8 @@
   2. Stand Banjo on grass in sunlight (Spiral Mountain)
   3. Walk around and look at his shadow
 - Look for: Is the hard, blocky shadow under Banjo gone, with only a soft-edged traced shadow left?
-- Status: waiting for L
+- Status: answered 2026-10-24 06:45 UTC
+- L's result: Withdrawn: change reverted at L's request (d36fd18); the blockiness was the ground (T573)
 
 ## T570 Openable settings, Jiggle, Boss rush button
 - Asked: 2026-10-23 21:09 UTC

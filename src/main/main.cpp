@@ -43,6 +43,7 @@
 #include "recompinput/input_events.h"
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
+#include "tooie_hand_cursor.h"
 #include "tooie_asset_mods.h"
 #include "tooie_boot_screen.h"
 #include "tooie_frame_overlay.h"
@@ -247,6 +248,8 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
 void update_gfx(void*) {
     tooie::watchdog::note_window_update();
     recompinput::handle_events();
+    // The cursor's picture (the hand, src/input/hand_cursor.cpp); the 3D hand steps through its frames here.
+    tooie::hand_cursor::update();
     // The menus are drawn, and read their input, only when a frame is shown. While one is open, RT64 shows
     // the last frame again when the game sends none (a map change or a load), so the menu keeps responding.
     // Checked every 50 ms: it takes the UI's lock, which the UI holds while it draws.
