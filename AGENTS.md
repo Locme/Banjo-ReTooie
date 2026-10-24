@@ -8,8 +8,7 @@ Banjo Re-Tooie's code is written by AI agents to Locme's direction. Read this be
 - Bugs before features, and a bug gets a failing check first where one can be made.
 - Never commit the ROM, anything extracted from it other than `RecompiledFuncs/` and `rsp/`, or any game art,
   audio, textures or models.
-- Say plainly what was and was not tested. A headless run in a container is not a test on a real PC; features
-  waiting for one go at the top of `notes/for-L-to-test.md` (`tools/test_request.py`).
+- Say plainly what was and was not tested. A headless run in a container is not a test on a real PC.
 - Settings apply the moment they change; no Apply button and no restart unless there is no way round it.
 - Keep `README.md` honest that the code is AI-written. Never present the port as BanjoRecomp's or open AI-written
   pull requests on BanjoRecomp, N64Recomp or RT64.

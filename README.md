@@ -35,9 +35,6 @@ emulator at runtime.
   screen-space and ray-traced effects (shadows, reflections, ambient occlusion, light), 3D grass and fur.
 - Quality of life: skip the intro, faster text and transitions, a free camera, save backups and save states,
   cheats, achievements, a level warp and a photo mode. Mods load from zip files.
-- Known problems: most features are new and have only been checked in headless runs here, not yet on a
-  real PC; the ones still waiting are listed in [`notes/for-L-to-test.md`](notes/for-L-to-test.md).
-  The automatic GitHub builds do not run at the moment, so build it yourself (below).
 
 What changed, newest first: [`notes/changelog.md`](notes/changelog.md).
 
@@ -62,11 +59,6 @@ What changed, newest first: [`notes/changelog.md`](notes/changelog.md).
 
 There is no emulator at runtime: the game's own code runs as native code, and RT64 draws its display lists
 with Direct3D 12 or Vulkan.
-
-## Next Steps
-
-The full roadmap, with what is done and what is next, is in
-[`notes/roadmap-checklist.md`](notes/roadmap-checklist.md).
 
 ## Testing and Development
 
@@ -115,7 +107,6 @@ What changed, newest first, is in [`notes/changelog.md`](notes/changelog.md).
 
 ### Reporting problems
 
-Features waiting for a test on a real PC are listed in [`notes/for-L-to-test.md`](notes/for-L-to-test.md).
 Headless testing in a container is described in [`notes/headless-testing.md`](notes/headless-testing.md).
 Notes for AI agents working on the code are in [`AGENTS.md`](AGENTS.md).
 
@@ -130,7 +121,7 @@ October 2026 and this port was restarted from the N64 game.
   and credits.
 - [`notes/settings-guide.md`](notes/settings-guide.md), [`notes/keys.md`](notes/keys.md),
   [`notes/cheats.md`](notes/cheats.md): every option, shortcut and cheat.
-- [`notes/roadmap-checklist.md`](notes/roadmap-checklist.md) and [`notes/changelog.md`](notes/changelog.md).
+- [`notes/changelog.md`](notes/changelog.md).
 
 Banjo Re-Tooie is GPL-3.0, see [`COPYING`](COPYING). The DLSS and FSR 3 / FSR 4 DLLs that Windows builds ship
 are under NVIDIA's and AMD's own licences; see [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md).
