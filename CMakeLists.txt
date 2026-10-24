@@ -403,6 +403,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/ui/toast.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/shader_progress.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/photo_panel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/brightness_panel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/photo_album.cpp
 
     ${CMAKE_SOURCE_DIR}/rsp/n_aspMain.cpp

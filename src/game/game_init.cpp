@@ -4,6 +4,7 @@
 #include "tooie_frame_overlay.h"
 #include "tooie_hide_hud.h"
 #include "tooie_effect_views.h"
+#include "tooie_brightness_panel.h"
 #include "tooie_photo_panel.h"
 #include "tooie_photo_mode.h"
 #include "tooie_save_state.h"
@@ -32,6 +33,7 @@ void tooie::on_game_init(uint8_t* rdram, recomp_context* /*ctx*/) {
     tooie::effect_views::start();
     tooie::photo_mode::start();
     tooie::photo_panel::start();
+    tooie::brightness_panel::start();
     tooie::save_state::start();
     tooie::frame_overlay::start(rdram);
     tooie::start_settings_script();
