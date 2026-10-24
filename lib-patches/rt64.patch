@@ -7073,7 +7073,7 @@ index e842dcc..8b8c63a 100644
  
              interop::float4x4 &prevViewProjTransform = drawData.prevViewProjTransforms[proj.transformsIndex];
 diff --git a/src/render/rt64_raster_shader.cpp b/src/render/rt64_raster_shader.cpp
-index 721a01e..77d41c6 100644
+index 721a01e..fee64a8 100644
 --- a/src/render/rt64_raster_shader.cpp
 +++ b/src/render/rt64_raster_shader.cpp
 @@ -5,6 +5,7 @@
@@ -7227,7 +7227,15 @@ index 721a01e..77d41c6 100644
  #       else
              assert(false && "This platform does not support runtime shader compilation.");
  #       endif
-@@ -236,6 +277,44 @@ namespace RT64 {
+@@ -227,6 +268,7 @@ namespace RT64 {
+         creation.pixelShader = pixelShader.get();
+         creation.alphaBlend = !copyMode && interop::Blender::usesAlphaBlend(desc.otherMode);
+         creation.culling = !copyMode && desc.flags.culling;
++        creation.mirror = (desc.features & RENDER_FEATURE_MIRROR) != 0;
+         creation.zCmp = !copyMode && desc.otherMode.zCmp() && (desc.otherMode.zMode() != ZMODE_DEC);
+         creation.zUpd = !copyMode && desc.otherMode.zUpd();
+         creation.cvgAdd = (desc.otherMode.cvgDst() == CVG_DST_WRAP) || (desc.otherMode.cvgDst() == CVG_DST_SAVE);
+@@ -236,6 +278,44 @@ namespace RT64 {
          creation.specConstants = specConstants;
  #endif
          creation.multisampling = multisampling;
@@ -7272,7 +7280,7 @@ index 721a01e..77d41c6 100644
          pipeline = createPipeline(creation);
      }
  
-@@ -249,25 +328,26 @@ namespace RT64 {
+@@ -249,25 +329,26 @@ namespace RT64 {
          vss << std::string_view(RenderParamsText, sizeof(RenderParamsText));
          vss << "RenderParams getRenderParams() {" + renderParamsCode + "; return rp; }";
          vss <<
@@ -7303,7 +7311,7 @@ index 721a01e..77d41c6 100644
              "}";
  
          // Generate pixel shader.
-@@ -275,7 +355,7 @@ namespace RT64 {
+@@ -275,7 +356,7 @@ namespace RT64 {
          pss << std::string_view(RenderParamsText, sizeof(RenderParamsText));
          pss << "RenderParams getRenderParams() {" + renderParamsCode + "; return rp; }";
          pss <<
@@ -7312,7 +7320,7 @@ index 721a01e..77d41c6 100644
              "[shader(\"pixel\")]"
              "void PSMain("
              "  in float4 vertexPosition : SV_POSITION"
-@@ -286,6 +366,8 @@ namespace RT64 {
+@@ -286,6 +367,8 @@ namespace RT64 {
              pss << ", nointerpolation in float4 vertexFlatColor : COLOR1";
          }
  
@@ -7321,7 +7329,7 @@ index 721a01e..77d41c6 100644
          pss <<
              ", out float4 pixelColor : SV_TARGET0"
              ", out float4 pixelAlpha : SV_TARGET1"
-@@ -298,7 +380,7 @@ namespace RT64 {
+@@ -298,7 +381,7 @@ namespace RT64 {
          pss <<
              "   float4 resultColor;"
              "   float4 resultAlpha;"
@@ -7330,12 +7338,12 @@ index 721a01e..77d41c6 100644
              "   pixelColor = resultColor;"
              "   pixelAlpha = resultAlpha;"
              "}";
-@@ -311,21 +393,26 @@ namespace RT64 {
+@@ -311,21 +394,26 @@ namespace RT64 {
          pipelineDesc.renderTargetBlend[0] = RenderBlendDesc::Copy();
          pipelineDesc.renderTargetFormat[0] = RenderTarget::colorBufferFormat(c.usesHDR);
          pipelineDesc.renderTargetCount = 1;
 -        pipelineDesc.cullMode = c.culling ? RenderCullMode::FRONT : RenderCullMode::NONE;
-+        pipelineDesc.cullMode = c.culling ? (((desc.features & RENDER_FEATURE_MIRROR) != 0) ? RenderCullMode::BACK : RenderCullMode::FRONT) : RenderCullMode::NONE;
++        pipelineDesc.cullMode = c.culling ? (c.mirror ? RenderCullMode::BACK : RenderCullMode::FRONT) : RenderCullMode::NONE;
          pipelineDesc.depthClipEnabled = !c.NoN;
          pipelineDesc.depthEnabled = c.zCmp || c.zUpd;
          pipelineDesc.depthFunction = c.zCmp ? RenderComparisonFunction::LESS : RenderComparisonFunction::ALWAYS;
@@ -7363,7 +7371,7 @@ index 721a01e..77d41c6 100644
          pipelineDesc.specConstants = c.specConstants.data();
          pipelineDesc.specConstantsCount = uint32_t(c.specConstants.size());
  
-@@ -347,6 +434,15 @@ namespace RT64 {
+@@ -347,6 +435,15 @@ namespace RT64 {
          return c.device->createGraphicsPipeline(pipelineDesc);
      }
      
@@ -7379,7 +7387,7 @@ index 721a01e..77d41c6 100644
      RenderMultisampling RasterShader::generateMultisamplingPattern(RenderSampleCounts sampleCount, bool sampleLocationsSupported) {
  #   if SAMPLE_LOCATIONS_REQUIRED
          if (!sampleLocationsSupported) {
-@@ -449,7 +545,12 @@ namespace RT64 {
+@@ -449,7 +546,12 @@ namespace RT64 {
          FramebufferRendererDescriptorFramebufferSet descriptorFramebufferSet;
          RenderPipelineLayoutBuilder layoutBuilder;
          layoutBuilder.begin(false, true);
@@ -7393,7 +7401,7 @@ index 721a01e..77d41c6 100644
          layoutBuilder.addDescriptorSet(descriptorCommonSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
-@@ -483,6 +584,152 @@ namespace RT64 {
+@@ -483,6 +585,152 @@ namespace RT64 {
              threadIndex = (threadIndex + 1) % threadCount;
          }
  
@@ -7546,7 +7554,7 @@ index 721a01e..77d41c6 100644
          // Spawn the threads that will compile all the pipelines.
          pipelineThreads.clear();
          pipelineThreads.resize(pipelineThreadCreations.size());
-@@ -554,8 +801,40 @@ namespace RT64 {
+@@ -554,8 +802,40 @@ namespace RT64 {
          postBlendDitherNoiseSubNegativePipeline = device->createGraphicsPipeline(postBlendDesc);
      }
  
@@ -7587,7 +7595,7 @@ index 721a01e..77d41c6 100644
      }
  
      void RasterShaderUber::threadCreatePipelines(uint32_t threadIndex) {
-@@ -590,7 +869,12 @@ namespace RT64 {
+@@ -590,7 +870,12 @@ namespace RT64 {
                  thread->join();
              }
  
@@ -7601,7 +7609,7 @@ index 721a01e..77d41c6 100644
              vertexShader.reset();
              pixelShader.reset();
 diff --git a/src/render/rt64_raster_shader.h b/src/render/rt64_raster_shader.h
-index 3b991ff..66d8ed5 100644
+index 3b991ff..037bbbd 100644
 --- a/src/render/rt64_raster_shader.h
 +++ b/src/render/rt64_raster_shader.h
 @@ -6,7 +6,9 @@
@@ -7614,7 +7622,7 @@ index 3b991ff..66d8ed5 100644
  #include <mutex>
  #include <thread>
  
-@@ -44,6 +46,13 @@ namespace RT64 {
+@@ -44,8 +46,17 @@ namespace RT64 {
          const RenderPipelineLayout *pipelineLayout;
          const RenderShader *vertexShader;
          const RenderShader *pixelShader;
@@ -7627,8 +7635,12 @@ index 3b991ff..66d8ed5 100644
 +        bool noVertexInput = false;
          bool alphaBlend;
          bool culling;
++        // Banjo-Tooie: Mirror Mode: the draw goes in flipped, so it culls the other face (RENDER_FEATURE_MIRROR).
++        bool mirror = false;
          bool NoN;
-@@ -71,6 +80,8 @@ namespace RT64 {
+         bool zCmp;
+         bool zUpd;
+@@ -71,6 +82,8 @@ namespace RT64 {
          ~RasterShader();
          static RasterShaderText generateShaderText(const ShaderDescription &desc, bool multisampling);
          static std::unique_ptr<RenderPipeline> createPipeline(const PipelineCreation &c);
@@ -7637,7 +7649,7 @@ index 3b991ff..66d8ed5 100644
          static RenderMultisampling generateMultisamplingPattern(uint32_t sampleCount, bool sampleLocationsSupported);
      };
  
-@@ -90,6 +101,47 @@ namespace RT64 {
+@@ -90,6 +103,47 @@ namespace RT64 {
          std::vector<std::unique_ptr<std::thread>> pipelineThreads;
          std::unique_ptr<RenderShader> vertexShader;
          std::unique_ptr<RenderShader> pixelShader;
