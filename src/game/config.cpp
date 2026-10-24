@@ -1139,15 +1139,9 @@ void tooie::init_config() {
                                        &tooie::picture_filters::npc_feather_size_option, &tooie::picture_filters::npc_feather_length_option,
                                        &tooie::picture_filters::npc_feather_density_option, &tooie::picture_filters::npc_feather_noisiness_option,
                                        &tooie::picture_filters::npc_feather_transparency_option }) {
-        recompui::config::set_option_display_before(*option, tooie::picture_filters::colour_grading_option);
-    }
-    recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");
-    // Colour Grading (L, 2026-10-23): its header sits under Colourblind Filter, and its four settings follow it.
-    recompui::config::set_option_display_before(tooie::picture_filters::colour_grading_option, tooie::picture_filters::three_point_option);
-    for (const std::string* option : { &tooie::picture_filters::contrast_option, &tooie::picture_filters::saturation_option,
-                                       &tooie::picture_filters::vignette_option, &tooie::picture_filters::grain_option }) {
         recompui::config::set_option_display_before(*option, tooie::picture_filters::three_point_option);
     }
+    recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");
     // Tessellation (L, 2026-10-23): its switch sits above Tessellated Snow; Tessellated Sand comes after Tessellated
     // Snow's settings, before Parallax.
     recompui::config::set_option_display_before(tooie::picture_filters::tessellation_section_option, tooie::picture_filters::deep_snow_option);
@@ -1193,6 +1187,9 @@ void tooie::init_config() {
             &tooie::fsr::option }) {
         recompui::config::set_option_page(*id, tooie::performance_tab_id);
     }
+    // Brightness & Colour Grading (L, 2026-10-24): the button for its panel is on top of the Display tab.
+    recompui::config::set_option_page(tooie::picture_filters::brightness_pattern_option, tooie::performance_tab_id);
+    recompui::config::set_option_display_before(tooie::picture_filters::brightness_pattern_option, recompui::config::graphics::options::res_option);
 
     recompui::config::create_controls_tab();
     {

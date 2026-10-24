@@ -5308,14 +5308,14 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         brightness_option,
         "Brightness",
         "Brightens or darkens the dark and middle tones. Black and white stay as they are. Turn on the test pattern below to set it.",
-        -5, 5, 1, 0, false, 0);
+        -5, 5, 1, 0, false, 0, true);
     graphics.add_bool_option(
         brightness_pattern_option,
-        "Brightness Test Pattern",
-        "Shows ten grey boxes over the game. The menu closes and a panel with Brightness and a Quit button comes up. Set Brightness so the first box just disappears into the black and the second one is just visible. Press Quit when done.",
+        "Brightness & Colour Grading",
+        "Opens a panel at the bottom of the screen with Brightness, Contrast, Colour Saturation, Vignette and Film Grain, and shows ten grey boxes at the top. Set Brightness so the first box just disappears into the black and the second one is just visible. Quit closes the panel; Back To Menu returns here.",
         false);
-    // A button (L, 2026-10-24): it turns the pattern on and the ESC menu steps aside for the brightness test panel (src/ui/brightness_panel.cpp).
-    graphics.set_option_button(brightness_pattern_option, "Show Brightness Test Pattern", "Hide Brightness Test Pattern");
+    // A button (L, 2026-10-24): it turns the test pattern on and the ESC menu steps aside for the brightness and colour grading panel (src/ui/brightness_panel.cpp).
+    graphics.set_option_button(brightness_pattern_option, "Show Brightness & Colour Grading Menu", "Hide Brightness & Colour Grading Menu");
     graphics.add_enum_option(
         colourblind_option,
         "Colourblind Filter",
@@ -5333,14 +5333,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "How strongly the colourblind filter shifts the colours.",
         0, 100, 10, 0, true, 100);
     graphics.add_option_hidden_dependency(colourblind_strength_option, colourblind_option, Colourblind::Off);
-    // Colour Grading (L, 2026-10-23): a header row with no switch, under the colourblind filter. Its four settings
-    // (contrast, saturation, vignette, film grain) open under it.
-    graphics.add_bool_option(
-        colour_grading_option,
-        "Colour Grading",
-        "Contrast, colour saturation, vignette and film grain. Open it to see them.",
-        true);
-    graphics.set_option_header(colour_grading_option);
+    // Brightness and the four Colour Grading settings (contrast, saturation, vignette, film grain) are hidden from this
+    // page: the Brightness & Colour Grading panel (src/ui/brightness_panel.cpp) edits them (L, 2026-10-24).
 
     graphics.add_bool_option(
         three_point_option,
@@ -5847,22 +5841,22 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         contrast_option,
         "Contrast",
         "More or less difference between the dark and light parts of the picture. 0 leaves it as it is.",
-        -50, 50, 5, 0, false, 0);
+        -50, 50, 5, 0, false, 0, true);
     graphics.add_number_option(
         saturation_option,
         "Colour Saturation",
         "Stronger or paler colours. 0 leaves them as they are.",
-        -100, 100, 5, 0, false, 0);
+        -100, 100, 5, 0, false, 0, true);
     graphics.add_number_option(
         vignette_option,
         "Vignette",
         "Darkens the corners of the picture. 0 is off.",
-        0, 100, 5, 0, false, 0);
+        0, 100, 5, 0, false, 0, true);
     graphics.add_number_option(
         grain_option,
         "Film Grain",
         "Adds moving film grain over the picture. 0 is off.",
-        0, 100, 5, 0, false, 0);
+        0, 100, 5, 0, false, 0, true);
 
     graphics.add_bool_option(
         grass_section_option,
