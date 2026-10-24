@@ -663,21 +663,34 @@ bool tooie::hand_cursor::make_model_frames(int size, ModelFrames& frames) {
     size = std::min((int)std::ceil(all_span * scale) + 1, size * 2);
     const Framing fr{ all.min_x, all.max_y, scale };
 
-    // The hot spot: the highest point on screen in the idle's first frame (the first finger's tip).
+    // The hot spot: the middle of the hand in the idle's first frame (L: the click lands where the hand is,
+    // not at a fingertip), 70% of the way from the palm bone's pivot (the wrist) to the mean of its
+    // children's pivots (the knuckles).
     {
-        float best = -1e30f;
-        frames.hot_x = size / 4;
-        frames.hot_y = 0;
-        for (const Tri& t : idle_tris[0]) {
-            for (const Corner& c : t.c) {
-                const Vec3 v = view(c.pos);
-                if (v.y > best) {
-                    best = v.y;
-                    frames.hot_x = std::clamp((int)std::lround((v.x - fr.min_x) * fr.scale), 0, size - 1);
-                    frames.hot_y = std::clamp((int)std::lround((fr.max_y - v.y) * fr.scale), 0, size - 1);
+        const std::vector<Mat> mats = pose(model, idle, (float)idle.start, true);
+        Vec3 centre{ 0, 0, 0 };
+        if (model.bones.size() > 1) {
+            const Vec3 wrist = mats[1].apply(model.bones[1].pivot);
+            Vec3 knuckles{ 0, 0, 0 };
+            int count = 0;
+            for (size_t i = 2; i < model.bones.size(); i++) {
+                if (model.bones[i].parent == 1) {
+                    const Vec3 k = mats[i].apply(model.bones[i].pivot);
+                    knuckles = { knuckles.x + k.x, knuckles.y + k.y, knuckles.z + k.z };
+                    count++;
                 }
             }
+            if (count > 0) {
+                constexpr float to_knuckles = 0.7f;
+                centre = { wrist.x + (knuckles.x / count - wrist.x) * to_knuckles, wrist.y + (knuckles.y / count - wrist.y) * to_knuckles,
+                           wrist.z + (knuckles.z / count - wrist.z) * to_knuckles };
+            } else {
+                centre = wrist;
+            }
         }
+        const Vec3 v = view(centre);
+        frames.hot_x = std::clamp((int)std::lround((v.x - fr.min_x) * fr.scale), 0, size - 1);
+        frames.hot_y = std::clamp((int)std::lround((fr.max_y - v.y) * fr.scale), 0, size - 1);
     }
 
     frames.size = size;
