@@ -44,6 +44,7 @@
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
 #include "tooie_hand_cursor.h"
+#include "tooie_launcher_background.h"
 #include "tooie_asset_mods.h"
 #include "tooie_boot_screen.h"
 #include "tooie_frame_overlay.h"
@@ -672,6 +673,7 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
         supported_games[0].thumbnail_bytes,
         recompui::GameOptionsMenuLayout::Center
     );
+    tooie::launcher_background::init(menu);
 
     // The launcher's options, with the start option named Play. Left and right on it pick the effects
     // preset (Graphics > Effects preset), applied when Play is pressed (L, 2026-10-16).
@@ -891,6 +893,7 @@ int main(int argc, char** argv) {
     tooie::start_save_backups();
 
     recompui::register_launcher_init_callback(on_launcher_init);
+    recompui::register_launcher_update_callback(tooie::launcher_background::update);
 
     recomp::rsp::callbacks_t rsp_callbacks{
         .get_rsp_microcode = get_rsp_microcode,
