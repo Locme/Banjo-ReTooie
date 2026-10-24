@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T574 Esc menu with a controller: top entry and remembered entry
+- Asked: 2026-10-24 07:50 UTC
+- Build: main, the push after 5d8335f
+- Steps:
+  1. Open the Esc menu with a controller and go into a long tab (Graphics)
+  2. Press Down a few times, then Up back to the first entry
+  3. Go far down the list, close the menu with the controller, then open it again
+- Look for: Step 2: the list scrolls right to the top, so the tab title and first heading show. Step 3: the menu reopens on the entry you left, not on the tab. Compiled only, not run.
+- Status: waiting for L
+
 ## T573 JPEG-like blocks on the ground with ray tracing
 - Asked: 2026-10-24 06:44 UTC
 - Build: main @ 6b900c7
