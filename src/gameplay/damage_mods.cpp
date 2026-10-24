@@ -437,7 +437,8 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
         float roll_side = 0.0f;  // the side picked for the roll in progress, 0 when none
         float heading[2] = {};   // its own measured velocity, eased
         float evel[2] = {};      // the dodge velocity away from an egg coming at it, eased
-        float active_for = 0.0f; // seconds it has been sliding or dodging without a break
+        float active_for = 0.0f; // seconds in the current 1.5 s window of sliding or dodging
+        float window_pos[2] = {};// where it was when the window began
         float pause = 0.0f;      // while above 0 the effect leaves this enemy alone (a loop breaker)
     };
     static std::unordered_map<uint32_t, Track> tracks;
@@ -478,8 +479,8 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
     const uint32_t block = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0x120) : 0;
     const uint32_t state = tooie::rdram::valid_ptr(block) ? tooie::rdram::read_word(rdram, block + 4) : 0;
-    // Loop breaker: an enemy that has been pushed for more than 4 seconds in a row, or whose own movement follows
-    // the yaw this writes, can circle in one place. After 4 s of effect it is left alone for 2.5 s.
+    // Loop breaker: an enemy that has been pushed for 1.5 seconds without getting anywhere, or whose own movement follows
+    // the yaw this writes, can circle in one place. After 1.5 s of effect without getting anywhere (under 80 units) it is left alone for 2.5 s.
     if (t.pause > 0.0f) {
         t.pause -= dt;
         t.vel = 0.0f;
@@ -558,10 +559,19 @@ extern "C" void tooie_enemy_strafe(uint8_t* rdram, recomp_context* ctx) {
         t.active_for = 0.0f;
         return;
     }
+    if (t.active_for == 0.0f) {
+        t.window_pos[0] = x;
+        t.window_pos[1] = z;
+    }
     t.active_for += dt;
-    if (t.active_for > 4.0f) {
-        t.pause = 2.5f;
-        return;
+    if (t.active_for > 1.5f) {
+        // Stuck test: 1.5 s of effect and the enemy has not got anywhere (under 80 units) is the loop, so it is
+        // left alone for 2.5 s; one that did travel starts a new window.
+        if (std::hypot(x - t.window_pos[0], z - t.window_pos[1]) < 80.0f) {
+            t.pause = 2.5f;
+            return;
+        }
+        t.active_for = 0.0f;
     }
     // The slide is perpendicular to the enemy-to-Banjo line: (dz, -dx) / dist.
     const float sx = sliding ? dz * t.vel / dist : 0.0f;
