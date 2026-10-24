@@ -1121,6 +1121,7 @@ void tooie::init_config() {
     // option shown there, so it saves to graphics.json).
     tooie::hand_cursor::add_option(graphics);
     recompui::config::set_option_page(tooie::hand_cursor::option, tooie::work_in_progress_tab_id);
+    recompui::config::set_option_page(tooie::hand_cursor::model_option, tooie::work_in_progress_tab_id);
 
     // Section headings in the Graphics tab. The options of a group sit next to each other above, and a
     // heading hides with its option.

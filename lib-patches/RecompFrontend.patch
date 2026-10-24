@@ -44,7 +44,7 @@ index f39ad89..3d7e354 100644
      }
  }
 diff --git a/recompinput/include/recompinput/input_state.h b/recompinput/include/recompinput/input_state.h
-index 1961e29..b98e113 100644
+index 1961e29..a09d2df 100644
 --- a/recompinput/include/recompinput/input_state.h
 +++ b/recompinput/include/recompinput/input_state.h
 @@ -35,11 +35,18 @@ namespace recompinput {
@@ -66,7 +66,7 @@ index 1961e29..b98e113 100644
      bool game_input_disabled();
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
-@@ -49,4 +56,27 @@ namespace recompinput {
+@@ -49,4 +56,33 @@ namespace recompinput {
      void add_rotation_deltas(SDL_JoystickID joystick_id, float rot_x, float rot_y);
      void add_mouse_deltas(float delta_x, float delta_y);
      void add_mouse_wheel_delta(int32_t delta);
@@ -80,6 +80,12 @@ index 1961e29..b98e113 100644
 +    void set_game_menu_mouse(bool on);
 +    bool game_menu_mouse();
 +    // Banjo-Tooie: the game draws the cursor itself (the save select's hand), so the system one is hidden.
++    // Banjo-Tooie: Show/Hide Cursor (Tab): while on, the cursor is freed and shown over the game.
++    void set_cursor_shown_by_key(bool on);
++    bool cursor_shown_by_key();
++    // Banjo-Tooie: inputs bound on the keyboard only; the Controls tab hides them in the controller view.
++    void set_game_input_keyboard_only(GameInput input, bool keyboard_only);
++    bool game_input_keyboard_only(GameInput input);
 +    // Banjo-Tooie: an SDL_Cursor* that shows while the cursor is visible (not in pick mode), null for the system's.
 +    void set_custom_cursor(void* sdl_cursor);
 +    void* custom_cursor();
@@ -95,10 +101,10 @@ index 1961e29..b98e113 100644
 +    int32_t get_game_mouse_wheel();
  }
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..b6a847f 100644
+index f5ed6c0..31b1c18 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,56 @@ namespace recompinput {
+@@ -37,10 +37,57 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
@@ -145,7 +151,8 @@ index f5ed6c0..b6a847f 100644
 +    DEFINE_INPUT(MATERIAL_PICK, 0, "Ray Tracing Material Pick Mode") \
 +    DEFINE_INPUT(CAMERA_SNAP_BEHIND, 0, "Camera Snap Behind") \
 +    DEFINE_INPUT(CAMERA_MOUSE_LOOK, 0, "Camera Mouse Look") \
-+    DEFINE_INPUT(VOLUMETRIC_SAVE, 0, "Save Volumetric Settings")
++    DEFINE_INPUT(VOLUMETRIC_SAVE, 0, "Save Volumetric Settings") \
++    DEFINE_INPUT(TOGGLE_CURSOR, 0, "Show/Hide Cursor")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \
@@ -156,7 +163,7 @@ index f5ed6c0..b6a847f 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -72,6 +118,9 @@ namespace recompinput {
+@@ -72,6 +119,9 @@ namespace recompinput {
          InputType input_type;
          // Represents a single source input. e.g. A keyboard's shift key, or a controller's R trigger
          int32_t input_id;
@@ -166,7 +173,7 @@ index f5ed6c0..b6a847f 100644
          std::string to_string() const;
          auto operator<=>(const InputField& rhs) const = default;
  
-@@ -90,15 +139,33 @@ namespace recompinput {
+@@ -90,15 +140,33 @@ namespace recompinput {
          bool is_empty() const {
              return input_type == InputType::None;
          }
@@ -200,7 +207,7 @@ index f5ed6c0..b6a847f 100644
      }
  
      // Represents the types of mapping/profiles that can be done.
-@@ -127,6 +194,10 @@ namespace recompinput {
+@@ -127,6 +195,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);
@@ -375,7 +382,7 @@ index 45d55a7..b7c867d 100644
              profiles::get_input_profile_for_player(BindingState.player_index, BindingState.device),
              BindingState.game_input,
 diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
-index c76a1dc..f94fe99 100644
+index c76a1dc..5df388a 100644
 --- a/recompinput/src/input_events.cpp
 +++ b/recompinput/src/input_events.cpp
 @@ -1,10 +1,14 @@
@@ -393,7 +400,7 @@ index c76a1dc..f94fe99 100644
  static struct {
      std::list<std::filesystem::path> files_dropped;
  } DropState;
-@@ -38,6 +42,55 @@ void purge_deferred_controller_profiles() {
+@@ -38,6 +42,57 @@ void purge_deferred_controller_profiles() {
      deferred_controller_profiles.clear();
  }
  
@@ -408,6 +415,8 @@ index c76a1dc..f94fe99 100644
 +static std::chrono::steady_clock::time_point warp_time{};
 +static int warp_x = -1;
 +static int warp_y = -1;
++// Banjo-Tooie: the cursor is showing while the game runs (update_cursor_lock); the mouse then leaves the camera alone.
++static bool cursor_shown_in_game = false;
 +
 +static void note_game_mouse_position(Uint32 window_id, int x, int y) {
 +    SDL_Window* window = SDL_GetWindowFromID(window_id);
@@ -449,7 +458,7 @@ index c76a1dc..f94fe99 100644
  bool sdl_event_filter(void* userdata, SDL_Event* event) {
      switch (event->type) {
      case SDL_EventType::SDL_KEYDOWN:
-@@ -79,6 +132,7 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -79,6 +134,7 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              printf("  Instance ID: %d\n", SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)));
              printf("  Path: %s\n", SDL_JoystickPath(SDL_GameControllerGetJoystick(controller)));
              recompinput::add_controller_state(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)), controller);
@@ -457,7 +466,7 @@ index c76a1dc..f94fe99 100644
  
              if (SDL_GameControllerHasSensor(controller, SDL_SensorType::SDL_SENSOR_GYRO) && SDL_GameControllerHasSensor(controller, SDL_SensorType::SDL_SENSOR_ACCEL)) {
                  SDL_GameControllerSetSensorEnabled(controller, SDL_SensorType::SDL_SENSOR_GYRO, SDL_TRUE);
-@@ -118,6 +172,9 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -118,6 +174,9 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
      {
          SDL_MouseWheelEvent* wheel_event = &event->wheel;
          recompinput::add_mouse_wheel_delta(wheel_event->y * (wheel_event->direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1));
@@ -467,7 +476,7 @@ index c76a1dc..f94fe99 100644
      }
      queue_if_enabled(event);
      break;
-@@ -151,6 +208,22 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -151,6 +210,22 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              queue_if_enabled(event);
          }
          break;
@@ -490,7 +499,7 @@ index c76a1dc..f94fe99 100644
      case SDL_EventType::SDL_CONTROLLERAXISMOTION:
          if (binding::is_controller_being_bound(event->caxis.which)) {
              GameInput scanning_game_input = binding::get_scanning_game_input();
-@@ -208,20 +281,41 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -208,20 +283,42 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              ControllerState& state = recompinput::get_controller_state(event->csensor.which);
              uint64_t cur_timestamp = event->csensor.timestamp;
              uint32_t delta_ms = cur_timestamp - state.prev_gyro_timestamp;
@@ -512,7 +521,8 @@ index c76a1dc..f94fe99 100644
          break;
      case SDL_EventType::SDL_MOUSEMOTION:
 -        if (!recompinput::game_input_disabled()) {
-+        if (!recompinput::game_input_disabled() && !recompinput::pick_mode()) {
++        // Banjo-Tooie: while the cursor shows over the game, the mouse does not turn the camera.
++        if (!recompinput::game_input_disabled() && !recompinput::pick_mode() && !cursor_shown_in_game) {
              SDL_MouseMotionEvent* motion_event = &event->motion;
              recompinput::add_mouse_deltas(motion_event->xrel, motion_event->yrel);
          }
@@ -535,7 +545,7 @@ index c76a1dc..f94fe99 100644
          queue_if_enabled(event);
          break;
      case SDL_EventType::SDL_DROPBEGIN:
-@@ -246,26 +340,78 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -246,26 +343,84 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
      return false;
  }
  
@@ -555,6 +565,11 @@ index c76a1dc..f94fe99 100644
 +    if (recompinput::game_menu_mouse() && !recompinput::game_input_disabled()) {
 +        cursor_locked = false;
 +        cursor_visible = recompui::get_cursor_visible() && !recompinput::game_menu_cursor_hidden();
++    }
++    // Banjo-Tooie: Show/Hide Cursor (Tab) frees and shows the cursor over the game.
++    if (recompinput::cursor_shown_by_key() && !recompinput::game_input_disabled()) {
++        cursor_locked = false;
++        cursor_visible = true;
 +    }
 +    // Banjo-Tooie: pick mode frees and shows the cursor, as a crosshair over the game.
 +    static SDL_Cursor *crosshair = nullptr;
@@ -579,6 +594,7 @@ index c76a1dc..f94fe99 100644
 +
 +    SDL_ShowCursor(cursor_visible ? SDL_ENABLE : SDL_DISABLE);
 +    SDL_SetRelativeMouseMode(cursor_locked ? SDL_TRUE : SDL_FALSE);
++    cursor_shown_in_game = cursor_visible && ultramodern::is_game_started();
 +
 +    // While locked, SDL's idea of where the cursor is stops following the real one, so the menu opened
 +    // over the game aimed every click at that old spot. Putting the cursor in the middle of the window on
@@ -629,7 +645,7 @@ index c76a1dc..f94fe99 100644
  
      binding::stop_skipping_events();
 diff --git a/recompinput/src/input_state.cpp b/recompinput/src/input_state.cpp
-index 03ed871..bebd4cd 100644
+index 03ed871..8085b04 100644
 --- a/recompinput/src/input_state.cpp
 +++ b/recompinput/src/input_state.cpp
 @@ -7,6 +7,8 @@
@@ -749,7 +765,7 @@ index 03ed871..bebd4cd 100644
      switch (field.input_type) {
      case InputType::Keyboard:
          if (InputState.keys && field.input_id >= 0 && field.input_id < InputState.numkeys) {
-@@ -411,6 +462,50 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
+@@ -411,6 +462,72 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
      InputState.pending_mouse_delta[0] += delta_x;
      InputState.pending_mouse_delta[1] += delta_y;
  }
@@ -775,6 +791,28 @@ index 03ed871..bebd4cd 100644
 +
 +bool recompinput::game_menu_mouse() {
 +    return game_menu_mouse_on.load();
++}
++
++static std::atomic_bool cursor_shown_by_key_on = false;
++
++void recompinput::set_cursor_shown_by_key(bool on) {
++    cursor_shown_by_key_on.store(on);
++}
++
++bool recompinput::cursor_shown_by_key() {
++    return cursor_shown_by_key_on.load();
++}
++
++static std::array<std::atomic_bool, (size_t)recompinput::GameInput::COUNT> keyboard_only_inputs{};
++
++void recompinput::set_game_input_keyboard_only(GameInput input, bool keyboard_only) {
++    if ((size_t)input < keyboard_only_inputs.size()) {
++        keyboard_only_inputs[(size_t)input].store(keyboard_only);
++    }
++}
++
++bool recompinput::game_input_keyboard_only(GameInput input) {
++    return (size_t)input < keyboard_only_inputs.size() && keyboard_only_inputs[(size_t)input].load();
 +}
 +
 +static std::atomic<void*> custom_cursor_ptr = nullptr;
@@ -2086,7 +2124,7 @@ index 0561657..0dbdef8 100644
  
  } // namespace recompui
 diff --git a/recompui/src/config/ui_config_page_controls.cpp b/recompui/src/config/ui_config_page_controls.cpp
-index f379a6f..388d5a2 100644
+index f379a6f..7bbf136 100644
 --- a/recompui/src/config/ui_config_page_controls.cpp
 +++ b/recompui/src/config/ui_config_page_controls.cpp
 @@ -206,6 +206,22 @@ void ConfigPageControls::create_game_input_contexts() {
@@ -2128,6 +2166,24 @@ index f379a6f..388d5a2 100644
          auto reset_to_defaults_button = context.create_element<Button>(footer_right, "Reset to defaults", ButtonStyle::Warning);
          reset_to_defaults_button->add_pressed_callback([this]() {
              recompinput::profiles::reset_profile_bindings(this->selected_profile_index, this->get_player_input_device());
+@@ -590,6 +615,17 @@ void ConfigPageControls::update_control_mappings() {
+         }
+     }
+ 
++    // Banjo-Tooie: inputs that only a key can trigger (Show/Hide Cursor) are left out of the controller view.
++    for (auto *row : game_input_rows) {
++        if (recompinput::game_input_keyboard_only(row->get_input_id())) {
++            if (get_player_input_device() == recompinput::InputDevice::Keyboard) {
++                row->display_show();
++            } else {
++                row->display_hide();
++            }
++        }
++    }
++
+     recompui::GameInputRowsWrapper *first = nullptr;
+     recompui::GameInputRowsWrapper *last = nullptr;
+     for (auto *wrapper : rows_wrappers) {
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
 index 6ba64e2..a05df0f 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp

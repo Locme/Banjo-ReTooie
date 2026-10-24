@@ -248,6 +248,8 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
 void update_gfx(void*) {
     tooie::watchdog::note_window_update();
     recompinput::handle_events();
+    // The cursor's picture (the hand, src/input/hand_cursor.cpp); the 3D hand steps through its frames here.
+    tooie::hand_cursor::update();
     // The menus are drawn, and read their input, only when a frame is shown. While one is open, RT64 shows
     // the last frame again when the game sends none (a map change or a load), so the menu keeps responding.
     // Checked every 50 ms: it takes the UI's lock, which the UI holds while it draws.
@@ -258,7 +260,6 @@ void update_gfx(void*) {
         const bool menu_open = recompui::is_context_capturing_input();
         RT64::SetIdleRepaint(ultramodern::is_game_started() && menu_open);
         tooie::menu_pause::set_menu_open(menu_open);
-        tooie::hand_cursor::update();
     }
 #ifdef __ANDROID__
     tooie::android::update_touch();
