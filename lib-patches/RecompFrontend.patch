@@ -44,7 +44,7 @@ index f39ad89..3d7e354 100644
      }
  }
 diff --git a/recompinput/include/recompinput/input_state.h b/recompinput/include/recompinput/input_state.h
-index 1961e29..e4b14fa 100644
+index 1961e29..b98e113 100644
 --- a/recompinput/include/recompinput/input_state.h
 +++ b/recompinput/include/recompinput/input_state.h
 @@ -35,11 +35,18 @@ namespace recompinput {
@@ -66,7 +66,7 @@ index 1961e29..e4b14fa 100644
      bool game_input_disabled();
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
-@@ -49,4 +56,24 @@ namespace recompinput {
+@@ -49,4 +56,27 @@ namespace recompinput {
      void add_rotation_deltas(SDL_JoystickID joystick_id, float rot_x, float rot_y);
      void add_mouse_deltas(float delta_x, float delta_y);
      void add_mouse_wheel_delta(int32_t delta);
@@ -80,6 +80,9 @@ index 1961e29..e4b14fa 100644
 +    void set_game_menu_mouse(bool on);
 +    bool game_menu_mouse();
 +    // Banjo-Tooie: the game draws the cursor itself (the save select's hand), so the system one is hidden.
++    // Banjo-Tooie: an SDL_Cursor* that shows while the cursor is visible (not in pick mode), null for the system's.
++    void set_custom_cursor(void* sdl_cursor);
++    void* custom_cursor();
 +    void set_game_menu_cursor_hidden(bool hidden);
 +    bool game_menu_cursor_hidden();
 +    // Banjo-Tooie: the cursor over the game window in pixels with the window's size (false before the
@@ -372,7 +375,7 @@ index 45d55a7..b7c867d 100644
              profiles::get_input_profile_for_player(BindingState.player_index, BindingState.device),
              BindingState.game_input,
 diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
-index c76a1dc..a2c79fc 100644
+index c76a1dc..f94fe99 100644
 --- a/recompinput/src/input_events.cpp
 +++ b/recompinput/src/input_events.cpp
 @@ -1,10 +1,14 @@
@@ -532,7 +535,7 @@ index c76a1dc..a2c79fc 100644
          queue_if_enabled(event);
          break;
      case SDL_EventType::SDL_DROPBEGIN:
-@@ -246,26 +340,73 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -246,26 +340,78 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
      return false;
  }
  
@@ -561,11 +564,16 @@ index c76a1dc..a2c79fc 100644
 +        cursor_locked = false;
 +        cursor_visible = true;
 +    }
-+    if (picking != was_picking) {
-+        if (picking && (crosshair == nullptr)) {
-+            crosshair = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
-+        }
-+        SDL_SetCursor(picking && (crosshair != nullptr) ? crosshair : SDL_GetDefaultCursor());
++    // Banjo-Tooie: the picture the cursor has outside pick mode (the game's hand), or null for the system's.
++    static SDL_Cursor *shown_cursor = nullptr;
++    SDL_Cursor *custom = static_cast<SDL_Cursor *>(recompinput::custom_cursor());
++    if (picking && (crosshair == nullptr)) {
++        crosshair = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
++    }
++    SDL_Cursor *wanted = (picking && crosshair != nullptr) ? crosshair : (custom != nullptr ? custom : SDL_GetDefaultCursor());
++    if (picking != was_picking || wanted != shown_cursor) {
++        SDL_SetCursor(wanted);
++        shown_cursor = wanted;
 +        was_picking = picking;
 +    }
 +
@@ -621,7 +629,7 @@ index c76a1dc..a2c79fc 100644
  
      binding::stop_skipping_events();
 diff --git a/recompinput/src/input_state.cpp b/recompinput/src/input_state.cpp
-index 03ed871..424e914 100644
+index 03ed871..bebd4cd 100644
 --- a/recompinput/src/input_state.cpp
 +++ b/recompinput/src/input_state.cpp
 @@ -7,6 +7,8 @@
@@ -741,7 +749,7 @@ index 03ed871..424e914 100644
      switch (field.input_type) {
      case InputType::Keyboard:
          if (InputState.keys && field.input_id >= 0 && field.input_id < InputState.numkeys) {
-@@ -411,6 +462,40 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
+@@ -411,6 +462,50 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
      InputState.pending_mouse_delta[0] += delta_x;
      InputState.pending_mouse_delta[1] += delta_y;
  }
@@ -767,6 +775,16 @@ index 03ed871..424e914 100644
 +
 +bool recompinput::game_menu_mouse() {
 +    return game_menu_mouse_on.load();
++}
++
++static std::atomic<void*> custom_cursor_ptr = nullptr;
++
++void recompinput::set_custom_cursor(void* sdl_cursor) {
++    custom_cursor_ptr.store(sdl_cursor);
++}
++
++void* recompinput::custom_cursor() {
++    return custom_cursor_ptr.load();
 +}
 +
 +static std::atomic_bool game_menu_cursor_hidden_on = false;

@@ -43,6 +43,7 @@
 #include "recompinput/input_events.h"
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
+#include "tooie_hand_cursor.h"
 #include "tooie_asset_mods.h"
 #include "tooie_boot_screen.h"
 #include "tooie_frame_overlay.h"
@@ -257,6 +258,7 @@ void update_gfx(void*) {
         const bool menu_open = recompui::is_context_capturing_input();
         RT64::SetIdleRepaint(ultramodern::is_game_started() && menu_open);
         tooie::menu_pause::set_menu_open(menu_open);
+        tooie::hand_cursor::update();
     }
 #ifdef __ANDROID__
     tooie::android::update_touch();
