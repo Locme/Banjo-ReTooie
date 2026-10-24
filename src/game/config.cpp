@@ -702,8 +702,10 @@ void tooie::init_config() {
         });
 
     // Section headings in the General tab (the controls and sliders above them have none).
-    // One section in General for the saves and the other switches (L, 2026-10-23).
-    recompui::config::set_option_group(tooie::save_backups_option, "Saves And Others");
+    // Saves is one section in General (L, 2026-10-24), and Discord Status is in Others, with Compile All Shaders at Start.
+    recompui::config::set_option_group(tooie::save_backups_option, "Saves");
+    recompui::config::set_option_display_before(tooie::discord::presence_option, tooie::precompile_shaders_option);
+    recompui::config::set_option_group(tooie::discord::presence_option, "Others");
     // At the end of the section before Back-Ports, with its own heading, so the options around it keep theirs.
     recompui::config::set_option_display_before(tooie::precompile_shaders_option, tooie::classic_sounds::option);
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports And Cut Content");
