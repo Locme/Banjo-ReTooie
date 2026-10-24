@@ -9,6 +9,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
+- Kazooie's feathers now show on the solo Kazooie model (her form without Banjo, asset 0x061C, so also a model mod of it): the model was never recognised as hers, so Banjo-Kazooie's feather cards skipped it. Her crest stays bare as on the pair model (bones 9 and 10; found from the ROM's skeleton, not yet seen in a run) (L). Untested.
 - **Openable settings** (L): an effect with settings of its own (Fog, 3D grass, Banjo fur, Sun shadows, Toon outlines and others) is one on/off switch with a down arrow in front of its name; press the arrow to open its sliders on a darker panel, press again to close. An effect that is only a slider (Bloom, SSGI) stays a slider. Untested on PC.
 - **Jiggle** is now one switch, **off by default**, under Gameplay > Enhancements; the arrow opens Snout, Belly, Ear, Fur, Backpack, Kazooie and Mumbo jiggle (each on by default, each with its own arrow and sliders). Anyone who had jiggle on has to turn the Jiggle switch on once (L). Untested on PC.
 - **Boss rush** is a button (Start boss rush / Stop boss rush) instead of a switch (L). Untested on PC.
