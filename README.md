@@ -105,7 +105,6 @@ Every keyboard and controller shortcut is in [`notes/keys.md`](notes/keys.md).
 What each cheat does is in [`notes/cheats.md`](notes/cheats.md).
 What changed, newest first, is in [`notes/changelog.md`](notes/changelog.md).
 
-
 ## Foundations, History, and Documentation
 
 Banjo Re-Tooie stands on N64Recomp, N64ModernRuntime and RT64, and follows the structure of BanjoRecomp, the
