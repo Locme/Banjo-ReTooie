@@ -272,8 +272,11 @@ namespace {
         // Per bone id: rotation x/y/z, scale x/y/z, move x/y/z.
         std::vector<std::array<float, 9>> parts(256, { 0, 0, 0, 1, 1, 1, 0, 0, 0 });
         const int length = loop ? anim.end - anim.start : 0;
+        // The root bone's turn and move place the whole hand in the save select scene (most of these animations
+        // turn it 53 degrees to point at a file), so they are left out: the cursor keeps one upright hand.
+        const int root_id = model.bones.empty() ? -1 : model.bones[0].id;
         for (const Track& t : anim.tracks) {
-            if (t.bone_id < 256) {
+            if (t.bone_id < 256 && t.bone_id != root_id) {
                 parts[t.bone_id][t.type >= 9 ? t.type - 9 : t.type] = evaluate(t, frame, length);
             }
         }
@@ -517,10 +520,10 @@ namespace {
                         for (int k = 0; k < 4; k++) {
                             rgba[k] *= texel[k] / 255.0f;
                         }
-                        // The nail (the texture's dark stripe) is brought well forward so it shows over its own
+                        // The nail (the texture's dark stripe) is brought a little forward so it shows over its own
                         // fingertip when the finger curls away.
                         if (texel[0] + texel[1] + texel[2] < 3 * 128) {
-                            pz += 200.0f;
+                            pz += 30.0f;
                         }
                     }
                     float& d = depth[py * n + px];
@@ -600,13 +603,13 @@ bool tooie::hand_cursor::make_model_frames(int size, ModelFrames& frames) {
     }
     decode_texture(model);
     // The nail is a black stripe three texels wide on the fingertip caps, well under a pixel at cursor size,
-    // so it is widened (each texel takes the darkest of its row within two texels) to stay in sight.
+    // so it is widened (each texel takes the darkest of its row within one texel) to stay in sight.
     if (model.tex.w > 0) {
         const auto src = model.tex.texels;
         for (int y = 0; y < model.tex.h; y++) {
             for (int x = 0; x < model.tex.w; x++) {
                 auto& out = model.tex.texels[y * model.tex.w + x];
-                for (int dx = -2; dx <= 2; dx++) {
+                for (int dx = -1; dx <= 1; dx++) {
                     const auto& in = src[y * model.tex.w + std::clamp(x + dx, 0, model.tex.w - 1)];
                     if (in[0] + in[1] + in[2] < out[0] + out[1] + out[2]) {
                         out = in;
