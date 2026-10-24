@@ -40,6 +40,8 @@ namespace {
     constexpr float title_settle_time = 0.5f;
     constexpr float title_rock = 2.0f; // Degrees.
     constexpr float title_rock_period = 3.0f;
+    // The launcher was hidden if no update came for this long; the title bounces in again when it is back.
+    constexpr float restart_gap = 1.0f;
 
     struct TitleLetter {
         const char* path;
@@ -74,6 +76,7 @@ namespace {
     recompui::Element* layer = nullptr;
     float laid_out_width = 0, laid_out_height = 0;
     clock::time_point start_time;
+    clock::time_point last_update;
     bool started = false;
 
     float clamp01(float t) {
@@ -146,12 +149,11 @@ namespace tooie::launcher_title {
         }
 
         clock::time_point now = clock::now();
-        // The intro plays once per run; after it, only the idle motion (drift, sway, hops) carries on,
-        // also when coming back to the menu (L, 2026-10-24).
-        if (!started) {
+        if (!started || std::chrono::duration<float>(now - last_update).count() > restart_gap) {
             start_time = now;
             started = true;
         }
+        last_update = now;
         float t = std::chrono::duration<float>(now - start_time).count();
 
         // Each letter falls from above the window, squashes as it lands, then rocks gently, each a
