@@ -443,6 +443,30 @@ index 20c0d4d..c1f4899 100644
              MapInitialized = true;
          }
      }
+diff --git a/src/hle/rt64_application.cpp b/src/hle/rt64_application.cpp
+index 785de27..bb680a0 100644
+--- a/src/hle/rt64_application.cpp
++++ b/src/hle/rt64_application.cpp
+@@ -345,15 +345,18 @@ namespace RT64 {
+         const RenderMultisampling multisampling = RasterShader::generateMultisamplingPattern(userConfig.msaaSampleCount(), device->getCapabilities().sampleLocations);
+         shaderLibrary = std::make_unique<ShaderLibrary>(usesHDR, usesHardwareResolve);
+         shaderLibrary->setupCommonShaders(renderInterface.get(), device.get());
+-        shaderLibrary->setupMultisamplingShaders(renderInterface.get(), device.get(), multisampling);
+ 
+         // Create the shader caches.
+         // Estimate the amount of shader compiler threads by trying to use about half of the system's available threads.
+         // We need the ubershader pipelines done as soon as possible, so we use a different thread count that demands more of the system.
++        // Banjo-Tooie: made before the multisampling shaders below (the ubershader only needs the common ones' samplers),
++        // so its pipelines compile on their threads while this thread builds the scene effects' pipelines, instead of
++        // after them: that was several seconds of the start-up "Loading" screen.
+         const uint32_t rasterShaderThreads = std::max(threadsAvailable / 2U, 1U);
+         const uint32_t ubershaderThreads = uint32_t(std::max(int(threadsAvailable) - 2, 1));
+         rasterShaderCache = std::make_unique<RasterShaderCache>(rasterShaderThreads, ubershaderThreads);
+         rasterShaderCache->setup(device.get(), renderInterface->getCapabilities().shaderFormat, shaderLibrary.get(), multisampling);
++        shaderLibrary->setupMultisamplingShaders(renderInterface.get(), device.get(), multisampling);
+ 
+ #   if RT_ENABLED
+         if (device->getCapabilities().raytracing) {
 diff --git a/src/hle/rt64_application_window.cpp b/src/hle/rt64_application_window.cpp
 index 08f83e5..2bfdba4 100755
 --- a/src/hle/rt64_application_window.cpp
