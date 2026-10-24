@@ -231,8 +231,9 @@ namespace RT64 {
         }
     }
 
-    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount, uint32_t view) {
+    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount, uint32_t view, float surfaces) {
         const std::scoped_lock lock(settingsMutex);
+        currentSettings.surfaces = std::clamp(surfaces, 0.0f, 1.0f);
         currentSettings.sun = std::clamp(sun, 0.0f, 1.0f);
         currentSettings.haze = std::clamp(haze, 0.0f, 1.0f);
         currentSettings.quality = std::min(quality, 2U);
@@ -651,6 +652,8 @@ namespace RT64 {
         // The composite reads the view in the pass's place.
         interop::VolShadowCB compositeConstants = constants;
         compositeConstants.medium.z = float(settings.view);
+        // How dark the surfaces in the sun's shade go (the mesh's cells, which only the volume pass reads, aren't needed here).
+        compositeConstants.lightD.w = ((settings.view == 0) && sunOn) ? 0.6f * settings.surfaces * std::min(sunStrength * 1.25f, 1.0f) : 0.0f;
         commandList->setGraphicsPushConstants(0, &compositeConstants);
         commandList->setVertexBuffers(0, nullptr, 0, nullptr);
         commandList->drawInstanced(3, 1, 0, 0);

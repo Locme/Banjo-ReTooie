@@ -12,7 +12,7 @@
 
 namespace RT64 {
     // rt64-ext/src/render/rt64_volumetric_shadows.h.
-    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount, uint32_t view);
+    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount, uint32_t view, float surfaces);
 }
 
 namespace {
@@ -54,6 +54,12 @@ void tooie::volumetric_shadows::add_options(recomp::config::Config& graphics) {
         1, 2, 1, 0, false, 2);
     graphics.add_option_hidden_dependency(lamp_count_option, lamps_option, 0.0);
     graphics.add_number_option(
+        surfaces_option,
+        "Volumetric Shadows On Surfaces",
+        "How much the sun's shafts also shade the ground and walls: what stands in the sun's way darkens what is behind it, from the shafts' own map, so the shade on the ground lines up with the shadows in the air. Separate from Sun Shadows. 0 leaves the surfaces as they are.",
+        0, 100, 5, 0, false, 60);
+    graphics.add_option_hidden_dependency(surfaces_option, sun_option, 0.0);
+    graphics.add_number_option(
         haze_option,
         "Volumetric Shadows Haze",
         "How thick the haze the light shows in is. Thicker makes the shafts and glows stronger, and also dims what is far away.",
@@ -83,7 +89,7 @@ void tooie::volumetric_shadows::add_options(recomp::config::Config& graphics) {
             {View::LightAndMap, "LightAndMap", "Light And Map"},
         },
         View::Normal);
-    for (const std::string* id : { &sun_option, &lamps_option, &lamp_count_option, &haze_option, &quality_option, &distance_option, &view_option }) {
+    for (const std::string* id : { &sun_option, &lamps_option, &lamp_count_option, &surfaces_option, &haze_option, &quality_option, &distance_option, &view_option }) {
         graphics.add_option_change_callback(*id,
             [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
                 if (context == recomp::config::OptionChangeContext::Temporary) {
@@ -112,7 +118,7 @@ void tooie::volumetric_shadows::tick() {
     const uint32_t count = uint32_t(std::clamp(number(lamp_count_option, 2.0f), 1.0f, 2.0f));
     sun_reach = (sun > 0.0f) ? distance : 0.0f;
     lamps = lamp > 0.0f;
-    RT64::SetVolumetricShadows(sun, haze, quality, distance, lamp, count, choice(view_option, 0));
+    RT64::SetVolumetricShadows(sun, haze, quality, distance, lamp, count, choice(view_option, 0), number(surfaces_option, 60.0f) / 100.0f);
 }
 
 float tooie::volumetric_shadows::sun_distance() {

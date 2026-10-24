@@ -32,9 +32,11 @@ namespace RT64 {
         uint32_t lampCount = 2;
         // 0 the picture, 1 only the light in the haze (over black), 2 that with the sun's map in the top left corner.
         uint32_t view = 0;
+        // How much the sun's map darkens the ground and walls in its shade (0 none, 1 most).
+        float surfaces = 0.6f;
     };
     // Set by the game each frame (src/gameplay/volumetric_shadows.cpp declares this itself, so it takes plain values).
-    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount, uint32_t view);
+    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount, uint32_t view, float surfaces);
     VolumetricShadowSettings GetVolumetricShadows();
     bool VolumetricShadowsOn();
 

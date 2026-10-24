@@ -1077,7 +1077,7 @@ void tooie::init_config() {
     {
         // Volumetric shadows are WIP (L, 2026-10-23): the WIP tab, under their own heading, off by default.
         namespace vs = tooie::volumetric_shadows;
-        for (const std::string* id : { &vs::sun_option, &vs::lamps_option, &vs::lamp_count_option, &vs::haze_option, &vs::quality_option,
+        for (const std::string* id : { &vs::sun_option, &vs::lamps_option, &vs::lamp_count_option, &vs::surfaces_option, &vs::haze_option, &vs::quality_option,
                 &vs::distance_option, &vs::view_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }

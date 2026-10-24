@@ -46,7 +46,8 @@ namespace interop {
         // its reach towards and away from the sun, its size in texels, then the map's middle and the mesh's cells a side.
         // A lamp: lightA its position and radius; lightB the map's near and far distances, a face's size in texels and the
         // face being drawn (map pass) or the lamp's brightness (volume pass); lightC the lamp's first texel across in the
-        // map, unused, the mesh's cells a face side, unused.
+        // map, unused, the mesh's cells a face side, unused. The composite pass has lightD.w how dark the
+        // surfaces in the sun's shade go (0 to 1) instead of the sun mesh's cells.
         float4 lightA;
         float4 lightB;
         float4 lightC;

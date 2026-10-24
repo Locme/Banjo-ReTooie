@@ -13,6 +13,8 @@ namespace tooie::volumetric_shadows {
     // The lamps' glow (0 off, 100 strongest) and how many of the nearest lamps have it (1 or 2).
     inline const std::string lamps_option = "volumetric_shadows_lamps";
     inline const std::string lamp_count_option = "volumetric_shadows_lamp_count";
+    // How much the sun's map shades the ground and walls (0 to 100).
+    inline const std::string surfaces_option = "volumetric_shadows_surfaces";
     // How thick the haze the light shows in is (1 to 100).
     inline const std::string haze_option = "volumetric_shadows_haze";
     // The light's map and the shafts' detail.
