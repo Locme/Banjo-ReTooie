@@ -106,6 +106,11 @@ the march itself is our own, written from Wronski's 2014 and Hillaire's 2015 vol
 Unity Asset Store package "Aero - Volumetric Fog and Mist" is under Unity's Asset Store EULA, which does not let its
 source go into another project, so none of it is used.
 
+The volumetric shadows (WIP) are written from Billeter, Sintorn and Assarsson's paper "Real Time Volumetric Shadows
+using Polygonal Light Volumes" (High Performance Graphics 2010): a mesh round the lit air is raised from a depth map
+drawn from the light, and its faces add and take away the light gathered along each pixel's ray. No code is copied
+from anywhere.
+
 ## Credits
 
 * [N64Recomp](https://github.com/N64Recomp/N64Recomp),

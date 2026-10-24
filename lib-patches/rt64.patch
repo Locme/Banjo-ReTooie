@@ -7899,7 +7899,7 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..b166786 100644
+index d1c5273..612667e 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -3,6 +3,7 @@
@@ -8106,7 +8106,7 @@ index d1c5273..b166786 100644
  #   include "shaders/ComposePS.hlsl.metal.h"
  #   include "shaders/DebugPS.hlsl.metal.h"
  #   include "shaders/Im3DPS.hlsl.metal.h"
-@@ -148,6 +293,12 @@
+@@ -148,10 +293,17 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
@@ -8119,7 +8119,12 @@ index d1c5273..b166786 100644
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -204,7 +355,7 @@ namespace RT64 {
+ #include "rt64_render_target.h"
++#include "rt64_volumetric_shadows.h"
+ 
+ #ifdef _WIN32
+ #   define CREATE_SHADER_INPUTS(DXIL_BLOB, SPIRV_BLOB, MSL_BLOB, ENTRY_NAME, SHADER_FORMAT)\
+@@ -204,7 +356,7 @@ namespace RT64 {
              samplerDesc.addressW = RenderTextureAddressMode::CLAMP;
  
              // This matches the bias used in the shader when native samplers are not used.
@@ -8128,7 +8133,7 @@ index d1c5273..b166786 100644
  
              // WRAP.
              samplerDesc.addressU = RenderTextureAddressMode::WRAP;
-@@ -549,6 +700,38 @@ namespace RT64 {
+@@ -549,6 +701,38 @@ namespace RT64 {
              rspWorld.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -8167,7 +8172,7 @@ index d1c5273..b166786 100644
          // Texture Copy.
          {
              TextureCopyDescriptorSet descriptorSet;
-@@ -569,6 +752,98 @@ namespace RT64 {
+@@ -569,6 +753,98 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -8266,7 +8271,7 @@ index d1c5273..b166786 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +858,20 @@ namespace RT64 {
+@@ -583,6 +859,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -8287,7 +8292,7 @@ index d1c5273..b166786 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +1121,240 @@ namespace RT64 {
+@@ -832,6 +1122,243 @@ namespace RT64 {
              }
          }
  
@@ -8485,6 +8490,9 @@ index d1c5273..b166786 100644
 +            pipelineDesc.depthTargetFormat = RenderFormat::D32_FLOAT;
 +            sunShadowMap.pipeline = device->createGraphicsPipeline(pipelineDesc);
 +        }
++
++        // Banjo-Tooie: volumetric shadows' passes (rt64-ext rt64_volumetric_shadows.cpp keeps its own pipelines).
++        SetupVolumetricShadowShaders(device, shaderFormat, multisampling, usesHDR);
 +
 +        // Banjo-Tooie: the temporal upscalers' objects velocity pass (ObjectVelocityVS.hlsl): the 3D world's solid
 +        // triangles drawn again into a velocity target with a depth buffer of its own.
