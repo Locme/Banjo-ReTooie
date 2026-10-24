@@ -110,7 +110,7 @@ namespace {
         { "launcher/ladder.svg", 1498, 280, 98, 768, Motion::Ladder },
         { "launcher/back_left.svg", -842, 584, 1511, 605, Motion::BackLeft },
         { "launcher/slide_left.svg", 263, 590, 1557, 965, Motion::FromLeft },
-        { "launcher/ledge.svg", 1721, 1194, 1134, 525, Motion::Ledge },
+        { "launcher/ledge.svg", 1721, 1194, 1134, 1808, Motion::Ledge },
         { "launcher/bird.svg", 2091, 1316, 184, 268, Motion::Critter },
     };
 

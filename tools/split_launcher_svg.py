@@ -36,6 +36,7 @@ def element(id_, keep=None):
 # Group "5": the grass ledge (paths 0-1), the bird on it (2-9 and 30) and the fence (10-29).
 bird = list(range(2, 10)) + [30]
 ledge = [0, 1] + list(range(10, 30))
+ledge_floor = '<polygon fill="#63522b" points="1723.72,1690 2777.72,1700 2777.72,3000 1723.72,3000"/>'
 layers = {  # bounding boxes measured in Chromium (getBBox)
     'background': (['Background_color', 'Background_2'], (-826.98, -914.44, 3213.02, 2220.67)),
     'slide_right': (['Slide_from_the_right'], (518.24, 349.38, 3208.35, 1296.61)),
@@ -49,13 +50,16 @@ layers = {  # bounding boxes measured in Chromium (getBBox)
     # Group "4": the rock arch and waterfall at the back left.
     'back_left': (['_x34_'], (-839.99, 586.32, 666.73, 1186.89)),
     'slide_left': (['Slide_from_the_left'], (265.39, 592.48, 1817.86, 1552.71)),
-    'ledge': ([('_x35_', ledge)], (1723.72, 1196.88, 2852.73, 1717.0)),
+    # The ledge's brown side carries on far below its art (to y 3000), so its bottom edge never shows
+    # while it rises or drifts (L, 2026-10-24).
+    'ledge': ([ledge_floor, ('_x35_', ledge)], (1723.72, 1196.88, 2852.73, 3000.0)),
     # The bird (about 2116-2250 by 1336-1450) hops from its feet, (2183, 1450).
     'bird': ([('_x35_', bird)], (2093, 1318, 2273, 1582)),
 }
 for name, (ids, (x0, y0, x1, y1)) in layers.items():
     x0, y0, x1, y1 = math.floor(x0) - 2, math.floor(y0) - 2, math.ceil(x1) + 2, math.ceil(y1) + 2
-    body = '\n'.join(element(*i) if isinstance(i, tuple) else element(i) for i in ids)
+    # An entry is an element id, (group id, path indices), or literal markup.
+    body = '\n'.join(element(*i) if isinstance(i, tuple) else i if i.startswith('<') else element(i) for i in ids)
     open(f'{out}/{name}.svg', 'w').write(
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{x0} {y0} {x1 - x0} {y1 - y0}">\n{body}\n</svg>\n')
     print(name, x0, y0, x1, y1)
