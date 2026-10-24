@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T573 JPEG-like blocks on the ground with ray tracing
+- Asked: 2026-10-24 06:44 UTC
+- Build: main @ 6b900c7
+- Steps:
+  1. Ray tracing on
+  2. Stand Banjo on grass (Spiral Mountain) and look at the ground in front of Kazooie
+  3. Turn the camera slowly
+- Look for: Are the square, JPEG-like blocks in the ground's shading gone?
+- Status: waiting for L
+
 ## T572 Mirror Mode: save select numbers
 - Asked: 2026-10-24 06:22 UTC
 - Build: main, next push (untested)
