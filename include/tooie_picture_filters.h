@@ -189,8 +189,6 @@ namespace tooie::picture_filters {
     bool sun_shadows_on();
     // Graphics > Ray tracing is on and the device has ray queries (the traced effects run).
     bool ray_tracing_active();
-    // Graphics > Traced shadows of the player.
-    bool ray_tracing_player_shadows_on();
     // Ray tracing on with Traced light beams above 0: they stand in for Window Light Beams' drawn ones.
     bool traced_beams_on();
     // Graphics > Sun shadow distance, in world units (0 while sun shadows are off).
