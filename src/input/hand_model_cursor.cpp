@@ -503,11 +503,7 @@ namespace {
                     if (l0 < 0 || l1 < 0 || l2 < 0) {
                         continue;
                     }
-                    const float pz = l0 * z[0] + l1 * z[1] + l2 * z[2];
-                    float& d = depth[py * n + px];
-                    if (pz <= d) {
-                        continue;
-                    }
+                    float pz = l0 * z[0] + l1 * z[1] + l2 * z[2];
                     float rgba[4];
                     for (int k = 0; k < 4; k++) {
                         rgba[k] = l0 * t.c[0].rgba[k] + l1 * t.c[1].rgba[k] + l2 * t.c[2].rgba[k];
@@ -521,6 +517,15 @@ namespace {
                         for (int k = 0; k < 4; k++) {
                             rgba[k] *= texel[k] / 255.0f;
                         }
+                        // The nail (the texture's dark stripe) is brought well forward so it shows over its own
+                        // fingertip when the finger curls away.
+                        if (texel[0] + texel[1] + texel[2] < 3 * 128) {
+                            pz += 200.0f;
+                        }
+                    }
+                    float& d = depth[py * n + px];
+                    if (pz <= d) {
+                        continue;
                     }
                     // Kept premultiplied by alpha.
                     float* c = &color[(py * n + px) * 4];
@@ -594,6 +599,22 @@ bool tooie::hand_cursor::make_model_frames(int size, ModelFrames& frames) {
         return false;
     }
     decode_texture(model);
+    // The nail is a black stripe three texels wide on the fingertip caps, well under a pixel at cursor size,
+    // so it is widened (each texel takes the darkest of its row within two texels) to stay in sight.
+    if (model.tex.w > 0) {
+        const auto src = model.tex.texels;
+        for (int y = 0; y < model.tex.h; y++) {
+            for (int x = 0; x < model.tex.w; x++) {
+                auto& out = model.tex.texels[y * model.tex.w + x];
+                for (int dx = -2; dx <= 2; dx++) {
+                    const auto& in = src[y * model.tex.w + std::clamp(x + dx, 0, model.tex.w - 1)];
+                    if (in[0] + in[1] + in[2] < out[0] + out[1] + out[2]) {
+                        out = in;
+                    }
+                }
+            }
+        }
+    }
 
     // One frame per animation frame: the idle loops over its whole length, the click plays once.
     std::vector<std::vector<Tri>> idle_tris, click_tris;
