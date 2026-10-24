@@ -1182,6 +1182,8 @@ void tooie::init_config() {
     recompui::config::set_option_display_last(tooie::smaa::option);
     recompui::config::set_option_display_last(tooie::fxaa::option);
     recompui::config::set_option_display_last(tooie::fsr::option);
+    // Game View (its heading and Always High-Detail Models) moves to the Display tab, at the very bottom (L, 2026-10-24).
+    recompui::config::set_option_display_last(tooie::high_detail_models_option);
     recompui::config::set_option_group(recompui::config::graphics::options::msaa_option, "Anti-Aliasing And Scaling");
     recompui::config::set_option_group(tooie::game_frame_rate::option, "Frame Rate And Overlay");
     recompui::config::set_option_group(tooie::effect_views::option, "Debug");
@@ -1197,7 +1199,7 @@ void tooie::init_config() {
             &recompui::config::graphics::options::ar_option, &recompui::config::graphics::options::wm_option,
             &recompui::config::graphics::options::hr_option, &recompui::config::graphics::options::api_option,
             &recompui::config::graphics::options::msaa_option, &tooie::smaa::option, &tooie::fxaa::option,
-            &tooie::fsr::option }) {
+            &tooie::fsr::option, &tooie::high_detail_models_option }) {
         recompui::config::set_option_page(*id, tooie::performance_tab_id);
     }
     // Brightness & Colour Grading (L, 2026-10-24): the button for its panel is on top of the Display tab.
