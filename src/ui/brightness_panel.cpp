@@ -1,6 +1,6 @@
 // The brightness test panel (L, 2026-10-24): the Brightness Test Pattern button in the Graphics tab turns the
 // pattern on. While it is on, the ESC menu is shut and a panel with only the Brightness slider and a Quit
-// button is shown over the pattern. Quit turns the pattern off and the panel goes away. The panel is its own
+// button is shown over the pattern. Quit turns the pattern off and the panel goes away; Back To Menu does the same and opens the ESC menu again. The panel is its own
 // UI context that takes input (as the menu does), so the game stays paused behind it like behind the menu.
 
 #include <atomic>
@@ -27,6 +27,8 @@ namespace {
 
     std::once_flag started;
     std::atomic<bool> panel_up{ false };
+    // Set by the Back To Menu button: once the panel is gone the ESC menu opens again.
+    std::atomic<bool> reopen_menu{ false };
 
     namespace style = recompui::sidebar_style;
 
@@ -34,6 +36,7 @@ namespace {
         recompui::ContextId context = recompui::ContextId::null();
         recompui::Slider* slider = nullptr;
         recompui::Button* quit = nullptr;
+        recompui::Button* back = nullptr;
     };
 
     recomp::config::Config& graphics_config() {
@@ -140,6 +143,13 @@ namespace {
                 graphics_config().set_option_value(tooie::picture_filters::brightness_pattern_option, false);
             });
 
+            p.back = ctx.create_element<recompui::Button>(box, "Back To Menu", recompui::ButtonStyle::Secondary, recompui::ButtonSize::Medium);
+            p.back->set_margin_top(8);
+            p.back->add_pressed_callback([] {
+                reopen_menu.store(true);
+                graphics_config().set_option_value(tooie::picture_filters::brightness_pattern_option, false);
+            });
+
             ctx.set_autofocus_element(p.quit);
             ctx.close();
             p.context = ctx;
@@ -181,6 +191,21 @@ namespace {
         p.context.close();
     }
 
+    // The ESC menu again, on the tab it was left on.
+    void open_menu() {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
+        try {
+            recompui::ContextId context = recompui::config::get_config_context_id();
+            context.open();
+            recompui::config::open();
+            context.close();
+        } catch (...) {
+        }
+    }
+
     void worker() {
         Panel panel;
         for (;;) {
@@ -189,6 +214,9 @@ namespace {
                 if (panel_up.load()) {
                     hide(panel);
                     panel_up.store(false);
+                    if (reopen_menu.exchange(false)) {
+                        open_menu();
+                    }
                 }
                 continue;
             }
