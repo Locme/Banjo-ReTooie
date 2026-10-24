@@ -462,8 +462,8 @@ namespace {
         constexpr float lean = 25.0f * 3.14159265f / 180.0f;
         // Model +y (the back of the hand) towards the viewer, model -z (the fingers) up the screen.
         const float sx = p.x, y = -p.z, z = p.y;
-        // Seen from above the fingertips (tipped 50 degrees), so the nails stay in sight while the fingers curl.
-        constexpr float tip = -50.0f * 3.14159265f / 180.0f;
+        // Seen from above the fingertips (tipped 20 degrees; L wanted it flatter than 50), so the nails stay in sight while the fingers curl.
+        constexpr float tip = -20.0f * 3.14159265f / 180.0f;
         const float sy = y * std::cos(tip) + z * std::sin(tip), sz = z * std::cos(tip) - y * std::sin(tip);
         return { sx * std::cos(lean) - sy * std::sin(lean), sx * std::sin(lean) + sy * std::cos(lean), sz };
     }
