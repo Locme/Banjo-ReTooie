@@ -20,11 +20,20 @@ namespace {
     using clock = std::chrono::steady_clock;
 
     constexpr float two_pi = 6.2831853f;
-    // The title: its top and height as fractions of the window (it is centred across), and its letters'
-    // bounce: when the first starts, the gap between letters, how long each falls and settles.
-    constexpr float title_top = 0.02f;
-    constexpr float title_height = 0.46f;
-    constexpr float title_box_height = 339.0f; // Title units, as in title_letters below.
+    // The title sits in the sky above the rock arch (L, 2026-10-24), so it is placed in the background
+    // art's units: its middle and width there. The art is fitted to the window as in
+    // launcher_background.cpp: its full height fills the window, wider windows scaling up to stay inside
+    // the sky's bleed.
+    constexpr float art_width = 2284.48f;
+    constexpr float art_height = 1735.67f;
+    constexpr float bleed_half_width = 1793.0f;
+    constexpr float title_art_x = 160.0f;
+    constexpr float title_art_y = 405.0f;
+    constexpr float title_art_width = 860.0f;
+    // The title's own box, in title units (title_letters below).
+    constexpr float title_box_width = 771.0f;
+    constexpr float title_box_middle = 162.2f;
+    // The bounce: when the first letter starts, the gap between letters, how long each falls and settles.
     constexpr float title_start = 0.4f;
     constexpr float title_letter_gap = 0.12f;
     constexpr float title_fall_time = 0.35f;
@@ -39,26 +48,29 @@ namespace {
         // Box in title units: left from the title's centre line, top from the title's top.
         float x, y, w, h;
         float tilt; // Degrees.
+        // Its place in the bounce, in reading order (the table is back to front).
+        int order;
         recompui::Svg* svg = nullptr;
         float left = 0, top = 0, width = 0, height = 0; // In window pixels.
     };
 
     // BANJO over RE-TOOIE, each row centred, the letters packed and the rows overlapping as on the N64
-    // box art; traced from u/Plebian_Donkey_Konga's lettering sheet.
+    // box art, some letters over their neighbours and some under (the J over the O and into the row
+    // below, the I over the O); traced from u/Plebian_Donkey_Konga's lettering sheet. Back to front.
     TitleLetter title_letters[] = {
-        { "launcher/title_b.svg", -325.2f, 16.9f, 139.1f, 170.3f, -6.0f },
-        { "launcher/title_a.svg", -213.5f, 41.6f, 202.8f, 150.8f, 4.0f },
-        { "launcher/title_n.svg", -38.9f, 41.6f, 150.8f, 145.6f, -3.0f },
-        { "launcher/title_j.svg", 92.0f, 0.0f, 97.5f, 221.0f, 5.0f },
-        { "launcher/title_o.svg", 169.2f, 59.8f, 156.0f, 130.0f, -4.0f },
-        { "launcher/title_r_blue.svg", -410.0f, 194.6f, 158.8f, 142.6f, -5.0f },
-        { "launcher/title_e_blue.svg", -273.8f, 202.2f, 123.1f, 137.2f, 4.0f },
-        { "launcher/title_hyphen.svg", -170.4f, 268.1f, 79.9f, 51.8f, -4.0f },
-        { "launcher/title_t_blue.svg", -113.9f, 189.2f, 143.6f, 148.0f, -3.0f },
-        { "launcher/title_o_blue.svg", 7.8f, 232.4f, 129.6f, 106.9f, 4.0f },
-        { "launcher/title_o_blue.svg", 116.7f, 230.3f, 129.6f, 106.9f, -4.0f },
-        { "launcher/title_i_blue.svg", 230.1f, 179.5f, 72.4f, 157.7f, 3.0f },
-        { "launcher/title_e_blue.svg", 286.9f, 202.2f, 123.1f, 137.2f, -5.0f },
+        { "launcher/title_o_blue.svg", 104.4f, 215.3f, 129.6f, 106.9f, -4.0f, 10 },
+        { "launcher/title_b.svg", -307.2f, 16.9f, 139.1f, 170.3f, -6.0f, 0 },
+        { "launcher/title_n.svg", -41.9f, 41.6f, 150.8f, 145.6f, -3.0f, 2 },
+        { "launcher/title_e_blue.svg", -258.0f, 187.2f, 123.1f, 137.2f, 4.0f, 6 },
+        { "launcher/title_o_blue.svg", 3.3f, 217.4f, 129.6f, 106.9f, 4.0f, 9 },
+        { "launcher/title_a.svg", -205.8f, 41.6f, 202.8f, 150.8f, 4.0f, 1 },
+        { "launcher/title_o.svg", 151.2f, 59.8f, 156.0f, 130.0f, -4.0f, 4 },
+        { "launcher/title_hyphen.svg", -160.3f, 253.1f, 79.9f, 51.8f, -4.0f, 7 },
+        { "launcher/title_e_blue.svg", 262.6f, 187.2f, 123.1f, 137.2f, -5.0f, 12 },
+        { "launcher/title_r_blue.svg", -385.7f, 179.6f, 158.8f, 142.6f, -5.0f, 5 },
+        { "launcher/title_t_blue.svg", -110.3f, 174.2f, 143.6f, 148.0f, -3.0f, 8 },
+        { "launcher/title_i_blue.svg", 211.8f, 164.5f, 72.4f, 157.7f, 3.0f, 11 },
+        { "launcher/title_j.svg", 81.6f, 0.0f, 97.5f, 221.0f, 5.0f, 3 },
     };
 
     recompui::Element* layer = nullptr;
@@ -77,10 +89,13 @@ namespace {
     }
 
     void lay_out(float window_width, float window_height) {
-        float title_scale = title_height * window_height / title_box_height;
+        float art_scale = std::max(window_height / art_height, window_width / (2.0f * bleed_half_width));
+        float center_x = window_width * 0.5f + (title_art_x - art_width * 0.5f) * art_scale;
+        float center_y = window_height * 0.5f + (title_art_y - art_height * 0.5f) * art_scale;
+        float title_scale = title_art_width * art_scale / title_box_width;
         for (TitleLetter& l : title_letters) {
-            l.left = window_width * 0.5f + l.x * title_scale;
-            l.top = title_top * window_height + l.y * title_scale;
+            l.left = center_x + l.x * title_scale;
+            l.top = center_y + (l.y - title_box_middle) * title_scale;
             l.width = l.w * title_scale;
             l.height = l.h * title_scale;
             l.svg->set_left(l.left / window_width * 100.0f, recompui::Unit::Percent);
@@ -140,8 +155,8 @@ namespace tooie::launcher_title {
 
         // Each letter falls from above the window, squashes as it lands, then rocks gently, each a
         // little out of step with the next.
-        int index = 0;
         for (TitleLetter& l : title_letters) {
+            int index = l.order;
             float letter_t = t - title_start - index * title_letter_gap;
             float k = clamp01(letter_t / title_fall_time);
             float dy = -(l.top + l.height + 0.05f * window_height) * (1.0f - k * k);
@@ -158,7 +173,6 @@ namespace tooie::launcher_title {
             l.svg->set_translate_2D(0.0f, dy / l.height * 100.0f, recompui::Unit::Percent);
             l.svg->set_rotation(l.tilt + rock * title_rock);
             l.svg->set_scale_2D(1.0f + squash, 1.0f - squash);
-            index++;
         }
     }
 }
