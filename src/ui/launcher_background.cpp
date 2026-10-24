@@ -3,10 +3,13 @@
 // bleeds past L's artboard is kept. The layers are placed as one picture: the artboard's full height
 // fills the window, and wider windows show the bleed at the sides.
 //
-// The picture fades in, the cliff slides in from the right and the pillar from the left, the path
-// (L's group "1") rises from below, the head (group "2") drops onto the cliff and squashes as it
-// lands, then everything drifts a little: the two parts against each other, the hill a little less
-// (depth), the head swaying on its ladder, clouds crossing the sky.
+// The picture fades in, the cliff slides in from the right and the pillar and the rock arch (group
+// "4") from the left, the path (L's group "1") rises from below, the ledge with the fence (group "5")
+// rises at the right, the head (group "2") drops onto the cliff and squashes as it lands, and its
+// ladder (group "3") unrolls from its mouth. Then everything drifts a little: the two sides against
+// each other, the hill a little less (depth), the head swaying on its ladder, the little green critter
+// on the ledge hopping now and then, and clouds crossing the sky. The title is its own animation,
+// src/ui/launcher_title.cpp.
 
 #include <algorithm>
 #include <chrono>
@@ -39,6 +42,14 @@ namespace {
     constexpr float head_drop_start = 2.1f;
     constexpr float head_drop_time = 0.45f;
     constexpr float head_land_time = 0.9f;
+    constexpr float back_left_delay = 0.2f;
+    constexpr float ledge_rise_start = 1.9f;
+    constexpr float ledge_rise_time = 0.7f;
+    constexpr float ladder_unroll_start = 2.8f;
+    constexpr float ladder_unroll_time = 0.6f;
+    constexpr float hop_start = 3.4f;
+    constexpr float hop_period = 3.5f;
+    constexpr float hop_time = 0.55f;
     constexpr float drift_ramp_time = 1.5f;
     constexpr float drift_period_x = 7.0f;
     constexpr float drift_period_y = 5.0f;
@@ -51,6 +62,11 @@ namespace {
     // Head sway, in degrees, and its squash on landing.
     constexpr float head_sway = 1.2f;
     constexpr float head_squash = 0.12f;
+    // The ladder's top (its layer's middle) sits this far above the head's turning point, in artboard units.
+    constexpr float ladder_above_pivot = 376.0f;
+    // The critter's hop height, in artboard units, and its squash.
+    constexpr float hop_height = 70.0f;
+    constexpr float hop_squash = 0.15f;
     // Seconds for a cloud to cross the artboard.
     constexpr float cloud_crossing_time = 120.0f;
     // The launcher was hidden if no update came for this long; the intro plays again when it is back.
@@ -62,7 +78,11 @@ namespace {
         FromRight,
         Path,
         Head,
+        Ladder,
+        BackLeft,
         FromLeft,
+        Ledge,
+        Critter,
     };
 
     struct Layer {
@@ -87,8 +107,13 @@ namespace {
         { "launcher/slide_right.svg", 516, 347, 2695, 952, Motion::FromRight },
         { "launcher/path.svg", -2, 1031, 1945, 931, Motion::Path },
         { "launcher/head.svg", 1128, -276, 844, 2632, Motion::Head },
-        { "launcher/slide_left.svg", -842, 584, 2662, 971, Motion::FromLeft },
+        { "launcher/ladder.svg", 1498, 280, 98, 768, Motion::Ladder },
+        { "launcher/back_left.svg", -842, 584, 1511, 605, Motion::BackLeft },
+        { "launcher/slide_left.svg", 263, 590, 1557, 965, Motion::FromLeft },
+        { "launcher/ledge.svg", 1721, 1194, 1134, 525, Motion::Ledge },
+        { "launcher/bird.svg", 2091, 1316, 184, 268, Motion::Critter },
     };
+
 
     float laid_out_width = 0, laid_out_height = 0;
     // Window pixels per artboard unit, and where the artboard's left edge is.
@@ -151,7 +176,7 @@ namespace tooie::launcher_background {
             l.svg->set_position(recompui::Position::Absolute);
             // Transforms keep the order they were first set in: move, then turn, then squash.
             l.svg->set_translate_2D(0.0f, 0.0f, recompui::Unit::Percent);
-            if (l.motion == Motion::Head) {
+            if (l.motion == Motion::Head || l.motion == Motion::Ladder || l.motion == Motion::Critter) {
                 l.svg->set_rotation(0.0f);
                 l.svg->set_scale_2D(1.0f, 1.0f);
             }
@@ -192,6 +217,10 @@ namespace tooie::launcher_background {
         float drift_dx = wave_x * drift_x * window_width;
         float drift_dy = wave_y * drift_y * window_height;
         float right_slide_dx = 0.0f;
+        float slide_back = ease_out_cubic(clamp01((t - slide_delay - back_left_delay) / slide_time));
+        // The head's move and turn, which the ladder follows; the ledge's, which the critter rides.
+        float head_dx = 0.0f, head_dy = 0.0f, head_turn = 0.0f;
+        float ledge_dx = 0.0f, ledge_dy = 0.0f;
 
         for (Layer& l : layers) {
             float dx = 0.0f, dy = 0.0f;
@@ -225,6 +254,50 @@ namespace tooie::launcher_background {
                     dx = -(l.left + l.width) * (1.0f - slide) - drift_dx;
                     dy = -drift_dy;
                     break;
+                case Motion::BackLeft:
+                    // A beat behind the pillar, and drifting less, as it is further back.
+                    dx = -(l.left + l.width) * (1.0f - slide_back) - drift_dx * 0.6f;
+                    dy = -drift_dy * 0.6f;
+                    break;
+                case Motion::Ledge: {
+                    float rise = ease_out_back(clamp01((t - ledge_rise_start) / ledge_rise_time));
+                    ledge_dx = drift_dx;
+                    ledge_dy = drift_dy + (window_height - l.top) * (1.0f - rise);
+                    dx = ledge_dx;
+                    dy = ledge_dy;
+                    break;
+                }
+                case Motion::Critter: {
+                    // Rides the ledge and hops every few seconds: crouch, jump, squash on landing.
+                    dx = ledge_dx;
+                    dy = ledge_dy;
+                    float squash = 0.0f;
+                    float hop_t = t - hop_start;
+                    if (hop_t > 0) {
+                        float k = std::fmod(hop_t, hop_period) / hop_time;
+                        if (k < 1.0f) {
+                            dy -= hop_height * scale * 4.0f * k * (1.0f - k);
+                            squash = -hop_squash * std::sin(two_pi * 0.5f * k) * 0.5f;
+                        }
+                        else if (k < 1.5f) {
+                            squash = hop_squash * std::sin(two_pi * (k - 1.0f));
+                        }
+                    }
+                    l.svg->set_scale_2D(1.0f + squash, 1.0f - squash);
+                    break;
+                }
+                case Motion::Ladder: {
+                    // Hangs from the head's mouth: turns with the head (about its own top, plus the
+                    // move that turning about the head's pivot gives the top), and unrolls downward.
+                    float unroll = ease_out_back(clamp01((t - ladder_unroll_start) / ladder_unroll_time));
+                    float turn = head_turn * two_pi / 360.0f;
+                    dx = head_dx + ladder_above_pivot * scale * std::sin(turn);
+                    dy = head_dy + ladder_above_pivot * scale * (1.0f - std::cos(turn));
+                    l.svg->set_rotation(head_turn);
+                    // Scaled about the layer's middle, which is the ladder's top.
+                    l.svg->set_scale_2D(1.0f, std::max(unroll, 0.0f));
+                    break;
+                }
                 case Motion::Head: {
                     // Rides on the cliff, and drops in from above the window as the cliff arrives.
                     float drop_t = t - head_drop_start;
@@ -246,6 +319,9 @@ namespace tooie::launcher_background {
                     float sway_t = land_t - head_land_time * 0.5f;
                     float sway = sway_t > 0 ? std::sin(two_pi * sway_t / head_sway_period) * smoothstep(sway_t / 2.0f) : 0.0f;
                     l.svg->set_rotation(sway * head_sway);
+                    head_dx = dx;
+                    head_dy = dy;
+                    head_turn = sway * head_sway;
                     break;
                 }
             }

@@ -45,6 +45,7 @@
 #include "recompinput/profiles.h"
 #include "tooie_hand_cursor.h"
 #include "tooie_launcher_background.h"
+#include "tooie_launcher_title.h"
 #include "tooie_asset_mods.h"
 #include "tooie_boot_screen.h"
 #include "tooie_frame_overlay.h"
@@ -698,6 +699,8 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
         tooie::picture_filters::set_preset(presets[play->get_choice()]);
     });
 
+    tooie::launcher_title::init(menu);
+
     if (autostart_game && recomp::is_rom_valid(supported_games[0].game_id)) {
         // Start a moment later, as the launcher's own option does: the VI
         // thread only sets up a video mode while no game is running, and it
@@ -893,7 +896,10 @@ int main(int argc, char** argv) {
     tooie::start_save_backups();
 
     recompui::register_launcher_init_callback(on_launcher_init);
-    recompui::register_launcher_update_callback(tooie::launcher_background::update);
+    recompui::register_launcher_update_callback([](recompui::LauncherMenu* menu) {
+        tooie::launcher_background::update(menu);
+        tooie::launcher_title::update(menu);
+    });
 
     recomp::rsp::callbacks_t rsp_callbacks{
         .get_rsp_microcode = get_rsp_microcode,

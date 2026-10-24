@@ -404,6 +404,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/debug/aim_trace.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/toast.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/launcher_background.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/launcher_title.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/shader_progress.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/photo_panel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/photo_album.cpp
