@@ -5,6 +5,7 @@
 
 #include <json/json.hpp>
 
+#include "tooie_brightness_panel.h"
 #include "tooie_photo_album.h"
 #include "tooie_game.h"
 #include "tooie_hand_cursor.h"
@@ -94,6 +95,18 @@ namespace {
         }
         try {
             recompui::config::set_tab_visible(tooie::wip_tab_id, on);
+        } catch (...) {
+        }
+    }
+
+    void show_work_in_progress_tab() {
+        bool on = false;
+        try {
+            on = std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::work_in_progress_tab_option));
+        } catch (...) {
+        }
+        try {
+            recompui::config::set_tab_visible(tooie::work_in_progress_tab_id, on);
         } catch (...) {
         }
     }
@@ -480,11 +493,12 @@ void tooie::init_config() {
         "Banjo's snout wobbles as he runs, turns, jumps, falls and lands: it trails behind the way he moves and folds back towards his eyes in a dive. It stays mid-wobble in Photo Mode. Works with player model mods that keep his skeleton, such as Smash Banjo.",
         true);
     {
+        // Defaults from L's tuned settings (2026-10-24): stiffness 500, damping 14.
         using namespace tooie::snout_jiggle;
         general.add_number_option(stiffness_option, "Snout Jiggle: Stiffness",
-            "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
+            "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 500);
         general.add_number_option(damping_option, "Snout Jiggle: Damping",
-            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
+            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 14);
         general.add_number_option(mass_option, "Snout Jiggle: Mass",
             "How heavy the snout is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
         general.add_number_option(squash_in_option, "Snout Jiggle: Max Squash & Stretch Inwards",
@@ -582,19 +596,20 @@ void tooie::init_config() {
         "Kazooie's crest and tail feathers wobble on springs as she moves, whether she rides in the backpack or walks alone after Split Up. Separate from Snout jiggle. They stay mid-wobble in Photo Mode.",
         true);
     {
+        // Defaults from L's tuned settings (2026-10-24): stiffness 500, damping 16, squash and stretch 40%.
         using namespace tooie::snout_jiggle;
         general.add_number_option(kazooie_stiffness_option, "Kazooie Jiggle: Stiffness",
-            "How hard her feathers spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
+            "How hard her feathers spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 500);
         general.add_number_option(kazooie_damping_option, "Kazooie Jiggle: Damping",
-            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
+            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 16);
         general.add_number_option(kazooie_mass_option, "Kazooie Jiggle: Mass",
             "How heavy her feathers are: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
         general.add_number_option(kazooie_squash_in_option, "Kazooie Jiggle: Max Squash & Stretch Inwards",
-            "How far each feather may squash back on itself, as a share of its length.", 0, 95, 5, 0, true, 50);
+            "How far each feather may squash back on itself, as a share of its length.", 0, 95, 5, 0, true, 40);
         general.add_number_option(kazooie_squash_out_option, "Kazooie Jiggle: Max Squash & Stretch Outwards",
-            "How far each feather may stretch out, as a share of its length.", 0, 300, 5, 0, true, 50);
+            "How far each feather may stretch out, as a share of its length.", 0, 300, 5, 0, true, 40);
         general.add_number_option(kazooie_squash_across_option, "Kazooie Jiggle: Max Squash & Stretch Up And Down",
-            "How far each feather may swing up and down (and to the side), as a share of its length.", 0, 300, 5, 0, true, 50);
+            "How far each feather may swing up and down (and to the side), as a share of its length.", 0, 300, 5, 0, true, 40);
         for (const std::string* id : { &kazooie_stiffness_option, &kazooie_damping_option, &kazooie_mass_option,
                                        &kazooie_squash_in_option, &kazooie_squash_out_option, &kazooie_squash_across_option }) {
             general.add_option_hidden_dependency(*id, kazooie_option, false);
@@ -715,7 +730,10 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
-    recompui::config::set_open_allowed_callback(tooie::menu_pause::open_allowed);
+    // The ESC menu stays shut while the brightness test panel stands in for it.
+    recompui::config::set_open_allowed_callback([] {
+        return tooie::menu_pause::open_allowed() && !tooie::brightness_panel::active();
+    });
     qol.add_bool_option(
         tooie::quick_start_option,
         "Press Start Anytime In Intro",
@@ -1137,15 +1155,9 @@ void tooie::init_config() {
                                        &tooie::picture_filters::npc_feather_size_option, &tooie::picture_filters::npc_feather_length_option,
                                        &tooie::picture_filters::npc_feather_density_option, &tooie::picture_filters::npc_feather_noisiness_option,
                                        &tooie::picture_filters::npc_feather_transparency_option }) {
-        recompui::config::set_option_display_before(*option, tooie::picture_filters::colour_grading_option);
-    }
-    recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");
-    // Colour Grading (L, 2026-10-23): its header sits under Colourblind Filter, and its four settings follow it.
-    recompui::config::set_option_display_before(tooie::picture_filters::colour_grading_option, tooie::picture_filters::three_point_option);
-    for (const std::string* option : { &tooie::picture_filters::contrast_option, &tooie::picture_filters::saturation_option,
-                                       &tooie::picture_filters::vignette_option, &tooie::picture_filters::grain_option }) {
         recompui::config::set_option_display_before(*option, tooie::picture_filters::three_point_option);
     }
+    recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");
     // Tessellation (L, 2026-10-23): its switch sits above Tessellated Snow; Tessellated Sand comes after Tessellated
     // Snow's settings, before Parallax.
     recompui::config::set_option_display_before(tooie::picture_filters::tessellation_section_option, tooie::picture_filters::deep_snow_option);
@@ -1191,6 +1203,9 @@ void tooie::init_config() {
             &tooie::fsr::option }) {
         recompui::config::set_option_page(*id, tooie::performance_tab_id);
     }
+    // Brightness & Colour Grading (L, 2026-10-24): the button for its panel is on top of the Display tab.
+    recompui::config::set_option_page(tooie::picture_filters::brightness_pattern_option, tooie::performance_tab_id);
+    recompui::config::set_option_display_before(tooie::picture_filters::brightness_pattern_option, recompui::config::graphics::options::res_option);
 
     recompui::config::create_controls_tab();
     {
@@ -1288,6 +1303,15 @@ void tooie::init_config() {
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             show_cheats_tab();
         });
+    wip.add_bool_option(
+        tooie::work_in_progress_tab_option,
+        "WIP Tab",
+        "Shows the WIP tab: features still being worked on. Turn it off to hide it; what is set there stays as it is. A dev.txt file next to the game's exe shows it whatever this says.",
+        false);
+    wip.add_option_change_callback(tooie::work_in_progress_tab_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            show_work_in_progress_tab();
+        });
     tooie::level_warp::add_option(wip);
     recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
@@ -1305,6 +1329,7 @@ void tooie::init_config() {
     turn_off_cheats_tab_once();
     show_cheats_tab();
     show_achievements_tab();
+    show_work_in_progress_tab();
     tooie::level_warp::refresh();
     move_saved_cutscene_skip();
     turn_on_transform_anywhere_once();

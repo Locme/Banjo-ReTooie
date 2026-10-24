@@ -36,8 +36,6 @@ namespace tooie::picture_filters {
     inline const std::string dither16_option = "retro_16bit_colour";
     inline const std::string crt_option = "retro_crt";
     inline const std::string sharpen_option = "picture_sharpening";
-    // The Colour Grading header (L, 2026-10-23): a row with no switch, whose settings open under it.
-    inline const std::string colour_grading_option = "colour_grading_section";
     inline const std::string contrast_option = "picture_contrast";
     inline const std::string saturation_option = "picture_saturation";
     inline const std::string vignette_option = "picture_vignette";
