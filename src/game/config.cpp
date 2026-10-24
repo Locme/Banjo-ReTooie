@@ -1105,12 +1105,11 @@ void tooie::init_config() {
     // The Water entry (Original, Modern, Stylised) is WIP (L, 2026-10-23): it sits in the WIP tab.
     recompui::config::set_option_page(tooie::picture_filters::water_option, tooie::work_in_progress_tab_id);
     {
-        // The upscalers are WIP (L, 2026-10-23): their own "Upscaler" section in the WIP tab. Still Graphics
-        // options, so they save to graphics.json.
+        // The upscalers are WIP (L, 2026-10-23): in the WIP tab. Still Graphics options, so they save to
+        // graphics.json. The Upscaler drop-down is a collapsible menu over the rest (L, 2026-10-24).
         for (const std::string* id : { &tooie::upscaler::option, &tooie::upscaler::quality_option, &tooie::upscaler::hud_option, &tooie::upscaler::hud_full_option, &tooie::upscaler::reactive_option, &tooie::upscaler::object_motion_option, &tooie::upscaler::sharpness_option }) {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
-        recompui::config::set_option_group(tooie::upscaler::option, "Upscaler");
     }
     tooie::game_frame_rate::add_option(graphics);
     recompui::config::graphics::add_interpolation_options(graphics);
