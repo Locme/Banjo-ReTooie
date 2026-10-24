@@ -189,6 +189,18 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
         "Object Motion",
         "Draws the 3D world's solid things a second time to tell the upscaler how characters and enemies move, which cuts smearing behind them. It costs frame rate; turn it off if the upscaler runs slower than no upscaler. The Reactive Mask needs it.",
         true);
+    // The settings under the Upscaler drop-down form a collapsible menu (L, 2026-10-24): the arrow on the
+    // Upscaler row opens them.
+    for (const std::string* child : { &quality_option, &hud_option, &hud_full_option, &reactive_option, &sharpness_option, &object_motion_option }) {
+        graphics.set_option_parent(*child, option);
+    }
+#if !defined(__ANDROID__)
+    // Grey out the FSR entries now, not only when the API changes: api_changed runs on load
+    // before this option exists, so a saved Vulkan API would otherwise leave them enabled.
+    for (uint32_t mode : { (uint32_t)Mode::Fsr4, (uint32_t)Mode::Fsr4NativeAA, (uint32_t)Mode::Fsr3 }) {
+        graphics.update_enum_option_disabled(option, mode, vulkan_selected);
+    }
+#endif
     for (const std::string* id : { &reactive_option, &sharpness_option, &object_motion_option }) {
         graphics.add_option_change_callback(*id,
             [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
