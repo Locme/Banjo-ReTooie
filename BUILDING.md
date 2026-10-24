@@ -63,8 +63,8 @@ the full path, `"C:\Program Files\Microsoft Visual Studio\2022\<edition>\VC\Tool
 
 `build.bat` puts the finished game in its `Release` subfolder (see the table
 above): the exe, its DLLs, `assets\`, `recompcontrollerdb.txt` and
-`built_from.txt`. Run `BanjoTooieN64Recomp.exe` from there.
-If you build by hand, the program is `build-cmake\BanjoTooieN64Recomp.exe`;
+`built_from.txt`. Run `BanjoReTooie.exe` from there.
+If you build by hand, the program is `build-cmake\BanjoReTooie.exe`;
 run it from a folder that holds `assets\` and `recompcontrollerdb.txt` (copy
 them from the repository, or run from a `Release` subfolder after `build.bat`).
 

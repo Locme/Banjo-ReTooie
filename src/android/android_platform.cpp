@@ -101,7 +101,7 @@ bool tooie::android::install_picked_rom(std::u8string game_id) {
         return true;
     }
     std::printf("[android] ROM refused: %s\n", rom_error_text(result));
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Banjo-Tooie", rom_error_text(result), nullptr);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Banjo Re-Tooie", rom_error_text(result), nullptr);
     return false;
 }
 

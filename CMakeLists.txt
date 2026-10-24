@@ -277,6 +277,8 @@ if (ANDROID)
     set_target_properties(BanjoTooieN64Recomp PROPERTIES OUTPUT_NAME main)
 else()
     add_executable(BanjoTooieN64Recomp)
+    # The game is called Banjo Re-Tooie (L, 2026-10-24); the target keeps its old name for the scripts that build it.
+    set_target_properties(BanjoTooieN64Recomp PROPERTIES OUTPUT_NAME BanjoReTooie)
 endif()
 
 set (SOURCES

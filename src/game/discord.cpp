@@ -78,7 +78,7 @@ namespace {
             }
         }
         if (name == nullptr) {
-            details = "Banjo-Tooie";
+            details = "Banjo Re-Tooie";
             state.clear();
             return;
         }

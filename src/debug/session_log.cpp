@@ -146,7 +146,7 @@ void tooie::session_log::start(const std::string& version) {
 #else
         ", debug";
 #endif
-    std::printf("Banjo-Tooie N64 Recomp %s\n", build_line.c_str());
+    std::printf("Banjo Re-Tooie %s\n", build_line.c_str());
     tooie::set_crash_context("build: " + build_line + "\n");
     // Detached: it only reads settings and prints, so it can die with the process.
     std::thread(watch).detach();

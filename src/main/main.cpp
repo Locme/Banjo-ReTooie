@@ -506,7 +506,7 @@ std::vector<recomp::GameEntry> supported_games = {
     {
         .rom_hash = 0x00F70DE5F2D70EA2ULL,
         .internal_name = "BANJO TOOIE",
-        .display_name = "Banjo-Tooie",
+        .display_name = "Banjo Re-Tooie",
         .game_id = u8"bt.n64.us.1.0",
         .mod_game_id = "bt",
         .save_type = recomp::SaveType::Eep16k,
