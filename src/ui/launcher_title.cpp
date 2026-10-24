@@ -91,8 +91,11 @@ namespace {
     void lay_out(float window_width, float window_height) {
         float art_scale = std::max(window_height / art_height, window_width / (2.0f * bleed_half_width));
         float center_x = window_width * 0.5f + (title_art_x - art_width * 0.5f) * art_scale;
-        float center_y = window_height * 0.5f + (title_art_y - art_height * 0.5f) * art_scale;
-        float title_scale = title_art_width * art_scale / title_box_width;
+        // Sized by the window's height, so on very wide windows (32:9), where the art is cropped top and
+        // bottom, the title doesn't grow with it, and kept below the window's top edge.
+        float title_scale = title_art_width * (window_height / art_height) / title_box_width;
+        float min_center_y = 0.03f * window_height + title_box_middle * title_scale;
+        float center_y = std::max(window_height * 0.5f + (title_art_y - art_height * 0.5f) * art_scale, min_center_y);
         for (TitleLetter& l : title_letters) {
             l.left = center_x + l.x * title_scale;
             l.top = center_y + (l.y - title_box_middle) * title_scale;
