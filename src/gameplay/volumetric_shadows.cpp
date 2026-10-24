@@ -12,7 +12,7 @@
 
 namespace RT64 {
     // rt64-ext/src/render/rt64_volumetric_shadows.h.
-    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount);
+    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount, uint32_t view);
 }
 
 namespace {
@@ -73,7 +73,17 @@ void tooie::volumetric_shadows::add_options(recomp::config::Config& graphics) {
         "Volumetric Shadows Distance",
         "How far round the camera the sun's shafts have shadows in them, in the game's units (Banjo is about 150 tall). Past it the haze is lit all through. Further spreads the same detail wider.",
         1500, 8000, 250, 0, false, 4000);
-    for (const std::string* id : { &sun_option, &lamps_option, &lamp_count_option, &haze_option, &quality_option, &distance_option }) {
+    graphics.add_enum_option(
+        view_option,
+        "Volumetric Shadows View",
+        "For testing. Light Only shows just the light in the haze over black, so the shafts and the shadows through them are easy to see. Light And Map adds the sun's map in the top left corner: what is nearest the sun white, the ground grey, nothing black.",
+        {
+            {View::Normal, "Normal", "Normal"},
+            {View::LightOnly, "LightOnly", "Light Only"},
+            {View::LightAndMap, "LightAndMap", "Light And Map"},
+        },
+        View::Normal);
+    for (const std::string* id : { &sun_option, &lamps_option, &lamp_count_option, &haze_option, &quality_option, &distance_option, &view_option }) {
         graphics.add_option_change_callback(*id,
             [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
                 if (context == recomp::config::OptionChangeContext::Temporary) {
@@ -102,7 +112,7 @@ void tooie::volumetric_shadows::tick() {
     const uint32_t count = uint32_t(std::clamp(number(lamp_count_option, 2.0f), 1.0f, 2.0f));
     sun_reach = (sun > 0.0f) ? distance : 0.0f;
     lamps = lamp > 0.0f;
-    RT64::SetVolumetricShadows(sun, haze, quality, distance, lamp, count);
+    RT64::SetVolumetricShadows(sun, haze, quality, distance, lamp, count, choice(view_option, 0));
 }
 
 float tooie::volumetric_shadows::sun_distance() {

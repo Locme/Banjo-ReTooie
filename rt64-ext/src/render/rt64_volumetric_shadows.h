@@ -30,9 +30,11 @@ namespace RT64 {
         // The lamps' glow (0 off, 1 strongest), and how many of the nearest lamps have it (1 or 2).
         float lamps = 0.0f;
         uint32_t lampCount = 2;
+        // 0 the picture, 1 only the light in the haze (over black), 2 that with the sun's map in the top left corner.
+        uint32_t view = 0;
     };
     // Set by the game each frame (src/gameplay/volumetric_shadows.cpp declares this itself, so it takes plain values).
-    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount);
+    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount, uint32_t view);
     VolumetricShadowSettings GetVolumetricShadows();
     bool VolumetricShadowsOn();
 
