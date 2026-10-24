@@ -105,7 +105,7 @@ namespace {
         { "launcher/cloud.svg", 0, 40, 520, 208, Motion::Cloud, 0.15f, 1.0f },
         { "launcher/cloud.svg", 0, 230, 340, 136, Motion::Cloud, 0.55f, 0.7f },
         { "launcher/cloud.svg", 0, -60, 420, 168, Motion::Cloud, 0.85f, 0.85f },
-        { "launcher/slide_right.svg", 516, 347, 3986, 975, Motion::FromRight },
+        { "launcher/slide_right.svg", 516, 159, 3986, 1163, Motion::FromRight },
         { "launcher/path.svg", -2, 1031, 1945, 931, Motion::Path },
         { "launcher/head.svg", 1128, -276, 844, 2632, Motion::Head },
         { "launcher/ladder.svg", 1498, 280, 98, 768, Motion::Ladder },

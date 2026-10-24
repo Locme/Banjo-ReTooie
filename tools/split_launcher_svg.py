@@ -38,23 +38,24 @@ bird = list(range(2, 10)) + [30]
 ledge = [0, 1] + list(range(10, 30))
 ledge_floor = '<polygon fill="#63522b" points="1723.72,1690 2777.72,1700 2777.72,3000 1723.72,3000"/>'
 # Side extensions, so a 32:9 window still shows the whole scene with the artboard's full height
-# (L, 2026-10-24): the sky, hill, cliffs and ledge carry on flat past L's art to x -2200 and 4500.
+# (L, 2026-10-24): the sky, hill, cliffs and ledge carry on past L's art to x -2200 and 4500. On the
+# right each edge keeps the slope of L's last segment, so there is no kink where they meet.
 sky_ext = '<rect fill="#44aebf" x="-2200" y="-1000" width="6700" height="3400"/>'
 hill_ext = ('<polygon fill="#78c044" points="-658.98,1120.67 -2200,1160 -2200,2400 -826.98,2400 -826.98,2220.67"/>'
-            '<polygon fill="#78c044" points="3181.35,1117.56 4500,1130 4500,2400 3213.02,2400 3213.02,2124.67"/>')
+            '<polygon fill="#78c044" points="3181.35,1117.56 4500,1257 4500,2400 3213.02,2400 3213.02,2124.67"/>')
 # The grass on the cliff's top runs on to the right edge too (L, 2026-10-24).
-right_cliff_ext = ('<polygon fill="#7f5d2d" points="3208.35,400.61 4500,380 4500,1320 3171.02,1296.61"/>'
-                   '<polygon fill="#78c044" points="2760,365 4500,352 4500,505 2832.35,509.93 2805.68,380.6"/>')
+right_cliff_ext = ('<polygon fill="#7f5d2d" points="3208.35,400.61 4500,345 4500,1320 3171.02,1296.61"/>'
+                   '<polygon fill="#78c044" points="2660.3,349.4 4500,161 4500,567.3 2832.35,509.93 2660.3,504"/>')
 back_left_ext = '<polygon fill="#755325" points="-839.99,821.56 -2200,1035 -2200,1260 -679.99,1186.89"/>'
-ledge_ext = ('<polygon fill="#67a03a" points="2852.73,1290.66 4500,1300 4500,1640 2777.73,1611.99"/>'
-             '<polygon fill="#63522b" points="2777.73,1611.99 4500,1640 4500,3000 2777.72,3000"/>')
+ledge_ext = ('<polygon fill="#67a03a" points="2852.73,1290.66 4500,1354 4500,1772.5 2777.73,1611.99"/>'
+             '<polygon fill="#63522b" points="2777.73,1611.99 4500,1772.5 4500,3000 2770,3000 2772.4,1609.7"/>')
 # A stroke of the same colour closes the hairline seam where an extension meets L's art.
 def seal(markup):
     return re.sub(r'fill="(#[0-9a-f]+)"', r'fill="\1" stroke="\1" stroke-width="4" stroke-linejoin="round"', markup)
 hill_ext, right_cliff_ext, back_left_ext, ledge_ext = map(seal, (hill_ext, right_cliff_ext, back_left_ext, ledge_ext))
 layers = {  # bounding boxes measured in Chromium (getBBox)
     'background': ([sky_ext, 'Background_2', hill_ext], (-2200, -1000, 4500, 2400)),
-    'slide_right': (['Slide_from_the_right', right_cliff_ext], (518.24, 349.38, 4500, 1320)),
+    'slide_right': (['Slide_from_the_right', right_cliff_ext], (518.24, 161, 4500, 1320)),
     # Group "1": the path and dirt patches in front.
     'path': (['_x31_'], (0.92, 1033.06, 1940.68, 1959.98)),
     # Group "2", the head (1267.77, -272.75, 1969.25, 818.31), turns about the foot of its ladder,
