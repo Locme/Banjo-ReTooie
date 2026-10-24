@@ -42,7 +42,9 @@ ledge_floor = '<polygon fill="#63522b" points="1723.72,1690 2777.72,1700 2777.72
 sky_ext = '<rect fill="#44aebf" x="-2200" y="-1000" width="6700" height="3400"/>'
 hill_ext = ('<polygon fill="#78c044" points="-658.98,1120.67 -2200,1160 -2200,2400 -826.98,2400 -826.98,2220.67"/>'
             '<polygon fill="#78c044" points="3181.35,1117.56 4500,1130 4500,2400 3213.02,2400 3213.02,2124.67"/>')
-right_cliff_ext = '<polygon fill="#7f5d2d" points="3208.35,400.61 4500,380 4500,1320 3171.02,1296.61"/>'
+# The grass on the cliff's top runs on to the right edge too (L, 2026-10-24).
+right_cliff_ext = ('<polygon fill="#7f5d2d" points="3208.35,400.61 4500,380 4500,1320 3171.02,1296.61"/>'
+                   '<polygon fill="#78c044" points="2760,365 4500,352 4500,505 2832.35,509.93 2805.68,380.6"/>')
 back_left_ext = '<polygon fill="#755325" points="-839.99,821.56 -2200,1035 -2200,1260 -679.99,1186.89"/>'
 ledge_ext = ('<polygon fill="#67a03a" points="2852.73,1290.66 4500,1300 4500,1640 2777.73,1611.99"/>'
              '<polygon fill="#63522b" points="2777.73,1611.99 4500,1640 4500,3000 2777.72,3000"/>')
