@@ -7,7 +7,7 @@ running it on [N64ModernRuntime](https://github.com/N64Recomp/N64ModernRuntime)
 and rendering it with [RT64](https://github.com/rt64/rt64). There is no
 emulator at runtime.
 
-> ### Made by Locme, with code written by AI
+> ### Made by Locme with the assistance of AI
 >
 > Locme leads this port: they choose and design every feature, play-test each
 > build, and drew the game's icon and the start menu art. The code is written
