@@ -98,6 +98,18 @@ namespace {
         }
     }
 
+    void show_work_in_progress_tab() {
+        bool on = true;
+        try {
+            on = std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::work_in_progress_tab_option));
+        } catch (...) {
+        }
+        try {
+            recompui::config::set_tab_visible(tooie::work_in_progress_tab_id, on);
+        } catch (...) {
+        }
+    }
+
     void show_achievements_tab() {
         bool on = false;
         try {
@@ -1293,6 +1305,16 @@ void tooie::init_config() {
             show_cheats_tab();
         });
     tooie::level_warp::add_option(wip);
+    // L, 2026-10-24: on by default, so the WIP tab shows as before until it is turned off.
+    wip.add_bool_option(
+        tooie::work_in_progress_tab_option,
+        "WIP Tab",
+        "Shows the WIP tab, with features that are still being worked on. Turn it off to hide it; its settings keep working as they are set. A dev.txt file next to the game's exe shows it whatever this says.",
+        true);
+    wip.add_option_change_callback(tooie::work_in_progress_tab_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            show_work_in_progress_tab();
+        });
     recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
     move_saved_hud_placement();
@@ -1309,6 +1331,7 @@ void tooie::init_config() {
     turn_off_cheats_tab_once();
     show_cheats_tab();
     show_achievements_tab();
+    show_work_in_progress_tab();
     tooie::level_warp::refresh();
     move_saved_cutscene_skip();
     turn_on_transform_anywhere_once();

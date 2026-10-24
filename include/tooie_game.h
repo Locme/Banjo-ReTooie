@@ -97,6 +97,7 @@ namespace tooie {
     // DEV > Additional Tabs (L, 2026-10-16): the toggles that show the Achievements and Cheats tabs.
     // The Warp tab's toggle is there too (src/game/level_warp.cpp). Cheats tab was in General before.
     inline const std::string achievements_tab_option = "achievements_tab";
+    inline const std::string work_in_progress_tab_option = "work_in_progress_tab";
     inline const std::string cheats_tab_option = "cheats_tab";
     // DEV > Hide Unnecessary Settings Entry (src/game/hide_vanilla_widescreen.cpp).
     inline const std::string hide_vanilla_widescreen_option = "hide_vanilla_widescreen";
