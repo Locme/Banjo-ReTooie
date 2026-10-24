@@ -382,7 +382,7 @@ index 45d55a7..b7c867d 100644
              profiles::get_input_profile_for_player(BindingState.player_index, BindingState.device),
              BindingState.game_input,
 diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
-index c76a1dc..5df388a 100644
+index c76a1dc..a6dc7fa 100644
 --- a/recompinput/src/input_events.cpp
 +++ b/recompinput/src/input_events.cpp
 @@ -1,10 +1,14 @@
@@ -545,7 +545,7 @@ index c76a1dc..5df388a 100644
          queue_if_enabled(event);
          break;
      case SDL_EventType::SDL_DROPBEGIN:
-@@ -246,26 +343,84 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -246,26 +343,86 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
      return false;
  }
  
@@ -586,7 +586,9 @@ index c76a1dc..5df388a 100644
 +        crosshair = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
 +    }
 +    SDL_Cursor *wanted = (picking && crosshair != nullptr) ? crosshair : (custom != nullptr ? custom : SDL_GetDefaultCursor());
-+    if (picking != was_picking || wanted != shown_cursor) {
++    // A picture of our own is put back when something else (the menus) has put up another since.
++    const bool replaced = (picking || custom != nullptr) && SDL_GetCursor() != wanted;
++    if (picking != was_picking || wanted != shown_cursor || replaced) {
 +        SDL_SetCursor(wanted);
 +        shown_cursor = wanted;
 +        was_picking = picking;
@@ -1214,10 +1216,38 @@ index eb8833e..acd435b 100644
          void add_default_options() {
              add_start_game_or_load_rom_option();
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..676066d 100644
+index 277a421..cabadda 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
-@@ -244,7 +244,8 @@ public:
+@@ -202,6 +202,18 @@ struct ContextDetails {
+     Rml::ElementDocument* document;
+ };
+ 
++// Banjo-Tooie: while the game gives the cursor its own picture (the hand, recompinput::set_custom_cursor),
++// the menus' cursor changes (an arrow, a pointer over buttons) would put the system's back; they are skipped.
++class TooieSystemInterface : public SystemInterface_SDL {
++public:
++    void SetMouseCursor(const Rml::String& cursor_name) override {
++        if (recompinput::custom_cursor() != nullptr) {
++            return;
++        }
++        SystemInterface_SDL::SetMouseCursor(cursor_name);
++    }
++};
++
+ class UIState {
+     bool mouse_is_active_changed = false;
+     std::vector<ContextDetails> shown_contexts{};
+@@ -224,7 +236,7 @@ public:
+ 
+     UIState(SDL_Window* window, plume::RenderInterface* interface, plume::RenderDevice* device) {
+ 
+-        system_interface = std::make_unique<SystemInterface_SDL>();
++        system_interface = std::make_unique<TooieSystemInterface>();
+         system_interface->SetWindow(window);
+         render_interface.init(interface, device);
+ 
+@@ -244,7 +256,8 @@ public:
          
          context = Rml::CreateContext("main", Rml::Vector2i(width, height));
  
@@ -1227,7 +1257,7 @@ index 277a421..676066d 100644
          {
              struct FontFace {
                  const char* filename;
-@@ -311,6 +312,14 @@ public:
+@@ -311,6 +324,14 @@ public:
              recompui::set_cursor_visible(mouse_is_active);
          }
  
@@ -1242,7 +1272,7 @@ index 277a421..676066d 100644
          Rml::ElementDocument* current_document = top_mouse_document();
          if (current_document == nullptr) {
              return;
-@@ -346,6 +355,13 @@ public:
+@@ -346,6 +367,13 @@ public:
                  // Check if not focused or focused element is not focusable.
                  if (focused_el == nullptr || focused_el->is_focusable() != recompui::Element::CanFocus::Yes) {
                      auto recompui_doc = top_context.get_root_element();
@@ -1256,7 +1286,7 @@ index 277a421..676066d 100644
                      auto last_hovered = recompui_doc->get_last_focusable_hovered_element();
                      if (last_hovered && last_hovered->is_focusable() == recompui::Element::CanFocus::Yes) {
                          last_hovered->focus();
-@@ -493,6 +509,7 @@ public:
+@@ -493,6 +521,7 @@ public:
  };
  
  std::unique_ptr<UIState> ui_state;
@@ -1264,7 +1294,7 @@ index 277a421..676066d 100644
  std::recursive_mutex ui_state_mutex{};
  
  // TODO make this not be global
-@@ -570,6 +587,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
+@@ -570,6 +599,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
      return identifier;
  }
  
@@ -1305,7 +1335,7 @@ index 277a421..676066d 100644
  bool check_menu_button_pressed(int profile_index, recompinput::GameInput input, int32_t event_button) {
      auto menuBinding0 = recompinput::profiles::get_input_binding(profile_index, input, 0);
      auto menuBinding1 = recompinput::profiles::get_input_binding(profile_index, input, 1);
-@@ -696,6 +747,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -696,6 +759,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
          if (!all_input_is_disabled) {
              bool is_mouse_input = false;
@@ -1316,7 +1346,7 @@ index 277a421..676066d 100644
              // Implement some additional behavior for specific events on top of what RmlUi normally does with them.
              switch (cur_event.type) {
              case SDL_EventType::SDL_MOUSEMOTION: {
-@@ -705,6 +760,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -705,6 +772,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                      float xD = cur_event.motion.x - last_mouse_pos[0];
                      float yD = cur_event.motion.y - last_mouse_pos[1];
                      if (sqrt(xD * xD + yD * yD) < 100) {
@@ -1324,7 +1354,7 @@ index 277a421..676066d 100644
                          break;
                      }
                  }
-@@ -713,6 +769,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -713,6 +781,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                  // if controller is the primary input, don't use mouse movement to allow cursor to reactivate
                  if (recompui::get_cont_active()) {
@@ -1332,7 +1362,7 @@ index 277a421..676066d 100644
                      break;
                  }
              }
-@@ -731,7 +788,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -731,7 +800,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              case SDL_EventType::SDL_CONTROLLERBUTTONDOWN: {
                  int sdl_key = cont_button_to_key(cur_event.cbutton);
                  if (context_capturing_input && sdl_key) {
@@ -1341,7 +1371,7 @@ index 277a421..676066d 100644
                      latest_controller_key_pressed = sdl_key;
                      next_repeat_time = clock::now() + start_repeat_delay;
                  }
-@@ -747,6 +804,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -747,6 +816,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                      if (cur_event.key.keysym.scancode == SDL_Scancode::SDL_SCANCODE_F8) {
                          if (recompui::config::general::get_debug_mode_enabled()) {
@@ -1351,7 +1381,7 @@ index 277a421..676066d 100644
                              Rml::Debugger::SetVisible(!Rml::Debugger::IsVisible());
                          }
                      }
-@@ -776,7 +836,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -776,7 +848,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                          non_mouse_interacted = true;
                          int sdl_key = cont_axis_to_key(cur_event.caxis, axis_value);
                          if (context_capturing_input && sdl_key) {
@@ -1360,7 +1390,7 @@ index 277a421..676066d 100644
                              latest_controller_key_pressed = sdl_key;
                              next_repeat_time = clock::now() + start_repeat_delay;
                          }
-@@ -796,14 +856,30 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -796,14 +868,30 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
  
              // Send the event to RmlUi if this type of event is being captured.
@@ -1393,7 +1423,7 @@ index 277a421..676066d 100644
                  }
              }
          }
-@@ -837,7 +913,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -837,7 +925,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
              }
  
@@ -1402,7 +1432,7 @@ index 277a421..676066d 100644
                  recompui::config::open();
              }
          }
-@@ -847,7 +923,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -847,7 +935,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      if (latest_controller_key_pressed != SDLK_UNKNOWN) {
          clock::time_point now = clock::now();
          if (now >= next_repeat_time) {
@@ -1411,7 +1441,7 @@ index 277a421..676066d 100644
              next_repeat_time += repeat_rate;
          }
      }
-@@ -893,7 +969,10 @@ void deinit_hook() {
+@@ -893,7 +981,10 @@ void deinit_hook() {
      recompui::destroy_all_contexts();
  
      std::lock_guard lock {ui_state_mutex};

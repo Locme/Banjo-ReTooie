@@ -138,7 +138,7 @@ namespace {
         std::fflush(stdout);
     }
 
-    // The 3D hand's cursor for now: the idle loops, a left click plays the pick animation's first part once.
+    // The 3D hand's cursor for now: the idle loops, a left click plays the grab animation once.
     SDL_Cursor* model_cursor() {
         using clock = std::chrono::steady_clock;
         static const clock::time_point began = clock::now();
@@ -172,7 +172,7 @@ void tooie::hand_cursor::add_option(recomp::config::Config& graphics) {
         "Shows the cursor as the save select screen's pointing hand wherever it appears over the game: the Start menu, the ESC menu and the other menus. Off uses the system's arrow. Pick mode keeps its crosshair.",
         true);
     graphics.add_bool_option(model_option, "3D Hand Cursor",
-        "With Hand Cursor on, the cursor is the save select screen's own 3D hand, drawn from the game's model with its idle animation, and a left click plays the game's pick animation (the hand turns and makes a fist). Off shows the flat glove.",
+        "With Hand Cursor on, the cursor is the save select screen's own 3D hand, drawn from the game's model with its idle animation, and a left click plays its grab animation (the hand closes into a fist and opens again). Off shows the flat glove.",
         false);
 }
 

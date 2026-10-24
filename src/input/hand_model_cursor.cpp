@@ -4,8 +4,8 @@
 //
 // The hand is actor 0x4AB in overlay chgameselect (its actor info at 0x80808038: model 0x0862, animation
 // list at 0x80808020). The list has two animations: 1 is 0x03D0, 1.0 s, the idle the hand plays while it
-// waits; 2 is 0x03D4, 2.6 s, which func_80801714 starts when a file is picked (the hand turns over and makes
-// a fist, then shakes it).
+// waits; 2 is 0x03D4, 2.6 s, which func_80801714 starts when a file is picked (a thumbs up). The ROM has more
+// animations for this hand (0x03CF to 0x03D6, 0x0423, 0x04B4); the click uses 0x03D5.
 //
 // The model (asset kind 0) is skinned in its display list: G_MTX loads (and pushes) the matrix of bone k
 // from segment 5 + 0x40 * k before the vertices that follow it, and G_POPMTX goes back to the parent's. Its
@@ -15,14 +15,20 @@
 // func_800E084C. A bone's matrix is its parent's times a turn (and scale and move) about its pivot.
 //
 // The picture is drawn as the game draws it: vertex colour times the CI4 texture (combiner TEXEL0 * SHADE
-// with PRIM black and ENV white), or vertex colour alone, no lighting. Each frame is drawn 3x larger and
+// with PRIM black and ENV white), or vertex colour alone, no lighting. The sleeve's end is drawn blended by
+// its vertex alpha (the game switches to a blended render mode through segment 3 + 0x20), so it fades out. Each frame is drawn 3x larger and
 // averaged down for smooth edges.
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
+#include <iterator>
+#include <span>
 #include <vector>
+
+#include "librecomp/game.hpp"
 
 #include "tooie_asset_mods.h"
 #include "tooie_hand_cursor.h"
@@ -31,11 +37,14 @@ namespace {
     constexpr uint32_t model_asset = 0x0862;
     constexpr uint32_t idle_asset = 0x03D0;
     constexpr float idle_seconds = 1.0f;
-    constexpr uint32_t click_asset = 0x03D4;
-    constexpr float click_seconds = 2.6f;
-    // The part of the pick animation the cursor plays on a click: the turn and the fist (frames 0-34 of 104).
-    constexpr float click_last_frame = 34.0f;
+    // The click: 0x03D5, made for the same hand (not in the save select's list), a grab that closes into a
+    // fist and opens again (L, 2026-10-24: the pick's thumbs up did not read as a click). Played whole, at the
+    // idle's frame rate.
+    constexpr uint32_t click_asset = 0x03D5;
+    constexpr float click_frames_per_second = 36.0f;
     constexpr int supersample = 3;
+    // The ROM as librecomp stores it in the config folder (the game id in main.cpp plus .z64).
+    constexpr const char* stored_rom_name = "bt.n64.us.1.0.z64";
 
     struct Bytes {
         const std::vector<uint8_t>& b;
@@ -89,12 +98,14 @@ namespace {
     struct Corner {
         Vec3 pos;
         float s, t;
-        float rgb[3];
+        float rgba[4];
     };
 
     struct Tri {
         Corner c[3];
         bool textured;
+        // Drawn blended by its vertex alpha: the end of the sleeve, which fades out as on the save select.
+        bool translucent;
     };
 
     struct Texture {
@@ -271,10 +282,12 @@ namespace {
             const std::array<float, 9>& p = parts[std::clamp(b.id, 0, 255)];
             const auto q = euler_quat(p[0], p[1], p[2]);
             const float x = q[0], y = q[1], z = q[2], w = q[3];
+            // The game's matrices take row vectors (v * M), so for column vectors the turn is the transpose of
+            // the usual quaternion matrix (with the plain one the fingers bent backwards).
             const float R[3][3] = {
-                { 1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w) },
-                { 2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w) },
-                { 2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y) },
+                { 1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w) },
+                { 2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w) },
+                { 2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y) },
             };
             Mat local;
             const float piv[3] = { b.pivot.x, b.pivot.y, b.pivot.z };
@@ -381,6 +394,7 @@ namespace {
         Mat cur;
         std::array<Corner, 64> slots{};
         bool textured = true;
+        bool translucent = false;
         const uint32_t count = r.u32(m.dl);
         for (uint32_t i = 0; i < count; i++) {
             const uint32_t w0 = r.u32(m.dl + 8 + i * 8), w1 = r.u32(m.dl + 12 + i * 8);
@@ -404,6 +418,11 @@ namespace {
                 case 0xFC:  // G_SETCOMBINE: textured when the first cycle starts from TEXEL0
                     textured = ((w0 >> 20) & 0xF) == 1;
                     break;
+                case 0xDE:  // G_DL into segment 3, the game's render modes: +0 opaque, +0x20 blended (the sleeve's end)
+                    if ((w1 >> 24) == 3) {
+                        translucent = (w1 & 0xFFFFFF) != 0;
+                    }
+                    break;
                 case 0x01: {  // G_VTX
                     const uint32_t n = (w0 >> 12) & 0xFF, end = (w0 & 0xFF) >> 1, base = (w1 & 0xFFFFFF) / 16;
                     for (uint32_t v = 0; v < n; v++) {
@@ -413,7 +432,7 @@ namespace {
                         }
                         const Vertex& src = m.verts[base + v];
                         slots[slot] = { cur.apply(src.pos), (float)src.s, (float)src.t,
-                                        { src.rgba[0] / 255.0f, src.rgba[1] / 255.0f, src.rgba[2] / 255.0f } };
+                                        { src.rgba[0] / 255.0f, src.rgba[1] / 255.0f, src.rgba[2] / 255.0f, src.rgba[3] / 255.0f } };
                     }
                     break;
                 }
@@ -423,6 +442,7 @@ namespace {
                     for (int t = 0; t < ((w0 >> 24) == 6 ? 2 : 1); t++) {
                         Tri tri{};
                         tri.textured = textured;
+                        tri.translucent = translucent;
                         for (int c = 0; c < 3; c++) {
                             tri.c[c] = slots[((words[t] >> (16 - 8 * c)) & 0xFF) / 2 % slots.size()];
                         }
@@ -437,7 +457,8 @@ namespace {
 
     // --- Drawing -------------------------------------------------------------------------------------
 
-    // The view: the back of the hand towards the viewer, fingers up and leaning left like an arrow cursor.
+    // The view: the back of the hand towards the viewer, as on the save select (the fingers curl away), fingers
+    // up and leaning left like an arrow cursor.
     Vec3 view(const Vec3& p) {
         constexpr float lean = 25.0f * 3.14159265f / 180.0f;
         // Model +y (the back of the hand) towards the viewer, model -z (the fingers) up the screen.
@@ -454,7 +475,8 @@ namespace {
         std::vector<float> color(n * n * 4, 0.0f);
         std::vector<float> depth(n * n, -1e30f);
         const float s_scale = m.tex.w > 0 ? 1.0f / 64.0f : 0.0f;  // S10.5 coordinates at a G_TEXTURE scale of 0.5
-        for (const Tri& t : tris) {
+        // Opaque triangles write depth; blended ones (drawn after, far to near) test it and mix by their alpha.
+        auto raster = [&](const Tri& t) {
             float x[3], y[3], z[3];
             for (int c = 0; c < 3; c++) {
                 const Vec3 v = view(t.c[c].pos);
@@ -464,7 +486,7 @@ namespace {
             }
             const float den = (y[1] - y[2]) * (x[0] - x[2]) + (x[2] - x[1]) * (y[0] - y[2]);
             if (std::fabs(den) < 1e-6f) {
-                continue;
+                return;
             }
             const int x0 = std::max(0, (int)std::floor(std::min({ x[0], x[1], x[2] })));
             const int x1 = std::min(n - 1, (int)std::ceil(std::max({ x[0], x[1], x[2] })));
@@ -484,10 +506,9 @@ namespace {
                     if (pz <= d) {
                         continue;
                     }
-                    d = pz;
-                    float rgb[3];
-                    for (int k = 0; k < 3; k++) {
-                        rgb[k] = l0 * t.c[0].rgb[k] + l1 * t.c[1].rgb[k] + l2 * t.c[2].rgb[k];
+                    float rgba[4];
+                    for (int k = 0; k < 4; k++) {
+                        rgba[k] = l0 * t.c[0].rgba[k] + l1 * t.c[1].rgba[k] + l2 * t.c[2].rgba[k];
                     }
                     if (t.textured && m.tex.w > 0) {
                         const float s = (l0 * t.c[0].s + l1 * t.c[1].s + l2 * t.c[2].s) * s_scale;
@@ -495,17 +516,40 @@ namespace {
                         const int tx = std::clamp((int)std::floor(s), 0, m.tex.w - 1);
                         const int ty = std::clamp((int)std::floor(tt), 0, m.tex.h - 1);
                         const auto& texel = m.tex.texels[ty * m.tex.w + tx];
-                        for (int k = 0; k < 3; k++) {
-                            rgb[k] *= texel[k] / 255.0f;
+                        for (int k = 0; k < 4; k++) {
+                            rgba[k] *= texel[k] / 255.0f;
                         }
                     }
+                    // Kept premultiplied by alpha.
                     float* c = &color[(py * n + px) * 4];
-                    c[0] = rgb[0];
-                    c[1] = rgb[1];
-                    c[2] = rgb[2];
-                    c[3] = 1.0f;
+                    if (t.translucent) {
+                        const float a = std::clamp(rgba[3], 0.0f, 1.0f);
+                        for (int k = 0; k < 3; k++) {
+                            c[k] = rgba[k] * a + c[k] * (1.0f - a);
+                        }
+                        c[3] = a + c[3] * (1.0f - a);
+                    } else {
+                        d = pz;
+                        c[0] = rgba[0];
+                        c[1] = rgba[1];
+                        c[2] = rgba[2];
+                        c[3] = 1.0f;
+                    }
                 }
             }
+        };
+        std::vector<const Tri*> blended;
+        for (const Tri& t : tris) {
+            if (t.translucent) {
+                blended.push_back(&t);
+            } else {
+                raster(t);
+            }
+        }
+        auto depth_of = [](const Tri* t) { return view(t->c[0].pos).z + view(t->c[1].pos).z + view(t->c[2].pos).z; };
+        std::sort(blended.begin(), blended.end(), [&](const Tri* a, const Tri* b) { return depth_of(a) < depth_of(b); });
+        for (const Tri* t : blended) {
+            raster(*t);
         }
         out.assign(size * size * 4, 0);
         const float area = (float)(supersample * supersample);
@@ -532,21 +576,29 @@ namespace {
 }
 
 bool tooie::hand_cursor::make_model_frames(int size, ModelFrames& frames) {
+    // Before the game starts (the start menu) the ROM isn't loaded yet: the stored copy is read instead.
+    std::vector<uint8_t> stored;
+    std::span<const uint8_t> rom = recomp::get_rom();
+    if (rom.empty()) {
+        std::ifstream in(recomp::get_config_path() / stored_rom_name, std::ios::binary);
+        stored.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        rom = stored;
+    }
     Model model;
     Anim idle, click;
-    if (!parse_model(tooie::asset_mods::rom_asset_bytes(model_asset), model) ||
-        !parse_anim(tooie::asset_mods::rom_asset_bytes(idle_asset), idle) ||
-        !parse_anim(tooie::asset_mods::rom_asset_bytes(click_asset), click)) {
+    if (!parse_model(tooie::asset_mods::rom_asset_bytes(rom, model_asset), model) ||
+        !parse_anim(tooie::asset_mods::rom_asset_bytes(rom, idle_asset), idle) ||
+        !parse_anim(tooie::asset_mods::rom_asset_bytes(rom, click_asset), click)) {
         return false;
     }
     decode_texture(model);
 
-    // One frame per animation frame: the idle loops over its whole length, the click plays its first part.
+    // One frame per animation frame: the idle loops over its whole length, the click plays once.
     std::vector<std::vector<Tri>> idle_tris, click_tris;
     for (int f = idle.start; f < idle.end; f++) {
         idle_tris.push_back(skin(model, pose(model, idle, (float)f, true)));
     }
-    for (int f = click.start; f <= (int)click_last_frame && f <= click.end; f++) {
+    for (int f = click.start; f <= click.end; f++) {
         click_tris.push_back(skin(model, pose(model, click, (float)f, false)));
     }
     if (idle_tris.empty() || click_tris.empty()) {
@@ -602,6 +654,6 @@ bool tooie::hand_cursor::make_model_frames(int size, ModelFrames& frames) {
         draw(model, tris, fr, size, frames.click.back());
     }
     frames.idle_fps = (float)(idle.end - idle.start) / idle_seconds;
-    frames.click_fps = (float)(click.end - click.start) / click_seconds;
+    frames.click_fps = click_frames_per_second;
     return true;
 }
