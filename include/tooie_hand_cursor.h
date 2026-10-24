@@ -10,14 +10,13 @@ namespace recomp::config {
 }
 
 // The cursor is the save select's pointing hand wherever it shows over the game window (the Start menu,
-// the ESC menu, the other menus) (L, 2026-10-24; src/input/hand_cursor.cpp). On by default.
+// the ESC menu, the other menus) (L, 2026-10-24; src/input/hand_cursor.cpp), always.
 namespace tooie::hand_cursor {
-    inline const std::string option = "hand_cursor";
-    // WIP > 3D Hand Cursor: the game's own hand model and its animations as the cursor, off by default
-    // (src/input/hand_model_cursor.cpp).
+    // DEV > Stability And Features > 3D Hand Cursor: the game's own hand model and its animations as the
+    // cursor, on by default (src/input/hand_model_cursor.cpp); off shows the flat glove.
     inline const std::string model_option = "hand_cursor_3d";
 
-    void add_option(recomp::config::Config& graphics);
+    void add_option(recomp::config::Config& dev);
 
     // Each pass of the window's event loop (main thread): puts the hand or the system cursor in place.
     void update();

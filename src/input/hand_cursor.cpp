@@ -1,7 +1,7 @@
-// The cursor as the save select's pointing hand (L, 2026-10-24): WIP > Hand Cursor, on by default.
+// The cursor as the save select's pointing hand (L, 2026-10-24), always: there is no switch for it.
 //
 // By default a drawn white glove pointing up: a 32x32 picture built into the program and handed to SDL as
-// a colour cursor. WIP > 3D Hand Cursor (off by default) uses the save select's own 3D hand instead, drawn
+// a colour cursor. DEV > 3D Hand Cursor (under Stability And Features, on by default) uses the save select's own 3D hand instead, drawn
 // from the ROM with its animations (hand_model_cursor.cpp), one cursor per animation frame. The window's event loop
 // (RecompFrontend input_events.cpp update_cursor_lock) shows it whenever the cursor is visible, and keeps the
 // crosshair for pick mode and the hidden cursor while the game's own menus draw the real hand.
@@ -78,7 +78,7 @@ namespace {
 
     bool option_value(const std::string& id, bool fallback) {
         try {
-            return std::get<bool>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(id));
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(id));
         } catch (...) {
             return fallback;
         }
@@ -167,13 +167,10 @@ namespace {
     }
 }
 
-void tooie::hand_cursor::add_option(recomp::config::Config& graphics) {
-    graphics.add_bool_option(option, "Hand Cursor",
-        "Shows the cursor as the save select screen's pointing hand wherever it appears over the game: the Start menu, the ESC menu and the other menus. Off uses the system's arrow. Pick mode keeps its crosshair.",
+void tooie::hand_cursor::add_option(recomp::config::Config& dev) {
+    dev.add_bool_option(model_option, "3D Hand Cursor",
+        "The cursor is the save select screen's own 3D hand, drawn from the game's model with its idle animation, and a left click plays its grab animation (the hand closes into a fist and opens again). Off shows the flat glove.",
         true);
-    graphics.add_bool_option(model_option, "3D Hand Cursor",
-        "With Hand Cursor on, the cursor is the save select screen's own 3D hand, drawn from the game's model with its idle animation, and a left click plays its grab animation (the hand closes into a fist and opens again). Off shows the flat glove.",
-        false);
 }
 
 void tooie::hand_cursor::update() {
@@ -187,24 +184,22 @@ void tooie::hand_cursor::update() {
         recompinput::set_cursor_shown_by_key(!recompinput::cursor_shown_by_key());
     }
     toggle_was_down = toggle_down;
-    // The options are read every 50 ms (they take the config's lock); the 3D hand's frame every pass.
-    static bool on = true;
-    static bool model_on = false;
+    // The option is read every 50 ms (it takes the config's lock); the 3D hand's frame every pass.
+    static bool model_on = true;
     static auto next_read = std::chrono::steady_clock::time_point{};
     const auto now = std::chrono::steady_clock::now();
     if (now >= next_read) {
         next_read = now + std::chrono::milliseconds(50);
-        on = option_value(option, true);
-        model_on = option_value(model_option, false);
+        model_on = option_value(model_option, true);
     }
     SDL_Cursor* cursor = nullptr;
-    if (on && model_on) {
+    if (model_on) {
         if (!model_made) {
             make_model();
         }
         cursor = model_cursor();
     }
-    if (on && cursor == nullptr) {
+    if (cursor == nullptr) {
         cursor = hand;
     }
     recompinput::set_custom_cursor(cursor);

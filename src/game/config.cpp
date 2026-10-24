@@ -1117,11 +1117,6 @@ void tooie::init_config() {
     tooie::low_latency::add_option(graphics);
     tooie::frame_readback::add_option(graphics);
     tooie::frame_overlay::add_option(graphics);
-    // L, 2026-10-24: the cursor is the save select's hand, on by default; it sits in the WIP tab (a Graphics
-    // option shown there, so it saves to graphics.json).
-    tooie::hand_cursor::add_option(graphics);
-    recompui::config::set_option_page(tooie::hand_cursor::option, tooie::work_in_progress_tab_id);
-    recompui::config::set_option_page(tooie::hand_cursor::model_option, tooie::work_in_progress_tab_id);
 
     // Section headings in the Graphics tab. The options of a group sit next to each other above, and a
     // heading hides with its option.
@@ -1257,12 +1252,14 @@ void tooie::init_config() {
         "Hides the settings entries this port makes unnecessary: Wide-screen Mode and Screen Alignment in the global settings on the save select screen (the TV) and in the Start menu's Settings page, leaving Speaker Mode, and while it is on keeps the game's own widescreen mode off and the picture centred: the game's widescreen squashes the picture for a stretched TV, and this port's widescreen is Aspect Ratio in the Graphics tab. The menu change shows the next time it opens.",
         true);
     tooie::game_frame_rate::add_dev_options(wip);
-    // L, 2026-10-23: the last entry under Stability And Features, on by default.
+    // L, 2026-10-23: under Stability And Features, on by default.
     wip.add_bool_option(
         tooie::hide_pause_settings_option,
         "Hide Custom Settings In Start Menu",
         "Leaves out the SETTINGS entry this port adds to the Start menu (the pause menu). Speaker Mode stays in the global settings on the save select screen (the TV). The change shows the next time the Start menu opens.",
         true);
+    // L, 2026-10-24: under Stability And Features, on by default.
+    tooie::hand_cursor::add_option(wip);
     // Debug options (under the Debug heading): they moved here from Graphics.
     tooie::effect_views::add_option(wip);
     // Picker Save Only Current Active sits under the same Debug heading (L, 2026-10-23).
