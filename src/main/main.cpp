@@ -667,6 +667,7 @@ void reorder_asset_mods(recomp::mods::ModContext& context) {
 bool autostart_game = false;
 
 void on_launcher_init(recompui::LauncherMenu *menu) {
+    tooie::watchdog::startup_mark("start menu built");
     auto game_options_menu = menu->init_game_options_menu(
         supported_games[0].game_id,
         supported_games[0].mod_game_id,
@@ -715,6 +716,7 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
 }
 
 int main(int argc, char** argv) {
+    tooie::watchdog::startup_mark(nullptr);
 #ifdef __ANDROID__
     tooie::android::setup_paths();
 #endif
@@ -885,8 +887,12 @@ int main(int argc, char** argv) {
     // says so instead of staying black. The text stays on the window until the renderer's first frame replaces it.
     recomp::mods::set_before_scan_callback([](bool game_started) {
         static bool at_boot = true;
+        if (at_boot) {
+            tooie::watchdog::startup_mark("mod scan starts (mod zips unpack first)");
+        }
         tooie::unpack_mod_zips(game_started, at_boot);
         if (at_boot) {
+            tooie::watchdog::startup_mark("mod zips unpacked; Loading screen up");
             tooie::boot_screen::show("Loading", "");
             tooie::boot_screen::close();
         }
@@ -908,7 +914,10 @@ int main(int argc, char** argv) {
     ultramodern::renderer::callbacks_t renderer_callbacks{
         .create_render_context = [](uint8_t* rdram, ultramodern::renderer::WindowHandle window_handle, bool developer_mode) {
             auto presentation_mode = ultramodern::renderer::PresentationMode::PresentEarly;
-            return tooie::watchdog::wrap(recompui::renderer::create_render_context(rdram, window_handle, presentation_mode, developer_mode));
+            tooie::watchdog::startup_mark("renderer starts");
+            auto context = tooie::watchdog::wrap(recompui::renderer::create_render_context(rdram, window_handle, presentation_mode, developer_mode));
+            tooie::watchdog::startup_mark("renderer ready");
+            return context;
         },
     };
 

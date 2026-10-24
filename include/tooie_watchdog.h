@@ -15,6 +15,9 @@ namespace tooie::watchdog {
     // rdram goes into the hang dump.
     void start(uint8_t* rdram);
 
+    // Start-up timing for the console log: "[startup] 12.3 s <what>", seconds since the first call (main(), with nullptr: starts the clock only).
+    void startup_mark(const char* what);
+
     // Called by the main thread's event loop each time round (update_gfx in main.cpp).
     void note_window_update();
     // Called on the game thread each controller read; only used by TOOIE_TEST_HANG=game:...

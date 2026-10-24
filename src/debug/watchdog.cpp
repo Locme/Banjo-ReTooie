@@ -393,6 +393,9 @@ namespace {
         }
     }
 
+    std::once_flag first_dl_once;
+    std::once_flag first_screen_once;
+
     class WatchedRenderer final : public ultramodern::renderer::RendererContext {
     public:
         explicit WatchedRenderer(std::unique_ptr<ultramodern::renderer::RendererContext> inner) : inner(std::move(inner)) {}
@@ -405,6 +408,7 @@ namespace {
         }
         void enable_instant_present() override { inner->enable_instant_present(); }
         void send_dl(const OSTask* task) override {
+            std::call_once(first_dl_once, [] { tooie::watchdog::startup_mark("game's first display list sent to the renderer"); });
             inner->send_dl(task);
             game_part.count.fetch_add(1, std::memory_order_relaxed);
         }
@@ -414,6 +418,7 @@ namespace {
             // Hands RT64 the controller read the new frame was made from (input latency).
             tooie::frame_overlay::note_screen_update();
             inner->update_screen();
+            std::call_once(first_screen_once, [] { tooie::watchdog::startup_mark("game's first screen update"); });
             screen_part.count.fetch_add(1, std::memory_order_relaxed);
             reported_api.store((int)inner->get_chosen_api(), std::memory_order_relaxed);
             reported_scale.store(inner->get_resolution_scale(), std::memory_order_relaxed);
@@ -462,4 +467,14 @@ std::unique_ptr<ultramodern::renderer::RendererContext> tooie::watchdog::wrap(
         return inner;
     }
     return std::make_unique<WatchedRenderer>(std::move(inner));
+}
+
+void tooie::watchdog::startup_mark(const char* what) {
+    static const auto start = std::chrono::steady_clock::now();
+    if (what == nullptr) {
+        return;
+    }
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    fprintf(stdout, "[startup] %.1f s %s\n", seconds, what);
+    fflush(stdout);
 }
