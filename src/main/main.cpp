@@ -882,7 +882,7 @@ int main(int argc, char** argv) {
         static bool at_boot = true;
         tooie::unpack_mod_zips(game_started, at_boot);
         if (at_boot) {
-            tooie::boot_screen::show("Compiling Shaders", "");
+            tooie::boot_screen::show("Loading", "");
             tooie::boot_screen::close();
         }
         at_boot = false;

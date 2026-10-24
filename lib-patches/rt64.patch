@@ -7043,7 +7043,7 @@ index e842dcc..8b8c63a 100644
  
              interop::float4x4 &prevViewProjTransform = drawData.prevViewProjTransforms[proj.transformsIndex];
 diff --git a/src/render/rt64_raster_shader.cpp b/src/render/rt64_raster_shader.cpp
-index 721a01e..d5cb970 100644
+index 721a01e..5c26bb0 100644
 --- a/src/render/rt64_raster_shader.cpp
 +++ b/src/render/rt64_raster_shader.cpp
 @@ -5,6 +5,7 @@
@@ -7355,7 +7355,7 @@ index 721a01e..d5cb970 100644
          layoutBuilder.addDescriptorSet(descriptorCommonSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
-@@ -483,6 +584,146 @@ namespace RT64 {
+@@ -483,6 +584,152 @@ namespace RT64 {
              threadIndex = (threadIndex + 1) % threadCount;
          }
  
@@ -7380,7 +7380,9 @@ index 721a01e..d5cb970 100644
 +                grassCreation.zCmp = true;
 +                grassCreation.zUpd = true;
 +                grassCreation.cvgAdd = false;
-+                grassBladePipeline = RasterShader::createBanjoPipeline(grassCreation, "3D grass blades");
++                startBanjoPipeline([this, grassCreation]() {
++                    grassBladePipeline = RasterShader::createBanjoPipeline(grassCreation, "3D grass blades");
++                });
 +            }
 +        }
 +
@@ -7403,7 +7405,9 @@ index 721a01e..d5cb970 100644
 +                instanceCreation.zCmp = true;
 +                instanceCreation.zUpd = true;
 +                instanceCreation.cvgAdd = false;
-+                grassInstancePipeline = RasterShader::createPipeline(instanceCreation);
++                startBanjoPipeline([this, instanceCreation]() {
++                    grassInstancePipeline = RasterShader::createPipeline(instanceCreation);
++                });
 +            }
 +        }
 +
@@ -7431,7 +7435,9 @@ index 721a01e..d5cb970 100644
 +                snowCreation.zCmp = true;
 +                snowCreation.zUpd = true;
 +                snowCreation.cvgAdd = false;
-+                snowTessPipeline = RasterShader::createBanjoPipeline(snowCreation, "tessellated deep snow");
++                startBanjoPipeline([this, snowCreation]() {
++                    snowTessPipeline = RasterShader::createBanjoPipeline(snowCreation, "tessellated deep snow");
++                });
 +            }
 +
 +            // Banjo-Tooie: Modern and Stylised water's tessellated surface (WaterTess.hlsl), drawn into the water mask:
@@ -7502,7 +7508,7 @@ index 721a01e..d5cb970 100644
          // Spawn the threads that will compile all the pipelines.
          pipelineThreads.clear();
          pipelineThreads.resize(pipelineThreadCreations.size());
-@@ -554,8 +795,26 @@ namespace RT64 {
+@@ -554,8 +801,40 @@ namespace RT64 {
          postBlendDitherNoiseSubNegativePipeline = device->createGraphicsPipeline(postBlendDesc);
      }
  
@@ -7526,22 +7532,51 @@ index 721a01e..d5cb970 100644
 +        if ((groundTessThreadMutable != nullptr) && groundTessThreadMutable->joinable()) {
 +            groundTessThreadMutable->join();
 +        }
++    }
++
++    void RasterShaderUber::startBanjoPipeline(std::function<void()> create) {
++        banjoPipelineThreads.emplace_back(std::make_unique<std::thread>([this, create = std::move(create)]() {
++            // Like the ubershader's own threads: after its first pipeline, so the driver reuses that compile.
++            {
++                std::unique_lock<std::mutex> lock(firstPipelineMutex);
++                firstPipelineCondition.wait(lock, [this]() {
++                    return (pipelines[0] != nullptr);
++                });
++            }
++
++            create();
++        }));
      }
  
      void RasterShaderUber::threadCreatePipelines(uint32_t threadIndex) {
+@@ -590,7 +869,12 @@ namespace RT64 {
+                 thread->join();
+             }
+ 
++            for (std::unique_ptr<std::thread> &thread : banjoPipelineThreads) {
++                thread->join();
++            }
++
+             pipelineThreads.clear();
++            banjoPipelineThreads.clear();
+             pipelineThreadCreations.clear();
+             vertexShader.reset();
+             pixelShader.reset();
 diff --git a/src/render/rt64_raster_shader.h b/src/render/rt64_raster_shader.h
-index 3b991ff..48b0986 100644
+index 3b991ff..66d8ed5 100644
 --- a/src/render/rt64_raster_shader.h
 +++ b/src/render/rt64_raster_shader.h
-@@ -6,6 +6,7 @@
+@@ -6,7 +6,9 @@
  
  #include "rt64_shader_common.h"
  
 +#include <atomic>
  #include <condition_variable>
++#include <functional>
  #include <mutex>
  #include <thread>
-@@ -44,6 +45,13 @@ namespace RT64 {
+ 
+@@ -44,6 +46,13 @@ namespace RT64 {
          const RenderPipelineLayout *pipelineLayout;
          const RenderShader *vertexShader;
          const RenderShader *pixelShader;
@@ -7555,7 +7590,7 @@ index 3b991ff..48b0986 100644
          bool alphaBlend;
          bool culling;
          bool NoN;
-@@ -71,6 +79,8 @@ namespace RT64 {
+@@ -71,6 +80,8 @@ namespace RT64 {
          ~RasterShader();
          static RasterShaderText generateShaderText(const ShaderDescription &desc, bool multisampling);
          static std::unique_ptr<RenderPipeline> createPipeline(const PipelineCreation &c);
@@ -7564,7 +7599,7 @@ index 3b991ff..48b0986 100644
          static RenderMultisampling generateMultisamplingPattern(uint32_t sampleCount, bool sampleLocationsSupported);
      };
  
-@@ -90,6 +100,41 @@ namespace RT64 {
+@@ -90,6 +101,47 @@ namespace RT64 {
          std::vector<std::unique_ptr<std::thread>> pipelineThreads;
          std::unique_ptr<RenderShader> vertexShader;
          std::unique_ptr<RenderShader> pixelShader;
@@ -7603,6 +7638,12 @@ index 3b991ff..48b0986 100644
 +        mutable std::once_flag groundTessOnce;
 +        mutable std::unique_ptr<std::thread> groundTessThreadMutable;
 +        void startGroundTess() const;
++        // Banjo-Tooie: the 3D grass and deep snow pipelines are built on threads of their own beside the ubershader's
++        // (they took about 10 s one after another at start on an RTX 5080 with no pipeline cache, before the
++        // ubershader's own threads even began). Joined in waitForPipelineCreation, so they are ready before the
++        // first frame is drawn, as before.
++        std::vector<std::unique_ptr<std::thread>> banjoPipelineThreads;
++        void startBanjoPipeline(std::function<void()> create);
  
          RasterShaderUber(RenderDevice *device, RenderShaderFormat shaderFormat, const RenderMultisampling &multisampling, const ShaderLibrary *shaderLibrary, uint32_t threadCount);
          ~RasterShaderUber();
