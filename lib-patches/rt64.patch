@@ -7996,18 +7996,21 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..612667e 100644
+index d1c5273..00d2919 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,10 @@
  //
  
  #include "rt64_shader_library.h"
++#include <memory>
++#include <thread>
++#include <vector>
 +#include "rt64_object_velocity.h"
  
  #include "common/rt64_common.h"
  #include "shared/rt64_render_target_copy.h"
-@@ -17,6 +18,23 @@
+@@ -17,6 +21,23 @@
  #include "shaders/FbWriteColorCS.hlsl.spirv.h"
  #include "shaders/FbWriteDepthCS.hlsl.spirv.h"
  #include "shaders/FbWriteDepthCSMS.hlsl.spirv.h"
@@ -8031,7 +8034,7 @@ index d1c5273..612667e 100644
  #include "shaders/GaussianFilterRGB3x3CS.hlsl.spirv.h"
  #include "shaders/BoxFilterCS.hlsl.spirv.h"
  #include "shaders/BicubicScalingCS.hlsl.spirv.h"
-@@ -40,7 +58,53 @@
+@@ -40,7 +61,53 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -8085,7 +8088,7 @@ index d1c5273..612667e 100644
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
-@@ -48,6 +112,11 @@
+@@ -48,6 +115,11 @@
  #include "shaders/VideoInterfacePSPixel.hlsl.spirv.h"
  #include "shaders/FullScreenVS.hlsl.spirv.h"
  #include "shaders/Im3DVS.hlsl.spirv.h"
@@ -8097,7 +8100,7 @@ index d1c5273..612667e 100644
  #include "shaders/ComposePS.hlsl.spirv.h"
  #include "shaders/DebugPS.hlsl.spirv.h"
  #include "shaders/Im3DPS.hlsl.spirv.h"
-@@ -86,7 +155,40 @@
+@@ -86,7 +158,40 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -8138,7 +8141,7 @@ index d1c5273..612667e 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
-@@ -94,6 +196,11 @@
+@@ -94,6 +199,11 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.dxil.h"
  #   include "shaders/FullScreenVS.hlsl.dxil.h"
  #   include "shaders/Im3DVS.hlsl.dxil.h"
@@ -8150,7 +8153,7 @@ index d1c5273..612667e 100644
  #   include "shaders/ComposePS.hlsl.dxil.h"
  #   include "shaders/DebugPS.hlsl.dxil.h"
  #   include "shaders/Im3DPS.hlsl.dxil.h"
-@@ -131,7 +238,40 @@
+@@ -131,7 +241,40 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -8191,7 +8194,7 @@ index d1c5273..612667e 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
-@@ -139,6 +279,11 @@
+@@ -139,6 +282,11 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.metal.h"
  #   include "shaders/FullScreenVS.hlsl.metal.h"
  #   include "shaders/Im3DVS.hlsl.metal.h"
@@ -8203,7 +8206,7 @@ index d1c5273..612667e 100644
  #   include "shaders/ComposePS.hlsl.metal.h"
  #   include "shaders/DebugPS.hlsl.metal.h"
  #   include "shaders/Im3DPS.hlsl.metal.h"
-@@ -148,10 +293,17 @@
+@@ -148,10 +296,17 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
@@ -8221,7 +8224,7 @@ index d1c5273..612667e 100644
  
  #ifdef _WIN32
  #   define CREATE_SHADER_INPUTS(DXIL_BLOB, SPIRV_BLOB, MSL_BLOB, ENTRY_NAME, SHADER_FORMAT)\
-@@ -204,7 +356,7 @@ namespace RT64 {
+@@ -204,7 +359,7 @@ namespace RT64 {
              samplerDesc.addressW = RenderTextureAddressMode::CLAMP;
  
              // This matches the bias used in the shader when native samplers are not used.
@@ -8230,7 +8233,7 @@ index d1c5273..612667e 100644
  
              // WRAP.
              samplerDesc.addressU = RenderTextureAddressMode::WRAP;
-@@ -549,6 +701,38 @@ namespace RT64 {
+@@ -549,6 +704,38 @@ namespace RT64 {
              rspWorld.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -8269,7 +8272,7 @@ index d1c5273..612667e 100644
          // Texture Copy.
          {
              TextureCopyDescriptorSet descriptorSet;
-@@ -569,6 +753,98 @@ namespace RT64 {
+@@ -569,6 +756,98 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -8368,7 +8371,7 @@ index d1c5273..612667e 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +859,20 @@ namespace RT64 {
+@@ -583,6 +862,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -8389,7 +8392,34 @@ index d1c5273..612667e 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +1122,243 @@ namespace RT64 {
+@@ -634,6 +927,26 @@ namespace RT64 {
+         // Create shaders shared across all pipelines.
+         std::unique_ptr<RenderShader> fullScreenVertexShader = device->createShader(CREATE_SHADER_INPUTS(FullScreenVSBlobDXIL, FullScreenVSBlobSPIRV, FullScreenVSBlobMSL, "VSMain", shaderFormat));
+ 
++        // Banjo-Tooie: the scene effects' pipelines are the slowest here (seconds each with no pipeline cache), so each is
++        // compiled on a thread of its own, all at once instead of one after another. They are all done before this
++        // function returns (the joiner below goes before fullScreenVertexShader, which they use); each keeps its own
++        // pixel shader alive.
++        struct PipelineJoiner {
++            std::vector<std::thread> threads;
++            ~PipelineJoiner() {
++                for (std::thread &thread : threads) {
++                    thread.join();
++                }
++            }
++        } pipelineJoiner;
++
++        auto createPipelineOnThread = [&](std::unique_ptr<RenderPipeline> &out, const RenderGraphicsPipelineDesc &desc, std::unique_ptr<RenderShader> &shader) {
++            std::shared_ptr<RenderShader> keptShader(std::move(shader));
++            pipelineJoiner.threads.emplace_back([device, &out, desc, keptShader]() {
++                out = device->createGraphicsPipeline(desc);
++            });
++        };
++
+         // Select shader blobs based on sample count.
+         const void *TextureResolvePSBlob = nullptr;
+         const void *RtCopyDepthToColorPSBlob = nullptr;
+@@ -832,6 +1145,243 @@ namespace RT64 {
              }
          }
  
@@ -8437,7 +8467,7 @@ index d1c5273..612667e 100644
 +            pipelineDesc.vertexShader = fullScreenVertexShader.get();
 +            pipelineDesc.pixelShader = pixelShader.get();
 +            pipelineDesc.multisampling = multisampling;
-+            sceneEffects.pipeline = device->createGraphicsPipeline(pipelineDesc);
++            createPipelineOnThread(sceneEffects.pipeline, pipelineDesc, pixelShader);
 +
 +            // The same with the reflections traced (ray queries over the world's triangles), Vulkan only.
 +#           ifndef __APPLE__
@@ -8478,7 +8508,7 @@ index d1c5273..612667e 100644
 +                RenderGraphicsPipelineDesc tracedDesc = pipelineDesc;
 +                tracedDesc.pipelineLayout = sceneEffectsTraced.pipelineLayout.get();
 +                tracedDesc.pixelShader = tracedShader.get();
-+                sceneEffectsTraced.pipeline = device->createGraphicsPipeline(tracedDesc);
++                createPipelineOnThread(sceneEffectsTraced.pipeline, tracedDesc, tracedShader);
 +            }
 +#           endif
 +
@@ -8506,7 +8536,7 @@ index d1c5273..612667e 100644
 +            tableDesc.renderTargetCount = 1;
 +            tableDesc.vertexShader = fullScreenVertexShader.get();
 +            tableDesc.pixelShader = tableShader.get();
-+            fireflyTable.pipeline = device->createGraphicsPipeline(tableDesc);
++            createPipelineOnThread(fireflyTable.pipeline, tableDesc, tableShader);
 +
 +            // The indirect pass (SceneEffectsPS.hlsl, INDIRECT_PASS): the same layout and constants, into a half-size
 +            // float target; built at the depth target's sample count, as it reads it.
@@ -8532,7 +8562,7 @@ index d1c5273..612667e 100644
 +            indirectDesc.renderTargetCount = 1;
 +            indirectDesc.vertexShader = fullScreenVertexShader.get();
 +            indirectDesc.pixelShader = indirectShader.get();
-+            sceneIndirect.pipeline = device->createGraphicsPipeline(indirectDesc);
++            createPipelineOnThread(sceneIndirect.pipeline, indirectDesc, indirectShader);
 +
 +            // The same with the occlusion and bounce light traced (and Half-resolution ray tracing's sun shadows and light
 +            // beams below them), Vulkan only, with the traced pass's layout: its rays read the textures of what they meet.
@@ -8559,7 +8589,7 @@ index d1c5273..612667e 100644
 +                std::unique_ptr<RenderShader> tracedIndirect = device->createShader(tracedBlob, tracedSize, "PSMain", shaderFormat);
 +                indirectDesc.pixelShader = tracedIndirect.get();
 +                indirectDesc.pipelineLayout = sceneEffectsTraced.pipelineLayout.get();
-+                sceneIndirectTraced.pipeline = device->createGraphicsPipeline(indirectDesc);
++                createPipelineOnThread(sceneIndirectTraced.pipeline, indirectDesc, tracedIndirect);
 +            }
 +#           endif
 +        }
