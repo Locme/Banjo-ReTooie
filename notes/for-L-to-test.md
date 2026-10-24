@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T575 3D hand cursor, glove and Show/Hide Cursor
+- Asked: 2026-10-24 08:01 UTC
+- Build: main @ 56a8bd7
+- Steps:
+  1. Start menu (before Play): move the mouse
+  2. Esc menu and the save select: move the mouse, click
+  3. DEV > Stability And Features > 3D Hand Cursor off, then on
+  4. In game, press Tab, move the mouse, press Tab again
+- Look for: The cursor is the save select's 3D hand, back of the hand towards you, thumb on the left, the sleeve fading out; a click plays a grab. It never turns back into the arrow, even over buttons. With 3D Hand Cursor off it is the flat glove. Tab shows the cursor in game and the camera does not move with the mouse while it shows. Checked: builds on Linux, the hand's frames are made on the start menu (log). Not seen on screen headless (an X screenshot leaves the cursor out).
+- Status: waiting for L
+
 ## T574 Esc menu with a controller: top entry and remembered entry
 - Asked: 2026-10-24 07:50 UTC
 - Build: main, the push after 5d8335f
