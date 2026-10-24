@@ -1634,7 +1634,7 @@ index 6c84c05..fcad6e9 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("Config modal has not been initialized.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..b6d50a7 100644
+index 86428c9..345955c 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
 @@ -1,4 +1,7 @@
@@ -1645,7 +1645,7 @@ index 86428c9..b6d50a7 100644
  
  namespace recompui {
  
-@@ -35,6 +38,19 @@ ConfigOptionElement::ConfigOptionElement(
+@@ -35,6 +38,30 @@ ConfigOptionElement::ConfigOptionElement(
      const recomp::config::ConfigOption &option = config->get_option(option_index);
  
      ContextId context = recompui::get_current_context();
@@ -1661,11 +1661,22 @@ index 86428c9..b6d50a7 100644
 +        };
 +        expand_button = make_expander("icons/Caret.svg", true);
 +        collapse_button = make_expander("icons/CaretUp.svg", false);
++    } else {
++        // A row with no options under it keeps the arrow's space, hidden, so its name and switch line up with the
++        // rows that have arrows (L, 2026-10-24).
++        auto make_spacer = [&](const char* svg) {
++            IconButton *button = context.create_element<IconButton>(this, svg, ButtonStyle::Basic, IconButtonSize::Small);
++            button->set_flex_shrink(0.0f);
++            button->set_visibility(Visibility::Hidden);
++            return button;
++        };
++        expand_button = make_spacer("icons/Caret.svg");
++        collapse_button = make_spacer("icons/CaretUp.svg");
 +    }
      auto name_text = option.name;
      if (!name_text.empty()) {
          name_label = context.create_element<Label>(this, name_text, theme::Typography::LabelMD);
-@@ -59,7 +75,11 @@ bool ConfigOptionElement::get_disabled() {
+@@ -59,7 +86,11 @@ bool ConfigOptionElement::get_disabled() {
  }
  
  bool ConfigOptionElement::get_hidden() {
@@ -1678,7 +1689,7 @@ index 86428c9..b6d50a7 100644
  }
  
  void ConfigOptionElement::process_event(const Event &e) {
-@@ -87,14 +107,72 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -87,14 +118,72 @@ void ConfigOptionElement::process_event(const Event &e) {
      }
  }
  
@@ -1752,7 +1763,7 @@ index 86428c9..b6d50a7 100644
  }
  
  // ConfigOptionEnum
-@@ -110,6 +188,7 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -110,6 +199,7 @@ ConfigOptionEnum::ConfigOptionEnum(
  {
      ContextId context = recompui::get_current_context();
      Element *wrapper = context.create_element<Element>(this, 0, "div", false);
@@ -1760,7 +1771,7 @@ index 86428c9..b6d50a7 100644
      wrapper->set_display(Display::Flex);
      wrapper->set_flex_direction(FlexDirection::Row);
      wrapper->set_align_items(AlignItems::Center);
-@@ -120,25 +199,48 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -120,25 +210,48 @@ ConfigOptionEnum::ConfigOptionEnum(
      // Negates the extra padding that radio tabs automatically add.
      name_label->set_margin_bottom(4.0f);
  
@@ -1826,7 +1837,7 @@ index 86428c9..b6d50a7 100644
      }
  
      update_value();
-@@ -153,12 +255,18 @@ void ConfigOptionEnum::update_value() {
+@@ -153,12 +266,18 @@ void ConfigOptionEnum::update_value() {
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(this->option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          if (enum_opt.options[i].value == option_value) {
@@ -1847,7 +1858,7 @@ index 86428c9..b6d50a7 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -177,6 +285,14 @@ void ConfigOptionEnum::update_enum_details() {
+@@ -177,6 +296,14 @@ void ConfigOptionEnum::update_enum_details() {
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
@@ -1862,7 +1873,7 @@ index 86428c9..b6d50a7 100644
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
          auto opt_element = radio->get_option_element(i);
-@@ -199,6 +315,7 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -199,6 +326,7 @@ ConfigOptionNumber::ConfigOptionNumber(
      auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
  
      slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
@@ -1870,7 +1881,7 @@ index 86428c9..b6d50a7 100644
      slider->set_width(100.0f, Unit::Percent);
      slider->set_max_width(512.0f, Unit::Dp);
  
-@@ -214,14 +331,29 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -214,14 +342,29 @@ ConfigOptionNumber::ConfigOptionNumber(
              this->on_hover(this->option_id);
          }
      });
@@ -1900,7 +1911,7 @@ index 86428c9..b6d50a7 100644
  };
  
  void ConfigOptionNumber::update_disabled() {
-@@ -229,6 +361,15 @@ void ConfigOptionNumber::update_disabled() {
+@@ -229,6 +372,15 @@ void ConfigOptionNumber::update_disabled() {
      set_enabled(!disabled);
  };
  
@@ -1916,7 +1927,7 @@ index 86428c9..b6d50a7 100644
  // ConfigOptionString
  ConfigOptionString::ConfigOptionString(
      ResourceId rid,
-@@ -245,6 +386,7 @@ ConfigOptionString::ConfigOptionString(
+@@ -245,6 +397,7 @@ ConfigOptionString::ConfigOptionString(
  
      ContextId context = recompui::get_current_context();
      text_input = context.create_element<TextInput>(this);
@@ -1924,7 +1935,7 @@ index 86428c9..b6d50a7 100644
      text_input->set_width(100.0f, Unit::Percent);
      text_input->set_max_width(100.0f, Unit::Percent);
      update_value();
-@@ -284,16 +426,41 @@ ConfigOptionBool::ConfigOptionBool(
+@@ -284,16 +437,41 @@ ConfigOptionBool::ConfigOptionBool(
  
      ContextId context = recompui::get_current_context();
      toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
