@@ -1,5 +1,7 @@
 # Banjo Re-Tooie
 
+*Banjo-Tooie on PC. Keeping the N64 game as it was, and making room for what comes next.*
+
 Banjo Re-Tooie is a native PC port of **Banjo-Tooie (USA, N64)**, with modern
 graphics, smooth frame rates and quality-of-life options, made by statically recompiling the
 game's MIPS code to C with [N64Recomp](https://github.com/N64Recomp/N64Recomp),
@@ -23,14 +25,55 @@ emulator at runtime.
 > `rsp/`), so that the game can be built with just a compiler. No art, audio,
 > textures or models are included.
 
-## Status
+## Current Status
 
-Early bring-up. See [`notes/roadmap-checklist.md`](notes/roadmap-checklist.md)
-for the feature roadmap and [`BUILDING.md`](BUILDING.md) for how to build.
-An Android build (64-bit ARM phones with Vulkan, Android 10 or newer) is in its
-first stage: see the Android section of [`BUILDING.md`](BUILDING.md).
+- The game boots, plays and saves natively on Windows.
+  Linux builds too. An Android build (64-bit ARM phones with Vulkan, Android 10 or newer) is in its first stage.
+- Graphics: widescreen and ultrawide, 60 FPS and higher with interpolation, any resolution, SMAA, FSR, DLSS,
+  screen-space and ray-traced effects (shadows, reflections, ambient occlusion, light), 3D grass and fur.
+- Quality of life: skip the intro, faster text and transitions, a free camera, save backups and save states,
+  cheats, achievements, a level warp and a photo mode. Mods load from zip files.
+- Known problems: most features are new and have only been checked in headless runs here, not yet on a
+  real PC; the ones still waiting are listed in [`notes/for-L-to-test.md`](notes/for-L-to-test.md).
+  The automatic GitHub builds do not run at the moment, so build it yourself (below).
 
-## Running
+What changed, newest first: [`notes/changelog.md`](notes/changelog.md).
+
+## The Experience We Want to Build
+
+- Banjo-Tooie exactly as it plays on the N64, with the same physics, timing and secrets, by default.
+- Smooth play at your monitor's refresh rate without changing the game's own speed.
+- Any window size and aspect ratio, with the HUD where you want it.
+- Optional modern graphics that look like the game, not like a different one.
+- Settings that apply at once, in a menu you can reach any time with Esc or Back.
+- Mods and texture packs that are easy to install and turn on or off.
+
+## How It Works
+
+1. The [Banjo-Tooie decompilation](https://github.com/Mr-Wiseguy/banjo-tooie)
+   (a submodule in `lib/bt-decomp`) splits your ROM and links a byte-matching
+   ELF with full relocations.
+2. N64Recomp turns that ELF into C (`RecompiledFuncs/`); RSPRecomp turns the
+   audio microcode into C++ (`rsp/`).
+3. CMake builds that code together with the runtime, RT64 and the menus into
+   one executable.
+
+There is no emulator at runtime: the game's own code runs as native code, and RT64 draws its display lists
+with Direct3D 12 or Vulkan.
+
+## Next Steps
+
+The full roadmap, with what is done and what is next, is in
+[`notes/roadmap-checklist.md`](notes/roadmap-checklist.md).
+
+## Testing and Development
+
+### Building
+
+See [`BUILDING.md`](BUILDING.md). On Windows, `update_and_build.bat` pulls the latest code and builds;
+`build.bat` builds what you have.
+
+### Playing
 
 You need your own legally obtained Banjo-Tooie (US) ROM. On Windows, `build.bat`
 (or `update_and_build.bat`) leaves the finished game in a `Release` subfolder:
@@ -46,7 +89,9 @@ go to your user profile.
 
 If the game crashes or freezes, see [`notes/reporting-crashes.md`](notes/reporting-crashes.md) for which logs to send.
 
-## Settings
+After a build, `Play Banjo Re-Tooie.cmd` checks the files the game needs and starts it.
+
+### Settings
 
 Press **Esc** on the keyboard, or **Back** / **Select** on a controller, to open
 settings. The tabs are General, QOL, Graphics, Controls, Sound, Cheats and Mods.
@@ -66,82 +111,24 @@ Every keyboard and controller shortcut is in [`notes/keys.md`](notes/keys.md).
 What each cheat does is in [`notes/cheats.md`](notes/cheats.md).
 What changed, newest first, is in [`notes/changelog.md`](notes/changelog.md).
 
-## How it works
+### Reporting problems
 
-1. The [Banjo-Tooie decompilation](https://github.com/Mr-Wiseguy/banjo-tooie)
-   (a submodule in `lib/bt-decomp`) splits your ROM and links a byte-matching
-   ELF with full relocations.
-2. N64Recomp turns that ELF into C (`RecompiledFuncs/`); RSPRecomp turns the
-   audio microcode into C++ (`rsp/`).
-3. CMake builds that code together with the runtime, RT64 and the menus into
-   one executable.
+Features waiting for a test on a real PC are listed in [`notes/for-L-to-test.md`](notes/for-L-to-test.md).
+Headless testing in a container is described in [`notes/headless-testing.md`](notes/headless-testing.md).
+Notes for AI agents working on the code are in [`AGENTS.md`](AGENTS.md).
 
-## Licence
+## Foundations, History, and Documentation
 
-The DLSS runtime `nvngx_dlss.dll` that Windows builds fetch and ship beside the game is NVIDIA's, under NVIDIA's own
-licence (`third-party/nvidia-dlss/LICENSE.txt`), not the GPL.
-The FSR 3 / FSR 4 DLLs (`amd_fidelityfx_loader_dx12.dll`, `amd_fidelityfx_upscaler_dx12.dll`) that Windows builds fetch and ship are
-AMD's, redistributed in binary form under AMD's licence (`third-party/amd-fsr/LICENSE.txt`), not the GPL.
-Android builds include Qualcomm's Snapdragon GSR 1 shader (`third-party/snapdragon-gsr`, BSD 3-Clause).
+Banjo Re-Tooie stands on N64Recomp, N64ModernRuntime and RT64, and follows the structure of BanjoRecomp, the
+Banjo-Kazooie port. An earlier attempt at a port started from the Xbox 360 (XBLA) version; it was dropped in
+October 2026 and this port was restarted from the N64 game.
 
-GPL-3.0, see [`COPYING`](COPYING). N64ModernRuntime is GPL-3.0; N64Recomp and
-RT64 are MIT; RecompFrontend ships no licence file and is used only as a
-submodule. Inter and Noto Emoji are under the SIL Open Font License; PromptFont
-ships its own terms in `assets/promptfont/LICENSE.txt`. The menu icons in
-`assets/icons/` come from BanjoRecomp (GPL-3.0). SMAA in `lib/smaa/` is
-MIT (`lib/smaa/LICENSE.txt`), and AMD FidelityFX FSR 1 in `lib/fsr/` is MIT
-(`lib/fsr/LICENSE.txt`). The Totals checklist's rules
-(`src/gameplay/totals_rules.inc`) are translated from the Archipelago
-randomizer's Banjo-Tooie world, MIT (licence text at the top of that file). The SSGI and screen-space
-reflections' ray march (in RT64's `SceneEffectsPS.hlsl`, through
-`lib-patches/rt64.patch`) is ported from 0beqz's realism-effects, MIT (licence
-text beside that code). The Stochastic reflections setting (GGX-sampled rays weighted by
-the BRDF) is ported from Simeon Radivoev's ComputeStochasticReflections, MIT (licence text beside that code in
-`SceneEffectsPS.hlsl`). The ambient occlusion is Ground Truth Ambient
-Occlusion written from Jimenez et al.'s 2016 paper; no code is copied from
-MaxwellGengYF's Unity GTAO, which has no licence.
+- [`BUILDING.md`](BUILDING.md): how to build on Windows, Linux and Android.
+- [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md): every third-party library, font and piece of art, its licence,
+  and credits.
+- [`notes/settings-guide.md`](notes/settings-guide.md), [`notes/keys.md`](notes/keys.md),
+  [`notes/cheats.md`](notes/cheats.md): every option, shortcut and cheat.
+- [`notes/roadmap-checklist.md`](notes/roadmap-checklist.md) and [`notes/changelog.md`](notes/changelog.md).
 
-The volumetric fog's presets (Default, Bright, Hell, Murky, Poison, Sponza, Pillar) use the settings (albedo,
-extinction, emissive, ambient light) of the presets in Arthur Brussee's
-[Vapor](https://github.com/ArthurBrussee/Vapor), MIT (licence text beside that code in `SceneEffectsPS.hlsl`);
-the march itself is our own, written from Wronski's 2014 and Hillaire's 2015 volumetric scattering papers. The
-Unity Asset Store package "Aero - Volumetric Fog and Mist" is under Unity's Asset Store EULA, which does not let its
-source go into another project, so none of it is used.
-
-The volumetric shadows (WIP) are written from Billeter, Sintorn and Assarsson's paper "Real Time Volumetric Shadows
-using Polygonal Light Volumes" (High Performance Graphics 2010): a mesh round the lit air is raised from a depth map
-drawn from the light, and its faces add and take away the light gathered along each pixel's ray. No code is copied
-from anywhere.
-
-## Credits
-
-* Locme: direction, design and play-testing, the game's icon (`icons/`) and the
-  start menu art (`assets/launcher/`).
-* [N64Recomp](https://github.com/N64Recomp/N64Recomp),
-  [N64ModernRuntime](https://github.com/N64Recomp/N64ModernRuntime) and
-  [RT64](https://github.com/rt64/rt64) by Wiseguy and contributors.
-* [RecompFrontend](https://github.com/N64Recomp/RecompFrontend): menus, input
-  and settings UI.
-* [BanjoRecomp](https://github.com/BanjoRecomp/BanjoRecomp): the Banjo-Kazooie
-  port whose project structure and front-end setup this port follows.
-* The [Banjo-Tooie decompilation](https://github.com/Mr-Wiseguy/banjo-tooie)
-  by Mr-Wiseguy and contributors.
-* [Vidanox/BanjoTooieRecompiled](https://github.com/Vidanox/BanjoTooieRecompiled):
-  its engineering notes documented several Tooie-specific facts used here.
-* [ScriptHawk](https://github.com/Isotarge/ScriptHawk) by Isotarge: map and flag
-  data.
-* retroben, illusion and wedarobi: facts from the Xenia Banjo-Tooie game patch.
-* The [Banjo-Tooie Archipelago world](https://github.com/jjjj12212/AP_Banjo-Tooie)
-  and its authors: the rules behind the Totals checklist's NOW column.
-* PromptFont by Yukari "Shinmera" Hafner.
-* u/Plebian_Donkey_Konga on Reddit: the Banjo-Tooie style lettering used for the
-  start menu's BANJO RE-TOOIE title.
-* Luckiest Guy by Astigmatic (Apache 2.0, `assets/LuckiestGuy-LICENSE.txt`): the
-  lettering of the settings menu's sidebar layout.
-* [SDL](https://www.libsdl.org/) (zlib licence): windows, input and sound; the
-  Android build also uses SDL's Android Java code (`android/app/src/main/java/org/libsdl/app`).
-* [FreeType](https://freetype.org/): menu fonts (built from source for Android).
-* [SMAA](https://github.com/iryoku/smaa) by Jorge Jimenez, Jose I. Echevarria,
-  Belen Masia, Fernando Navarro and Diego Gutierrez: the SMAA Anti-Aliasing option.
-* [FidelityFX Super Resolution 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR)
-  by Advanced Micro Devices: the FSR 1 Upscaling option.
+Banjo Re-Tooie is GPL-3.0, see [`COPYING`](COPYING). The DLSS and FSR 3 / FSR 4 DLLs that Windows builds ship
+are under NVIDIA's and AMD's own licences; see [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md).
