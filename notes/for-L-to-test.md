@@ -2,7 +2,7 @@
 
 ## T576 Faster start-up Loading screen
 - Asked: 2026-10-24 09:06 UTC
-- Build: main
+- Build: main (round 2 from 2026-10-24 10:00: the ambient occlusion, SSGI and reflection pipelines also build all at once; switching MSAA should be quicker too)
 - Steps:
   1. Build and start the game the way you normally do
   2. Watch the screen that used to say Compiling Shaders
