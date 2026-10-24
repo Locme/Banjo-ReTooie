@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T576 Faster start-up Loading screen
+- Asked: 2026-10-24 09:06 UTC
+- Build: main
+- Steps:
+  1. Build and start the game the way you normally do
+  2. Watch the screen that used to say Compiling Shaders
+  3. Play a little in a grassy area and somewhere with deep snow
+- Look for: The screen now says Loading and goes away noticeably sooner than before, both on a first start after a build and on later starts. The game's first picture also comes sooner. Grass, fur and deep snow still look the same as before. If it still feels slow, send logs/console.log so we can see which pipelines took longest. Checked: builds on Linux; headless on a software GPU the renderer was ready at 10 s instead of 61 s and the first game frame came at 114 s instead of 156 s. Not tried on a real GPU.
+- Status: waiting for L
+
 ## T575 3D hand cursor, glove and Show/Hide Cursor
 - Asked: 2026-10-24 08:01 UTC
 - Build: main @ 56a8bd7
