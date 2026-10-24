@@ -30,6 +30,7 @@
 #include "shared/rt64_scene_effects.h"
 
 #include "rt64_render_target.h"
+#include "rt64_temporal_upscaler.h"
 #include "rt64_volumetric_shadows.h"
 
 namespace RT64 {
@@ -139,7 +140,8 @@ namespace RT64 {
             bool bvhBuiltOnce = false;
             // The level's lights for the traced shadows: the count, then each one's x, y, z, range (16 bytes each).
             std::unique_ptr<RenderBuffer> lightsBuffer;
-            // The volumetric settings buffer (SceneEffectsPS.hlsl gDust): the extras in its first 16 bytes.
+            // The volumetric settings buffer (SceneEffectsPS.hlsl gDust): the extras in its first 16 bytes, the last
+            // float the upscaler's noise turn (NoiseFrameOffset).
             std::unique_ptr<RenderBuffer> dustBuffer;
             // The world radiance cache: a hash table of 16-unit cells (check word, colour), 1 M entries.
             std::unique_ptr<RenderBuffer> radianceBuffer;
@@ -3708,6 +3710,7 @@ namespace RT64 {
                 dust[1] = volExtra[0];
                 dust[2] = volExtra[1];
             }
+            dust[3] = UpscalerNoiseOffset();
             res.dustBuffer->unmap();
         }
 
