@@ -45,6 +45,7 @@ namespace {
         { "NPC feathers", { "NPC feather size", "NPC feather length", "NPC feather density",
             "NPC feather noisiness", "NPC feather transparency" } },
         { "Sun shadows", { "Sun Shadow On Banjo", "Sun shadow softness", "Sun shadow distance" } },
+        { "Parallax", { "Parallax On Original Textures" } },
         { "Fog", { "Fog start distance", "Fog colour" } },
         { "3D grass", { "3D grass height", "3D grass distance", "3D grass density", "3D grass patches",
             "3D grass thickness", "3D grass random length", "3D grass blending", "Chunky 3D grass",
