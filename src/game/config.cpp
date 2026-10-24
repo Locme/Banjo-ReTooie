@@ -98,6 +98,18 @@ namespace {
         }
     }
 
+    void show_work_in_progress_tab() {
+        bool on = false;
+        try {
+            on = std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::work_in_progress_tab_option));
+        } catch (...) {
+        }
+        try {
+            recompui::config::set_tab_visible(tooie::work_in_progress_tab_id, on);
+        } catch (...) {
+        }
+    }
+
     void show_achievements_tab() {
         bool on = false;
         try {
@@ -480,11 +492,12 @@ void tooie::init_config() {
         "Banjo's snout wobbles as he runs, turns, jumps, falls and lands: it trails behind the way he moves and folds back towards his eyes in a dive. It stays mid-wobble in Photo Mode. Works with player model mods that keep his skeleton, such as Smash Banjo.",
         true);
     {
+        // Defaults from L's tuned settings (2026-10-24): stiffness 500, damping 14.
         using namespace tooie::snout_jiggle;
         general.add_number_option(stiffness_option, "Snout Jiggle: Stiffness",
-            "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
+            "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 500);
         general.add_number_option(damping_option, "Snout Jiggle: Damping",
-            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
+            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 14);
         general.add_number_option(mass_option, "Snout Jiggle: Mass",
             "How heavy the snout is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
         general.add_number_option(squash_in_option, "Snout Jiggle: Max Squash & Stretch Inwards",
@@ -582,19 +595,20 @@ void tooie::init_config() {
         "Kazooie's crest and tail feathers wobble on springs as she moves, whether she rides in the backpack or walks alone after Split Up. Separate from Snout jiggle. They stay mid-wobble in Photo Mode.",
         true);
     {
+        // Defaults from L's tuned settings (2026-10-24): stiffness 500, damping 16, squash and stretch 40%.
         using namespace tooie::snout_jiggle;
         general.add_number_option(kazooie_stiffness_option, "Kazooie Jiggle: Stiffness",
-            "How hard her feathers spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
+            "How hard her feathers spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 500);
         general.add_number_option(kazooie_damping_option, "Kazooie Jiggle: Damping",
-            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
+            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 16);
         general.add_number_option(kazooie_mass_option, "Kazooie Jiggle: Mass",
             "How heavy her feathers are: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
         general.add_number_option(kazooie_squash_in_option, "Kazooie Jiggle: Max Squash & Stretch Inwards",
-            "How far each feather may squash back on itself, as a share of its length.", 0, 95, 5, 0, true, 50);
+            "How far each feather may squash back on itself, as a share of its length.", 0, 95, 5, 0, true, 40);
         general.add_number_option(kazooie_squash_out_option, "Kazooie Jiggle: Max Squash & Stretch Outwards",
-            "How far each feather may stretch out, as a share of its length.", 0, 300, 5, 0, true, 50);
+            "How far each feather may stretch out, as a share of its length.", 0, 300, 5, 0, true, 40);
         general.add_number_option(kazooie_squash_across_option, "Kazooie Jiggle: Max Squash & Stretch Up And Down",
-            "How far each feather may swing up and down (and to the side), as a share of its length.", 0, 300, 5, 0, true, 50);
+            "How far each feather may swing up and down (and to the side), as a share of its length.", 0, 300, 5, 0, true, 40);
         for (const std::string* id : { &kazooie_stiffness_option, &kazooie_damping_option, &kazooie_mass_option,
                                        &kazooie_squash_in_option, &kazooie_squash_out_option, &kazooie_squash_across_option }) {
             general.add_option_hidden_dependency(*id, kazooie_option, false);
@@ -1288,6 +1302,15 @@ void tooie::init_config() {
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             show_cheats_tab();
         });
+    wip.add_bool_option(
+        tooie::work_in_progress_tab_option,
+        "WIP Tab",
+        "Shows the WIP tab: features still being worked on. Turn it off to hide it; what is set there stays as it is. A dev.txt file next to the game's exe shows it whatever this says.",
+        false);
+    wip.add_option_change_callback(tooie::work_in_progress_tab_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            show_work_in_progress_tab();
+        });
     tooie::level_warp::add_option(wip);
     recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
@@ -1305,6 +1328,7 @@ void tooie::init_config() {
     turn_off_cheats_tab_once();
     show_cheats_tab();
     show_achievements_tab();
+    show_work_in_progress_tab();
     tooie::level_warp::refresh();
     move_saved_cutscene_skip();
     turn_on_transform_anywhere_once();
