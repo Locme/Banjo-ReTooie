@@ -31,6 +31,7 @@
 #include "tooie_fine_aim.h"
 #include "tooie_free_camera.h"
 #include "tooie_game.h"
+#include "tooie_game_frame_rate.h"
 #include "tooie_motion_aim.h"
 
 namespace {
@@ -166,7 +167,7 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
         pending_yaw = 0.0f;
         pending_pitch = 0.0f;
     }
-    if (!tooie::fine_aim::in_first_person()) {
+    if (tooie::game_frame_rate::demo_playing() || !tooie::fine_aim::in_first_person()) {
         have_last = false;
         return;
     }

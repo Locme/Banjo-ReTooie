@@ -1048,6 +1048,10 @@ double tooie::game_frame_rate::game_seconds() {
     return game_seconds_total.load();
 }
 
+bool tooie::game_frame_rate::demo_playing() {
+    return demo_frames.load() > 0;
+}
+
 bool tooie::game_frame_rate::pad_on_game_time() {
     static const bool on = std::getenv("TOOIE_PAD_GAME_TIME") != nullptr;
     return on;

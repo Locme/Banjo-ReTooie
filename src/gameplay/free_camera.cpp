@@ -44,6 +44,7 @@
 #include "recompinput/input_state.h"
 #include "tooie_debug.h"
 #include "tooie_free_camera.h"
+#include "tooie_game_frame_rate.h"
 #include "tooie_photo_mode.h"
 #include "tooie_game.h"
 #include "tooie_hotkeys.h"
@@ -396,10 +397,12 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
         return mode == (uint32_t)tooie::FreeCameraMouse::Always ||
             (mode == (uint32_t)tooie::FreeCameraMouse::Hold && look_key);
     };
-    if (!allowed(mouse_mode)) {
+    // A recorded demo plays by itself: the mouse and gyro leave its camera alone (L, 2026-10-24).
+    const bool demo = tooie::game_frame_rate::demo_playing();
+    if (demo || !allowed(mouse_mode)) {
         mouse_x = mouse_y = 0.0f;
     }
-    if (!allowed(gyro_mode)) {
+    if (demo || !allowed(gyro_mode)) {
         gyro_x = gyro_y = 0.0f;
     }
     const float orbit_x = mouse_x + gyro_x;
@@ -407,7 +410,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     // Mouse wheel zoom and the middle button (snap behind) while the mouse is on; counts since last step.
     const int32_t wheel_now = recompinput::get_game_mouse_wheel();
     const uint32_t middle_now = recompinput::get_game_mouse_clicks(2);
-    const bool mouse_on = mouse_mode != (uint32_t)tooie::FreeCameraMouse::Off;
+    const bool mouse_on = !demo && mouse_mode != (uint32_t)tooie::FreeCameraMouse::Off;
     const int32_t wheel_notches = mouse_on && state.has_wheel ? wheel_now - state.wheel : 0;
     const bool middle_clicked = mouse_on && state.has_wheel && middle_now != state.middle;
     state.wheel = wheel_now;

@@ -29,6 +29,9 @@ namespace tooie::game_frame_rate {
     // The same in seconds, unrounded (src/gameplay/snout_jiggle.cpp steps its swing by it).
     double game_seconds();
     bool pad_on_game_time();
+    // True while a recorded scene replays (the attract demo, the game select, the intro story cutscenes). The
+    // player's mouse and gyro must not move the camera then (L, 2026-10-24).
+    bool demo_playing();
 }
 
 #endif

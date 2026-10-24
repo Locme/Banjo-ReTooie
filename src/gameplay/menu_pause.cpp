@@ -12,6 +12,7 @@
 // 0x801357D0, track at +0x28) is faded to 0 with func_800FCAE0 here, and back to its own volume (-1) on
 // closing, when the background channel is cleared (func_800FC1A8) as the pause menu does.
 //
+// Not while a recorded demo plays (L, 2026-10-24): it keeps playing behind the ESC menu.
 // Not during the title, the file select, letterboxed scenes or a map change, where Start doesn't pause
 // either, nor while the game's own pause menu is open (its pointer at 0x80128AF0).
 //
@@ -31,6 +32,7 @@
 #include "funcs.h"
 #include "tooie_debug.h"
 #include "tooie_game.h"
+#include "tooie_game_frame_rate.h"
 #include "tooie_menu_pause.h"
 #include "tooie_rdram.h"
 
@@ -78,7 +80,7 @@ namespace {
     }
 
     bool should_pause(uint8_t* rdram) {
-        return menu_open.load() && enabled() && tooie::debug::can_warp() && !tooie::in_letterboxed_scene() &&
+        return menu_open.load() && enabled() && tooie::debug::can_warp() && !tooie::game_frame_rate::demo_playing() && !tooie::in_letterboxed_scene() &&
             !tooie::debug::map_change_busy(rdram);
     }
 }
