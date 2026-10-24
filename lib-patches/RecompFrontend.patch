@@ -885,7 +885,7 @@ index 4dce8e0..15bd9e3 100644
  endif()
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..dc7cbcc 100644
+index 38b84f5..1437185 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
 @@ -1,6 +1,7 @@
@@ -905,7 +905,7 @@ index 38b84f5..dc7cbcc 100644
              void toggle_fullscreen();
          }
  
-@@ -133,10 +136,52 @@ namespace recompui {
+@@ -133,10 +136,55 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
@@ -923,6 +923,9 @@ index 38b84f5..dc7cbcc 100644
 +        // library adds in an order that doesn't fit the tab's sections. Only the display order changes.
 +        void set_option_display_before(const std::string &option_id, const std::string &before_id);
 +        const std::string *get_option_display_before(const std::string &option_id);
++        // Puts the option at the bottom of its tab, after every other option (in their own order).
++        void set_option_display_last(const std::string &option_id);
++        bool get_option_display_last(const std::string &option_id);
 +        // Puts a button with this label beside the option's control (a drop-down's choice can then be acted
 +        // on again and again). on_press runs on the UI thread each time it is pressed.
 +        void set_option_button(const std::string &option_id, const std::string &label, std::function<void()> on_press);
@@ -1365,7 +1368,7 @@ index 277a421..676066d 100644
      ui_state->unload();
      ui_state.reset();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..1656e86 100644
+index 6c84c05..fcad6e9 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
 @@ -1,7 +1,14 @@
@@ -1494,7 +1497,7 @@ index 6c84c05..1656e86 100644
      void config::create_tab(
          const std::string &name,
          const std::string &id,
-@@ -121,7 +225,93 @@ namespace recompui {
+@@ -121,7 +225,103 @@ namespace recompui {
          loaded_configs = true;
      }
  
@@ -1518,6 +1521,16 @@ index 6c84c05..1656e86 100644
 +    const std::string *config::get_option_display_before(const std::string &option_id) {
 +        auto it = option_display_before.find(option_id);
 +        return it == option_display_before.end() ? nullptr : &it->second;
++    }
++
++    static std::unordered_map<std::string, bool> option_display_last;
++
++    void config::set_option_display_last(const std::string &option_id) {
++        option_display_last[option_id] = true;
++    }
++
++    bool config::get_option_display_last(const std::string &option_id) {
++        return option_display_last.contains(option_id);
 +    }
 +
 +    static std::unordered_map<std::string, config::OptionButton> option_buttons;
@@ -1588,7 +1601,7 @@ index 6c84c05..1656e86 100644
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
                  if (tab.id == id) {
-@@ -177,6 +367,14 @@ namespace recompui {
+@@ -177,6 +377,14 @@ namespace recompui {
          return config_modal->modal_root_context;
      }
  
@@ -1603,7 +1616,7 @@ index 6c84c05..1656e86 100644
      void config::set_tab(const std::string &id) {
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
-@@ -185,6 +383,16 @@ namespace recompui {
+@@ -185,6 +393,16 @@ namespace recompui {
          config_modal->set_selected_tab(id);
      }
  
@@ -2098,7 +2111,7 @@ index f379a6f..388d5a2 100644
          reset_to_defaults_button->add_pressed_callback([this]() {
              recompinput::profiles::reset_profile_bindings(this->selected_profile_index, this->get_player_input_device());
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..1bb00be 100644
+index 6ba64e2..a05df0f 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,10 @@
@@ -2303,13 +2316,13 @@ index 6ba64e2..1bb00be 100644
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
          };
-@@ -181,8 +301,37 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +301,46 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
 +        // Display order: the schema's, with options moved by set_option_display_before.
 +        std::vector<size_t> order;
-         for (size_t i = 0; i < schema.options.size(); i++) {
++        for (size_t i = 0; i < schema.options.size(); i++) {
 +            const std::string *page = recompui::config::get_option_page(schema.options[i].id);
 +            if ((page == nullptr) == page_id.empty() && (page == nullptr || *page == page_id)) {
 +                order.push_back(i);
@@ -2327,6 +2340,15 @@ index 6ba64e2..1bb00be 100644
 +            order.erase(from);
 +            order.insert(std::find(order.begin(), order.end(), schema.options_by_id.at(*before)), i);
 +        }
++        // Options set with set_option_display_last go to the bottom, in schema order.
+         for (size_t i = 0; i < schema.options.size(); i++) {
++            auto from = std::find(order.begin(), order.end(), i);
++            if (from == order.end() || !recompui::config::get_option_display_last(schema.options[i].id)) {
++                continue;
++            }
++            order.erase(from);
++            order.push_back(i);
++        }
 +        for (size_t position = 0; position < order.size(); position++) {
 +            const size_t i = order[position];
              auto &config_option = schema.options[i];
@@ -2341,7 +2363,7 @@ index 6ba64e2..1bb00be 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +382,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +391,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -2349,7 +2371,7 @@ index 6ba64e2..1bb00be 100644
              element->update_disabled();
              element->update_hidden();
              config_option_elements.push_back(element);
-@@ -241,6 +391,18 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -241,6 +400,18 @@ void ConfigPageOptionsMenu::render_config_options() {
  }
  
  void ConfigPageOptionsMenu::on_option_hover(const std::string &option_id) {

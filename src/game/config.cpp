@@ -1155,7 +1155,11 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::picture_filters::ray_tracing_option, "Ray Tracing");
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game View");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
-    recompui::config::set_option_display_before(recompui::config::graphics::options::msaa_option, tooie::smaa::option);
+    // Anti-Aliasing and Scaling sit at the bottom of the Display tab (L, 2026-10-24), in this order.
+    recompui::config::set_option_display_last(recompui::config::graphics::options::msaa_option);
+    recompui::config::set_option_display_last(tooie::smaa::option);
+    recompui::config::set_option_display_last(tooie::fxaa::option);
+    recompui::config::set_option_display_last(tooie::fsr::option);
     recompui::config::set_option_group(recompui::config::graphics::options::msaa_option, "Anti-Aliasing And Scaling");
     recompui::config::set_option_group(tooie::game_frame_rate::option, "Frame Rate And Overlay");
     recompui::config::set_option_group(tooie::effect_views::option, "Debug");
