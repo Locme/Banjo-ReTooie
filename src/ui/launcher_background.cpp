@@ -29,8 +29,9 @@ namespace {
     // L's artboard (the BANJO.svg viewBox).
     constexpr float art_width = 2284.48f;
     constexpr float art_height = 1735.67f;
-    // How far the sky reaches each side of the artboard's centre; wider windows scale up to stay inside it.
-    constexpr float bleed_half_width = 1793.0f;
+    // How far the art reaches each side of the artboard's centre (the side extensions in
+    // tools/split_launcher_svg.py: enough for 32:9); wider windows scale up to stay inside it.
+    constexpr float bleed_half_width = 3340.0f;
     constexpr float two_pi = 6.2831853f;
 
     // Timing, in seconds.
@@ -100,17 +101,17 @@ namespace {
     // Back to front. The art viewBoxes match tools/split_launcher_svg.py; a cloud is 400x160 (cloud.svg)
     // scaled to its size here.
     Layer layers[] = {
-        { "launcher/background.svg", -829, -917, 4045, 3140, Motion::Hill },
+        { "launcher/background.svg", -2202, -1002, 6704, 3404, Motion::Hill },
         { "launcher/cloud.svg", 0, 40, 520, 208, Motion::Cloud, 0.15f, 1.0f },
         { "launcher/cloud.svg", 0, 230, 340, 136, Motion::Cloud, 0.55f, 0.7f },
         { "launcher/cloud.svg", 0, -60, 420, 168, Motion::Cloud, 0.85f, 0.85f },
-        { "launcher/slide_right.svg", 516, 347, 2695, 952, Motion::FromRight },
+        { "launcher/slide_right.svg", 516, 347, 3986, 975, Motion::FromRight },
         { "launcher/path.svg", -2, 1031, 1945, 931, Motion::Path },
         { "launcher/head.svg", 1128, -276, 844, 2632, Motion::Head },
         { "launcher/ladder.svg", 1498, 280, 98, 768, Motion::Ladder },
-        { "launcher/back_left.svg", -842, 584, 1511, 605, Motion::BackLeft },
+        { "launcher/back_left.svg", -2202, 584, 2871, 678, Motion::BackLeft },
         { "launcher/slide_left.svg", 263, 590, 1557, 965, Motion::FromLeft },
-        { "launcher/ledge.svg", 1721, 1194, 1134, 1808, Motion::Ledge },
+        { "launcher/ledge.svg", 1721, 1194, 2781, 1808, Motion::Ledge },
         { "launcher/bird.svg", 2091, 1316, 184, 268, Motion::Critter },
     };
 
