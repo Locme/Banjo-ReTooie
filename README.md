@@ -2,6 +2,8 @@
 
 *Banjo-Tooie on PC. Keeping the N64 game as it was, and making room for what comes next.*
 
+![The Banjo Re-Tooie start menu: Locme's art of Spiral Mountain, with the title dropping in](docs/media/start-menu.gif)
+
 Banjo Re-Tooie is a native PC port of **Banjo-Tooie (USA, N64)**, with modern
 graphics, smooth frame rates and quality-of-life options, made by statically recompiling the
 game's MIPS code to C with [N64Recomp](https://github.com/N64Recomp/N64Recomp),
