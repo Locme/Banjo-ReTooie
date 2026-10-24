@@ -402,18 +402,6 @@ index c20fb51..d9e9256 100644
      }
  
      hlslpp::float4x4 matrixTranslation(const hlslpp::float3 &t) {
-diff --git a/src/contrib/plume b/src/contrib/plume
---- a/src/contrib/plume
-+++ b/src/contrib/plume
-@@ -1 +1 @@
--Subproject commit d890ac899e505fb30040e037a4037cdeca68f033
-+Subproject commit d890ac899e505fb30040e037a4037cdeca68f033-dirty
-diff --git a/src/contrib/re-spirv b/src/contrib/re-spirv
---- a/src/contrib/re-spirv
-+++ b/src/contrib/re-spirv
-@@ -1 +1 @@
--Subproject commit 5d6b756ee62760f71b65d37e41a0b5a3dab90507
-+Subproject commit 5d6b756ee62760f71b65d37e41a0b5a3dab90507-dirty
 diff --git a/src/gbi/rt64_gbi_extended.cpp b/src/gbi/rt64_gbi_extended.cpp
 index 20c0d4d..c1f4899 100644
 --- a/src/gbi/rt64_gbi_extended.cpp
@@ -2308,7 +2296,7 @@ index 69a82ac..d17896a 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..9d9c08c 100644
+index 9fae0d4..c9d7a43 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,22 @@
@@ -3283,7 +3271,7 @@ index 9fae0d4..9d9c08c 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -561,8 +1418,20 @@ namespace RT64 {
+@@ -561,25 +1418,226 @@ namespace RT64 {
                      switchToDepthWrite();
                  }
  
@@ -3306,7 +3294,15 @@ index 9fae0d4..9d9c08c 100644
                      previousScissor = triangles.scissor;
                  }
  
-@@ -574,12 +1443,200 @@ namespace RT64 {
+-                if (previousPipeline != triangles.pipeline) {
+-                    worker->commandList->setPipeline(triangles.pipeline);
+-                    previousPipeline = triangles.pipeline;
++                const RenderPipeline *drawPipeline = ((mirrorWidth > 0) && (triangles.mirrorPipeline != nullptr)) ? triangles.mirrorPipeline : triangles.pipeline;
++                if (previousPipeline != drawPipeline) {
++                    worker->commandList->setPipeline(drawPipeline);
++                    previousPipeline = drawPipeline;
+                 }
+                 
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -3508,7 +3504,7 @@ index 9fae0d4..9d9c08c 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,10 +1654,12 @@ namespace RT64 {
+@@ -597,10 +1655,12 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -3523,7 +3519,7 @@ index 9fae0d4..9d9c08c 100644
                  uint32_t clearRectCount = rectCoversWholeTarget ? 0 : 1;
                  if (fbStorage->colorTarget != nullptr) {
                      worker->commandList->clearColor(0, clearRect.color, clearRects, clearRectCount);
-@@ -616,6 +1675,7 @@ namespace RT64 {
+@@ -616,6 +1676,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -3531,7 +3527,7 @@ index 9fae0d4..9d9c08c 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1246,20 +2306,116 @@ namespace RT64 {
+@@ -1246,20 +2307,116 @@ namespace RT64 {
          }
  
          startBarriers.emplace_back(RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE));
@@ -3658,7 +3654,7 @@ index 9fae0d4..9d9c08c 100644
                      const uint32_t sceneIndex = rtScene.interleavedRasters[i].rasterSceneIndex;
                      RenderTarget *colorRenderTarget = rtResources->interleavedColorTargetVector[i].get();
                      RenderTarget *depthRenderTarget = rtResources->interleavedDepthTargetVector[i].get();
-@@ -1296,9 +2452,230 @@ namespace RT64 {
+@@ -1296,9 +2453,230 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3890,7 +3886,7 @@ index 9fae0d4..9d9c08c 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2727,48 @@ namespace RT64 {
+@@ -1350,10 +2728,48 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3939,7 +3935,7 @@ index 9fae0d4..9d9c08c 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2801,12 @@ namespace RT64 {
+@@ -1386,6 +2802,12 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3952,7 +3948,7 @@ index 9fae0d4..9d9c08c 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2829,72 @@ namespace RT64 {
+@@ -1408,6 +2830,72 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -4025,7 +4021,7 @@ index 9fae0d4..9d9c08c 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2918,22 @@ namespace RT64 {
+@@ -1431,6 +2919,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -4048,7 +4044,7 @@ index 9fae0d4..9d9c08c 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2953,167 @@ namespace RT64 {
+@@ -1450,12 +2954,167 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -4216,15 +4212,16 @@ index 9fae0d4..9d9c08c 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3264,7 @@ namespace RT64 {
+@@ -1606,6 +3265,8 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
 +                        triangles.shellPipeline = nullptr;
++                        triangles.mirrorPipeline = nullptr;
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3341,20 @@ namespace RT64 {
+@@ -1682,6 +3343,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -4245,7 +4242,7 @@ index 9fae0d4..9d9c08c 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3420,2308 @@ namespace RT64 {
+@@ -1747,25 +3422,2314 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -5089,6 +5086,12 @@ index 9fae0d4..9d9c08c 100644
 +                        NoteMirrorPictureAddress(fbPair.colorImage.address);
 +                    }
 +                    instanceMirrorHudVector.push_back(mirrorPictureCopy ? 2 : ((GetMirrorMode() && worldSeen && !mirrorMode.zCmp() && !mirrorMode.zUpd()) ? 1 : 0));
++                    // A culled draw that may go in flipped (outside the 3D world) takes the pipeline that culls the other face.
++                    if (GetMirrorMode() && call.shaderDesc.flags.culling && (!worldOpen || (instanceMirrorHudVector.back() == 1)) &&
++                        (instanceDrawCall.type != InstanceDrawCall::Type::RegularRect))
++                    {
++                        instanceDrawCall.triangles.mirrorPipeline = featurePipelineFor(call.shaderDesc, call.shaderDesc.features | RENDER_FEATURE_MIRROR);
++                    }
 +                }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8) | ((parallax >> 22) & RASTER_PARALLAX_SHAPE_HIGH) |
@@ -6566,7 +6569,7 @@ index 9fae0d4..9d9c08c 100644
  
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
-@@ -1816,8 +5772,12 @@ namespace RT64 {
+@@ -1816,8 +5780,12 @@ namespace RT64 {
          }
  #   endif
  
@@ -7012,16 +7015,19 @@ index 3add9c3..433442a 100644
          void endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled);
          void recordSetup(RenderWorker *worker, std::vector<BufferUploader *> bufferUploaders, RSPProcessor *rspProcessor, VertexProcessor *vertexProcessor, const OutputBuffers *outputBuffers, bool rtEnabled);
 diff --git a/src/render/rt64_framebuffer_renderer_call.h b/src/render/rt64_framebuffer_renderer_call.h
-index f2eee70..dde55dd 100644
+index f2eee70..81375ab 100644
 --- a/src/render/rt64_framebuffer_renderer_call.h
 +++ b/src/render/rt64_framebuffer_renderer_call.h
-@@ -33,6 +33,9 @@ namespace RT64 {
+@@ -33,6 +33,12 @@ namespace RT64 {
              struct {
                  ShaderDescription shaderDesc;
                  const RenderPipeline *pipeline;
 +                // Banjo-Tooie: the pipeline for the shell redraws (3D grass shells, deep snow, Banjo's fur), the
 +                // material's shader built with them (RENDER_FEATURE_SHELLS); null when the draw has none.
 +                const RenderPipeline *shellPipeline;
++                // Banjo-Tooie: Mirror Mode: the pipeline for the draw when it goes in flipped (culls the other face); null when
++                // the draw doesn't cull or never goes in flipped.
++                const RenderPipeline *mirrorPipeline;
                  interop::float2 screenScale;
                  interop::float2 screenOffset;
                  RenderRect scissor;
@@ -7067,7 +7073,7 @@ index e842dcc..8b8c63a 100644
  
              interop::float4x4 &prevViewProjTransform = drawData.prevViewProjTransforms[proj.transformsIndex];
 diff --git a/src/render/rt64_raster_shader.cpp b/src/render/rt64_raster_shader.cpp
-index 721a01e..5c26bb0 100644
+index 721a01e..77d41c6 100644
 --- a/src/render/rt64_raster_shader.cpp
 +++ b/src/render/rt64_raster_shader.cpp
 @@ -5,6 +5,7 @@
@@ -7324,7 +7330,15 @@ index 721a01e..5c26bb0 100644
              "   pixelColor = resultColor;"
              "   pixelAlpha = resultAlpha;"
              "}";
-@@ -318,14 +400,19 @@ namespace RT64 {
+@@ -311,21 +393,26 @@ namespace RT64 {
+         pipelineDesc.renderTargetBlend[0] = RenderBlendDesc::Copy();
+         pipelineDesc.renderTargetFormat[0] = RenderTarget::colorBufferFormat(c.usesHDR);
+         pipelineDesc.renderTargetCount = 1;
+-        pipelineDesc.cullMode = c.culling ? RenderCullMode::FRONT : RenderCullMode::NONE;
++        pipelineDesc.cullMode = c.culling ? (((desc.features & RENDER_FEATURE_MIRROR) != 0) ? RenderCullMode::BACK : RenderCullMode::FRONT) : RenderCullMode::NONE;
+         pipelineDesc.depthClipEnabled = !c.NoN;
+         pipelineDesc.depthEnabled = c.zCmp || c.zUpd;
+         pipelineDesc.depthFunction = c.zCmp ? RenderComparisonFunction::LESS : RenderComparisonFunction::ALWAYS;
          pipelineDesc.depthWriteEnabled = c.zUpd;
          pipelineDesc.depthTargetFormat = RenderFormat::D32_FLOAT;
          pipelineDesc.multisampling = c.multisampling;
@@ -10035,7 +10049,7 @@ index 1ceb2ce..e1ba872 100644
 +
 +#endif // RT64_TEXTURESAMPLER_HLSLI
 diff --git a/src/shaders/VideoInterfacePS.hlsl b/src/shaders/VideoInterfacePS.hlsl
-index 3f33475..7d84d10 100644
+index 3f33475..f471fd1 100644
 --- a/src/shaders/VideoInterfacePS.hlsl
 +++ b/src/shaders/VideoInterfacePS.hlsl
 @@ -32,10 +32,141 @@ float4 PixelAntialiasing(float2 uv) {
@@ -10484,10 +10498,10 @@ index 0a5c332..4af6fc8 100644
  #ifdef HLSL_CPU
  };
 diff --git a/src/shared/rt64_render_params.h b/src/shared/rt64_render_params.h
-index b7a6750..182ef4e 100644
+index b7a6750..8ea5e3d 100644
 --- a/src/shared/rt64_render_params.h
 +++ b/src/shared/rt64_render_params.h
-@@ -15,13 +15,34 @@ namespace interop {
+@@ -15,13 +15,37 @@ namespace interop {
      typedef uint RenderFlags;
  #endif
  
@@ -10500,6 +10514,9 @@ index b7a6750..182ef4e 100644
 +    // Banjo-Tooie: and displaced ground (GroundTess.hlsl): its material's shaders with the ground's hull and domain shaders.
 +    // Only the pipeline changes, not the shaders' code.
 +#define RENDER_FEATURE_GROUND_TESS 4
++    // Banjo-Tooie: Mirror Mode: a draw that goes in flipped (the HUD) has its winding reversed, so its material's pipeline
++    // culls the other face. Only the pipeline changes, not the shaders' code.
++#define RENDER_FEATURE_MIRROR 8
 +
      struct RenderParams {
          uint ccL;
