@@ -103,11 +103,13 @@ namespace RT64 {
         // The composite pass's: the picture's depth and the gathered light.
         struct VolShadowCompositeDescriptorSet : RenderDescriptorSetBase {
             uint32_t gDepth;
+            uint32_t gSunMap;
             uint32_t gGathered;
 
             VolShadowCompositeDescriptorSet(RenderDevice *device = nullptr) {
                 builder.begin();
                 gDepth = builder.addTexture(1);
+                gSunMap = builder.addTexture(2);
                 gGathered = builder.addTexture(4);
                 builder.end();
                 if (device != nullptr) {
@@ -229,7 +231,7 @@ namespace RT64 {
         }
     }
 
-    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount) {
+    void SetVolumetricShadows(float sun, float haze, uint32_t quality, float distance, float lamps, uint32_t lampCount, uint32_t view) {
         const std::scoped_lock lock(settingsMutex);
         currentSettings.sun = std::clamp(sun, 0.0f, 1.0f);
         currentSettings.haze = std::clamp(haze, 0.0f, 1.0f);
@@ -237,6 +239,7 @@ namespace RT64 {
         currentSettings.distance = distance;
         currentSettings.lamps = std::clamp(lamps, 0.0f, 1.0f);
         currentSettings.lampCount = std::clamp(lampCount, 1U, uint32_t(VOL_SHADOW_MAX_LAMPS));
+        currentSettings.view = std::min(view, 2U);
     }
 
     VolumetricShadowSettings GetVolumetricShadows() {
@@ -516,6 +519,7 @@ namespace RT64 {
             res.volumeSet->setTexture(res.volumeSet->gLampMap, res.lampMap.get(), RenderTextureLayout::SHADER_READ, res.lampMapView.get());
             res.compositeSet = std::make_unique<VolShadowCompositeDescriptorSet>(device);
             res.compositeSet->setTexture(res.compositeSet->gDepth, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
+            res.compositeSet->setTexture(res.compositeSet->gSunMap, res.sunMap.get(), RenderTextureLayout::SHADER_READ, res.sunMapView.get());
             res.compositeSet->setTexture(res.compositeSet->gGathered, res.gathered.get(), RenderTextureLayout::SHADER_READ);
             res.setDepth = depthTarget->texture.get();
             res.setSunMap = res.sunMap.get();
@@ -539,15 +543,19 @@ namespace RT64 {
         constants.lightB = { up[0], up[1], up[2], range };
         constants.lightC = { towards[0], towards[1], towards[2], float(quality.sunMap) };
         constants.lightD = { middle[0], middle[1], middle[2], float(sunCells) };
-        // The haze: at 100, half the light is lost over about 3500 units (at the default 40, about 8700); the sky counts
-        // as one and a half times the map's reach away.
-        const float thickness = std::max(settings.haze, 0.01f) * (1.0f / 5000.0f);
-        constants.medium = { thickness, 1.5f * halfWidth, float(VOL_SHADOW_PASS_SUN), float(quality.scale) };
-        const float sunLight = sunOn ? sunStrength * 1.2f : 0.0f;
-        constants.sunColor = { frame.sunTint[0] * 1.0f * sunLight, frame.sunTint[1] * 0.92f * sunLight, frame.sunTint[2] * 0.80f * sunLight, 0.45f };
+        // The haze. How fast it gathers light along a ray is set for the look, not by physics: thick enough that a shadow a
+        // few hundred units deep shows (at the default 40, a fifth of the most light within 500 units, three fifths within
+        // 2000; L, 2026-10-24: the first try, at a twelfth of that, showed no shadows). What it hides of the picture behind
+        // is much thinner (at 40, a tenth is lost over 2000 units), so the scene doesn't fog over. The sky counts as one and
+        // a half times the map's reach away.
+        const float gathering = (0.3f + settings.haze) * (1.0f / 1500.0f);
+        const float extinction = settings.haze * (1.0f / 8000.0f);
+        constants.medium = { gathering, 1.5f * halfWidth, float(VOL_SHADOW_PASS_SUN), float(quality.scale) };
+        const float sunLight = sunOn ? sunStrength * 0.8f : 0.0f;
+        constants.sunColor = { frame.sunTint[0] * 1.0f * sunLight, frame.sunTint[1] * 0.92f * sunLight, frame.sunTint[2] * 0.80f * sunLight, 0.35f };
         // The shaded haze keeps a little of the sky's light, so the shafts stand out against it without it going black.
-        const float skyLight = 0.25f * std::max(settings.sun, settings.lamps * 0.5f);
-        constants.ambient = { frame.sunTint[0] * 0.55f * skyLight, frame.sunTint[1] * 0.62f * skyLight, frame.sunTint[2] * 0.75f * skyLight, settings.lamps };
+        const float skyLight = 0.12f * std::max(settings.sun, settings.lamps * 0.5f);
+        constants.ambient = { frame.sunTint[0] * 0.55f * skyLight, frame.sunTint[1] * 0.62f * skyLight, frame.sunTint[2] * 0.75f * skyLight, extinction };
 
         RenderRect area(0, 0, int32_t(colorTarget->width), int32_t(colorTarget->height));
         if (!frame.area.isEmpty()) {
@@ -640,7 +648,10 @@ namespace RT64 {
         commandList->setPipeline(pipelines->composite.get());
         commandList->setGraphicsPipelineLayout(pipelines->compositeLayout.get());
         commandList->setGraphicsDescriptorSet(res.compositeSet->get(), 0);
-        commandList->setGraphicsPushConstants(0, &constants);
+        // The composite reads the view in the pass's place.
+        interop::VolShadowCB compositeConstants = constants;
+        compositeConstants.medium.z = float(settings.view);
+        commandList->setGraphicsPushConstants(0, &compositeConstants);
         commandList->setVertexBuffers(0, nullptr, 0, nullptr);
         commandList->drawInstanced(3, 1, 0, 0);
 

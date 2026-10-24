@@ -8,6 +8,7 @@
 
 #include "VolumetricShadows.hlsli"
 
+Texture2D<float> gSunMap : register(t2);
 Texture2D<float2> gGathered : register(t4);
 
 // The sun's light gathered along the ray outside its map's box, where it all counts as lit.
@@ -82,5 +83,14 @@ float4 PSMain(in float4 pos : SV_Position) : SV_Target {
     light += gConstants.ambient.rgb * SunGathered(distance);
     // The lamps' glow: warm, as the game's torches and lanterns are.
     light += float3(1.0f, 0.72f, 0.42f) * max(gathered.y, 0.0f);
-    return float4(light, exp(-gConstants.medium.x * distance));
+    // The views for testing: only the light (over black), and with the sun's map (near the sun white, far dark).
+    if (gConstants.medium.z > 0.5f) {
+        if ((gConstants.medium.z > 1.5f) && all(pixel < int2(384, 384))) {
+            const int size = int(gConstants.lightC.w);
+            const float depth = gSunMap.Load(int3(pixel * size / 384, 0));
+            return float4((1.0f - depth).xxx, 0.0f);
+        }
+        return float4(light, 0.0f);
+    }
+    return float4(light, exp(-gConstants.ambient.w * distance));
 }

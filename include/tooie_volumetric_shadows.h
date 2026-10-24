@@ -20,6 +20,9 @@ namespace tooie::volumetric_shadows {
     inline const std::string quality_option = "volumetric_shadows_quality";
     // How far round the camera the sun's shafts reach, in world units.
     inline const std::string distance_option = "volumetric_shadows_distance";
+    // For testing: the picture, only the light in the haze, or that with the sun's map in a corner.
+    enum class View : uint32_t { Normal, LightOnly, LightAndMap };
+    inline const std::string view_option = "volumetric_shadows_view";
 
     void add_options(recomp::config::Config& graphics);
     // Once per game frame from tooie_warp_tick.

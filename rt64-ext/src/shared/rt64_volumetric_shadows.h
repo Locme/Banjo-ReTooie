@@ -51,12 +51,13 @@ namespace interop {
         float4 lightB;
         float4 lightC;
         float4 lightD;
-        // How thick the haze is (extinction per world unit), how far the sky counts as, the pass (VOL_SHADOW_PASS_*),
-        // then how many picture pixels a side each pixel of the gathered light covers (1 or 2).
+        // How fast the haze gathers light (per world unit), how far the sky counts as, the pass (VOL_SHADOW_PASS_*; the
+        // composite's view instead), then how many picture pixels a side each pixel of the gathered light covers (1 or 2).
         float4 medium;
         // The sun's light in the haze (rgb, strength folded in), then the haze's forward scattering (0 to 0.9).
         float4 sunColor;
-        // The light the shaded haze still gets from the sky (rgb), then the lamps' strength.
+        // The light the shaded haze still gets from the sky (rgb), then how much of the picture behind it the haze hides
+        // (extinction per world unit).
         float4 ambient;
     };
 #ifdef HLSL_CPU
