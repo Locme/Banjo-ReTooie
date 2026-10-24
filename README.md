@@ -1,17 +1,19 @@
 # Banjo Re-Tooie
 
-A native PC port of **Banjo-Tooie (USA, N64)** made by statically recompiling the
+Banjo Re-Tooie is a native PC port of **Banjo-Tooie (USA, N64)**, with modern
+graphics, smooth frame rates and quality-of-life options, made by statically recompiling the
 game's MIPS code to C with [N64Recomp](https://github.com/N64Recomp/N64Recomp),
 running it on [N64ModernRuntime](https://github.com/N64Recomp/N64ModernRuntime)
 and rendering it with [RT64](https://github.com/rt64/rt64). There is no
 emulator at runtime.
 
-> ### This port is AI-written.
+> ### Made by Locme, with code written by AI
 >
-> The code in this repository is written by an AI (Claude), directed and
-> play-tested by Locme. It is **not** associated with, or endorsed by, the
-> Banjo: Recompiled team, N64Recomp or RT64. Please do not take issues with
-> this port to those projects.
+> Locme leads this port: they choose and design every feature, play-test each
+> build, and drew the game's icon and the start menu art. The code is written
+> by an AI (Claude) to Locme's direction. The port is **not** associated with,
+> or endorsed by, the Banjo: Recompiled team, N64Recomp or RT64. Please do not
+> take issues with this port to those projects.
 
 > ### No game assets are included.
 >
@@ -113,6 +115,8 @@ from anywhere.
 
 ## Credits
 
+* Locme: direction, design and play-testing, the game's icon (`icons/`) and the
+  start menu art (`assets/launcher/`).
 * [N64Recomp](https://github.com/N64Recomp/N64Recomp),
   [N64ModernRuntime](https://github.com/N64Recomp/N64ModernRuntime) and
   [RT64](https://github.com/rt64/rt64) by Wiseguy and contributors.
