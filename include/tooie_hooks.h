@@ -100,9 +100,8 @@ void tooie_shadow_note_model(uint8_t* rdram, recomp_context* ctx);
 void tooie_snout_model(uint8_t* rdram, recomp_context* ctx);
 void tooie_snout_bone(uint8_t* rdram, recomp_context* ctx);
 void tooie_player_health_change(uint8_t* rdram, recomp_context* ctx);
-// Honeycombs Stay (src/gameplay/honeycomb_cap.cpp): chhoney's expiry check, and the limit of dropped honeycombs.
+// Honeycombs Stay (src/gameplay/honeycomb_cap.cpp): chhoney's expiry check.
 int tooie_honeycomb_no_expire(uint8_t* rdram, recomp_context* ctx);
-int tooie_honeycomb_limit(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx);

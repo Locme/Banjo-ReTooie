@@ -221,9 +221,9 @@ under it are described in the Graphics sections.
   `<bone> <type> <scale> <offset degrees> [set]`.
 
 - **Honeycombs stay (untested)**: the health honeycombs that enemies and
-  breakables drop no longer vanish after 20 seconds. As many as your full health
-  can lie about at once (the form you are in); when another drops, the oldest
-  goes. Leaving the area clears them. Default: off.
+  breakables drop no longer vanish after 20 seconds. The game's own limit of 10
+  on the ground at once stays; the oldest goes when another drops. Leaving the
+  area clears them. Default: off.
 
 ## Controls: Movement
 

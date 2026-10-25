@@ -1027,7 +1027,6 @@ L_808005DC:
     ctx->r13 = ADD32(ctx->r11, 0X1);
     // 0x808005FC: slti        $at, $t5, 0xB
     ctx->r1 = SIGNED(ctx->r13) < 0XB ? 1 : 0;
-    ctx->r1 = SIGNED(ctx->r13) < tooie_honeycomb_limit(rdram, ctx) ? 1 : 0;
     // 0x80800600: bne         $at, $zero, L_80800620
     if (ctx->r1 != 0) {
         // 0x80800604: sw          $t5, 0x0($v0)

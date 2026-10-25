@@ -999,7 +999,7 @@ void tooie::init_config() {
     graphics.add_bool_option(
         tooie::honeycomb_cap::option,
         "Honeycombs Stay",
-        "Health honeycombs that enemies and breakables drop no longer vanish after 20 seconds. As many as your full health can lie about at once; when another drops, the oldest goes. Leaving the area clears them. Work in progress.",
+        "Health honeycombs that enemies and breakables drop no longer vanish after 20 seconds. The game's limit of 10 on the ground at once stays, and the oldest goes when another drops. Leaving the area clears them. Work in progress.",
         false);
     recompui::config::set_option_page(tooie::honeycomb_cap::option, tooie::work_in_progress_tab_id);
     recompui::config::set_option_group(tooie::honeycomb_cap::option, "Honeycombs Stay");
