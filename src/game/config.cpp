@@ -23,6 +23,7 @@
 #include "tooie_torch_enemy.h"
 #include "tooie_boss_rush.h"
 #include "tooie_save_state.h"
+#include "tooie_honeycomb_cap.h"
 #include "tooie_honeycomb_glitter.h"
 #include "tooie_snout_jiggle.h"
 #include "tooie_original_honeycomb.h"
@@ -995,6 +996,13 @@ void tooie::init_config() {
         "Dive",
         "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and lies there until you jump. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
         false);
+    graphics.add_bool_option(
+        tooie::honeycomb_cap::option,
+        "Honeycombs Stay",
+        "Health honeycombs that enemies and breakables drop no longer vanish after 20 seconds. As many as your full health can lie about at once; when another drops, the oldest goes. Leaving the area clears them. Work in progress.",
+        false);
+    recompui::config::set_option_page(tooie::honeycomb_cap::option, tooie::work_in_progress_tab_id);
+    recompui::config::set_option_group(tooie::honeycomb_cap::option, "Honeycombs Stay");
     {
         namespace pf = tooie::picture_filters;
         for (const std::string* id : { &tooie::dive::option, &pf::grass_section_option,

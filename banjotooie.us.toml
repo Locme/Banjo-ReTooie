@@ -2730,3 +2730,17 @@ text = "if (tooie_dust_spawn(rdram, ctx)) { return; }"
 func = "badust_entrypoint_4"
 before_vram = 0x8080048C
 text = "if (tooie_dust_spawn_foot(rdram, ctx)) { ctx->r31 = MEM_W(0X2C, ctx->r29); ctx->r16 = MEM_W(0X28, ctx->r29); ctx->r29 = ADD32(ctx->r29, 0X58); return; }"
+
+# Honeycombs Stay (src/gameplay/honeycomb_cap.cpp, WIP, L 2026-10-25). chhoney's func_80800EB0 is the 20 second
+# expiry of a dropped health honeycomb: with the setting on it returns 0 (not expired) at once. In func_8080046C the
+# comb counter (0x80127194) is tested against 10 (slti $at, $t5, 0xB); the hook before the branch redoes that test
+# against the full health of Banjo's form plus one, so the oldest comb is removed by the game's own func_80800688.
+[[patches.hook]]
+func = "func_80800EB0_chhoney"
+before_vram = 0x80800EB0
+text = "if (tooie_honeycomb_no_expire(rdram, ctx)) { ctx->r2 = 0; return; }"
+
+[[patches.hook]]
+func = "func_8080046C_chhoney"
+before_vram = 0x80800600
+text = "ctx->r1 = SIGNED(ctx->r13) < tooie_honeycomb_limit(rdram, ctx) ? 1 : 0;"

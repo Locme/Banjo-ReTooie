@@ -372,6 +372,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/field_of_view.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/cutscene_skip.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/honeycomb_glitter.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/honeycomb_cap.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/snout_jiggle.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/original_honeycomb.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/window_beams.cpp

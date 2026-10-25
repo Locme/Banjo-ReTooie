@@ -220,6 +220,11 @@ under it are described in the Graphics sections.
   `TOOIE_DIVE_POSE_TUNE=<file>` replaces the pose rules, lines
   `<bone> <type> <scale> <offset degrees> [set]`.
 
+- **Honeycombs stay (untested)**: the health honeycombs that enemies and
+  breakables drop no longer vanish after 20 seconds. As many as your full health
+  can lie about at once (the form you are in); when another drops, the oldest
+  goes. Leaving the area clears them. Default: off.
+
 ## Controls: Movement
 
 - **Tiptoe**: hold it to tiptoe at any left stick tilt. Default: Left stick
