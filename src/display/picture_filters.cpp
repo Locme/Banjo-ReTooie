@@ -4237,7 +4237,6 @@ namespace {
         { &tooie::picture_filters::water_waves_option, 0.0 },
         { &tooie::picture_filters::light_shafts_option, 0.0 },
         { &tooie::picture_filters::sun_shadows_option, 0.0 },
-        { &tooie::picture_filters::grass_option, 0.0 },
         { &tooie::picture_filters::deep_snow_option, false },
         { &tooie::picture_filters::tessellated_sand_option, false },
         { &tooie::picture_filters::parallax_option, 0.0 },
@@ -4408,7 +4407,7 @@ namespace {
         RT64::SetMirrorTextTextures(mirror_text.data(), mirror_text.size());
         std::vector<uint64_t> lamps = build(std::begin(lamp_textures), std::end(lamp_textures), tooie::effect_pick::effect_lamp, true);
         RT64::SetSceneLampTextures(lamps.data(), lamps.size());
-        RT64::SetSceneGrassEdgeTextures(edges.data(), value<bool>(tooie::picture_filters::grass_edges_option, true) ? edges.size() : 0);
+        RT64::SetSceneGrassEdgeTextures(edges.data(), 0);
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
         // Light Source picks make the object itself shine (Slight Glow) and light nothing round it: a light of its own
         // drew a ball of light round the object however it was cast (L, 2026-10-22: "Object glows only").
@@ -4660,17 +4659,7 @@ void tooie::picture_filters::apply() {
     sun_shadow_reach = sun_shadows ? shadow_distance : 0.0f;
     sun_shadow_distance_set.store(shadow_distance);
     RT64::SetSceneSunShadowDistance(shadow_distance);
-    RT64::SetSceneGrass((float)(value<double>(grass_option, 0.0) / 100.0), (float)(value<double>(grass_height_option, 100.0) / 100.0),
-        (float)value<double>(grass_distance_option, 1800.0), (float)(value<double>(grass_density_option, 100.0) / 100.0),
-        (float)(value<double>(grass_patches_option, 50.0) / 100.0));
-    RT64::SetSceneGrassBlades((float)(value<double>(grass_thickness_option, 100.0) / 100.0),
-        (float)(value<double>(grass_random_length_option, 40.0) / 100.0), value<bool>(grass_chunky_option, false),
-        (float)(value<double>(grass_chunk_size_option, 200.0) / 100.0), value<bool>(grass_pixelated_option, false),
-        (float)value<double>(grass_pixel_size_option, 1.0), (float)(value<double>(grass_blend_option, 50.0) / 100.0));
-    RT64::SetSceneGrassCulling(value<bool>(grass_frustum_cull_option, true), value<bool>(grass_occlusion_cull_option, true),
-        value<bool>(grass_chunking_option, true));
-    RT64::SetSceneGrassLod((float)(value<double>(grass_lod_option, 0.0) / 100.0), value<bool>(grass_half_rate_option, true));
-    RT64::SetSceneGrassRayTracing(value<bool>(grass_ray_tracing_option, true));
+    RT64::SetSceneGrass(0.0f, 1.0f, 1800.0f, 1.0f, 0.5f);
     send_effect_textures();
     // The Character Shaders switch turns all of the character shaders off; their settings stay as they are.
     const bool character_on = value<bool>(character_section_option, true);
@@ -5858,113 +5847,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Adds moving film grain over the picture. 0 is off.",
         0, 100, 5, 0, false, 0, true);
 
-    graphics.add_bool_option(
-        grass_section_option,
-        "Grass",
-        "Shows the 3D grass settings below. Hiding them does not turn the grass off.",
-        true);
-
-    graphics.add_number_option(
-        grass_option,
-        "3D Grass",
-        "Real blades of grass grow out of the green ground of the levels (Spiral Mountain, Isle o' Hags, Mayahem Temple and others): wind rolls across them in waves, and they bend away from Banjo and spring back up behind him. Higher numbers grow more of them. Drawn on the picture, so nothing in the game changes. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        grass_height_option,
-        "3D Grass Height",
-        "How tall the 3D grass grows, in percent. 100 is about knee high on Banjo.",
-        25, 200, 5, 0, false, 100);
-    graphics.add_number_option(
-        grass_distance_option,
-        "3D Grass Distance",
-        "How far from the camera the 3D grass reaches before it shrinks away, in the game's units (Banjo is about 150 tall). Further costs more.",
-        500, 6000, 250, 0, false, 1800);
-    graphics.add_number_option(
-        grass_density_option,
-        "3D Grass Density",
-        "How closely the 3D grass blades grow, in percent. Lower is sparser and cheaper, higher is thicker and costs more.",
-        10, 200, 5, 0, false, 100);
-    graphics.add_number_option(
-        grass_patches_option,
-        "3D Grass Patches",
-        "How much of the green ground the 3D grass grows on: it grows in patches here and there, with short grass at their edges. Lower is fewer, smaller patches, 100 is grass everywhere.",
-        5, 100, 5, 0, false, 50);
-    graphics.add_number_option(
-        grass_thickness_option,
-        "3D Grass Thickness",
-        "How wide each 3D grass blade is, in percent of the normal width. Higher gives thicker, chunkier strands.",
-        50, 400, 10, 0, false, 100);
-    graphics.add_number_option(
-        grass_random_length_option,
-        "3D Grass Random Length",
-        "How much the 3D grass blades' lengths differ from each other, in percent. 0 makes every blade as long as 3D grass height; 100 makes them anything from very short to full length.",
-        0, 100, 5, 0, false, 40);
-    graphics.add_number_option(
-        grass_blend_option,
-        "3D Grass Blending",
-        "How much the 3D grass takes on the colour of the ground it grows from, so it blends in instead of standing out: most at the roots (no dark line where the blades meet the ground) and further away. 0 is off.",
-        0, 100, 5, 0, false, 50);
-    graphics.add_bool_option(
-        grass_chunky_option,
-        "Chunky 3D Grass",
-        "Low-poly 3D grass to suit the N64 look: fewer, wider blades, each a single flat-coloured triangle. Also cheaper to draw.",
-        false);
-    graphics.add_number_option(
-        grass_chunk_size_option,
-        "Chunk Size",
-        "With Chunky 3D grass: how big the chunky blades are, in percent of a normal blade. They also grow further apart, so the grass gets coarser. Higher is chunkier and cheaper.",
-        100, 400, 25, 0, false, 200);
-    graphics.add_bool_option(
-        grass_pixelated_option,
-        "Pixelated 3D Grass",
-        "Draws the 3D grass blades in blocks the size of the N64's own pixels, so they look blocky and pixel-sharp at any resolution. Works with or without Chunky 3D grass.",
-        false);
-    graphics.add_number_option(
-        grass_pixel_size_option,
-        "Pixel Size",
-        "With Pixelated 3D grass: how big the blocks are, in N64 pixels. 1 matches the game's own pixels; lower is finer (0.5 is half an N64 pixel), higher is blockier. A block is never smaller than one pixel of your screen.",
-        0.25, 8, 0.25, 2, false, 1);
-    graphics.add_bool_option(
-        grass_edges_option,
-        "3D Grass On Edges",
-        "Also grow 3D grass on the grassy parts of textures that are only partly grass: the grass fringe along cliff tops and banks, and grass at the foot of rocks and walls. The blades lean out from slopes and walls.",
-        true);
-    graphics.add_bool_option(
-        grass_frustum_cull_option,
-        "Frustum Culling",
-        "Skips 3D grass blades that are off the edges of the screen before they are drawn. Looks the same; faster.",
-        true);
-    graphics.add_bool_option(
-        grass_occlusion_cull_option,
-        "Occlusion Culling",
-        "With Chunking: skips whole chunks of 3D grass hidden behind walls, hills and other nearer things, using the depth of the frame before. Single blades are never hidden this way, so grass doesn't vanish behind Banjo as he moves. Turns itself off for a frame when the camera cuts or turns fast.",
-        true);
-    graphics.add_bool_option(
-        grass_chunking_option,
-        "Chunking",
-        "With Frustum culling: sorts the grassy ground into chunks and skips whole chunks that are off screen (or, with Occlusion culling, hidden) at once, before looking at single blades. Not the same as Chunky 3D grass. Looks the same; faster.",
-        true);
-    graphics.add_number_option(
-        grass_lod_option,
-        "3D Grass LOD",
-        "How much the 3D grass thins out with distance, in percent: fewer, wider blades further away. 0 is off: every blade is placed once, stays where it is and is drawn all the way out to 3D grass distance (slowest). Higher thins it out sooner and is faster; each blade still keeps its place.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_bool_option(
-        grass_half_rate_option,
-        "30 FPS 3D Grass",
-        "Works out which 3D grass blades to draw, and their sway in the wind, 30 times a second instead of every frame, and draws them again in between. Faster above 30 FPS; the wind and the grass parting round Banjo update at 30 FPS.",
-        true);
-    graphics.add_bool_option(
-        grass_ray_tracing_option,
-        "3D Grass In Ray Tracing",
-        "With Ray tracing on: the 3D grass near Banjo casts traced shadows (sun, lamps, light beams) and shows in traced reflections. Off leaves the grass out of the rays (faster).",
-        true);
-
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5987,25 +5874,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
 
 
     // Hidden when the Shaders toggle is off; the effects keep their values either way.
-    graphics.add_option_hidden_dependency(grass_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_height_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_distance_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_density_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_patches_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_thickness_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_random_length_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_blend_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_chunky_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_pixelated_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_chunk_size_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_pixel_size_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_edges_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_frustum_cull_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_occlusion_cull_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_chunking_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_lod_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_half_rate_option, grass_section_option, false);
-    graphics.add_option_hidden_dependency(grass_ray_tracing_option, grass_section_option, false);
 }
 
 std::vector<tooie::picture_filters::CostEffect> tooie::picture_filters::cost_effects() {

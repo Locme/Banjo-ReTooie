@@ -26,7 +26,6 @@ namespace tooie::picture_filters {
 
     inline const std::string preset_option = "effects_preset";
     // Lighting, Water, Fog (Experimental) toggle: hides the effect options below it (they keep their values).
-    inline const std::string grass_section_option = "grass_section";
     inline const std::string reflections_section_option = "reflections_section";
     inline const std::string brightness_option = "brightness";
     inline const std::string brightness_pattern_option = "brightness_pattern";
@@ -99,32 +98,10 @@ namespace tooie::picture_filters {
     inline const std::string wave_speed_option = "water_wave_speed";
     // Graphics > Water detail: how finely Modern and Stylised water is cut into moving geometry round the player (0 = none).
     inline const std::string water_detail_option = "water_detail";
-    inline const std::string grass_option = "grass_3d";
     // Graphics > Water: Original (the game's water) or Modern (new water drawn in its place, roadmap 4.45/4.46).
     inline const std::string water_option = "water_style";
     // Graphics > Shore foam: Modern water's broken white line along the shores, on the game's own water (Original).
     inline const std::string shore_foam_option = "water_shore_foam";
-    inline const std::string grass_height_option = "grass_3d_height";
-    inline const std::string grass_distance_option = "grass_3d_distance";
-    inline const std::string grass_density_option = "grass_3d_density";
-    inline const std::string grass_patches_option = "grass_3d_patches";
-    inline const std::string grass_thickness_option = "grass_3d_thickness";
-    inline const std::string grass_random_length_option = "grass_3d_random_length";
-    inline const std::string grass_chunky_option = "grass_3d_chunky";
-    inline const std::string grass_pixelated_option = "grass_3d_pixelated";
-    inline const std::string grass_chunk_size_option = "grass_3d_chunk_size";
-    inline const std::string grass_blend_option = "grass_3d_blend";
-    inline const std::string grass_pixel_size_option = "grass_3d_pixel_size";
-    inline const std::string grass_edges_option = "grass_3d_edges";
-    // Instanced 3D grass's culling: skip blades off screen, blades hidden behind nearer things, and whole patches of
-    // ground at a time.
-    inline const std::string grass_frustum_cull_option = "grass_3d_frustum_cull";
-    inline const std::string grass_occlusion_cull_option = "grass_3d_occlusion_cull";
-    inline const std::string grass_chunking_option = "grass_3d_chunking";
-    // 3D grass LOD (0 off: every blade stays out to the grass distance) and 30 FPS grass (its culling every other frame).
-    inline const std::string grass_lod_option = "grass_3d_lod";
-    inline const std::string grass_half_rate_option = "grass_3d_30fps";
-    inline const std::string grass_ray_tracing_option = "grass_3d_ray_tracing";
     // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (rt64-ext/src/shaders/Snow.hlsli),
     // and how deep it is.
     // The Tessellation switch (L, 2026-10-23): its Tessellated Snow and Tessellated Sand settings sit under it.

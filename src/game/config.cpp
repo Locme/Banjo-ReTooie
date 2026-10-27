@@ -1004,22 +1004,9 @@ void tooie::init_config() {
     recompui::config::set_option_page(tooie::honeycomb_cap::option, tooie::work_in_progress_tab_id);
     recompui::config::set_option_group(tooie::honeycomb_cap::option, "Honeycombs Stay");
     {
-        namespace pf = tooie::picture_filters;
-        for (const std::string* id : { &tooie::dive::option, &pf::grass_section_option,
-                &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
-                &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
-                &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
-                &pf::grass_pixelated_option, &pf::grass_pixel_size_option, &pf::grass_edges_option,
-                &pf::grass_frustum_cull_option, &pf::grass_occlusion_cull_option, &pf::grass_chunking_option,
-                &pf::grass_lod_option, &pf::grass_half_rate_option, &pf::grass_ray_tracing_option }) {
-            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
-        }
-        // Dive first, then the Grass toggle and its settings, all under one
-        // WIP heading.
-        recompui::config::set_option_display_before(tooie::dive::option, pf::grass_section_option);
+        recompui::config::set_option_page(tooie::dive::option, tooie::work_in_progress_tab_id);
         // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
         recompui::config::set_option_group(tooie::dive::option, "Dive");
-        recompui::config::set_option_group(pf::grass_section_option, "3D Grass");
     }
     graphics.add_bool_option(
         tooie::high_detail_models_option,
@@ -1167,9 +1154,7 @@ void tooie::init_config() {
     // Snow's settings, before Parallax.
     recompui::config::set_option_display_before(tooie::picture_filters::tessellation_section_option, tooie::picture_filters::deep_snow_option);
     recompui::config::set_option_display_before(tooie::picture_filters::tessellated_sand_option, tooie::picture_filters::parallax_option);
-    // 3D grass had its own section after the colour grading (L, 2026-10-16); it is in the WIP tab for now
-    // (L, 2026-10-21), and gets set_option_group(grass_section_option, "Grass") back when it returns.
-    // Ray Tracing has its own section after the grass, always shown (L, 2026-10-21).
+    // Ray Tracing has its own section after the colour grading, always shown (L, 2026-10-21).
     for (const std::string* option : { &tooie::picture_filters::ray_tracing_option, &tooie::picture_filters::ray_tracing_strength_option,
                                        &tooie::picture_filters::ray_tracing_reflections_option, &tooie::picture_filters::ray_tracing_water_reflections_option,
                                        &tooie::picture_filters::ray_tracing_metal_option, &tooie::picture_filters::ray_tracing_tiles_option,
