@@ -43,7 +43,6 @@ namespace RT64 {
     void SetScenePickHighlight(bool on);
     void ScenePickResult(uint64_t &hash, uint32_t &layers);
     uint32_t SceneParallaxTexture(uint64_t hash);
-    uint32_t SceneGrassTexture(uint64_t hash);
     uint32_t SceneIceTexture(uint64_t hash);
     bool SceneShinyTexture(uint64_t hash);
     bool SceneLampTexture(uint64_t hash);
@@ -277,8 +276,8 @@ namespace {
     std::map<uint64_t, Effects> effects;
     std::map<uint64_t, Effects> saved_effects;
     std::atomic<uint32_t> effects_version{1};
-    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text", "lamp", "glow", "light", "rt_off" };
-    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Lamp (ray traced light)", "Slight Glow", "Light Source", "Disable RT" };
+    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "deep_snow", "ice", "shiny", "text", "lamp", "glow", "light", "rt_off" };
+    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Lamp (ray traced light)", "Slight Glow", "Light Source", "Disable RT" };
 
     std::filesystem::path effects_path() {
         return tooie::dev_files::path("shader_effect_tags.txt");
@@ -425,13 +424,10 @@ namespace {
         return (has_live && (live->second != saved->second)) ? ", not saved" : "";
     }
 
-    // The built-in choice: grass, ice, shiny and lamp from the lists (grass along an edge is not in the set,
-    // edges_only says so). Shiny shows only while Screen-space reflections are on, as the list is looked up only then.
-    Effects built_in_effects(uint64_t hash, bool& edges_only) {
+    // The built-in choice: ice, shiny, lamp, glow, light and RT-off from the lists. Shiny shows only while Screen-space
+    // reflections are on, as the list is looked up only then.
+    Effects built_in_effects(uint64_t hash) {
         Effects set = 0;
-        const uint32_t grass = RT64::SceneGrassTexture(hash);
-        edges_only = (grass == 2);
-        set |= (grass == 1) ? bit(tooie::effect_pick::effect_grass) : 0;
         set |= (RT64::SceneIceTexture(hash) != 0u) ? bit(tooie::effect_pick::effect_ice) : 0;
         set |= RT64::SceneShinyTexture(hash) ? bit(tooie::effect_pick::effect_shiny) : 0;
         set |= RT64::SceneLampTexture(hash) ? bit(tooie::effect_pick::effect_lamp) : 0;
@@ -468,14 +464,10 @@ namespace {
             }
             note = effect_unsaved_note_locked(hash);
         }
-        bool edges_only = false;
         if (!own) {
-            effect = built_in_effects(hash, edges_only);
+            effect = built_in_effects(hash);
         }
         std::string set = effects_text(effect, false);
-        if (edges_only) {
-            set = (effect == 0) ? "Grass along edges" : set + " + Grass along edges";
-        }
         const int chosen = chosen_effect.load();
         const bool chosen_on = tooie::effect_pick::has(effect, Effect(chosen));
         snprintf(text, sizeof(text), "%016llx\n%s (%s%s)\n%s%d %s is %s: left click turns it %s, right click another effect\nKeys 1-9 (Shift: 10 on): that effect, hold left: paint, middle: Show All %s",
@@ -525,8 +517,7 @@ namespace {
     // off and any other turns Disable off; turning the last one off leaves Disable, and Disable off is the built-in
     // choice again. Returns whether the effect is on now.
     bool paint_effect(uint64_t hash, Effect chosen, bool on) {
-        bool edges_only = false;
-        const Effects built_in = built_in_effects(hash, edges_only);
+        const Effects built_in = built_in_effects(hash);
         {
             std::lock_guard lock{ effects_mutex };
             const auto it = effects.find(hash);
@@ -553,8 +544,7 @@ namespace {
     // texture has no Light Source pick.
     bool step_light_strength(uint64_t hash, int notches, int& strength) {
         // A built-in Light Source (a shipped pick) becomes the player's own pick with the same effects.
-        bool edges_only = false;
-        const Effects built_in = built_in_effects(hash, edges_only);
+        const Effects built_in = built_in_effects(hash);
         {
             std::lock_guard lock{ effects_mutex };
             auto it = effects.find(hash);
@@ -585,8 +575,7 @@ namespace {
         const Effect chosen = Effect(chosen_effect.load());
         Effects set = 0;
         if (!effect_of(hash, set)) {
-            bool edges_only = false;
-            set = built_in_effects(hash, edges_only);
+            set = built_in_effects(hash);
         }
         return paint_effect(hash, chosen, !tooie::effect_pick::has(set, chosen));
     }

@@ -78,7 +78,7 @@ namespace tooie::material_pick {
     size_t save_all();
 
     // The label beside the cursor for a texture.
-    // Textures a shader effect (ice, lamp, grass, glow) or parallax also owns, for the label; the effect ones get no built-in material.
+    // Textures a shader effect (ice, lamp, glow) or parallax also owns, for the label; the effect ones get no built-in material.
     void set_owners(std::vector<uint64_t> effect, std::vector<uint64_t> parallax);
     std::string describe(uint64_t hash, uint32_t layer, uint32_t layers, Property chosen, bool show_all);
 }

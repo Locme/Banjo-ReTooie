@@ -29,7 +29,7 @@ resets `lib/rt64` doesn't touch it.
 | `src/render/rt64_photo_grade.cpp`, `.h`, `src/shared/rt64_photo_grade.h`, `src/shaders/PhotoGradePS.hlsl` | Photo mode filters, sharpening |
 | `src/shaders/TextureUpscaleCS.hlsl` | Live texture upscaling |
 | `src/render/rt64_gpu_sections.h` | GPU timings for the frame overlay (included by the framebuffer renderer and scene effects, unchanged) |
-| `src/shaders/Parallax.hlsli`, `GrassGS.hlsl` | Parallax (included by RasterPS and GroundTess), grass blades |
+| `src/shaders/Parallax.hlsli` | Parallax (included by RasterPS and GroundTess) |
 | `src/shaders/GroundTess.hlsl` | Displaced ground |
 | `src/shaders/WaterTess.hlsl`, `WaterTess.hlsli` | Tessellated water |
 | `src/shaders/Fur.hlsli` | Banjo's fur (included by RasterPS) |
@@ -41,7 +41,7 @@ resets `lib/rt64` doesn't touch it.
 | `src/render/rt64_raster_shader_cache_ext.cpp`, `.h` (new) | The shader list: `SetShaderListPath`, `GetShaderListProgress`, the binary load/save helpers and `RasterShaderCache::loadShaderList`. Shared state through `RT64::shaderlistext` |
 | `src/render/rt64_scene_effects.cpp`, `.h`, `src/shared/rt64_scene_effects.h`, `src/shaders/SceneEffectsPS.hlsl`, `BloomPS.hlsl`, `SunShadowMap.hlsli`, `SunShadowMapVS.hlsl`, `SunShadowMapPS.hlsl` | Scene effects (AO, SSGI, reflections, bloom, fireflies, sun shadows) and the traced variants for Ray tracing (built with `rt64_ext_traced_shader`, the same ray query options) |
 | `src/render/rt64_volumetric_shadows.cpp`, `.h`, `src/shared/rt64_volumetric_shadows.h`, `src/shaders/VolumetricShadows.hlsli`, `VolumetricShadowMapVS.hlsl`, `VolumetricShadowMapPS.hlsl`, `VolumetricShadowVolumeVS.hlsl`, `VolumetricShadowVolumePS.hlsl`, `VolumetricShadowCompositePS.hlsl` | Volumetric shadows (WIP): polygonal light volumes (Billeter, Sintorn and Assarsson, HPG 2010) for the sun and the nearest lamps, with their own maps and passes; called after the scene effects and set up by one line in the shader library |
-| `src/shaders/Grass.hlsli`, `GrassBladeCommon.hlsli`, `GrassBladeVS.hlsl`, `GrassCullCS.hlsl`, `GrassHiZCS.hlsl`, `src/shared/rt64_grass_instances.h` | 3D grass with GPU instancing |
+| `src/shaders/CellHash.hlsli`, `FeatherGS.hlsl` | Cell hash (included by Snow.hlsli); Kazooie's feather cards (geometry shader) |
 
 **Can move here next (new files, verbatim; owner noted)**
 
@@ -56,7 +56,7 @@ RT64's own shaders find `.hlsli` files here: with `RT64_EXTENSION_SOURCE_DIR` se
 
 **Include guards:** every header here has an `#ifndef` guard as well as `#pragma once`, and so do the RT64
 `.hlsli` files these include (`FbRendererCommon`, `TextureSampler`, `Depth`). On Windows DXC reaches a file
-by two spellings of its path (`shaders\Grass.hlsli` from a file beside it, `shaders/Grass.hlsli` through
+by two spellings of its path (`shaders\Snow.hlsli` from a file beside it, `shaders/Snow.hlsli` through
 `-I`), and `#pragma once` then lets it in twice (L's build, 2026-10-21). A new header here needs a guard.
 Linux can't show it as is; to check, rerun each shader command from `ninja -t commands` with `/.` after
 each `-I` folder.
@@ -72,9 +72,9 @@ or they go back into the patch.
 | Files | What they hold |
 |---|---|
 | `src/hle/rt64_present_queue.cpp`, `.h` | SMAA, FXAA, FSR, photo grade, mirror calls; the screenshot copy; frame stats per present; fake vsync; the repaint and vsync switches in the present loop. A post-pass hook (a list of passes run on the game image before the VI pass) would take the pass calls out. |
-| `src/render/rt64_framebuffer_renderer.cpp`, `.h`, `rt64_framebuffer_renderer_call.h` | Scene effects split, water mask, grass, snow, ground tessellation, mirror. Needs a scene-pass hook; the largest part of the patch. |
+| `src/render/rt64_framebuffer_renderer.cpp`, `.h`, `rt64_framebuffer_renderer_call.h` | Scene effects split, water mask, snow, ground tessellation, mirror. Needs a scene-pass hook; the largest part of the patch. |
 | `src/render/rt64_shader_library.cpp`, `.h`, `rt64_descriptor_sets.h` | Pipelines and descriptor sets for every new pass. Would go with a pass hook that lets a pass own its pipelines. |
-| `src/render/rt64_raster_shader.cpp`, `.h`, `rt64_raster_shader_cache.cpp`, `.h` | Grass, tessellation pipelines, shader list. |
+| `src/render/rt64_raster_shader.cpp`, `.h`, `rt64_raster_shader_cache.cpp`, `.h` | Feather, tessellation pipelines, shader list. |
 | `src/render/rt64_texture_cache.cpp`, `.h`, `rt64_texture.h` | Texture upscaling, textures kept until drawn. |
 | `src/render/rt64_vi_renderer.cpp`, `.h`, `src/shaders/VideoInterfacePS.hlsl`, `src/shared/rt64_video_interface.h` | Picture filters. |
 | `src/hle/rt64_workload_queue.cpp`, `.h`, `rt64_workload.cpp`, `.h`, `rt64_rsp.cpp`, `rt64_state.cpp`, `rt64_draw_call.h`, `rt64_framebuffer_manager.cpp`, `rt64_present.h` | Per-frame data the passes read, `Set*` API entry points. |

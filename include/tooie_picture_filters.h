@@ -130,7 +130,7 @@ namespace tooie::picture_filters {
     inline const std::string char_dirt_option = "char_dirt";
     // The Character Shaders section's switch: shows Banjo's fur and Kazooie's feathers (hiding them turns none off).
     inline const std::string character_section_option = "character_shaders_section";
-    // Kazooie's feathers (rt64-ext/src/shaders/GrassGS.hlsl): how full (0 off) and how big.
+    // Kazooie's feathers (rt64-ext/src/shaders/FeatherGS.hlsl): how full (0 off) and how big.
     inline const std::string kazooie_feathers_option = "kazooie_feathers";
     inline const std::string kazooie_feather_size_option = "kazooie_feather_size";
     // Like Banjo's fur (L): length, density, noisiness, and how see-through.

@@ -32,7 +32,7 @@ emulator at runtime.
 - The game boots, plays and saves natively on Windows.
   Linux builds too. An Android build (64-bit ARM phones with Vulkan, Android 10 or newer) is in its first stage.
 - Graphics: widescreen and ultrawide, 60 FPS and higher with interpolation, any resolution, SMAA, FSR, DLSS,
-  screen-space and ray-traced effects (shadows, reflections, ambient occlusion, light), 3D grass and fur.
+  screen-space and ray-traced effects (shadows, reflections, ambient occlusion, light), and fur.
 - Quality of life: skip the intro, faster text and transitions, a free camera, save backups and save states,
   cheats, achievements, a level warp and a photo mode. Mods load from zip files.
 

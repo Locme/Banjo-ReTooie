@@ -3,7 +3,6 @@
 //
 
 #include "rt64_scene_effects.h"
-#include "shared/rt64_grass_instances.h"
 #include "shared/rt64_gpu_tile.h"
 #include "shared/rt64_rdp_tile.h"
 #include "rt64_gpu_sections.h"
@@ -119,15 +118,8 @@ namespace RT64 {
             uint64_t bvhBlasSize = 0;
             uint64_t bvhTlasSize = 0;
             uint64_t bvhScratchSize = 0;
-            // The 3D grass's blades near the camera: their own bottom level structure (rebuilt when the grass's culling
-            // pass writes them again), a second instance in the top level one (instance 1, mask 2; the world is mask 1).
-            std::unique_ptr<RenderBuffer> grassBlasBuffer;
-            std::unique_ptr<RenderAccelerationStructure> grassBlas;
-            uint64_t grassBlasSize = 0;
-            uint64_t grassBuiltGeneration = UINT64_MAX;
-            const RenderBuffer *grassBuiltVertices = nullptr;
             uint32_t bvhInstanceCount = 0;
-            const RenderBuffer *bvhInstanceBuffers[3] = {};
+            const RenderBuffer *bvhInstanceBuffers[2] = {};
             // The level's own draws (bvhBlas holds the models'): kept while their fingerprint (levelKey) is the same.
             std::unique_ptr<RenderBuffer> levelBlasBuffer;
             std::unique_ptr<RenderAccelerationStructure> levelBlas;
@@ -820,32 +812,6 @@ namespace RT64 {
         }
     }
 
-    // The night light textures: read on the render thread while it builds a frame's draws, so they are kept apart
-    // from the effects settings and swapped in whole.
-    static std::mutex grassTextureMutex;
-    static std::unordered_set<uint64_t> grassTextures;
-    static std::unordered_set<uint64_t> grassEdgeTextures;
-
-    void SetSceneGrassTextures(const uint64_t *hashes, size_t count) {
-        std::unordered_set<uint64_t> textures(hashes, hashes + count);
-        const std::scoped_lock lock(grassTextureMutex);
-        grassTextures.swap(textures);
-    }
-
-    void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count) {
-        std::unordered_set<uint64_t> textures(hashes, hashes + count);
-        const std::scoped_lock lock(grassTextureMutex);
-        grassEdgeTextures.swap(textures);
-    }
-
-    uint32_t SceneGrassTexture(uint64_t hash) {
-        const std::scoped_lock lock(grassTextureMutex);
-        if (grassTextures.empty() || (grassTextures.count(hash) != 0)) {
-            return 1;
-        }
-        return (grassEdgeTextures.count(hash) != 0) ? 2 : 0;
-    }
-
     // Shiny textures (metal, tiles) for screen-space reflections: read on the render thread like the ice ones,
     // and only looked up while the reflections are on.
     static std::mutex shinyTextureMutex;
@@ -866,7 +832,7 @@ namespace RT64 {
         return shinyWanted.load();
     }
 
-    // Ice textures: read on the render thread like the grass ones.
+    // Ice textures: read on the render thread, like the night light ones.
     static std::mutex iceTextureMutex;
     static std::unordered_set<uint64_t> iceTextures;
 
@@ -1223,15 +1189,6 @@ namespace RT64 {
         effectsSettings.dayShafts = enabled ? std::clamp(shafts, 0.0f, 1.0f) : 1.0f;
     }
 
-    void SetSceneGrass(float amount, float height, float distance, float density, float patches) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.grass = amount;
-        effectsSettings.grassHeight = height;
-        effectsSettings.grassDistance = distance;
-        effectsSettings.grassDensity = std::clamp(density, 0.1f, 2.0f);
-        effectsSettings.grassPatches = std::clamp(patches, 0.0f, 1.0f);
-    }
-
     void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand) {
         const std::scoped_lock lock(effectsMutex);
         effectsSettings.snowRefillAfter = std::max(refillAfter, 0.0f);
@@ -1246,59 +1203,6 @@ namespace RT64 {
         effectsSettings.snowSand = sand;
         effectsSettings.snow = on && (height > 0.0f);
         effectsSettings.snowHeight = std::clamp(height, 0.0f, 3.0f);
-    }
-
-    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.grassThickness = std::clamp(thickness, 0.25f, 4.0f);
-        effectsSettings.grassRandomLength = std::clamp(randomLength, 0.0f, 1.0f);
-        effectsSettings.grassChunky = chunky;
-        effectsSettings.grassChunkSize = std::clamp(chunkSize, 1.0f, 4.0f);
-        effectsSettings.grassPixelated = pixelated;
-        effectsSettings.grassPixelSize = std::clamp(pixelSize, 0.25f, 8.0f);
-        effectsSettings.grassBlend = std::clamp(blend, 0.0f, 1.0f);
-    }
-
-    void SetSceneGrassCulling(bool frustum, bool occlusion, bool chunking) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.grassCulling = (frustum ? GRASS_CULL_FRUSTUM : 0u) | (occlusion ? GRASS_CULL_OCCLUSION : 0u) | (chunking ? GRASS_CULL_CHUNKS : 0u);
-    }
-
-    uint32_t SceneGrassCulling() {
-        const std::scoped_lock lock(effectsMutex);
-        // Test aid: TOOIE_GRASS_CULL=<0-7> sets the flags instead (1 frustum, 2 occlusion, 4 chunking).
-        static const char *forced = getenv("TOOIE_GRASS_CULL");
-        return (forced != nullptr) ? (uint32_t(atoi(forced)) & 0x7u) : effectsSettings.grassCulling;
-    }
-
-    void SetSceneGrassLod(float lod, bool halfRate) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.grassLod = std::clamp(lod, 0.0f, 1.0f);
-        effectsSettings.grassHalfRate = halfRate;
-    }
-
-    bool SceneGrassHalfRate() {
-        const std::scoped_lock lock(effectsMutex);
-        // Test aid: TOOIE_GRASS_HALF=0 or 1 instead of the setting.
-        static const char *forced = getenv("TOOIE_GRASS_HALF");
-        return (forced != nullptr) ? (forced[0] == '1') : effectsSettings.grassHalfRate;
-    }
-
-    void SetSceneGrassRayTracing(bool enabled) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.grassRayTracing = enabled;
-    }
-
-    float SceneGrassRayReach() {
-        if (!RayTracingActive()) {
-            return 0.0f;
-        }
-        const std::scoped_lock lock(effectsMutex);
-        // Test aid: TOOIE_GRASS_RT=0 or 1 instead of the setting.
-        static const char *forced = getenv("TOOIE_GRASS_RT");
-        const bool wanted = (forced != nullptr) ? (forced[0] == '1') : effectsSettings.grassRayTracing;
-        // Out to 1500 units: further off a blade's shadow is too small to see, and the blades too many.
-        return wanted ? std::min(effectsSettings.grassDistance, 1500.0f) : 0.0f;
     }
 
     void SetSceneFur(float amount, float length, float density, float noisiness) {
@@ -1519,28 +1423,6 @@ namespace RT64 {
         return true;
     }
 
-    // Enough shells that the knee-high blades look solid from the side.
-    static constexpr uint32_t GrassShells = 24;
-
-    // Real blades (GrassGS.hlsl): the finest grid's cell size at density 1, and how many blades a pass can grow on a triangle.
-    static constexpr float GrassBladeCell = 3.0f;
-    static constexpr uint32_t GrassBladeInvocations = 32;
-    static constexpr uint32_t GrassBladesPerInvocation = 11;
-    static constexpr uint32_t GrassBladeMaxPasses = 31;
-
-    uint32_t SceneGrassBladePasses(const float (&low)[2], const float (&high)[2], float distanceToCamera, float lodNear, float baseCell) {
-        // As GrassCellSize in GrassGS.hlsl: the passes the triangle's grid needs at its distance, at most GrassBladeMaxPasses.
-        const float cell = baseCell * std::exp2(std::max(std::floor(std::log2(std::max(distanceToCamera, 1.0f) / lodNear)), 0.0f));
-        const float cells = (std::floor((high[0] - low[0]) / cell) + 2.0f) * (std::floor((high[1] - low[1]) / cell) + 2.0f);
-        const float perPass = float(GrassBladeInvocations * GrassBladesPerInvocation);
-        return std::clamp(uint32_t(std::ceil(cells / perPass)), 1u, GrassBladeMaxPasses);
-    }
-
-    uint32_t SceneGrassShells() {
-        const std::scoped_lock lock(effectsMutex);
-        return (effectsSettings.grass > 0.0f) ? GrassShells : 0;
-    }
-
     // Gauss-Jordan elimination with partial pivoting; false when the matrix can't be inverted.
     static bool InvertMatrix4(const double (&m)[4][4], double (&out)[4][4]) {
         double a[4][8];
@@ -1592,7 +1474,7 @@ namespace RT64 {
     {
         SceneEffectsSettings settings = GetSceneEffects();
         // (Deep snow, Kazooie's and NPCs' feathers and parallax mapping need the camera's terms worked out here too.)
-        if (((settings.grass <= 0.0f) && !settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f) && (settings.groundDisplacement <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
+        if ((!settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f) && (settings.groundDisplacement <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
             return false;
         }
         UsePlayerFrame(settings, workloadId);
@@ -1604,23 +1486,9 @@ namespace RT64 {
             return false;
         }
 
-        // The full blade height straight up in world space, in the game's clip space, then as RasterVS has its
-        // positions: the RSP's screen position (ndc * viewport scale + translate) back over the resolution, times w.
-        const float height = 36.0f * settings.grassHeight;
-        float clip[4];
-        for (int c = 0; c < 4; c++) {
-            clip[c] = height * (rowVector ? viewProj.m[1][c] : viewProj.m[c][1]);
-        }
         const float halfWidth = resolution.x / 2.0f;
         const float halfHeight = resolution.y / 2.0f;
-        frameParams.grassClipUp = {
-            clip[0] * (viewportScale.x / halfWidth) + clip[3] * ((viewportTranslate.x - halfWidth) / halfWidth),
-            clip[1] * (viewportScale.y / halfHeight) - clip[3] * ((viewportTranslate.y - halfHeight) / halfHeight),
-            clip[2] * viewportScale.z + clip[3] * viewportTranslate.z,
-            clip[3]
-        };
-
-        // Real blades (GrassGS.hlsl): the whole map from world space to those positions, and back.
+        // Kazooie's feathers (FeatherGS.hlsl): the whole map from world space to RasterVS's positions, and back.
         double toClip[4][4];
         for (int j = 0; j < 4; j++) {
             float c[4];
@@ -1641,7 +1509,6 @@ namespace RT64 {
             frameParams.grassClipToWorld[r] = { float(inverse[r][0]), float(inverse[r][1]), float(inverse[r][2]), float(inverse[r][3]) };
         }
 
-        frameParams.grassDepthTerms = DepthTermsForViewport(rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] }, viewportScale.z, viewportTranslate.z);
         frameParams.grassProjection = { m[0][0], m[1][1], viewportWidth, viewportHeight };
 
         // View space back to world space, as RecordSceneEffects does it.
@@ -1668,21 +1535,6 @@ namespace RT64 {
         frameParams.grassWorldY = { y0, y1, y2, -(v[3][0] * y0 + v[3][1] * y1 + v[3][2] * y2) };
         frameParams.grassWorldZ = { z0, z1, z2, -(v[3][0] * z0 + v[3][1] * z1 + v[3][2] * z2) };
 
-        // A tuft of five blades every 6 units (Banjo is about 150 tall); fewer cells hold one at lower amounts.
-        frameParams.grassParams = { height, std::sqrt(settings.grassDensity) / 6.0f, std::max(settings.grassDistance, 100.0f), 0.35f + 0.65f * std::min(settings.grass, 1.0f) };
-        frameParams.grassPlayer = { settings.player[0], settings.player[2], settings.player[1], 45.0f };
-
-        // A breeze from one side; Grass.hlsli rolls waves across the field along it.
-        static const auto startTime = std::chrono::steady_clock::now();
-        const float now = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
-        frameParams.grassWind = { 0.85f, 0.5f, std::fmod(now, 3600.0f), 1.0f };
-        // Real blades: the grid coarsens from the LOD distance (none with LOD off: every blade out to the grass
-        // distance; from 150 units away at full LOD, between them evenly in doublings), wind noise 260 units across
-        // drifting 0.12 of that a second, and the finest grid's cells 3 units wide at density 1 (twice the density,
-        // twice the blades).
-        const float grassReach = std::max(settings.grassDistance, 100.0f);
-        const float grassLodNear = (settings.grassLod <= 0.0f) ? 1.0e6f : grassReach * std::pow(std::min(150.0f / grassReach, 1.0f), settings.grassLod);
-        frameParams.grassBlades = { grassLodNear, 260.0f, 0.12f, (settings.grassChunky ? settings.grassChunkSize : 1.0f) * GrassBladeCell / std::sqrt(settings.grassDensity) };
         // Kazooie's feathers: about 5.5 units long and 2.4 wide at size 1 (her head is about 25 units across), packed
         // so each spot of her is under about two of them.
         const float featherLength = 5.5f * settings.featherSize * settings.featherLength;
@@ -1695,58 +1547,6 @@ namespace RT64 {
         frameParams.npcFeatherParams = { npcFeatherLength, npcFeatherWidth,
             (0.8f + 1.6f * settings.npcFeathers) * settings.npcFeatherDensity / (npcFeatherLength * npcFeatherWidth * 0.55f), 0.35f };
         frameParams.npcFeatherStyle = { settings.npcFeatherNoisiness, settings.npcFeatherTransparency, 0.0f, 0.0f };
-        // Patches of grass about 220 units across (Banjo is about 150 tall), from a few to all the green ground.
-        frameParams.grassPatches = { settings.grassPatches, 220.0f, settings.grassThickness, settings.grassRandomLength };
-        frameParams.grassStyle = { settings.grassChunky ? 1.0f : 0.0f, settings.grassPixelated ? 1.0f : 0.0f, settings.grassChunkSize, settings.grassPixelSize };
-        frameParams.grassLook = { settings.grassBlend, 0.0f, 0.0f, 0.0f };
-
-        // Banjo's trail: a point every tenth of a second he moves, each springing back up over about a second.
-        struct TrailPoint { float x, y, z, time; };
-        static TrailPoint trail[12] = {};
-        static uint32_t trailNext = 0;
-        static float trailLast = -1.0f;
-        const bool havePlayer = settings.player[1] > -1e8f;
-        if (havePlayer && (now - trailLast >= 0.1f)) {
-            const TrailPoint &last = trail[(trailNext + 11) % 12];
-            const float dx = settings.player[0] - last.x, dy = settings.player[1] - last.y, dz = settings.player[2] - last.z;
-            const float moved = std::sqrt(dx * dx + dy * dy + dz * dz);
-            if (moved > 400.0f) {
-                // A warp or a new map: the old trail is somewhere else.
-                for (TrailPoint &point : trail) {
-                    point.time = 0.0f;
-                }
-            }
-            if ((last.time == 0.0f) || (moved > 3.0f)) {
-                trail[trailNext] = { settings.player[0], settings.player[1], settings.player[2], std::max(now, 1e-3f) };
-                trailNext = (trailNext + 1) % 12;
-            }
-            trailLast = now;
-        }
-        float low[2] = { 1e30f, 1e30f }, high[2] = { -1e30f, -1e30f };
-        if (havePlayer) {
-            low[0] = high[0] = settings.player[0];
-            low[1] = high[1] = settings.player[2];
-        }
-        for (uint32_t i = 0; i < 12; i++) {
-            const TrailPoint &point = trail[i];
-            const float age = now - point.time;
-            float pressed = 0.0f;
-            if (havePlayer && (point.time > 0.0f) && (age < 2.0f)) {
-                // Held down briefly, then a damped spring back up that just overshoots.
-                const float t = std::max(age - 0.15f, 0.0f);
-                pressed = std::exp(-2.6f * t) * std::cos(3.4f * t);
-                if (std::abs(pressed) < 1e-3f) {
-                    pressed = 0.0f;
-                }
-            }
-            frameParams.grassTrail[i] = { point.x, point.z, point.y, pressed };
-            if (pressed != 0.0f) {
-                low[0] = std::min(low[0], point.x); low[1] = std::min(low[1], point.z);
-                high[0] = std::max(high[0], point.x); high[1] = std::max(high[1], point.z);
-            }
-        }
-        const float trailRadius = frameParams.grassPlayer.w;
-        frameParams.grassTrailBounds = { low[0] - trailRadius, low[1] - trailRadius, high[0] + trailRadius, high[1] + trailRadius };
         return true;
     }
 
@@ -2366,7 +2166,7 @@ namespace RT64 {
             return false;
         }
 
-        // The snow's full height straight up, as RasterVS has its positions (as ComputeSceneGrass's grassClipUp).
+        // The snow's full height straight up, as RasterVS has its positions (as snowClipUp).
         const float depth = SnowDepth * settings.snowHeight;
         const float full = depth * (1.0f + SnowBank);
         float clip[4];
@@ -2630,7 +2430,7 @@ namespace RT64 {
     // positions the vertex processor worked out, under one instance of the identity transform. Does nothing unless
     // RayTracingActive(); on a failure the pass falls back to the depth march (bvhReady stays false).
     void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
-        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, const SceneRayGrass &grass, uint64_t levelKey)
+        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, uint64_t levelKey)
     {
         Resources &res = resourcesFor(worker);
         res.bvhReady = false;
@@ -2710,7 +2510,6 @@ namespace RT64 {
             res.rayTexturesSet = set;
             res.rayTexturesCache.push_back(std::move(entry));
         }
-        const bool withGrass = building && (grass.vertices != nullptr) && (grass.vertexCount >= 3);
         // A pass with no casters (some in-between frames have none) traces through the last structure built, rather than
         // dropping to the depth march and its shadow map, which made the shadows come and go.
         // The lights are written every pass, whatever the casters.
@@ -2748,10 +2547,7 @@ namespace RT64 {
             // percent times 8 and the subsurface scattering strength in percent times 1024.
             mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayTracingHalf.load() ? 2.0f : 0.0f) + (rayScenesPbr.load() ? 4.0f : 0.0f) +
                 float(rayTracingBrdfPercent.load() * 8u + rayTracingSubsurfacePercent.load() * 1024u);
-            // The 3D grass (when it is in the structure): how far along a ray its blades are passed by, so a ray from a
-            // blade or the ground among them (whose surfaces the picture only roughly has) isn't stopped by its own
-            // blade and its neighbours: one and a half blade heights.
-            mapped[10] = withGrass ? 54.0f * lightSettings.grassHeight : 0.0f;
+            mapped[10] = 0.0f;
             // How much the Parallax materials reflect (Graphics > Ray Tracing's sliders), in hundredths packed together: Metal,
             // then Tiles times 256, then Smooth times 65536.
             mapped[11] = !rayScenesShine.load() ? 0.0f : std::round(rayTracingMaterials[0].load() * 100.0f) + std::round(rayTracingMaterials[1].load() * 100.0f) * 256.0f +
@@ -2853,12 +2649,6 @@ namespace RT64 {
         if (withModels) {
             device->setBottomLevelASBuildInfo(modelInfo, modelMeshes.data(), uint32_t(modelMeshes.size()), true, false);
         }
-        RenderBottomLevelASBuildInfo grassInfo;
-        if (withGrass) {
-            const RenderBottomLevelASMesh grassMesh(RenderBufferReference(), RenderBufferReference(grass.vertices, 0), RenderFormat::UNKNOWN, RenderFormat::R32G32B32_FLOAT,
-                0, grass.vertexCount - (grass.vertexCount % 3), uint32_t(sizeof(float) * 4), false);
-            device->setBottomLevelASBuildInfo(grassInfo, &grassMesh, 1, true, false);
-        }
 
         // Buffers that are too small are replaced (the old ones kept until the GPU is done with them).
         auto grow = [&](std::unique_ptr<RenderBuffer> &buffer, std::unique_ptr<RenderAccelerationStructure> &structure, uint64_t &capacity, uint64_t needed, const char *name) {
@@ -2880,16 +2670,9 @@ namespace RT64 {
         if (withModels) {
             grow(res.bvhBlasBuffer, res.bvhBlas, res.bvhBlasSize, modelInfo.accelerationStructureSize, "Scene Effects models BLAS");
         }
-        if (withGrass && grow(res.grassBlasBuffer, res.grassBlas, res.grassBlasSize, grassInfo.accelerationStructureSize, "Scene Effects grass BLAS")) {
-            res.grassBuiltGeneration = UINT64_MAX;
-        }
-        bool grassBuild = false;
-        if (withGrass) {
-            grassBuild = (res.grassBuiltGeneration != grass.generation) || (res.grassBuiltVertices != grass.vertices);
-        }
-        // Instance 0 the level (mask 1), the models (mask 4, custom index MaxGeometries), the grass (mask 2, RayGrassInstance).
-        RenderTopLevelASInstance instances[3];
-        const RenderBuffer *instanceBuffers[3] = {};
+        // Instance 0 the level (mask 1), the models (mask 4, custom index MaxGeometries).
+        RenderTopLevelASInstance instances[2];
+        const RenderBuffer *instanceBuffers[2] = {};
         uint32_t instanceCount = 0;
         if (withLevel) {
             instanceBuffers[instanceCount] = res.levelBlasBuffer.get();
@@ -2899,13 +2682,9 @@ namespace RT64 {
             instanceBuffers[instanceCount] = res.bvhBlasBuffer.get();
             instances[instanceCount++] = RenderTopLevelASInstance(RenderBufferReference(res.bvhBlasBuffer.get()), uint32_t(MaxGeometries), 0x04, 0, true, RenderAffineTransform());
         }
-        if (withGrass) {
-            instanceBuffers[instanceCount] = res.grassBlasBuffer.get();
-            instances[instanceCount++] = RenderTopLevelASInstance(RenderBufferReference(res.grassBlasBuffer.get()), 0xFFFFFFu, 0x02, 0, true, RenderAffineTransform());
-        }
-        const bool instancesChanged = (instanceCount != res.bvhInstanceCount) || !std::equal(instanceBuffers, instanceBuffers + 3, res.bvhInstanceBuffers);
+        const bool instancesChanged = (instanceCount != res.bvhInstanceCount) || !std::equal(instanceBuffers, instanceBuffers + 2, res.bvhInstanceBuffers);
         res.bvhInstanceCount = instanceCount;
-        std::copy(instanceBuffers, instanceBuffers + 3, res.bvhInstanceBuffers);
+        std::copy(instanceBuffers, instanceBuffers + 2, res.bvhInstanceBuffers);
         RenderTopLevelASBuildInfo tlasInfo;
         device->setTopLevelASBuildInfo(tlasInfo, instances, instanceCount, true, false);
         if ((res.bvhTlas == nullptr) || (res.bvhTlasSize < tlasInfo.accelerationStructureSize)) {
@@ -2917,8 +2696,7 @@ namespace RT64 {
             res.bvhTlas = device->createAccelerationStructure(RenderAccelerationStructureDesc(RenderAccelerationStructureType::TOP_LEVEL, RenderBufferReference(res.bvhTlasBuffer.get()), size));
             res.bvhTlasSize = size;
         }
-        const uint64_t scratchNeeded = std::max({ (withLevel && !levelKept) ? levelInfo.scratchSize : 0, withModels ? modelInfo.scratchSize : 0, tlasInfo.scratchSize,
-            withGrass ? grassInfo.scratchSize : 0 });
+        const uint64_t scratchNeeded = std::max({ (withLevel && !levelKept) ? levelInfo.scratchSize : 0, withModels ? modelInfo.scratchSize : 0, tlasInfo.scratchSize });
         if ((res.bvhScratchBuffer == nullptr) || (res.bvhScratchSize < scratchNeeded)) {
             const uint64_t size = std::max<uint64_t>(scratchNeeded + scratchNeeded / 2, 1u << 20);
             res.retireLater(std::move(res.bvhScratchBuffer));
@@ -2958,11 +2736,6 @@ namespace RT64 {
         if (withModels) {
             buildBottom(res.bvhBlas.get(), res.bvhBlasBuffer.get(), modelInfo, worldPos);
         }
-        if (grassBuild) {
-            buildBottom(res.grassBlas.get(), res.grassBlasBuffer.get(), grassInfo, grass.vertices);
-            res.grassBuiltGeneration = grass.generation;
-            res.grassBuiltVertices = grass.vertices;
-        }
         commandList->barriers(RenderBarrierStage::COMPUTE, {
             RenderBufferBarrier(res.bvhScratchBuffer.get(), RenderBufferAccess::WRITE),
             RenderBufferBarrier(res.bvhTlasBuffer.get(), RenderBufferAccess::WRITE)
@@ -2983,9 +2756,8 @@ namespace RT64 {
             static auto lastLog = std::chrono::steady_clock::now();
             if (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(1000)) {
                 lastLog = std::chrono::steady_clock::now();
-                fprintf(stderr, "[rt] BVH built: level %zu geometries (%s, BLAS %llu KB), models %zu geometries (BLAS %llu KB), TLAS %llu KB, scratch %llu KB, grass %s (BLAS %llu KB, reach %.0f)\n",
-                    levelMeshes.size(), levelKept ? "kept" : "rebuilt", (unsigned long long)(res.levelBlasSize / 1024), modelMeshes.size(), (unsigned long long)(res.bvhBlasSize / 1024), (unsigned long long)(res.bvhTlasSize / 1024), (unsigned long long)(res.bvhScratchSize / 1024),
-                    withGrass ? (grassBuild ? "rebuilt" : "kept") : "none", (unsigned long long)(res.grassBlasSize / 1024), grass.reach);
+                fprintf(stderr, "[rt] BVH built: level %zu geometries (%s, BLAS %llu KB), models %zu geometries (BLAS %llu KB), TLAS %llu KB, scratch %llu KB\n",
+                    levelMeshes.size(), levelKept ? "kept" : "rebuilt", (unsigned long long)(res.levelBlasSize / 1024), modelMeshes.size(), (unsigned long long)(res.bvhBlasSize / 1024), (unsigned long long)(res.bvhTlasSize / 1024), (unsigned long long)(res.bvhScratchSize / 1024));
                 uint32_t modelDraws = 0, modelTris = 0, cutDraws = 0, shineDraws = 0, materialDraws = 0;
                 for (size_t i = 0; i < drawCount; i++) {
                     const uint32_t material = (draws[i].flags >> SceneRayDrawMaterialShift) & 0xFFu;

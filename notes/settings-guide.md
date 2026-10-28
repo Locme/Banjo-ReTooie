@@ -200,9 +200,9 @@ own tab, so they are saved in general.json and apply as soon as they change.
 
 Features still being worked on, in the WIP tab's WIP section. When one is done it
 moves back to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's
-menus is already in QOL > Menu, Grass to Graphics after the colour grading). The tab is a page of Graphics
-options: all of them save in graphics.json. The Grass toggle and the 3D grass settings
-under it are described in the Graphics sections.
+menus is already in QOL > Menu). The tab is a page of Graphics
+options: all of them save in graphics.json. 
+
 
 - **Dive** (off by default): press the Run key (B on a controller) in the air as
   Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and stays
@@ -384,7 +384,7 @@ in their shade).
 **Shader Effects Pick Mode** (Controls, Pick Modes, no default) works the
 same way for the texture effects. A texture can have several effects at once.
 The label lists the texture's effects ("yours" or "built-in") and the effect
-you have chosen. **Right click** chooses the effect (Disable, Grass, Deep Snow,
+you have chosen. **Right click** chooses the effect (Disable, Deep Snow,
 Ice Reflection, Shiny Reflection, Text, Lamp, Slight Glow, Light Source, Disable RT; **Shift +
 right click** goes back one) and **left click** turns it on or off for the
 texture under the cursor. The **number keys 1 to 9** choose effect 1 to 9 in

@@ -980,31 +980,19 @@ bool RayTexturesOn() {
     return asfloat(gLights.Load(32)) > 0.5f;
 }
 
-// The traced structure's instances (BuildSceneBVH): the level's own draws (mask 1, custom index 0), the models
-// (characters, enemies, objects: mask 4, custom index the first of their geometry table entries) and the 3D grass's
-// blades near the camera (mask 2, custom index RayGrassInstance), not opaque, with no geometry entry: a ray's geometry
-// is RayGrassGeometry there.
-static const uint RayGrassGeometry = 0xFFFFFFFFu;
-static const uint RayGrassInstance = 0xFFFFFFu;
+// The traced structure's instances (BuildSceneBVH): the level's own draws (mask 1, custom index 0) and the models
+// (characters, enemies, objects: mask 4, custom index the first of their geometry table entries).
 static const uint RayLevelMask = 0x01u;
-static const uint RayGrassMask = 0x02u;
 static const uint RayModelMask = 0x04u;
 static const uint RayWorldMask = RayLevelMask | RayModelMask;
 
 uint RayGeometryOf(uint instance, uint geometry) {
-    return (instance == RayGrassInstance) ? RayGrassGeometry : (instance + geometry);
+    return instance + geometry;
 }
 
-// Whether a ray stops at a grass blade it met t along (ray units): only past one and a half blade heights from where
-// it started (the lights buffer's header), so the blade a ray starts on and those round it (where the picture's
-// surfaces only roughly match the blades) don't shade it.
-bool RayGrassStops(RayDesc ray, float t) {
-    return t * length(ray.Direction) > asfloat(gLights.Load(40));
-}
-
-// A traced geometry's flags: 1 a cut-out or see-through draw, 2 it has a texture, 4 a model, 8 the 3D grass.
+// A traced geometry's flags: 1 a cut-out or see-through draw, 2 it has a texture, 4 a model.
 uint RayGeometryFlags(uint geometry) {
-    return (geometry == RayGrassGeometry) ? 8u : gRayGeometries.Load(geometry * 16u + 8u);
+    return gRayGeometries.Load(geometry * 16u + 8u);
 }
 
 // A geometry's material (SceneMaterialTexture: Parallax's shape + 1; 0 for none).
@@ -1013,12 +1001,12 @@ uint RayGeometryMaterial(uint geometry) {
     if (asfloat(gLights.Load(56)) < 0.5f) {
         return 0u;
     }
-    return (geometry == RayGrassGeometry) ? 0u : (gRayGeometries.Load(geometry * 16u + 12u) & 0xFFu);
+    return gRayGeometries.Load(geometry * 16u + 12u) & 0xFFu;
 }
 
 RayPbr RayGeometryPbr(uint geometry) {
     RayPbr material = RayPbrNone();
-    if (!RayPbrOn() || (geometry == RayGrassGeometry)) {
+    if (!RayPbrOn()) {
         return material;
     }
     const uint index = gRayGeometries.Load(geometry * 16u + 12u) >> 8u;
@@ -1101,7 +1089,7 @@ bool RayCutoutSolid(uint geometry, uint primitive, float2 barycentrics) {
 // is behind, so his outline leaves no lit hole in a shadow he stands in), 2 only Banjo. A cut-out (a grate, a fence,
 // leaves) counts only where its texture is solid, so light goes through its holes (L, 2026-10-21).
 // Anything solid among the instances in mask: solid triangles end the search at once (the hardware's fast path); only
-// cut-outs and the grass are looked at one by one.
+// cut-outs are looked at one by one.
 // Set when a ray TraceAny traced met a level cut-out (instance 0), solid there or not: the sun's shadow rays that all got
 // through and met none leave SunThroughCutout nothing to find.
 static bool gSawLevelCutout = false;
@@ -1117,9 +1105,7 @@ bool TraceAny(RayDesc ray, uint mask) {
         if ((query.CandidateInstanceID() == 0u) && ((RayGeometryFlags(geometry) & 5u) == 1u)) {
             gSawLevelCutout = true;
         }
-        if ((geometry == RayGrassGeometry) ? RayGrassStops(ray, query.CandidateTriangleRayT()) :
-            RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics()))
-        {
+        if (RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
             query.CommitNonOpaqueTriangleHit();
         }
     }
@@ -1155,7 +1141,7 @@ bool TraceOccluded(RayDesc ray, uint mode) {
     if (mode == 2u) {
         return TraceModels(ray, true);
     }
-    if (TraceAny(ray, RayLevelMask | RayGrassMask)) {
+    if (TraceAny(ray, RayLevelMask)) {
         return true;
     }
     return (mode == 1u) && TraceModels(ray, false);
@@ -1373,17 +1359,11 @@ float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
     // The direction keeps the view's scale, so t is in view units.
     ray.TMax = rayDistance;
     // Cut-outs are seen where their texture is solid (a grate's bars, Banjo's textured parts: characters are drawn as
-    // cut-outs), passed by in their holes; the 3D grass is seen (away from where the ray starts).
+    // cut-outs), passed by in their holes.
     RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
     while (query.Proceed()) {
         if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
-            continue;
-        }
-        if (query.CandidateInstanceID() == RayGrassInstance) {
-            if (RayGrassStops(ray, query.CandidateTriangleRayT())) {
-                query.CommitNonOpaqueTriangleHit();
-            }
             continue;
         }
         const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
@@ -1434,7 +1414,7 @@ float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
     // where the hit would be, L 2026-10-22): a textured surface's own texel, lit there: the sun and the nearest lamp
     // where they reach it (PathDirectLight), and the light round about (RoomLight), so a mirror keeps showing what is
     // behind the camera, dark where it is dark.
-    if (!inView && (query.CommittedInstanceID() != RayGrassInstance) && RayTexturesOn()) {
+    if (!inView && RayTexturesOn()) {
         const uint hitGeometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
         if ((RayGeometryFlags(hitGeometry) & 2u) != 0u) {
             const float3 texel = RayTexel(hitGeometry, query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics()).rgb;
@@ -1528,7 +1508,6 @@ bool Enclosed(float3 worldStart) {
         // Only the level makes a room: Banjo standing over the spot doesn't, nor a model beside it (a note pedestal
         // closed the one way out for the floor round it, so its shadow there came out lit and the rest dark: a
         // reversed shadow, L 2026-10-22).
-        // Grass doesn't make a room either, and its blades round the spot were each looked at.
         if (!TraceAny(ray, RayLevelMask)) {
             return false;
         }

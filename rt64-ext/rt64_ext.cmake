@@ -89,8 +89,8 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/PhotoGradePS.hlsl")
 # Live texture upscaling in the texture cache (RT64::SetTextureUpscale).
 rt64_ext_shader(build_compute_shader rt64 "src/shaders/TextureUpscaleCS.hlsl")
 
-# 3D grass blades (geometry shader; D3D12 and Vulkan only, see build_geometry_shader in RT64's CMakeLists.txt).
-rt64_ext_shader(build_geometry_shader rt64 "src/shaders/GrassGS.hlsl")
+# Kazooie's feathers (geometry shader; D3D12 and Vulkan only, see build_geometry_shader in RT64's CMakeLists.txt).
+rt64_ext_shader(build_geometry_shader rt64 "src/shaders/FeatherGS.hlsl")
 
 # Displaced ground: floors tessellated and pushed down (hull and domain shaders; D3D12 and Vulkan only).
 rt64_ext_shader(build_tessellation_shaders rt64 "src/shaders/GroundTess.hlsl" "src/shaders/GroundTessHS.hlsl" "src/shaders/GroundTessDS.hlsl")
@@ -110,20 +110,6 @@ rt64_ext_shader(build_tessellation_shaders rt64 "src/shaders/SnowTess.hlsl" "src
 
 # Tessellated water (hull and domain shaders; D3D12 and Vulkan only).
 rt64_ext_shader(build_tessellation_shaders rt64 "src/shaders/WaterTess.hlsl" "src/shaders/WaterTessHS.hlsl" "src/shaders/WaterTessDS.hlsl")
-
-# 3D grass with GPU instancing: the culling passes, the depth pyramid and the blades (D3D12 and Vulkan only).
-# build_grass_shader takes its options as one list, which rt64_ext_shader's ARGN would split, so this
-# passes the options variable's name instead.
-function(rt64_ext_grass_shader SHADERNAME OPTIONS_VAR)
-    set(PROJECT_SOURCE_DIR ${RT64_EXT_DIR})
-    build_grass_shader(rt64 ${SHADERNAME} "${${OPTIONS_VAR}}" ${ARGN})
-endfunction()
-rt64_ext_grass_shader("src/shaders/GrassBladeVS.hlsl" DXC_VS_OPTS)
-rt64_ext_grass_shader("src/shaders/GrassCullCS.hlsl" DXC_CS_OPTS)
-rt64_ext_grass_shader("src/shaders/GrassCullCS.hlsl" DXC_CS_OPTS "src/shaders/GrassChunkCullCS.hlsl" "-D CHUNK_PASS")
-rt64_ext_grass_shader("src/shaders/GrassHiZCS.hlsl" DXC_CS_OPTS)
-rt64_ext_grass_shader("src/shaders/GrassHiZCS.hlsl" DXC_CS_OPTS "src/shaders/GrassHiZMSCS.hlsl" "-D MULTISAMPLING")
-rt64_ext_grass_shader("src/shaders/GrassHiZCS.hlsl" DXC_CS_OPTS "src/shaders/GrassHiZCoarseCS.hlsl" "-D COARSE_PASS")
 
 # Scene effects over the 3D world (ambient occlusion, SSGI, reflections, bloom, fireflies, sun shadows).
 target_sources(rt64 PRIVATE ${RT64_EXT_DIR}/src/render/rt64_scene_effects.cpp)
@@ -163,7 +149,7 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/VolumetricShadowCompositePS
 # The traced variant of the scene effects (Graphics > Ray tracing): a ray query over the world's triangles in
 # place of the reflections' depth march. Vulkan only (SPIR-V), where the device has ray queries; shader model 6.5
 # for the ray query, and SPIR-V 1.5 (Vulkan 1.2) for the ray query capability. build_shader_spirv takes its
-# options as one list, so these go through a wrapper as the grass shaders do.
+# options as one list, so these go through a wrapper.
 if (NOT APPLE)
     set(DXC_PS_RQ_OPTS "${DXC_COMMON_OPTS}" "-E" "PSMain" "-T ps_6_5" "-fspv-target-env=vulkan1.2" "-fspv-extension=SPV_KHR_ray_query" "-fspv-extension=SPV_EXT_descriptor_indexing" "-I${RT64_EXT_DIR}/src" "-I${RT64_EXT_RT64_SHADERS}")
     function(rt64_ext_traced_shader OUTNAME)

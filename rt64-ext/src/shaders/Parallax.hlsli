@@ -7,7 +7,7 @@
 // Each pixel follows the view ray from its place on the flat triangle down into that height field, a step at a time,
 // and the textures are then looked up where the ray meets it, so the faces of the stones stand out of the wall and
 // hide the gaps behind them as the camera moves. The triangle's own place and slope come from the camera's terms
-// (ComputeSceneGrass) and the pixel's depth, as for 3D grass, so the game's models need nothing new.
+// (ComputeSceneGrass) and the pixel's depth, as for deep snow, so the game's models need nothing new.
 
 #pragma once
 // Include guard as well as #pragma once: DXC on Windows reaches a file here by two spellings of its path
@@ -19,7 +19,7 @@
 #include "TextureSampler.hlsli"
 
 // The view space position at a pixel (the camera at the origin, looking down -z), from its depth, as
-// GrassWorldPosition finds it before it goes to world space.
+// ScenePixelWorldPosition finds it before it goes to world space.
 // With the camera of the draw's own framebuffer (RASTER_PARALLAX_CAMERA, FrameParams.parallaxCameras).
 float3 ParallaxViewPosition(float4 pixelPosition, uint bits) {
     const uint camera = (bits & RASTER_PARALLAX_CAMERA) >> RASTER_PARALLAX_CAMERA_SHIFT;

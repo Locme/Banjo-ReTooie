@@ -417,7 +417,7 @@ std::string tooie::material_pick::describe(uint64_t hash, uint32_t layer, uint32
     {
         std::lock_guard lock{ materials_mutex };
         if (std::binary_search(effect_owned.begin(), effect_owned.end(), hash)) {
-            result += "\nA shader effect owns this texture (ice, lamp, grass or glow): it gets no built-in material";
+            result += "\nA shader effect owns this texture (ice, lamp or glow): it gets no built-in material";
         }
         if (std::binary_search(parallax_owned.begin(), parallax_owned.end(), hash)) {
             result += "\nParallax is on this texture too: it stacks with the material";

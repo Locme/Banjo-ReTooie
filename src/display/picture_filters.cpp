@@ -104,13 +104,6 @@ namespace RT64 {
     void SetSceneLightShafts(float strength);
     void SetSceneSunShadows(float strength, bool onBanjo, float softness);
     void SetSceneSunShadowDistance(float distance);
-    void SetSceneGrass(float amount, float height, float distance, float density, float patches);
-    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend);
-    void SetSceneGrassCulling(bool frustum, bool occlusion, bool chunking);
-    void SetSceneGrassLod(float lod, bool halfRate);
-    void SetSceneGrassRayTracing(bool enabled);
-    void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
-    void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count);
     void SetSceneFur(float amount, float length, float density, float noisiness);
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
@@ -601,36 +594,6 @@ namespace {
     };
 
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).
-    // The grass textures of the levels' ground (their RT64 texture hashes, picked by eye from a texture dump of 22
-    // outdoor maps on 2026-10-16): 3D grass grows only on these, not on other green textures (moss, leaves, walls).
-    constexpr uint64_t grass_textures[] = {
-        0x04b8e6560d7f0373, 0x07e2adeaace237bf, 0x0ba0f140a35638fc, 0x0e4d9a802c7dc7ea,
-        0x131bc9d029e49793, 0x177db5c49582b48d, 0x1acbb6681f918b72, 0x1dd2ae664d368548,
-        0x1fcb6c5e87f783fb, 0x27eae30b3613e31d, 0x37cf9756bf11bfcc, 0x4550fe11ee0e4d34,
-        0x48b2654886cd15c6, 0x4a0cddf9edc01dab, 0x4b0e8cd3ac96bba8, 0x543f46bc9510c161,
-        0x55950894b7abc374, 0x583f4a61dea0c60c, 0x5d56d430aeacb7cf, 0x6f7c66122a9e73d4,
-        0x7557553c55ab1a8a, 0x7727582b32eebc5f, 0x7b5eec9bafbe1838, 0x887e31b8771d7b91,
-        0x9069a11fede45381, 0x92912c9af8ac974f, 0x94e63a3b4b78fc54, 0x9ec2455f025b64df,
-        0x9f1986bf06a9fde4, 0x9fa547ff3c838199, 0xa0b40729970090fe, 0xa181e8f7c27c9e43,
-        0xa4235f087bde04cd, 0xa45e6eb6df215fff, 0xb092ded1029decac, 0xb4e2f23be6235ed4,
-        0xb586ef9810cd32d7, 0xbea28b5e576eeebc, 0xbfcb26d86de25a81, 0xc0555349975fe317,
-        0xc65609b0a5b03fe4, 0xdfe83dc2f43dcf40, 0xe333ef8b4a0b2512, 0xe6a78e76ed50374a,
-        0xe6e8cc803fb5cc26, 0xe6fb1ff1fd886251, 0xe83affdc5057bd6d, 0xea8789c9031a539d,
-        0xf13b3cfd0e5fc100, 0xfbcd4c5990eee6c0,
-    };
-
-    // Textures with grass only along an edge or in part (cliff tops with a grass fringe, banks of grass over dirt),
-    // picked by eye from the same dump: with 3D grass on edges, blades grow on their green parts, whichever way they
-    // face. The yellow road and the stone and brick walls with moss are left out: blades grew from their green
-    // flecks (L, 2026-10-16).
-    constexpr uint64_t grass_edge_textures[] = {
-        0x05ea4829b0f5ae21, 0x0c5260f7fed5e062, 0x0e44aed08f6b69e4, 0x252c178af5221184,
-        0x2df0d9aa6d361419, 0x383158a31ec96959, 0x3db137bf59b5a361, 0x42cdc86e999ec748,
-        0x46d68be1a6b1fa62, 0x747f93d5552d7d66, 0x7acde6f0c1a0efa2, 0x7ad091419192ebc3,
-        0x83d693d9e9707210, 0xa63f304a43ef6d4d, 0xb55e8fd582d86eb2, 0xe8394ac6c551ad41,
-        0xf083a8663d02850e,
-    };
-
     // Textures with parallax mapping: stone walls, paving, brick, rock, cliff and rocky ground, and (from a second sweep)
     // plank walls and crates, roof tiles, scales and carved or embossed panels, and (a third) riveted and grated metal
     // panels, pipes, machinery and rough ground, whose brightness reads as their shape (dark gaps, grooves and cracks
@@ -4312,8 +4275,7 @@ namespace {
         }
     }
 
-    // The grass, grass edge, ice and snow-off lists sent to RT64: the built-in ones (grass_textures[],
-    // grass_edge_textures[], ice_textures[]) with Shader Effects pick mode's picks over them. A pick without
+    // The ice and snow-off lists sent to RT64: the built-in ones (ice_textures[]) with Shader Effects pick mode's picks over them. A pick without
     // Deep Snow among its effects also keeps deep snow off that texture; Deep Snow picks are only kept in the file for now, as deep
     // snow goes by map and colour, not texture.
     std::atomic<uint32_t> effects_sent_version{0};
@@ -4364,8 +4326,6 @@ namespace {
             }
             return list;
         };
-        std::vector<uint64_t> grass = build(std::begin(grass_textures), std::end(grass_textures), tooie::effect_pick::effect_grass, true);
-        std::vector<uint64_t> edges = build(std::begin(grass_edge_textures), std::end(grass_edge_textures), tooie::effect_pick::effect_grass, false);
         std::vector<uint64_t> ice_all(std::begin(ice_textures), std::end(ice_textures));
         ice_all.insert(ice_all.end(), ice_extra.begin(), ice_extra.end());
         std::vector<uint64_t> ice = build(ice_all.data(), ice_all.data() + ice_all.size(), tooie::effect_pick::effect_ice, true);
@@ -4390,13 +4350,6 @@ namespace {
                 snow_off.push_back(hash);
             }
         }
-        // An edge entry picked as Grass is grass all over: the grass list wins.
-        edges.erase(std::remove_if(edges.begin(), edges.end(), [&](uint64_t h) { return picks.count(h) != 0; }), edges.end());
-        // RT64 reads an empty grass list as every texture, so a list emptied by Disable picks keeps one entry no draw has.
-        if (grass.empty()) {
-            grass.push_back(0);
-        }
-        RT64::SetSceneGrassTextures(grass.data(), grass.size());
         RT64::SetSceneIceTextures(ice.data(), ice.size());
         // Ice that reflects in any map: ice_anywhere_textures and the Ice picks.
         std::vector<uint64_t> ice_anywhere = build(std::begin(ice_anywhere_textures), std::end(ice_anywhere_textures), tooie::effect_pick::effect_ice, true);
@@ -4407,7 +4360,6 @@ namespace {
         RT64::SetMirrorTextTextures(mirror_text.data(), mirror_text.size());
         std::vector<uint64_t> lamps = build(std::begin(lamp_textures), std::end(lamp_textures), tooie::effect_pick::effect_lamp, true);
         RT64::SetSceneLampTextures(lamps.data(), lamps.size());
-        RT64::SetSceneGrassEdgeTextures(edges.data(), 0);
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
         // Light Source picks make the object itself shine (Slight Glow) and light nothing round it: a light of its own
         // drew a ball of light round the object however it was cast (L, 2026-10-22: "Object glows only").
@@ -4436,9 +4388,9 @@ namespace {
             std::vector<uint64_t> material_hashes;
             std::vector<uint32_t> albedo_roughness;
             std::vector<uint32_t> metalness_emissive;
-            // Textures a shader effect owns (ice, lamps, grass, glow) get no built-in material; picks of the player's win.
+            // Textures a shader effect owns (ice, lamps, glow) get no built-in material; picks of the player's win.
             std::vector<uint64_t> effect_owned = ice;
-            for (const std::vector<uint64_t>* owned : { &ice_anywhere, &lamps, &grass, &edges, &glow }) {
+            for (const std::vector<uint64_t>* owned : { &ice_anywhere, &lamps, &glow }) {
                 effect_owned.insert(effect_owned.end(), owned->begin(), owned->end());
             }
             std::vector<uint64_t> parallax_owned;
@@ -4466,12 +4418,9 @@ namespace {
         RT64::SetSceneLightSourceTextures(light_sources.data(), light_reaches.data(), light_sources.size());
         std::vector<uint64_t> ray_off = build(nullptr, nullptr, tooie::effect_pick::effect_rt_off, true);
         RT64::SetSceneRayOffTextures(ray_off.data(), ray_off.size());
-        // The same lists for the pick mode's Show All (edges count as grass; ice in the icy maps or anywhere).
+        // The same lists for the pick mode's Show All (ice in the icy maps or anywhere).
         {
             using tooie::effect_pick::set_list;
-            std::vector<uint64_t> grass_all = grass;
-            grass_all.insert(grass_all.end(), edges.begin(), edges.end());
-            set_list(tooie::effect_pick::effect_grass, grass_all);
             std::vector<uint64_t> ice_any = ice;
             ice_any.insert(ice_any.end(), ice_anywhere.begin(), ice_anywhere.end());
             set_list(tooie::effect_pick::effect_ice, ice_any);
@@ -4659,7 +4608,6 @@ void tooie::picture_filters::apply() {
     sun_shadow_reach = sun_shadows ? shadow_distance : 0.0f;
     sun_shadow_distance_set.store(shadow_distance);
     RT64::SetSceneSunShadowDistance(shadow_distance);
-    RT64::SetSceneGrass(0.0f, 1.0f, 1800.0f, 1.0f, 0.5f);
     send_effect_textures();
     // The Character Shaders switch turns all of the character shaders off; their settings stay as they are.
     const bool character_on = value<bool>(character_section_option, true);
