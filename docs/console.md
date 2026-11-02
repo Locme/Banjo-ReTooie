@@ -60,7 +60,7 @@ last <the last output line>
   value up to 255 is one byte, up to 65535 is two, and larger is four. A negative value is four bytes.
 * Some commands need the game running. These are `warp`, `status`, `savestate`, `spawn`, `diff`, `perf`,
   `screenshot`, `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto`, `transform`, `pause`,
-  `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo` and `invincible`. Until the game
+  `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo`, `invincible`, `recall`, `play` and `input`. Until the game
   is running they wait at the front
   of the queue, so `start; warp place 1` works on one line. If the game never starts, they never run. The frame, map and
   until forms of `wait` report an error instead of waiting.
@@ -346,6 +346,237 @@ profile load fast
 ```
 
 Catch: a setting the menu greys out is refused when the profile loads. That shows as `ERR`, and the other lines still run.
+
+## Quick testing
+
+These commands set a test up in a few words and let you go back to it. A mark keeps a spot, a scenario is a file of
+commands that sets a test up, and a recording plays controller 1 back. The rest work on the session and on the files
+beside the game: a stopwatch, the autoexec file, the typed history, a search of the console's own lines, and the folders.
+
+Worked example: mark a spot, save a scenario from where Banjo is, then boot straight into that test each time the game
+starts. Mark the spot and save the scenario in the game:
+
+```
+mark ledge
+scenario save ledge_test
+```
+
+Then put this line in `autoexec.txt` in the game folder (`autoexec` prints where that is):
+
+```
+scenario ledge_test
+```
+
+Each start runs the scenario. Its first line, `wait save`, holds it until you press Play and load a save file (warps
+need one). Then the warp takes Banjo to the saved map and the `goto` puts him where he stood when `scenario save` ran.
+The scenario sets the ten named item counters to their saved values on every start too. The mark is separate:
+`scenario save` does not read it, and `recall ledge` uses it later.
+
+### `mark`
+
+Usage: `mark <name> | mark list | mark delete <name>`
+
+Keeps Banjo's map and position under a name, in `marks.txt` in the game folder. The name is not case sensitive and is
+kept in lower case. Marking a name that already exists replaces it. With no argument, `mark` lists the marks, the same as
+`mark list`. `mark delete` also takes `del`.
+
+```
+mark ledge
+mark list
+mark delete ledge
+```
+
+Catch: a mark holds only the map and the position, not the rest of the game. Catch: needs the game running and a player.
+Without them it reports `the game has to be running` or `there is no player yet`. In `marks.txt`, a line that does not
+read as a name, a hex map and three numbers is skipped, and a line that starts with `#` is a comment.
+
+### `recall`
+
+Usage: `recall <name>`
+
+Goes back to a mark. When the mark is in the map Banjo is in, it runs `goto` with the saved position. When it is in
+another map, it runs `wait save`, `warp id <map>`, then `wait map <map>`, then `wait 30`, then the `goto`. The 30 game updates let the
+game place the player once the map is in.
+
+```
+mark ledge
+recall ledge
+```
+
+Catch: a warp to another map waits for a save file to be loaded (`wait save`). Catch: if the map does not arrive, the `wait map` gives up when its
+timeout runs out, which is 120 seconds unless the wait is given another. Catch: `recall` waits at the front of the queue
+until the game is running.
+
+### `scenario`
+
+Usage: `scenario <name> | scenario list | scenario save <name> | scenario delete <name>` (also `sc`)
+
+`scenario <name>` runs `scenarios/<name>.txt` in the game folder, next to the exe, as `exec` does. `scenario list` prints
+the names. `scenario save <name>` writes a file from where Banjo is now: `wait save`, `warp id` for his map, `wait map`, `wait 30`, a
+`goto` to his position, then an `item` line for each of the ten named item counters with its value. Those counters are
+the blue, fire, ice, grenade, clockwork and proximity eggs, the red and gold feathers, Glowbos and the ice keys.
+`scenario delete <name>` removes the file.
+
+```
+scenario save ledge_test
+sc ledge_test
+scenario list
+```
+
+Catch: `scenario save` writes only the map, the position and those ten item counters. Any other command has to be added
+by hand, by editing the file. A scenario file is a plain list of console lines, and `#` lines are comments.
+
+Catch: running a scenario sets those ten item counters to the values saved, every time it runs.
+
+Catch: `scenario save` needs the game running and a player.
+
+### `record`
+
+Usage: `record <name> | record stop | record list` (`record off` also stops)
+
+`record <name>` starts recording controller 1 under that name. The recording keeps one line per game update: the update
+number from when recording began, the buttons in hex, and the stick x and y. Input from `press` is recorded too, because
+`press` is added to controller 1 before it is recorded. `record stop` ends the recording and writes
+`inputs/<name>.txt` in the game folder. `record list` prints the recordings, and `record` alone does the same.
+
+```
+savestate save
+record jump_test
+# play the test in the game
+record stop
+```
+
+Catch: the file is written only by `record stop`. If the program ends while a recording is running, the recording is lost.
+
+Catch: only one recording can run at a time. `record <name>` while another is running reports `already recording`. The
+timing is per game update, so read the `play` section before relying on a replay.
+
+### `play`
+
+Usage: `play <name> | play stop`
+
+Plays `inputs/<name>.txt` back as controller 1, starting on the next game update. While it plays, the game's own
+controller 1 input is ignored. When the last line has been played, it prints `playback finished`. `play stop` ends it
+early. A press still adds on top: `press` adds its buttons to the playback, and a press with a stick replaces the stick.
+
+```
+savestate load
+play jump_test
+```
+
+Catch: playback follows the game update count, not the frame, so a replay is not exact to the frame. Pair it with
+`savestate save` before the `record` and `savestate load` before the `play` to start both from the same place.
+
+Catch: needs the game running, so `play` waits in the queue until then. A recording with no lines reports `is empty`.
+
+### `input`
+
+Usage: `input`
+
+Prints the buttons and stick the game got on controller 1 last. The buttons show as hex and by name, joined with `+`. The
+stick shows as x and y in the range of 80, which is the range `press` takes, rounded to whole numbers. It reports
+`no controller` when the last read had none. Because it shows what the game got, a value from `press` or `play` shows
+here as well.
+
+```
+press a+b
+input
+```
+
+Catch: needs the game running, so `input` waits in the queue until then.
+
+### `timer`
+
+Usage: `timer start | timer stop | timer show`
+
+A stopwatch for practice runs. `timer start` starts it, clears any splits from before, and splits on every map change.
+A split is named for the map Banjo left, and shows its seconds and game updates. `timer show`, the default with no word,
+prints every split, a `so far` line for the map Banjo is in, and a total. `timer stop` prints the same and stops the
+splits. After that, `timer show` prints the splits and `stopped`.
+
+```
+timer start
+timer show
+timer stop
+```
+
+Catch: a split waits until a map change that is still in progress has finished. Catch: the seconds are the console's own
+clock, so they are wall-clock time. Catch: `timer start` needs the game running, and `timer show` before any start reports
+`the timer has not run`.
+
+### `autoexec`
+
+Usage: `autoexec [run]`
+
+With no argument, prints where `autoexec.txt` is in the game folder, and whether it exists. When it exists, its lines run
+each time the program starts. They run before the `--exec` files and `TOOIE_CONSOLE`. `autoexec run` runs it now, as
+`exec` does.
+
+```
+autoexec
+autoexec run
+```
+
+Catch: `autoexec run` reports an error when the file does not exist. Catch: any line that needs the game, such as `warp`
+or `press`, waits until the game has started, as it does anywhere in the console.
+
+### `grep`
+
+Usage: `grep <text>`
+
+Prints the console's lines that hold the text, not case sensitive. The text is the rest of the line, so it can have spaces,
+and it is plain text rather than a pattern. Lines typed at the prompt show with `> ` in front, as they were typed. The
+`grep` line itself is left out.
+
+```
+grep ERR
+grep warp id
+```
+
+Catch: `grep` searches only the console's own lines held in memory for this session: the newest 400 that the prompt keeps.
+Lines that `clear` removed, or that have fallen out of those 400, are not found. It does not read any file, including
+`console_history.txt`.
+
+### `history`
+
+Usage: `history [clear]`
+
+Prints the commands typed at the prompt, oldest first. This is the list that Up and Down walk, and it keeps the last 64.
+It is saved in `console_history.txt` in the game folder each time a line is typed, and loaded at the next start.
+`history clear` empties the list and the file.
+
+```
+history
+history clear
+```
+
+Catch: only lines typed at the prompt are kept. Lines piped in on stdin, run from a file, or run by a bind or an alias are
+not. Catch: a line the same as the one before it is not added again.
+
+### `open`
+
+Usage: `open <config|game|mods|saves|backups|screenshots|scenarios|inputs>` (also `data`, `exe`, `app`, `save`, `shots`
+and `recordings`)
+
+Shows one of the game's folders in the file manager, and prints its path. A folder that is missing is created first. The
+folders are:
+
+* `config` (`data`): the config folder.
+* `game` (`exe`, `app`): the game folder, where the exe and `autoexec.txt` are.
+* `mods`: the mods folder.
+* `saves` (`save`): the folder the save file is in, or the saves folder in the config folder when no save file is set.
+* `backups`: `save_backups` in the config folder.
+* `screenshots` (`shots`): `screenshots` in the config folder.
+* `scenarios`: the `scenarios` folder in the game folder.
+* `inputs` (`recordings`): the `inputs` folder in the game folder.
+
+```
+open game
+open scenarios
+```
+
+Catch: the folder opens through the system's handling of a file link. If that call fails, the command prints `ERR` with the
+message from SDL.
 
 ## Cheats and spawning
 
@@ -782,10 +1013,11 @@ does not apply, except to the update that a `step` runs. Needs the game running.
 
 ### `wait`
 
-Usage: `wait <frames> | wait <n>ms | wait <n>s | wait map <map hex> [timeout s] | wait until <address> <value> [8|16|32] [timeout s]`
+Usage: `wait <frames> | wait <n>ms | wait <n>s | wait save [timeout s] | wait map <map hex> [timeout s] | wait until <address> <value> [8|16|32] [timeout s]`
 
 Holds the queue, so the commands after it wait. A plain number is a count of game updates. `ms` and `s` are time, and
-fractions are allowed. `wait map` waits until the current map is the given id and no map change is in progress. `wait
+fractions are allowed. `wait save` waits until a save file is loaded, which is what warps need; its timeout is 600
+seconds, so it also works from `autoexec.txt` while you get through the launcher and file select. `wait map` waits until the current map is the given id and no map change is in progress. `wait
 until` waits until RAM holds the value. The size is the one given, or the one the typed value implies. The default
 timeout is 120 seconds. When the timeout passes, the console prints `ERR gave up waiting (timed out)`, and the queue goes
 on.
@@ -794,6 +1026,7 @@ on.
 wait 60
 wait 500ms
 wait 1.5s
+wait save
 wait map 0x1A 30
 wait until 80127630 0x05 8 10
 ```
@@ -1182,5 +1415,5 @@ A one-word shortcut runs a command, and any words typed after the shortcut are a
 These commands are not in the console yet, because they need addresses from the Banjo-Tooie decomp or hooks into the
 game: `jiggies`, `notes`, `jinjos`, `health`, `seed`, `camera` (save and
 load), `trace`, `disasm`, `screenshot compare`, achievement `unlock` and `reset`, `actors`, `hide`, `show`,
-`capture`, `record`, `replay`, `hud`, and `moves` (`unlock moves` turns on the cheat for now). `pause`, `resume`, `step`
-and `ff` are in the console now, as described above.
+`capture`, `replay`, `hud`, and `moves` (`unlock moves` turns on the cheat for now). `pause`, `resume`, `step`,
+`ff`, `record` and `play` are in the console now, as described above.

@@ -1479,9 +1479,18 @@ void cmd_release(Ctx&) {
 }
 
 void cmd_wait(Ctx& c) {
-    const char* usage = "wait <frames> | wait <n>ms | wait <n>s | wait map <map hex> [timeout s] | wait until <address> <value> [8|16|32] [timeout s]";
+    const char* usage = "wait <frames> | wait <n>ms | wait <n>s | wait save [timeout s] | wait map <map hex> [timeout s] | wait until <address> <value> [8|16|32] [timeout s]";
     if (c.w.size() < 2) { error(usage); return; }
     std::string v = lower(c.w[1]);
+    if (v == "save") {
+        // wait save [timeout s]: until a save file is loaded (what warp needs), for autoexec and scenarios.
+        double timeout = 600;
+        if (c.w.size() >= 3 && !parse_double(c.w[2], &timeout)) { error(usage); return; }
+        g_wait_cond = [] { return ultramodern::is_game_started() && tooie::debug::can_warp(); };
+        g_wait_cond_deadline = Clock::now() + std::chrono::microseconds((int64_t)(timeout * 1e6));
+        print("waiting for a save file to be loaded");
+        return;
+    }
     if (v == "map" || v == "until") {
         if (!ultramodern::is_game_started()) { error("wait " + v + " needs the game running"); return; }
         double timeout = 120;
@@ -2263,7 +2272,7 @@ std::string place_commands(uint8_t* rdram, uint16_t map, const float pos[3]) {
     std::string go = format("goto %.3f %.3f %.3f", pos[0], pos[1], pos[2]);
     if (rdram != nullptr && tooie::debug::current_map(rdram) == map) return go;
     // 30 game updates after the map is in: the player is placed by then.
-    return format("warp id %X; wait map %X; wait 30; ", map, map) + go;
+    return format("wait save; warp id %X; wait map %X; wait 30; ", map, map) + go;
 }
 
 void cmd_mark(Ctx& c) {
@@ -2328,7 +2337,7 @@ void cmd_scenario(Ctx& c) {
         std::ofstream out{ path };
         if (!out.good()) { error("cannot write " + path.string()); return; }
         out << "# Scenario " << lower(c.w[2]) << ": map 0x" << format("%X", map) << " (" << map_name(map) << "). Add any console commands.\n";
-        out << format("warp id %X\nwait map %X\nwait 30\ngoto %.3f %.3f %.3f\n", map, map, pos[0], pos[1], pos[2]);
+        out << format("wait save\nwarp id %X\nwait map %X\nwait 30\ngoto %.3f %.3f %.3f\n", map, map, pos[0], pos[1], pos[2]);
         for (const ItemName& in : kItemNames) {
             out << format("item %d %d\n", in.index, tooie::progress_cheats::get_item(c.rdram, c.ctx, 0x40 + in.index));
         }
@@ -2650,7 +2659,7 @@ const std::vector<Command>& commands() {
         { "screenshot", { "shot" }, true, "screenshot", "save the next frame as a PNG, as F12 does", cmd_screenshot },
         { "press", {}, true, "press <buttons> [stick <x> <y>] [frames]", "hold controller 1's buttons (a+b) and stick (-80..80), for n frames or until release", cmd_press },
         { "release", {}, false, "release", "let go of what press holds", cmd_release },
-        { "wait", {}, false, "wait <frames|n ms|n s|map <hex>|until <addr> <value>>", "hold the next commands (frames are game updates; map and until wait for a state)", cmd_wait },
+        { "wait", {}, false, "wait <frames|n ms|n s|save|map <hex>|until <addr> <value>>", "hold the next commands (frames are game updates; save, map and until wait for a state)", cmd_wait },
         { "peek", {}, true, "peek <address> [bytes]", "read RAM (hex address)", cmd_peek },
         { "poke", {}, true, "poke <address> <value> [8|16|32]", "write RAM", cmd_poke },
         { "expect", {}, true, "expect <address> <value> [8|16|32]", "ERR when RAM does not hold the value", cmd_expect },
