@@ -428,6 +428,33 @@ transform
 Catch: needs a save file loaded, and the game running. The command turns the cheats master switch on before it sets the
 form, as `spawn` does. If the switch cannot be turned on, the form is not changed.
 
+### `item`
+
+Usage: `item [list] | item <name|n> [value|+n|-n]` (also `give` and `items`)
+
+With no argument, or `list`, prints the game's 22 item counters, each with its place in the item table and its value.
+The ten named places are the blue, fire, ice, grenade, clockwork and proximity eggs, the red and gold feathers, Glowbos
+and the ice keys. The others show as `item N`, where N is the place. With a name or a number, prints that counter. A
+name is compared the way `warp` compares names, and a part of a name works. If several names match, the first in the
+table is used. A number from 0 to 21 is taken as the place, and is tried before the names. With a value, the counter is
+set, and the output gives the value before and after. `+n` and `-n` add to or take away from the current value. A value
+below 0 is set to 0. Setting a counter does not show the counter pop-up.
+
+```
+item list
+item glowbos
+item glowbos 100
+item red feathers +10
+item 19 1
+```
+
+Catch: item counts are kept XORed with code bytes, so `poke` cannot change them. Use `item` for them.
+
+Catch: the game clamps a set to the item's limit, so the output shows the value the game kept, not the value typed. A
+value of 999 means the item has no limit.
+
+Catch: needs a game update running. Before the game runs it reports `no game update is running` and does not wait.
+
 ## Input
 
 ### `press`
@@ -1018,6 +1045,24 @@ photo
 
 Catch: needs the game running.
 
+### `sfx`
+
+Usage: `sfx <hex id> [volume]`
+
+Plays a sound effect on Banjo, the first player, through the game's own sound function (func_8009DE38). The id is hex,
+with or without `0x`, and at most `FFFF`. The volume is from 0 to 2, and is 1 when not given. The output is `sound 0x`
+and the id in upper-case hex.
+
+```
+sfx 1F
+sfx 0x1F 0.5
+```
+
+Catch: the id is not checked against the game's sounds, so an unknown id may play nothing.
+
+Catch: an id above `FFFF` or a volume outside 0 to 2 is an error. Playing needs a game update running and a player. With
+no player yet, it reports `there is no player yet`.
+
 ## Binds and aliases
 
 Binds and aliases are saved in `console.txt` in the app folder, and are loaded when the program starts.
@@ -1135,7 +1180,7 @@ A one-word shortcut runs a command, and any words typed after the shortcut are a
 ## Not ported yet
 
 These commands are not in the console yet, because they need addresses from the Banjo-Tooie decomp or hooks into the
-game: item counters (`jiggies`, `notes`, `jinjos`, `health`, `eggs`, `feathers`, `give`), `seed`, `camera` (save and
-load), `sfx`, `trace`, `disasm`, `screenshot compare`, achievement `unlock` and `reset`, `actors`, `hide`, `show`,
+game: `jiggies`, `notes`, `jinjos`, `health`, `seed`, `camera` (save and
+load), `trace`, `disasm`, `screenshot compare`, achievement `unlock` and `reset`, `actors`, `hide`, `show`,
 `capture`, `record`, `replay`, `hud`, and `moves` (`unlock moves` turns on the cheat for now). `pause`, `resume`, `step`
 and `ff` are in the console now, as described above.
