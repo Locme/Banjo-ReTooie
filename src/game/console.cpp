@@ -2754,6 +2754,220 @@ void cmd_memview(Ctx& c) {
     print(format("showing %08X..%08X at the top right (memview off hides it)", m.addr, m.addr + m.rows * 16 - 1));
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Finding addresses: search narrows RAM down step by step (changed, increased, = 5...); ramlog counts which words
+// change over a stretch of play and writes them to a file, busiest first.
+
+struct Search {
+    int size = 0;             // 1, 2, 4; 0: no search
+    bool is_float = false;
+    std::vector<uint32_t> addrs; // empty with `all` set: every address from `from` to `to`
+    std::vector<uint32_t> values;
+    bool all = false;
+    uint32_t from = 0, to = 0;
+    int steps = 0;
+};
+Search g_search;
+
+uint32_t search_addr(size_t i) {
+    return g_search.all ? g_search.from + (uint32_t)i * g_search.size : g_search.addrs[i];
+}
+
+double as_number(uint32_t v, int size, bool is_float) {
+    if (is_float) {
+        float f;
+        std::memcpy(&f, &v, 4);
+        return f;
+    }
+    // Bytes and halves read as unsigned (counters), words as signed.
+    return size == 1 ? (double)(uint8_t)v : size == 2 ? (double)(uint16_t)v : (double)(int32_t)v;
+}
+
+std::string search_value_text(uint32_t v) {
+    if (g_search.is_float) return format("%.4f", as_number(v, 4, true));
+    return format("%s (%.0f)", hex(v, g_search.size).c_str(), as_number(v, g_search.size, false));
+}
+
+void cmd_search(Ctx& c) {
+    const char* usage = "search start [8|16|32|f] [from] [to] | search changed|unchanged|up|down | search = <v> | != <v> | > <v> | < <v> | "
+        "search up <n> | down <n> | search list [n] | search watch [n] | search trace [n] | search count";
+    if (c.w.size() < 2) { error(usage); return; }
+    std::string what = lower(c.w[1]);
+    if (what == "start" || what == "new") {
+        Search s{};
+        s.size = 4;
+        s.from = kRamStart;
+        s.to = kFindEnd;
+        size_t i = 2;
+        if (i < c.w.size()) {
+            std::string a = lower(c.w[i]);
+            if (a == "f" || a == "float") { s.is_float = true; s.size = 4; i++; }
+            else if (int z = parse_size(a)) { s.size = z; i++; }
+        }
+        if ((i < c.w.size() && !parse_addr(c.w[i], &s.from)) || (i + 1 < c.w.size() && !parse_addr(c.w[i + 1], &s.to)) || s.to <= s.from) { error(usage); return; }
+        s.from = (s.from + s.size - 1) & ~(uint32_t)(s.size - 1);
+        s.all = true;
+        size_t n = (s.to - s.from) / s.size;
+        s.values.resize(n);
+        for (size_t k = 0; k < n; k++) s.values[k] = read_ram(c.rdram, s.from + (uint32_t)k * s.size, s.size);
+        g_search = std::move(s);
+        print(format("%zu %s values kept from %08X to %08X. Now change something in the game and narrow it down: search changed, "
+            "search up, search = 5...", n, g_search.is_float ? "float" : (std::to_string(g_search.size * 8) + "-bit").c_str(), g_search.from, g_search.to));
+        return;
+    }
+    if (g_search.size == 0) { error("no search yet (search start [8|16|32|f])"); return; }
+    size_t count = g_search.all ? g_search.values.size() : g_search.addrs.size();
+    if (what == "count") { print(format("%zu left after %d steps", count, g_search.steps)); return; }
+    if (what == "list" || what == "watch" || what == "trace") {
+        int n = what == "list" ? 32 : 8;
+        if (c.w.size() >= 3 && (!parse_int(c.w[2], &n) || n < 1)) { error(usage); return; }
+        if (what != "list" && n > 32) { error(what + " takes at most 32 addresses at once"); return; }
+        if (g_search.all && count > 100000) { error(format("%zu left; narrow it down first", count)); return; }
+        std::string out = format("%zu left", count);
+        for (size_t i = 0; i < count && (int)i < n; i++) {
+            uint32_t a = search_addr(i);
+            uint32_t v = read_ram(c.rdram, a, g_search.size);
+            out += format("\n%08X: %s", a, search_value_text(v).c_str());
+            if (what == "watch") enqueue_line(format("watch %08X %s", a, g_search.is_float ? "f" : std::to_string(g_search.size * 8).c_str()), c.depth + 1);
+            if (what == "trace") enqueue_line(format("trace %08X %d %d", a, g_search.size, g_search.size * 8), c.depth + 1);
+        }
+        if ((size_t)n < count) out += "\n...";
+        print(out);
+        return;
+    }
+    // A filter: keep the addresses whose value now passes it, and keep the value they have now for the next step.
+    std::function<bool(double old_v, double now_v, uint32_t old_raw, uint32_t now_raw)> keep;
+    double arg = 0;
+    bool has_arg = c.w.size() >= 3;
+    if (has_arg) {
+        uint32_t raw;
+        bool is_hex = c.w[2].size() > 2 && c.w[2][0] == '0' && (c.w[2][1] == 'x' || c.w[2][1] == 'X');
+        if (is_hex && !g_search.is_float && parse_u32(c.w[2], &raw)) arg = as_number(raw, g_search.size, false);
+        else if (!parse_double(c.w[2], &arg)) { error(usage); return; }
+    }
+    const double eps = 1e-4;
+    if (what == "changed" || what == "ch") keep = [](double, double, uint32_t o, uint32_t n) { return o != n; };
+    else if (what == "unchanged" || what == "same") keep = [](double, double, uint32_t o, uint32_t n) { return o == n; };
+    else if ((what == "up" || what == "increased" || what == "inc") && !has_arg) keep = [](double o, double n, uint32_t, uint32_t) { return n > o; };
+    else if ((what == "down" || what == "decreased" || what == "dec") && !has_arg) keep = [](double o, double n, uint32_t, uint32_t) { return n < o; };
+    else if (what == "up" || what == "increased" || what == "inc") keep = [arg, eps](double o, double n, uint32_t, uint32_t) { return std::fabs((n - o) - arg) < eps; };
+    else if (what == "down" || what == "decreased" || what == "dec") keep = [arg, eps](double o, double n, uint32_t, uint32_t) { return std::fabs((o - n) - arg) < eps; };
+    else if ((what == "=" || what == "==" || what == "eq") && has_arg) keep = [arg, eps](double, double n, uint32_t, uint32_t) { return std::fabs(n - arg) < eps; };
+    else if ((what == "!=" || what == "ne") && has_arg) keep = [arg, eps](double, double n, uint32_t, uint32_t) { return std::fabs(n - arg) >= eps; };
+    else if ((what == ">" || what == "gt") && has_arg) keep = [arg](double, double n, uint32_t, uint32_t) { return n > arg; };
+    else if ((what == "<" || what == "lt") && has_arg) keep = [arg](double, double n, uint32_t, uint32_t) { return n < arg; };
+    else { error(usage); return; }
+    std::vector<uint32_t> addrs, values;
+    for (size_t i = 0; i < count; i++) {
+        uint32_t a = search_addr(i);
+        uint32_t now = read_ram(c.rdram, a, g_search.size);
+        uint32_t old = g_search.values[i];
+        if (keep(as_number(old, g_search.size, g_search.is_float), as_number(now, g_search.size, g_search.is_float), old, now)) {
+            addrs.push_back(a);
+            values.push_back(now);
+        }
+    }
+    g_search.all = false;
+    g_search.addrs = std::move(addrs);
+    g_search.values = std::move(values);
+    g_search.steps++;
+    std::string out = format("%zu left (from %zu)", g_search.addrs.size(), count);
+    for (size_t i = 0; i < g_search.addrs.size() && i < 8; i++) out += format("\n%08X: %s", g_search.addrs[i], search_value_text(g_search.values[i]).c_str());
+    if (g_search.addrs.size() > 8) out += "\n... (search list shows more)";
+    print(out);
+}
+
+// ramlog <seconds> [from] [to]: counts how often each word changes, then writes ramlog-<time>.csv in the game folder.
+struct RamLog {
+    bool on = false;
+    uint32_t from = 0, to = 0;
+    Clock::time_point until;
+    uint64_t updates = 0;
+    std::vector<uint32_t> first, last, changes;
+};
+RamLog g_ramlog;
+
+void finish_ramlog() {
+    g_ramlog.on = false;
+    std::vector<size_t> order;
+    for (size_t i = 0; i < g_ramlog.changes.size(); i++) {
+        if (g_ramlog.changes[i] != 0) order.push_back(i);
+    }
+    std::stable_sort(order.begin(), order.end(), [](size_t a, size_t b) { return g_ramlog.changes[a] > g_ramlog.changes[b]; });
+    std::time_t t = std::time(nullptr);
+    char stamp[32];
+    std::strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H-%M-%S", std::localtime(&t));
+    std::filesystem::path path = recompui::file::get_app_folder_path() / "traces" / (std::string("ramlog-") + stamp + ".csv");
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    FILE* f = std::fopen(path.string().c_str(), "w");
+    if (f != nullptr) {
+        std::fprintf(f, "address,changes,of_updates,first,last\n");
+        for (size_t i : order) {
+            std::fprintf(f, "%08X,%u,%llu,%08X,%08X\n", g_ramlog.from + (uint32_t)i * 4, g_ramlog.changes[i], (unsigned long long)g_ramlog.updates, g_ramlog.first[i], g_ramlog.last[i]);
+        }
+        std::fclose(f);
+    }
+    std::string out = format("ramlog: %zu words changed in %llu updates", order.size(), (unsigned long long)g_ramlog.updates);
+    out += f != nullptr ? ", all in " + path.string() : ", but " + path.string() + " could not be written";
+    // The quietest words that changed are often the ones a single event touched; the busiest are timers and the like.
+    auto line = [&](size_t i) {
+        out += format("\n%08X changed %u times: %08X -> %08X", g_ramlog.from + (uint32_t)i * 4, g_ramlog.changes[i], g_ramlog.first[i], g_ramlog.last[i]);
+    };
+    if (!order.empty()) out += "\nbusiest:";
+    for (size_t k = 0; k < order.size() && k < 8; k++) line(order[k]);
+    if (order.size() > 16) {
+        out += "\nquietest (changed once or a few times):";
+        for (size_t k = order.size() - 8; k < order.size(); k++) line(order[k]);
+    }
+    g_ramlog.first.clear(); g_ramlog.last.clear(); g_ramlog.changes.clear();
+    g_ramlog.first.shrink_to_fit(); g_ramlog.last.shrink_to_fit(); g_ramlog.changes.shrink_to_fit();
+    {
+        std::lock_guard lock{ g_mutex };
+        g_current = "ramlog";
+    }
+    print(out);
+}
+
+void ramlog_tick(uint8_t* rdram) {
+    if (!g_ramlog.on) return;
+    g_ramlog.updates++;
+    for (size_t i = 0; i < g_ramlog.last.size(); i++) {
+        uint32_t v = read_ram(rdram, g_ramlog.from + (uint32_t)i * 4, 4);
+        if (v != g_ramlog.last[i]) {
+            g_ramlog.last[i] = v;
+            g_ramlog.changes[i]++;
+        }
+    }
+    if (Clock::now() >= g_ramlog.until) finish_ramlog();
+}
+
+void cmd_ramlog(Ctx& c) {
+    const char* usage = "ramlog <seconds> [from] [to] | ramlog stop";
+    if (c.w.size() >= 2 && lower(c.w[1]) == "stop") {
+        if (!g_ramlog.on) { error("no ramlog is running"); return; }
+        finish_ramlog();
+        return;
+    }
+    double seconds;
+    uint32_t from = kRamStart, to = 0x80800000;
+    if (c.w.size() < 2 || !parse_double(c.w[1], &seconds) || seconds <= 0 || (c.w.size() >= 3 && !parse_addr(c.w[2], &from)) ||
+        (c.w.size() >= 4 && !parse_addr(c.w[3], &to)) || to <= from) { error(usage); return; }
+    if (g_ramlog.on) { error("a ramlog is running (ramlog stop)"); return; }
+    from &= ~3u;
+    size_t n = (to - from) / 4;
+    g_ramlog.from = from;
+    g_ramlog.to = to;
+    g_ramlog.updates = 0;
+    g_ramlog.first.resize(n);
+    for (size_t i = 0; i < n; i++) g_ramlog.first[i] = read_ram(c.rdram, from + (uint32_t)i * 4, 4);
+    g_ramlog.last = g_ramlog.first;
+    g_ramlog.changes.assign(n, 0);
+    g_ramlog.until = Clock::now() + std::chrono::microseconds((int64_t)(seconds * 1e6));
+    g_ramlog.on = true;
+    print(format("logging %08X..%08X for %.1f s (it can slow the game a little; ramlog stop ends it early)", from, to - 1, seconds));
+}
+
 const std::vector<Command>& commands() {
     static const std::vector<Command> list = {
         { "help", { "?" }, false, "help [command]", "list the commands, or one command's use", cmd_help },
@@ -2827,6 +3041,8 @@ const std::vector<Command>& commands() {
         { "echo", {}, false, "echo <text>", "print text and mark the session log", cmd_echo },
         { "clear", { "cls" }, false, "clear", "clear the console", cmd_clear },
         { "close", {}, false, "close", "hide the console (` too)", cmd_close },
+        { "search", { "ramsearch", "s" }, true, "search start [8|16|32|f] [from] [to] | search changed|unchanged|up|down|= v|!= v|> v|< v | search up|down <n> | search list|watch|trace [n] | search count", "find an unknown address: keep RAM, change something in the game, keep only what changed the same way, repeat", cmd_search },
+        { "ramlog", {}, true, "ramlog <seconds> [from] [to] | ramlog stop", "count which RAM words change while you play, then write traces/ramlog-<time>.csv busiest first", cmd_ramlog },
         { "trace", {}, false, "trace <address> [bytes] [8|16|32] [file <name>] [quiet] | trace list | trace stop <address>|all", "print every change in a RAM range as it happens (file keeps them in traces/<name>.csv)", cmd_trace },
         { "memview", { "hexview", "mv" }, false, "memview <address> [rows] | memview off", "a live hex view of RAM at the top right, 16 bytes a row", cmd_memview },
         { "mark", {}, false, "mark <name> | mark list | mark delete <name>", "keep Banjo's map and position under a name (marks.txt)", cmd_mark },
@@ -3286,6 +3502,7 @@ void tooie::console::frame(uint8_t* rdram, recomp_context* ctx) {
     time_tick(rdram);
     timer_tick(rdram);
     trace_tick(rdram);
+    ramlog_tick(rdram);
     bool play_ended = false;
     {
         std::lock_guard lock{ g_input_mutex };
