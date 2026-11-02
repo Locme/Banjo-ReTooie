@@ -827,6 +827,57 @@ Stops watching one address, or all of them. With no argument it stops all of the
 unwatch 80127630
 ```
 
+### `trace`
+
+Usage: `trace <address> [bytes] [8|16|32] [file <name>] [quiet]` | `trace list` | `trace stop <address>|all`
+
+Prints every change in a RAM range as it happens. Every game update the range is compared with the previous update,
+and each changed value is printed as `[frame] address old -> new`, where the frame is the game's update count. At most
+16 lines are printed per update. Any others in that update are counted in a `... and N more changes this update` line.
+
+`bytes` is decimal unless it has `0x`. It is rounded up to a whole number of values of the size. The default is one
+32-bit word. The size, `8`, `16` or `32` bits, comes after `bytes`. The range can be at most `0x10000` bytes. The
+address must be aligned to the size, and the range must stay inside RAM.
+
+`file <name>` also writes every change to a CSV file as `update,address,old,new` lines. A relative name goes in the
+`traces` folder of the game folder, and a name with no extension gets `.csv`. An absolute path is used as given.
+`quiet` stops the printing, so it needs `file`. The output is then only in the file.
+
+Tracing an address that is already traced replaces the old trace, and closes its file. `trace` with no argument, or
+`trace list`, lists the traces with their size and number of changes. `trace stop <address>` ends one trace, and
+`trace stop all` ends them all. Trace lines are also copied by `tee`.
+
+```
+trace 80127630
+trace 80127630 16 16
+trace 80127630 0x20 8 file run1
+trace 80127630 quiet file flags
+trace stop 80127630
+```
+
+Catch: the game has to be running to start a trace, and changes are only checked during game updates, so nothing is
+printed while the game is paused or not running.
+
+### `memview`
+
+Usage: `memview <address> [rows]` | `memview off` | `memview`
+
+Aliases: `hexview`, `mv`.
+
+Shows a hex view of RAM in the panel at the top right of the window, the same panel as `watch`. Each row is 16 bytes,
+shown as four 32-bit words after the address. `rows` is from 1 to 16 (default 4), and larger numbers are cut to 16.
+The address is rounded down to a multiple of 16. The panel is refreshed every 6 game updates. `memview` with no
+argument lists the ranges being shown. `memview off` removes all of them.
+
+```
+memview 80127630
+memview 80127630 8
+memview off
+```
+
+Catch: like `watch`, the values are read during game updates, so the panel is not updated while the game is not
+running. Showing an address that is already shown replaces the old entry.
+
 ### `diff`
 
 Usage: `diff snapshot | diff [compare] [n]` (`snapshot` can also be `snap` or `keep`)
@@ -1414,6 +1465,6 @@ A one-word shortcut runs a command, and any words typed after the shortcut are a
 
 These commands are not in the console yet, because they need addresses from the Banjo-Tooie decomp or hooks into the
 game: `jiggies`, `notes`, `jinjos`, `health`, `seed`, `camera` (save and
-load), `trace`, `disasm`, `screenshot compare`, achievement `unlock` and `reset`, `actors`, `hide`, `show`,
+load), `disasm`, `screenshot compare`, achievement `unlock` and `reset`, `actors`, `hide`, `show`,
 `capture`, `replay`, `hud`, and `moves` (`unlock moves` turns on the cheat for now). `pause`, `resume`, `step`,
 `ff`, `record` and `play` are in the console now, as described above.
