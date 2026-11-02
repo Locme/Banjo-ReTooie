@@ -55,7 +55,8 @@ last <the last output line>
   the value typed. Hex digits decide it: up to two digits is one byte, up to four is two bytes, more is four. A decimal
   value up to 255 is one byte, up to 65535 is two, and larger is four. A negative value is four bytes.
 * Some commands need the game running. These are `warp`, `status`, `savestate`, `spawn`, `diff`, `perf`,
-  `screenshot`, `press`, `peek`, `poke`, `expect`, `find` and `freeze`. Until the game is running they wait at the front
+  `screenshot`, `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto` and `transform`. Until the game
+  is running they wait at the front
   of the queue, so `start; warp place 1` works on one line. If the game never starts, they never run. The frame, map and
   until forms of `wait` report an error instead of waiting.
 * Nothing runs until the launcher is on screen, or until the game has started some other way.
@@ -358,6 +359,20 @@ spawn 3 5
 
 Catch: needs a save file loaded, and the game running.
 
+### `transform`
+
+Usage: `transform [form]`
+
+Works with the Transformation row on the Cheats tab, which is the setting `cheats.cheat_transform`. With no argument,
+prints the setting's value and what it takes. With a form, sets the setting in the same way `set` does.
+
+```
+transform
+```
+
+Catch: needs a save file loaded, and the game running. The command turns the cheats master switch on before it sets the
+form, as `spawn` does. If the switch cannot be turned on, the form is not changed.
+
 ## Input
 
 ### `press`
@@ -515,6 +530,50 @@ diff compare 20
 Catch: `diff 20` is an error. The word `compare` is needed before the number. The snapshot is kept in memory only.
 Needs the game running, and a snapshot taken first.
 
+## Player and game state
+
+### `flag`
+
+Usage: `flag <hex id> [on|off]`
+
+Reads or sets one of the game's progress flags, using the same getter and setter as the cheats. The id is hex, with or
+without `0x`, and up to four digits. With no value, prints whether the flag is on or off. With `on` or `off`, sets it and
+prints the result.
+
+```
+flag 0x1A
+flag 1A on
+```
+
+Catch: a flag that is set stays set in the save file only if the game is saved. Needs the game running.
+
+### `pos`
+
+Usage: `pos`
+
+Prints Banjo's position as x, y and z to two decimal places, and the current map as hex.
+
+```
+pos
+```
+
+Catch: needs a player in the game. Until there is one, it reports an error.
+
+### `goto`
+
+Usage: `goto <x> <y> <z>` (also `tp`)
+
+Moves Banjo to the given position in the current map. The numbers can be decimal or fractions. Run `pos` first to see
+where Banjo is.
+
+```
+goto 0 500 0
+tp 120.5 300 -40
+```
+
+Catch: it moves Banjo within the map he is in. It does not change the map, and `warp` does that. Needs a player in the
+game.
+
 ## Waiting and scripting
 
 ### `wait`
@@ -563,6 +622,20 @@ a point in a script's log.
 ```
 echo start of the jump test
 ```
+
+### `repeat`
+
+Usage: `repeat <n> <command>`
+
+Runs the command `n` times, with `n` from 1 to 1000. The command is the rest of the line, so `;` splits it into several
+commands, which then run in order each time. The copies are put at the front of the queue, so they run before anything
+already waiting. The output prints how many times and the command.
+
+```
+repeat 3 press a 10; wait 20
+```
+
+Catch: nesting is limited to 8 levels. A `repeat` deeper than that is an error.
 
 ## Diagnostics
 
@@ -629,6 +702,21 @@ screenshot
 ```
 
 Catch: needs the game running.
+
+### `tee`
+
+Usage: `tee <file> | tee off`
+
+Copies everything the console prints to a file, one line at a time, and flushes each line. A relative file name is put in
+the app folder. The file is opened for adding, so anything already in it is kept. A new `tee` closes the old file first.
+`tee off` closes the file.
+
+```
+tee run.log
+tee off
+```
+
+Catch: only output printed after `tee` starts is copied. The same text still goes to stdout and the prompt.
 
 ## Binds and aliases
 
@@ -702,6 +790,6 @@ A one-word shortcut runs a command, and any words typed after the shortcut are a
 ## Not ported yet
 
 These commands from the original plan are not in the console yet, because they need addresses from the Banjo-Tooie decomp
-or hooks into the game: counters (`jiggies`, `notes`, `health`), `char`, `transform`, `moves` (`unlock moves` turns on
+or hooks into the game: counters (`jiggies`, `notes`, `health`), `char`, `moves` (`unlock moves` turns on
 the cheat for now), `camera`, `actors`, `hide`, `show`, `pause`, `resume`, `step`, `ff`, `seed`, `capture`, `record`,
 `replay` and `hud`. The `noclip` name is a shortcut now (see above), and it works when the build has that cheat.
