@@ -24,6 +24,9 @@ namespace tooie::texture_sweep {
     void apply_input(uint16_t* buttons);
     // True while a sweep is warping around, so nothing saves the game meanwhile.
     bool sweeping();
+    // Starts the sweep as the menu prompt's Start sweep button does, once Texture dump is set to Sweep all maps
+    // (developer console).
+    void confirm_start();
     // True while a sweep is in a map with DEV > Pass over crashes on: a crash or hang should call pass_over.
     bool pass_over_active();
     // From the crash handler or the watchdog: writes the MAJOR line for the entrance the sweep is in,

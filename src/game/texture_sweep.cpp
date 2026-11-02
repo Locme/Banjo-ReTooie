@@ -936,3 +936,7 @@ bool tooie::texture_sweep::pass_over(const char* why) {
 bool tooie::texture_sweep::sweeping() {
     return phase != Phase::Idle && phase != Phase::Done && phase != Phase::WaitForFile;
 }
+
+void tooie::texture_sweep::confirm_start() {
+    confirmed = true;
+}

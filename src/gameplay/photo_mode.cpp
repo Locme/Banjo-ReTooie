@@ -1298,3 +1298,7 @@ void tooie::photo_mode::mix_shutter(float* stereo, size_t frames, uint32_t rate,
         time = -1.0f;
     }
 }
+
+void tooie::photo_mode::request_toggle() {
+    toggle_requested = true;
+}

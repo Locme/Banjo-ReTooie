@@ -42,6 +42,8 @@ namespace tooie::photo_mode {
     void start();
 
     bool active();
+    // Same as the photo mode key: turns photo mode on or off on the next frame (developer console).
+    void request_toggle();
 
     // The photo panel's rows ("Name: value") and the picked one; false when the panel isn't shown
     // (photo mode off, or hidden with L). Read by src/ui/photo_panel.cpp.
