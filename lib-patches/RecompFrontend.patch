@@ -1257,7 +1257,7 @@ index cfaab26..f944779 100644
          // These are public so you can modify them.
          Style hover_style;
 diff --git a/recompui/src/base/ui_launcher.cpp b/recompui/src/base/ui_launcher.cpp
-index 6de7a94..b0be7f0 100644
+index 6de7a94..fe36a36 100644
 --- a/recompui/src/base/ui_launcher.cpp
 +++ b/recompui/src/base/ui_launcher.cpp
 @@ -456,6 +456,9 @@ namespace recompui {
@@ -1270,8 +1270,29 @@ index 6de7a94..b0be7f0 100644
                  recompui::update_game_mod_id(this->mod_game_id);
                  if (recomp::mods::game_mode_count(this->mod_game_id, false) > 0) {
                      get_launcher_menu()->show_game_mode_menu(this->game_id, this->game_display_name, this->game_thumbnail);
+@@ -548,10 +551,16 @@ namespace recompui {
+         menu_container->set_bottom(24.0f);
+         menu_container->set_left(24.0f);
+ 
+-        version_label = context.create_element<Label>(this, "v" + recomp::get_project_version().to_string(), LabelStyle::Small);
+-        version_label->set_position(Position::Absolute);
+-        version_label->set_bottom(4.0f);
+-        version_label->set_left(4.0f);
++        // Banjo-Tooie: a credit line sits directly above the version number (same style, left aligned).
++        version_container = context.create_element<Element>(this, 0, "div", false);
++        version_container->set_position(Position::Absolute);
++        version_container->set_bottom(4.0f);
++        version_container->set_left(4.0f);
++        version_container->set_display(Display::Flex);
++        version_container->set_flex_direction(FlexDirection::Column);
++
++        credit_label = context.create_element<Label>(version_container, "Directed By Locme", LabelStyle::Small);
++        version_label = context.create_element<Label>(version_container, "v" + recomp::get_project_version().to_string(), LabelStyle::Small);
+     }
+ 
+     void LauncherMenu::remove_default_title() {
 diff --git a/recompui/src/base/ui_launcher.h b/recompui/src/base/ui_launcher.h
-index eb8833e..acd435b 100644
+index eb8833e..8388dc1 100644
 --- a/recompui/src/base/ui_launcher.h
 +++ b/recompui/src/base/ui_launcher.h
 @@ -23,6 +23,7 @@ namespace recompui {
@@ -1291,6 +1312,15 @@ index eb8833e..acd435b 100644
      
          void add_default_options() {
              add_start_game_or_load_rom_option();
+@@ -57,6 +60,8 @@ namespace recompui {
+         Element *background_wrapper;
+         Svg *background_svg = nullptr;
+         Element *menu_container;
++        Element *version_container;
++        Label *credit_label;
+         Label *version_label;
+         Element *default_title_wrapper;
+         GameOptionsMenu *game_options_menu = nullptr;
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
 index 277a421..cabadda 100644
 --- a/recompui/src/base/ui_state.cpp
