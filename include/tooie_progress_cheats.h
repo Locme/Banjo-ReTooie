@@ -16,6 +16,16 @@ namespace tooie::progress_cheats {
     // console. ctx is the hook's context; it is left as it was.
     bool get_flag(uint8_t* rdram, recomp_context* ctx, int32_t flag);
     void set_flag(uint8_t* rdram, recomp_context* ctx, int32_t flag, bool value);
+
+    // The game's item counters (eggs, feathers, Glowbos and the rest; item = 0x40 + its place in the item table at
+    // 0x8011AF50): func_800D1A04 reads one (999 when it has no limit), func_800D1864 sets one, clamped to its cap
+    // by the game (func_800D16CC). The counts are kept XORed with code bytes, so a RAM poke cannot set them.
+    int32_t get_item(uint8_t* rdram, recomp_context* ctx, int32_t item);
+    void set_item(uint8_t* rdram, recomp_context* ctx, int32_t item, int32_t value);
+
+    // Plays a sound effect on the player with func_8009DE38(player, sound, volume), as Transform anywhere plays its
+    // refusal sound. False when there is no player.
+    bool play_sound(uint8_t* rdram, recomp_context* ctx, int32_t sound, float volume);
 }
 
 #endif

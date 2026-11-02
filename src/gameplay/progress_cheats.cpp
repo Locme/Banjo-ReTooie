@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #include "recomp.h"
 #include "funcs.h"
@@ -380,4 +381,38 @@ bool tooie::progress_cheats::get_flag(uint8_t* rdram, recomp_context* ctx, int32
 
 void tooie::progress_cheats::set_flag(uint8_t* rdram, recomp_context* ctx, int32_t flag, bool value) {
     flag_set(rdram, ctx, flag, value);
+}
+
+int32_t tooie::progress_cheats::get_item(uint8_t* rdram, recomp_context* ctx, int32_t item) {
+    recomp_context saved = *ctx;
+    ctx->r4 = (uint64_t)(int64_t)item;
+    func_800D1A04(rdram, ctx);
+    const int32_t value = (int32_t)ctx->r2;
+    *ctx = saved;
+    return value;
+}
+
+void tooie::progress_cheats::set_item(uint8_t* rdram, recomp_context* ctx, int32_t item, int32_t value) {
+    recomp_context saved = *ctx;
+    ctx->r4 = (uint64_t)(int64_t)item;
+    ctx->r5 = (uint64_t)(int64_t)value;
+    ctx->r6 = 0; // no counter pop-up
+    func_800D1864(rdram, ctx);
+    *ctx = saved;
+}
+
+bool tooie::progress_cheats::play_sound(uint8_t* rdram, recomp_context* ctx, int32_t sound, float volume) {
+    const uint32_t player = (uint32_t)MEM_W(0, (gpr)(int32_t)0x80135490); // player pointers, player 0 first
+    if (player < 0x80000000u || player >= 0x81000000u) {
+        return false;
+    }
+    recomp_context call = *ctx;
+    call.r29 = (int32_t)(((uint32_t)ctx->r29 - 0x200) & ~0xFu);
+    call.r4 = (int32_t)player;
+    call.r5 = (uint64_t)(int64_t)sound;
+    uint32_t bits;
+    std::memcpy(&bits, &volume, sizeof(bits));
+    call.r6 = (int32_t)bits;
+    func_8009DE38(rdram, &call);
+    return true;
 }

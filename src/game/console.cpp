@@ -145,14 +145,14 @@ std::string join(const std::vector<std::string>& words, size_t from, size_t to =
     return out;
 }
 
-// Commands on one line are separated by ';', except in alias and bind, whose commands run later.
+// Commands on one line are separated by ';', except in alias, bind, repeat, if and break, whose commands run later.
 std::vector<std::string> split_commands(const std::string& line) {
     std::vector<std::string> out;
     {
         std::string t = trim(line);
         std::string first = t.substr(0, t.find_first_of(" \t"));
         for (char& ch : first) ch = (char)std::tolower((unsigned char)ch);
-        if (first == "alias" || first == "bind") {
+        if (first == "alias" || first == "bind" || first == "repeat" || first == "if" || first == "break") {
             if (!t.empty()) out.push_back(t);
             return out;
         }
@@ -2145,6 +2145,66 @@ void cmd_hang(Ctx& c) {
     print("going on");
 }
 
+// item [list] | item <name|number> [value|+n|-n]: the game's item counters through its own getter and setter.
+struct ItemName { int index; const char* name; };
+// Places in the item table the Cheats tab names (src/game/cheats.cpp); the others show by number.
+const ItemName kItemNames[] = {
+    { 0, "blue eggs" }, { 1, "fire eggs" }, { 2, "ice eggs" }, { 3, "grenade eggs" }, { 4, "clockwork eggs" },
+    { 5, "proximity eggs" }, { 6, "red feathers" }, { 7, "gold feathers" }, { 8, "glowbos" }, { 19, "ice keys" },
+};
+constexpr int kItemCount = 22; // the save keeps 22 counters (func_800D1C78)
+
+std::string item_name(int index) {
+    for (const ItemName& n : kItemNames) {
+        if (n.index == index) return n.name;
+    }
+    return format("item %d", index);
+}
+
+void cmd_item(Ctx& c) {
+    if (c.ctx == nullptr) { error("no game update is running"); return; }
+    if (c.w.size() < 2 || lower(c.w[1]) == "list") {
+        std::string out;
+        for (int i = 0; i < kItemCount; i++) {
+            int32_t v = tooie::progress_cheats::get_item(c.rdram, c.ctx, 0x40 + i);
+            out += format("%s%d %s: %d", out.empty() ? "" : "\n", i, item_name(i).c_str(), v);
+        }
+        print(out);
+        return;
+    }
+    // The name may be several words; a last word that is a number (or +n / -n) is the value.
+    std::string last = c.w.back();
+    bool has_value = c.w.size() >= 3 && (last[0] == '+' || last[0] == '-' || std::isdigit((unsigned char)last[0]));
+    std::string query = join(c.w, 1, has_value ? c.w.size() - 1 : c.w.size());
+    int index = -1, n;
+    if (parse_int(query, &n) && n >= 0 && n < kItemCount) index = n;
+    for (const ItemName& in : kItemNames) {
+        if (index < 0 && squash(in.name).find(squash(query)) != std::string::npos) index = in.index;
+    }
+    if (index < 0) { error("no item called \"" + query + "\" (item list)"); return; }
+    int32_t item = 0x40 + index;
+    int32_t now = tooie::progress_cheats::get_item(c.rdram, c.ctx, item);
+    if (!has_value) { print(format("%s: %d", item_name(index).c_str(), now)); return; }
+    int value;
+    if (!parse_int(last, &value)) { error("item <name> [value | +n | -n]"); return; }
+    if (last[0] == '+' || last[0] == '-') value = now + value;
+    tooie::progress_cheats::set_item(c.rdram, c.ctx, item, std::max(value, 0));
+    print(format("%s: %d -> %d (the game keeps it within the item's limit)", item_name(index).c_str(), now, tooie::progress_cheats::get_item(c.rdram, c.ctx, item)));
+}
+
+// sfx <hex id> [volume]: a sound effect on Banjo.
+void cmd_sfx(Ctx& c) {
+    uint32_t id = 0;
+    double volume = 1.0;
+    std::string h = c.w.size() >= 2 && c.w[1].size() > 2 && c.w[1][0] == '0' && (c.w[1][1] == 'x' || c.w[1][1] == 'X') ? c.w[1].substr(2) : (c.w.size() >= 2 ? c.w[1] : "");
+    char* end = nullptr;
+    id = (uint32_t)std::strtoul(h.c_str(), &end, 16);
+    if (h.empty() || *end != '\0' || id > 0xFFFF || (c.w.size() >= 3 && (!parse_double(c.w[2], &volume) || volume < 0 || volume > 2))) { error("sfx <sound id in hex> [volume 0 to 2]"); return; }
+    if (c.ctx == nullptr) { error("no game update is running"); return; }
+    if (!tooie::progress_cheats::play_sound(c.rdram, c.ctx, (int32_t)id, (float)volume)) { error("there is no player yet"); return; }
+    print(format("sound 0x%X", id));
+}
+
 // invincible on|off: the game's own no-damage flag (0x53C, the Honey King's reward, which src/gameplay/damage_mods.cpp
 // reads). It is a save-file flag, so saving keeps it.
 bool cmd_flag_set(Ctx& c, int32_t flag, bool on) {
@@ -2204,6 +2264,8 @@ const std::vector<Command>& commands() {
         { "sweep", {}, true, "sweep [start|stop]", "the texture sweep (Texture dump > Sweep all maps)", cmd_sweep },
         { "photo", {}, true, "photo", "photo mode on or off, as its key", cmd_photo },
         { "ach", { "achievements" }, false, "ach [filter]", "the achievements and which are unlocked", cmd_ach },
+        { "item", { "give", "items" }, true, "item [list] | item <name|n> [value|+n|-n]", "read or set an item counter (eggs, feathers, Glowbos...) through the game's own functions", cmd_item },
+        { "sfx", {}, true, "sfx <hex id> [volume]", "play a sound effect on Banjo (the game's func_8009DE38)", cmd_sfx },
         { "invincible", { "god" }, true, "invincible [on|off]", "the game's own no-damage flag (0x53C; saving keeps it)", cmd_invincible },
         { "version", {}, false, "version", "the build's version", cmd_version },
         { "vram", {}, false, "vram", "the VRAM figures the VRAM log keeps", cmd_vram },

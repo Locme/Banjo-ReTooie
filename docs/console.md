@@ -15,6 +15,10 @@ printed in the game by `help`.
 * **Scripts:** each line on stdin is a command (`BanjoReTooie < test.txt`, or a pipe). `--exec <file>` and
   `TOOIE_CONSOLE="cmd; cmd"` do the same. No window focus is needed. Lines that start with `#` are comments, both on
   stdin and in a file run by `exec`.
+* **Tab:** in the prompt, Tab completes the first word of the line, while the line has no space yet. If one command name
+  or alias starts with what is typed, it is filled in with a space after it. If several match, they are printed on one
+  output line. Only command names and your own aliases are completed: not shortcuts, command aliases such as `ls`, or
+  setting names. Tab may also move focus in the UI, which is untested.
 
 ## Output
 
@@ -44,8 +48,8 @@ last <the last output line>
 ## Syntax
 
 * Command names, keywords and names of settings, cheats, lists and enemies are not case sensitive.
-* Put several commands on one line with `;`. An `alias` or `bind` line is the exception: the rest of the line is kept
-  as one body, and the `;` split happens when that body runs.
+* Put several commands on one line with `;`. An `alias`, `bind`, `repeat`, `if` or `break` line is the exception:
+  the rest of the line is kept as one body, and the `;` split happens when that body runs.
 * Commands run in order from one queue. A failed command prints `ERR`, and the commands after it still run.
 * Numbers are decimal, or hex with `0x` in front. Addresses are always hex, with or without `0x`. An address below
   `0x80000000` is taken as a physical address, and `0x80000000` is added to it. An address has to be inside RAM and
@@ -55,7 +59,8 @@ last <the last output line>
   the value typed. Hex digits decide it: up to two digits is one byte, up to four is two bytes, more is four. A decimal
   value up to 255 is one byte, up to 65535 is two, and larger is four. A negative value is four bytes.
 * Some commands need the game running. These are `warp`, `status`, `savestate`, `spawn`, `diff`, `perf`,
-  `screenshot`, `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto` and `transform`. Until the game
+  `screenshot`, `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto`, `transform`, `pause`,
+  `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo` and `invincible`. Until the game
   is running they wait at the front
   of the queue, so `start; warp place 1` works on one line. If the game never starts, they never run. The frame, map and
   until forms of `wait` report an error instead of waiting.
@@ -99,9 +104,13 @@ Usage: `help [command]` (also `?`)
 With no argument, prints the usage and description of every command. With a command name or alias, prints that
 command's usage and description.
 
+Any other word searches the commands. It matches the usage and the description of each command, ignoring case, spaces
+and punctuation, and prints every command that contains it. Shortcuts are not searched.
+
 ```
 help
 help warp
+help backup
 ```
 
 Catch: the full list is long. `help <command>` is the quick way to check one command.
@@ -291,6 +300,52 @@ dev off
 ```
 
 Catch: `dev.txt` is written next to the exe, not in the app folder.
+
+### `mod`
+
+Usage: `mod list | mod on <id> | mod off <id>` (also `mods`)
+
+`mod list` prints the mods the launcher's Mods menu shows: on or off, the id, the display name and the version. A mod
+that cannot be switched while the game runs is marked "needs a restart". `mod on` and `mod off` enable or disable a mod
+by its id. An id that is not a mod is refused. The command does not restart the game.
+
+```
+mod list
+mod off <id from mod list>
+```
+
+### `config`
+
+Usage: `config export <folder> | config import <folder>`
+
+`export` copies every settings file (the `.json` files in the config folder) into the folder. `import` copies the
+`.json` files from the folder into the config folder, replacing any with the same name. A relative folder is taken from
+the app folder, and the folder name can contain spaces. The output says how many files were copied.
+
+```
+config export settings-copy
+config import settings-copy
+```
+
+Catch: import needs a restart, and the command says so. Files that are not in the source folder are left alone, so an
+import does not clear the other settings. If no `.json` files are found, it is an error.
+
+### `profile`
+
+Usage: `profile save <name> | profile load <name> | profile list`
+
+`profile save` writes the value of every setting into `console_profiles` in the app folder, as `<name>.txt`. Each line is
+a `set` command. The name keeps only its letters and digits, in lower case, so `Fast Run` and `fastrun` are the same
+profile. Settings on the Debug tab and text settings are left out, and so is any setting whose value the console cannot
+read. `profile load` runs that file as `exec`, so each setting is set the way `set` sets it. `profile list` prints the
+profile names.
+
+```
+profile save fast
+profile load fast
+```
+
+Catch: a setting the menu greys out is refused when the profile loads. That shows as `ERR`, and the other lines still run.
 
 ## Cheats and spawning
 
@@ -530,6 +585,40 @@ diff compare 20
 Catch: `diff 20` is an error. The word `compare` is needed before the number. The snapshot is kept in memory only.
 Needs the game running, and a snapshot taken first.
 
+### `break`
+
+Usage: `break <address> [value] [8|16|32] [pause] [then <commands>] | break list | break clear`
+
+Watches one address and reports it when it hits. Without a value, it hits the first time the RAM value changes. With a
+value, it hits when RAM holds that value. The check runs once per game update. A hit prints
+`ADDR: old -> new at game update N`, and the break removes itself, so it hits only once. `pause` pauses the game, and
+the commands after `then` run. The size is the one given, or the one the value implies. Without a value it is a word.
+`break list` lists the breaks, and `break clear` removes them all.
+
+```
+break 80127630 0 16 pause
+break 80127630 then echo it changed
+```
+
+Catch: everything after `then` is the body, `;` included. Set the break again to catch the next change. A value
+that changes and changes back between two game updates is missed. Needs the game running.
+
+### `findptr`
+
+Usage: `findptr <address> [range]`
+
+Looks through the first 16 MB of RAM (`80000000` to `80FFFFFF`), one word at a time, for the words that point at the
+address. With a range, it counts the words that point at any address within the range bytes after it. The range
+defaults to 4, which is an exact match. The output gives the count and the first 32 addresses found, with `...` when
+there are more.
+
+```
+findptr 80127630
+findptr 80127600 256
+```
+
+Catch: only words on 4-byte boundaries are checked. Needs the game running.
+
 ## Player and game state
 
 ### `flag`
@@ -573,6 +662,94 @@ tp 120.5 300 -40
 
 Catch: it moves Banjo within the map he is in. It does not change the map, and `warp` does that. Needs a player in the
 game.
+
+### `invincible`
+
+Usage: `invincible [on|off]` (also `god`)
+
+Sets the game's own no-damage flag, 0x53C. It is a save-file flag, so saving the game keeps it. With no value, it prints
+whether the flag is on. With `on` or `off`, it sets the flag and prints the result.
+
+```
+invincible on
+god off
+```
+
+Catch: needs the game running, because the flag is read and set during a game update.
+
+### `ach`
+
+Usage: `ach [filter]` (also `achievements`)
+
+Prints how many achievements are unlocked, out of how many, then each achievement: `[x]` if unlocked or `[ ]` if not, its
+name, its points, and its progress as `count of goal` when it has a goal. With a filter, only the names that contain it
+are listed, but the count still covers all of them. The filter is compared the way `warp` compares names.
+
+```
+ach
+ach jig
+```
+
+Catch: `ach` only reads the list. It does not unlock or reset achievements, which is not ported yet.
+
+### `pause`
+
+Usage: `pause`
+
+Stops the game's movement without opening the pause menu. On each game update the frame's delta time is set to almost
+zero, so everything the game moves by delta time stands still. Menus and the frame rate keep going, and console commands
+still run. The pause is not saved, so the game starts unpaused. `break` with `pause` pauses the game the same way.
+
+```
+pause
+step
+resume
+```
+
+Catch: needs the game running.
+
+### `resume`
+
+Usage: `resume`
+
+Ends a pause. It prints "resumed" even when the game was not paused.
+
+```
+resume
+```
+
+### `step`
+
+Usage: `step`
+
+While paused, lets one game update run normally, and then the game is paused again. When the game is not paused, it is
+an error: "not paused (pause first)".
+
+```
+pause
+step
+step
+resume
+```
+
+Catch: `timescale` still applies to the update that a `step` runs.
+
+### `timescale`
+
+Usage: `timescale [0.05 to 4]` (also `ff`, `slowmo`)
+
+With no value, prints the current scale. Otherwise it scales the frame's delta time for the game's movement: 1 is normal,
+2 is double speed, and 0.5 is half speed. The frame rate does not change. A value above 4, or 0 and below, is refused. A
+value below 0.05 is set to 0.05.
+
+```
+timescale 2
+slowmo 0.5
+timescale 1
+```
+
+Catch: the scale is kept in memory only, and starts at 1 each time the program starts. While the game is paused the scale
+does not apply, except to the update that a `step` runs. Needs the game running.
 
 ## Waiting and scripting
 
@@ -627,15 +804,31 @@ echo start of the jump test
 
 Usage: `repeat <n> <command>`
 
-Runs the command `n` times, with `n` from 1 to 1000. The command is the rest of the line, so `;` splits it into several
-commands, which then run in order each time. The copies are put at the front of the queue, so they run before anything
+Runs the command `n` times, with `n` from 1 to 1000. The command is the rest of the line, `;` included, so `repeat 3 press a 10; wait 20` repeats both. The copies are put at the front of the queue, so they run before anything
 already waiting. The output prints how many times and the command.
 
 ```
-repeat 3 press a 10; wait 20
+repeat 3 press a 10
 ```
 
 Catch: nesting is limited to 8 levels. A `repeat` deeper than that is an error.
+
+### `if`
+
+Usage: `if <address> ==|!= <value> [8|16|32] <commands>`
+
+Checks RAM once, when the line runs. If the check is true, the commands go to the front of the queue and run next. If it
+is false, nothing runs. The console prints `true: <commands>` or `false`. The size can follow the value. Without one, the
+value decides it, as described under Syntax.
+
+```
+if 80127630 == 5 echo yes
+if 80127630 != 0 16 press a 10
+```
+
+Catch: the body is the rest of the line, `;` included, so in `if 80127630 == 5 press a 10; wait 30` both commands
+are conditional. The
+body runs one level down, so `macro` and `last` do not record it.
 
 ## Diagnostics
 
@@ -718,6 +911,113 @@ tee off
 
 Catch: only output printed after `tee` starts is copied. The same text still goes to stdout and the prompt.
 
+### `version`
+
+Usage: `version`
+
+Prints the build's name and version number. Works before the game starts.
+
+```
+version
+```
+
+### `vram`
+
+Usage: `vram`
+
+Prints the summary the VRAM log keeps, or "no VRAM figures yet" when it has none. The command only prints what the log
+holds. It does not measure anything itself.
+
+```
+vram
+```
+
+### `gfx`
+
+Usage: `gfx` (also `gfxbudget`)
+
+Prints how full the last display list was, as a percentage of its buffer.
+
+```
+gfx
+```
+
+Catch: needs the game running.
+
+### `crash`
+
+Usage: `crash test confirm`
+
+Crashes the game on purpose by writing to a null pointer, to check that the crash report is written. It prints
+"crashing now", and the game ends at once. Any other form prints an error that says it really crashes the game.
+
+```
+crash test confirm
+```
+
+Catch: this is a real crash, and nothing is saved first. The command does not wait for the game, so in a script it
+crashes as soon as it is reached.
+
+### `hang`
+
+Usage: `hang test <seconds>` (1 to 300)
+
+Holds the thread that runs the command for the given number of seconds. It prints "holding the game thread for N seconds"
+first and "going on" after. It is for checking the hang watchdog. Once the game runs, that thread is the game thread, so
+the game stops responding for the time.
+
+```
+hang test 5
+```
+
+Catch: needs the game running. A number outside 1 to 300 is an error.
+
+## Tools
+
+### `save`
+
+Usage: `save backup | save list`
+
+`save backup` copies the save file into `save_backups` in the config folder. The copy goes in a folder named with the
+date and time and `_console`, and the command prints where it went. `save list` prints the backup folders in name order,
+so the oldest is first. The command does not put a backup back. Its error text says to copy a backup over the save file
+with the game closed.
+
+```
+save backup
+save list
+```
+
+Catch: `save backup` needs a save file already on disk. Without one it reports "no save file yet".
+
+### `sweep`
+
+Usage: `sweep [start|stop]`
+
+`sweep start` sets the Texture dump option to "Sweep all maps" and starts the texture sweep without the menu prompt. It
+prints that the sweep takes about 40 minutes. `sweep stop` sets the Texture dump option to off. With no argument, it
+prints whether a sweep is running.
+
+```
+sweep start
+sweep stop
+```
+
+Catch: needs the game running, so `sweep start` waits in the queue until then.
+
+### `photo`
+
+Usage: `photo`
+
+Turns photo mode on or off, as its key does. The change happens on the next frame, and the message gives the state it is
+switching to.
+
+```
+photo
+```
+
+Catch: needs the game running.
+
 ## Binds and aliases
 
 Binds and aliases are saved in `console.txt` in the app folder, and are loaded when the program starts.
@@ -766,6 +1066,42 @@ Catch: an alias takes no arguments, and any words typed after its name are dropp
 command, such as `ls`, is accepted, but it never runs, because the command runs first. An alias runs up to 8 aliases
 deep. Your own alias with the same name as a shortcut below replaces that shortcut.
 
+### `macro`
+
+Usage: `macro record <name> | macro stop`
+
+`macro record <name>` starts recording. Each top-level line that runs after it is kept: lines typed, piped in, or run by
+a bind. `macro stop` saves them as one alias, joined with `; `, in `console.txt`, so typing the name runs them again. The
+name is lower case. Lines run by an alias, `if`, `repeat`, `exec` or `profile load` are not kept, and neither are `last`
+and `macro` lines. Stopping with nothing recorded saves nothing.
+
+```
+macro record jumpwait
+press a 10
+wait 30
+macro stop
+jumpwait
+```
+
+Catch: nothing is saved until `macro stop`, so a recording is lost if the program ends first. A new `macro record` throws
+away the lines recorded so far. A name that is also a command's name is saved, but it never runs.
+
+### `last`
+
+Usage: `last` (also `!!`)
+
+Runs the last top-level line again, and prints it. A line counts when it was typed, piped in, or run by a bind. Lines run
+by an alias, `if`, `repeat` or `exec` do not count, and neither do `last` and `macro` lines. With nothing yet to repeat, it
+says "nothing to repeat yet".
+
+```
+press a 30
+last
+```
+
+Catch: a `;` splits a line before it runs, so the last line is only the part that ran last. After `press a 10; wait 30`,
+`last` runs `wait 30`.
+
 ### Shortcuts
 
 A one-word shortcut runs a command, and any words typed after the shortcut are added to the end of it. For example,
@@ -786,10 +1122,20 @@ A one-word shortcut runs a command, and any words typed after the shortcut are a
 | `upscale` | `set texture_upscale` | Needs a value. |
 | `interp` | `set force_scene_interpolation` | Needs a value, such as `interp on`. |
 | `testroom` | `warp place test room` | Needs a save file loaded. |
+| `freecam` | `set free_camera` | Needs a value, such as `freecam on`. |
+| `boss` | `set boss_rush` | Needs a value. |
+| `cutscene` | `set cutscene_skip_all` | Needs a value. |
+| `dive` | `set dive` | Needs a value. |
+| `trot` | `set talon_trot` | Needs a value. |
+| `fineaim` | `set fine_aim` | Needs a value. |
+| `music` | `set music_player` | Needs a value. |
+| `mem` | `set more_game_memory` | Needs a value. |
+| `char` | `transform` | With no value, prints the form. Needs a save file loaded and the game running, as `transform` does. |
 
 ## Not ported yet
 
-These commands from the original plan are not in the console yet, because they need addresses from the Banjo-Tooie decomp
-or hooks into the game: counters (`jiggies`, `notes`, `health`), `char`, `moves` (`unlock moves` turns on
-the cheat for now), `camera`, `actors`, `hide`, `show`, `pause`, `resume`, `step`, `ff`, `seed`, `capture`, `record`,
-`replay` and `hud`. The `noclip` name is a shortcut now (see above), and it works when the build has that cheat.
+These commands are not in the console yet, because they need addresses from the Banjo-Tooie decomp or hooks into the
+game: item counters (`jiggies`, `notes`, `jinjos`, `health`, `eggs`, `feathers`, `give`), `seed`, `camera` (save and
+load), `sfx`, `trace`, `disasm`, `screenshot compare`, achievement `unlock` and `reset`, `actors`, `hide`, `show`,
+`capture`, `record`, `replay`, `hud`, and `moves` (`unlock moves` turns on the cheat for now). `pause`, `resume`, `step`
+and `ff` are in the console now, as described above.
