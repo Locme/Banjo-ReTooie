@@ -21,10 +21,13 @@
 // through the same config calls as the settings menu, so nothing here is a second copy of a feature.
 
 #include "tooie_console.h"
+#include "tooie_cheats.h"
 #include "tooie_debug.h"
+#include "tooie_enemy_spawner.h"
 #include "tooie_game.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_level_warp.h"
+#include "tooie_save_state.h"
 #include "tooie_screenshot.h"
 #include "recomp.h"
 #include "recompui/recompui.h"
@@ -288,6 +291,8 @@ uint8_t* g_rdram = nullptr;               // set on the game thread
 uint64_t g_wait_frames_until;             // 0: none
 Clock::time_point g_wait_until;           // epoch: none
 std::atomic<bool> g_busy{ false };
+std::function<bool()> g_wait_cond;        // wait map / wait until: true when what it waits for has happened
+Clock::time_point g_wait_cond_deadline;
 
 // press / release (apply_input).
 std::mutex g_input_mutex;
@@ -441,13 +446,26 @@ bool holding() {
         if (Clock::now() < g_wait_until) return true;
         g_wait_until = Clock::time_point{};
     }
+    if (g_wait_cond) {
+        if (g_wait_cond()) {
+            g_wait_cond = nullptr;
+            return false;
+        }
+        if (Clock::now() < g_wait_cond_deadline) return true;
+        g_wait_cond = nullptr;
+        {
+            std::lock_guard lock{ g_mutex };
+            g_current = "wait";
+        }
+        error("gave up waiting (timed out)");
+    }
     return false;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Settings: every option of the port's settings tabs, plus the Debug tab's own values (kept in debug.json).
 
-const char* const kTabs[] = { "general", "graphics", "sound", "qol", "wip" };
+const char* const kTabs[] = { "general", "graphics", "sound", "qol", "cheats", "wip" };
 
 Config* find_config(const std::string& id) {
     try {
@@ -1053,6 +1071,202 @@ void cmd_screenshot(Ctx&) {
     print("screenshot of the next frame, saved to the screenshots folder of the app-data folder (as F12)");
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Cheats, save states, spawning, waiting for a state, RAM diffs, timing
+
+// The Cheats tab's on/off cheats (the master switch is not one of them).
+std::vector<SettingRef> cheat_list() {
+    std::vector<SettingRef> out;
+    for (const SettingRef& r : all_settings()) {
+        if (r.tab == "cheats" && !r.debug && r.type() == ConfigOptionType::Bool && r.id() != "cheats_enabled") out.push_back(r);
+    }
+    return out;
+}
+
+// "noclip", "no clip", "cheat_noclip", or a part of a name that only one cheat has.
+bool find_cheat(const std::string& query, SettingRef* out) {
+    std::vector<SettingRef> list = cheat_list();
+    std::string sq = squash(query);
+    if (sq.empty()) return false;
+    for (const SettingRef& r : list) {
+        if (squash(r.id()) == sq || squash(r.id()) == "cheat" + sq || squash(r.name()) == sq) { *out = r; return true; }
+    }
+    std::vector<SettingRef> matches;
+    for (const SettingRef& r : list) {
+        if (squash(r.id()).find(sq) != std::string::npos || squash(r.name()).find(sq) != std::string::npos) matches.push_back(r);
+    }
+    if (matches.size() == 1) { *out = matches[0]; return true; }
+    if (matches.empty()) {
+        error("no cheat called \"" + query + "\" (cheat lists them)");
+    } else {
+        std::string text = "several cheats match \"" + query + "\":";
+        for (const SettingRef& r : matches) text += " " + r.id();
+        error(text);
+    }
+    return false;
+}
+
+// The cheats only work while the Cheats tab's master switch is on: the console turns it on when it sets a cheat.
+bool cheats_master_on() {
+    SettingRef master;
+    std::vector<SettingRef> matches;
+    if (!find_setting("cheats.cheats_enabled", &master, &matches)) { error("this build has no Cheats tab"); return false; }
+    if (std::get<bool>(master.config->get_option_value(master.id()))) return true;
+    std::string why;
+    if (!apply_value(master, ConfigValueVariant{ true }, &why)) { error(why); return false; }
+    return true;
+}
+
+void cmd_cheat(Ctx& c) {
+    if (c.w.size() < 2) {
+        std::string out = std::string("cheats ") + (tooie::cheats::enabled() ? "on" : "off") + " (the master switch; setting a cheat turns it on)";
+        for (const SettingRef& r : cheat_list()) out += "\n" + r.id() + " = " + value_text(r) + "   (" + r.name() + ")";
+        print(out);
+        return;
+    }
+    SettingRef ref;
+    if (!find_cheat(c.w[1], &ref)) return;
+    bool now = std::get<bool>(ref.config->get_option_value(ref.id()));
+    bool on = !now; // no value: flip it
+    if (c.w.size() >= 3 && !parse_bool(c.w[2], &on)) { error("cheat [name] [on|off]"); return; }
+    std::string why;
+    if (on && !cheats_master_on()) return;
+    if (!apply_value(ref, ConfigValueVariant{ on }, &why)) { error(why); return; }
+    print(ref.id() + " = " + value_text(ref));
+}
+
+void cmd_unlock(Ctx& c) {
+    std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
+    const char* cheat = what == "moves" ? "all_moves" : what == "everything" ? "unlock_everything" : nullptr;
+    if (cheat == nullptr) { error("unlock moves | unlock everything (cheats; the save file is not changed)"); return; }
+    SettingRef ref;
+    if (!find_cheat(cheat, &ref)) return;
+    std::string why;
+    if (!cheats_master_on() || !apply_value(ref, ConfigValueVariant{ true }, &why)) { if (!why.empty()) error(why); return; }
+    print(ref.id() + " = " + value_text(ref));
+}
+
+void cmd_savestate(Ctx& c) {
+    std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
+    if (what != "save" && what != "load") { error("savestate save | savestate load (one snapshot, kept in memory; in a level only)"); return; }
+    if (!tooie::debug::can_warp()) { error("a save file has to be loaded first"); return; }
+    if (what == "save") tooie::save_state::request_save();
+    else tooie::save_state::request_load();
+    print(what + " requested (taken on the next game update)");
+}
+
+void cmd_spawn(Ctx& c) {
+    std::vector<std::string> names = tooie::enemy_spawner::names();
+    if (c.w.size() < 2) {
+        std::string out;
+        for (size_t i = 0; i < names.size(); i++) out += format("%zu: %s%s", i + 1, names[i].c_str(), i + 1 < names.size() ? "\n" : "");
+        print(out);
+        return;
+    }
+    int count = 1;
+    std::string query = join(c.w, 1);
+    if (c.w.size() >= 3 && parse_int(c.w.back(), &count) && count >= 1 && count <= 20) query = join(c.w, 1, c.w.size() - 1);
+    else count = 1;
+    std::vector<int> matches;
+    int pos = find_entry(names, query, &matches);
+    if (pos <= 0) {
+        if (pos == 0) { error("no enemy matches \"" + query + "\" (spawn lists them)"); return; }
+        std::string out = "several match:";
+        int n = 0;
+        for (int m : matches) {
+            if (++n > 12) { out += " ..."; break; }
+            out += format(" %d (%s);", m, names[m - 1].c_str());
+        }
+        error(out);
+        return;
+    }
+    if (!tooie::debug::can_warp()) { error("a save file has to be loaded first"); return; }
+    if (!cheats_master_on()) return; // the spawner only works with the cheats on
+    for (int i = 0; i < count; i++) tooie::enemy_spawner::spawn((size_t)pos - 1);
+    print(format("%d x %s (in front of Banjo, on the next game update)", count, names[pos - 1].c_str()));
+}
+
+// RAM diff: the first 16 MB as words, kept by `diff snapshot`, compared by `diff` / `diff compare`.
+std::vector<uint32_t> g_diff_snapshot;
+
+void cmd_diff(Ctx& c) {
+    std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "compare";
+    if (what == "snapshot" || what == "snap" || what == "keep") {
+        g_diff_snapshot.resize((kFindEnd - kRamStart) / 4);
+        for (size_t i = 0; i < g_diff_snapshot.size(); i++) g_diff_snapshot[i] = read_ram(c.rdram, kRamStart + (uint32_t)i * 4, 4);
+        print("RAM kept (diff shows what changed since)");
+        return;
+    }
+    if (what != "compare") { error("diff snapshot | diff [compare] [how many to show, default 64]"); return; }
+    if (g_diff_snapshot.empty()) { error("no snapshot yet (diff snapshot)"); return; }
+    int show = 64;
+    if (c.w.size() >= 3 && (!parse_int(c.w[2], &show) || show < 1)) { error("diff compare [how many to show]"); return; }
+    size_t changed = 0;
+    std::string out;
+    for (size_t i = 0; i < g_diff_snapshot.size(); i++) {
+        uint32_t now = read_ram(c.rdram, kRamStart + (uint32_t)i * 4, 4);
+        if (now == g_diff_snapshot[i]) continue;
+        if ((int)changed < show) out += format("%08X: %08X -> %08X\n", kRamStart + (uint32_t)i * 4, g_diff_snapshot[i], now);
+        changed++;
+    }
+    print(format("%zu words changed", changed) + (out.empty() ? "" : "\n" + out.substr(0, out.size() - 1)) + (changed > (size_t)show ? "\n..." : ""));
+}
+
+// perf <seconds>: the time between game updates, written to perf-<time>.csv in the app folder.
+std::vector<double> g_perf_ms;
+bool g_perf_on;
+Clock::time_point g_perf_end, g_perf_last;
+
+void cmd_perf(Ctx& c) {
+    double seconds;
+    if (c.w.size() < 2 || !parse_double(c.w[1], &seconds) || seconds <= 0 || seconds > 600) { error("perf <seconds, up to 600>"); return; }
+    g_perf_ms.clear();
+    g_perf_last = Clock::time_point{};
+    g_perf_end = Clock::now() + std::chrono::microseconds((int64_t)(seconds * 1e6));
+    g_perf_on = true;
+    print(format("timing game updates for %.0f seconds", seconds));
+}
+
+// Called once per game update.
+void perf_tick() {
+    if (!g_perf_on) return;
+    Clock::time_point now = Clock::now();
+    if (g_perf_last != Clock::time_point{}) g_perf_ms.push_back(std::chrono::duration<double, std::milli>(now - g_perf_last).count());
+    g_perf_last = now;
+    if (now < g_perf_end) return;
+    g_perf_on = false;
+    if (g_perf_ms.empty()) { error("no game updates were timed"); return; }
+    std::time_t t = std::time(nullptr);
+    char stamp[32];
+    std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", std::localtime(&t));
+    std::filesystem::path path = recompui::file::get_app_folder_path() / (std::string("perf-") + stamp + ".csv");
+    {
+        std::ofstream out{ path };
+        out << "update,ms\n";
+        for (size_t i = 0; i < g_perf_ms.size(); i++) out << i << "," << g_perf_ms[i] << "\n";
+    }
+    std::vector<double> sorted = g_perf_ms;
+    std::sort(sorted.begin(), sorted.end());
+    double sum = 0;
+    for (double v : sorted) sum += v;
+    double avg = sum / sorted.size();
+    double p99 = sorted[std::min(sorted.size() - 1, (size_t)(sorted.size() * 0.99))];
+    {
+        std::lock_guard lock{ g_mutex };
+        g_current = "perf";
+    }
+    print(format("%zu updates, average %.2f ms (%.1f per second), 99th percentile %.2f ms, worst %.2f ms; saved to %s",
+        sorted.size(), avg, 1000.0 / avg, p99, sorted.back(), path.string().c_str()));
+}
+
+void cmd_sysinfo(Ctx&) {
+    int w = 0, h = 0;
+    if (window != nullptr) SDL_GetWindowSize(window, &w, &h);
+    const char* driver = SDL_GetCurrentVideoDriver();
+    print(format("%s, %d logical CPUs, %d MB RAM, video driver %s, window %dx%d",
+        SDL_GetPlatform(), SDL_GetCPUCount(), SDL_GetSystemRAM(), driver != nullptr ? driver : "none", w, h));
+}
+
 void cmd_settings(Ctx& c) {
     std::string sq = squash(join(c.w, 1));
     std::string out;
@@ -1164,8 +1378,38 @@ void cmd_release(Ctx&) {
 }
 
 void cmd_wait(Ctx& c) {
-    if (c.w.size() < 2) { error("wait <frames> | wait <n>ms | wait <n>s"); return; }
+    const char* usage = "wait <frames> | wait <n>ms | wait <n>s | wait map <map hex> [timeout s] | wait until <address> <value> [8|16|32] [timeout s]";
+    if (c.w.size() < 2) { error(usage); return; }
     std::string v = lower(c.w[1]);
+    if (v == "map" || v == "until") {
+        if (!ultramodern::is_game_started()) { error("wait " + v + " needs the game running"); return; }
+        double timeout = 120;
+        if (v == "map") {
+            uint32_t id = 0;
+            std::string h = c.w.size() >= 3 && c.w[2].size() > 2 && c.w[2][0] == '0' && (c.w[2][1] == 'x' || c.w[2][1] == 'X') ? c.w[2].substr(2) : (c.w.size() >= 3 ? c.w[2] : "");
+            char* end = nullptr;
+            id = (uint32_t)std::strtoul(h.c_str(), &end, 16);
+            if (h.empty() || *end != '\0' || id > 0xFFFF || (c.w.size() >= 4 && !parse_double(c.w[3], &timeout))) { error(usage); return; }
+            g_wait_cond = [id] { return g_rdram != nullptr && tooie::debug::current_map(g_rdram) == id && !tooie::debug::map_change_busy(g_rdram); };
+            print(format("waiting for map 0x%X", id));
+        } else {
+            uint32_t addr, value;
+            if (c.w.size() < 4 || !parse_addr(c.w[2], &addr) || !parse_u32(c.w[3], &value)) { error(usage); return; }
+            int size = size_of_value(c.w[3], value);
+            size_t next = 4;
+            if (c.w.size() > next) {
+                int s = parse_size(c.w[next]);
+                if (s != 0) { size = s; next++; }
+            }
+            if (c.w.size() > next && !parse_double(c.w[next], &timeout)) { error(usage); return; }
+            if ((addr & (size - 1)) != 0) { error("the address must be aligned to the size"); return; }
+            uint32_t mask = size == 4 ? 0xFFFFFFFFu : (1u << (size * 8)) - 1;
+            g_wait_cond = [addr, value, size, mask] { return g_rdram != nullptr && read_ram(g_rdram, addr, size) == (value & mask); };
+            print(format("waiting for %08X = %s", addr, hex(value & mask, size).c_str()));
+        }
+        g_wait_cond_deadline = Clock::now() + std::chrono::microseconds((int64_t)(timeout * 1e6));
+        return;
+    }
     double n;
     if (v.size() > 2 && v.substr(v.size() - 2) == "ms" && parse_double(v.substr(0, v.size() - 2), &n) && n >= 0) {
         g_wait_until = Clock::now() + std::chrono::microseconds((int64_t)(n * 1000.0));
@@ -1173,7 +1417,7 @@ void cmd_wait(Ctx& c) {
         g_wait_until = Clock::now() + std::chrono::microseconds((int64_t)(n * 1e6));
     } else {
         int f;
-        if (!parse_int(v, &f) || f < 0) { error("wait <frames> | wait <n>ms | wait <n>s"); return; }
+        if (!parse_int(v, &f) || f < 0) { error(usage); return; }
         if (!ultramodern::is_game_started()) { error("wait in frames needs the game running; use ms or s"); return; }
         g_wait_frames_until = g_frames.load() + (uint64_t)f;
     }
@@ -1474,11 +1718,18 @@ const std::vector<Command>& commands() {
         { "toggle", {}, false, "toggle <setting>", "flip on/off, or the next choice", cmd_toggle },
         { "reset", {}, false, "reset <setting>", "a setting back to its default", cmd_reset },
         { "fps", {}, false, "fps [value]", "the Game Frame Rate setting", cmd_fps },
+        { "cheat", {}, false, "cheat [name] [on|off]", "list the cheats, or switch one (turns the cheats master switch on); no value flips it", cmd_cheat },
+        { "unlock", {}, false, "unlock moves | unlock everything", "the Unlock all moves / Unlock everything cheats", cmd_unlock },
+        { "savestate", { "ss" }, true, "savestate save | savestate load", "the Save State / Load State keys (one snapshot, in a level)", cmd_savestate },
+        { "spawn", {}, true, "spawn [enemy|number] [count]", "spawn an enemy in front of Banjo (the Enemy Spawner cheat); no argument lists them", cmd_spawn },
+        { "diff", {}, true, "diff snapshot | diff [compare] [n]", "keep RAM, then list the words that changed since", cmd_diff },
+        { "perf", {}, true, "perf <seconds>", "time the game updates and write perf-<time>.csv", cmd_perf },
+        { "sysinfo", {}, false, "sysinfo", "platform, CPUs, RAM, video driver and window size (for bug reports)", cmd_sysinfo },
         { "dev", {}, false, "dev [on|off]", "make dev.txt next to the exe (shows every hidden tab after a restart); off removes it", cmd_dev },
         { "screenshot", { "shot" }, true, "screenshot", "save the next frame as a PNG, as F12 does", cmd_screenshot },
         { "press", {}, true, "press <buttons> [stick <x> <y>] [frames]", "hold controller 1's buttons (a+b) and stick (-80..80), for n frames or until release", cmd_press },
         { "release", {}, false, "release", "let go of what press holds", cmd_release },
-        { "wait", {}, false, "wait <frames> | wait <n>ms | wait <n>s", "hold the next commands (frames are game updates)", cmd_wait },
+        { "wait", {}, false, "wait <frames|n ms|n s|map <hex>|until <addr> <value>>", "hold the next commands (frames are game updates; map and until wait for a state)", cmd_wait },
         { "peek", {}, true, "peek <address> [bytes]", "read RAM (hex address)", cmd_peek },
         { "poke", {}, true, "poke <address> <value> [8|16|32]", "write RAM", cmd_poke },
         { "expect", {}, true, "expect <address> <value> [8|16|32]", "ERR when RAM does not hold the value", cmd_expect },
@@ -1509,6 +1760,25 @@ const Command* find_command(const std::string& name) {
         }
     }
     return nullptr;
+}
+
+// One-word shortcuts the console knows without an alias: the name, then the command it runs with the rest of the
+// line added after it. Your own aliases win over these.
+struct Shortcut { const char* name; const char* body; };
+const Shortcut kShortcuts[] = {
+    { "noclip", "cheat noclip" }, { "levitate", "cheat infinite_jumps" }, { "fly", "cheat fly_anywhere" }, { "onehit", "cheat one_hit" },
+    { "msaa", "set msaa_option" }, { "res", "set res_option" }, { "hdshadows", "set hd_shadows" }, { "mirror", "set mirror_mode" },
+    { "daynight", "set day_night" }, { "sunshadows", "set sun_shadows" }, { "upscale", "set texture_upscale" },
+    { "interp", "set force_scene_interpolation" }, { "testroom", "warp place test room" },
+};
+
+std::string shortcut_body(const std::string& name, const std::string& line) {
+    for (const Shortcut& s : kShortcuts) {
+        if (name != s.name) continue;
+        std::string rest = rest_of(line, 1);
+        return std::string(s.body) + (rest.empty() ? "" : " " + rest);
+    }
+    return "";
 }
 
 // Runs the front of the queue while nothing holds it. rdram is null before the game starts: then a command that
@@ -1553,6 +1823,7 @@ void pump(uint8_t* rdram) {
                 auto it = g_aliases.find(lower(w[0]));
                 if (it != g_aliases.end()) body = it->second;
             }
+            if (body.empty()) body = shortcut_body(lower(w[0]), e.text);
             if (body.empty()) { error("unknown command \"" + w[0] + "\" (help)"); continue; }
             if (e.depth > 8) { error("aliases nest too deep"); continue; }
             enqueue_line(body, e.depth + 1, true);
@@ -1863,6 +2134,7 @@ void tooie::console::frame(uint8_t* rdram) {
         std::lock_guard lock{ g_mutex };
         for (const Freeze& f : g_freezes) write_ram(rdram, f.addr, f.value, f.size);
     }
+    perf_tick();
     poll_keys();
     pump(rdram);
     if (frame % 6 == 0) update_watch_panel(rdram);

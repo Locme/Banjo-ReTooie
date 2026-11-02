@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "recomp.h"
 
@@ -19,6 +20,10 @@ namespace tooie::enemy_spawner {
     // Adds the row to the Cheats tab, hidden while master_option is off.
     void add_options(recomp::config::Config& cheats, const std::string& master_option);
 
+    // The enemies the drop-down lists, by name, and a spawn of one of them by position in that list (developer
+    // console). Same as picking it and pressing Spawn: the spawn happens on the next game frame.
+    std::vector<std::string> names();
+    bool spawn(size_t index);
     // Drops a spawn that is still waiting (the master switch went off).
     void reset();
 

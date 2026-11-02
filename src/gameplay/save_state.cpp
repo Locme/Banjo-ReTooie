@@ -523,3 +523,11 @@ void tooie::save_state::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     }
 }
+
+void tooie::save_state::request_save() {
+    save_requested = true;
+}
+
+void tooie::save_state::request_load() {
+    load_requested = true;
+}

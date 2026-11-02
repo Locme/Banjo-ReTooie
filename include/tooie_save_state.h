@@ -25,6 +25,10 @@ namespace tooie::save_state {
     // two game frames, put back every two frames, so the blend mode can be switched on a still scene.
     // In a level only; a map change or Load State ends it (freeze_on() then reads false).
     void set_freeze(bool on);
+    // Same as the Save State / Load State keys, for the developer console. Taken on the next game frame; a load
+    // with no snapshot kept does nothing.
+    void request_save();
+    void request_load();
     bool freeze_on();
     // True while the game is actually being held (sound is muted).
     bool frozen();

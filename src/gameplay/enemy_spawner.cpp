@@ -31,6 +31,7 @@
 #include <fstream>
 #include "librecomp/game.hpp"
 #include <map>
+#include <iterator>
 #include <mutex>
 #include <string>
 #include <variant>
@@ -727,4 +728,21 @@ void tooie::enemy_spawner::tick(uint8_t* rdram, recomp_context* ctx) {
             queue.erase(queue.begin());
         }
     }
+}
+
+std::vector<std::string> tooie::enemy_spawner::names() {
+    std::vector<std::string> out;
+    for (const Enemy& enemy : enemies) {
+        out.push_back(enemy.name);
+    }
+    return out;
+}
+
+bool tooie::enemy_spawner::spawn(size_t index) {
+    if (index >= std::size(enemies)) {
+        return false;
+    }
+    std::lock_guard lock{queue_mutex};
+    queue.push_back(enemies[index].id);
+    return true;
 }
