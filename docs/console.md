@@ -827,6 +827,68 @@ Stops watching one address, or all of them. With no argument it stops all of the
 unwatch 80127630
 ```
 
+### `search`
+
+Aliases: `ramsearch`, `s`
+
+Usage: `search start [8|16|32|f] [from] [to]` | `search changed|unchanged|up|down` | `search up <n>` | `search down <n>` | `search =|!=|>|< <value>` | `search list [n]` | `search watch [n]` | `search trace [n]` | `search count`
+
+Finds an address whose value you do not know yet. `search start` keeps every aligned value in the range, from `80000000`
+to `81000000` by default. Then each filter keeps only the addresses whose value passes it, and remembers the value they
+have now for the next step. After a filter it prints how many are left and the first 8.
+
+- `changed` (or `ch`) and `unchanged` (or `same`) compare with the previous step.
+- `up`, `increased` or `inc` and `down`, `decreased` or `dec` keep the addresses that went up or down at all. With a number, `up <n>` and `down <n>` keep only the ones that moved by exactly `n`.
+- `=` (or `==`, `eq`), `!=` (or `ne`), `>` (or `gt`) and `<` (or `lt`) compare the current value with a number.
+
+Values typed as `0x..` are hex, and others are decimal. The 8 and 16-bit values read as unsigned, the 32-bit values as
+signed, and `f` reads floats. Float comparisons allow a difference of 0.0001.
+
+`search list [n]` prints the remaining addresses with their values, 32 by default. `search count` prints how many are left
+and how many steps were taken. `search watch [n]` and `search trace [n]` queue a `watch` or `trace` command for each of
+the first `n` addresses, 8 by default and at most 32. Those run after this command.
+
+Worked example: finding the egg count, which goes down by one each time an egg is fired.
+
+```
+search start 8
+(fire an egg in the game)
+search down 1
+(fire another egg)
+search down 1
+search list
+search trace
+```
+
+Each step should leave fewer addresses. When `search list` shows only a few, `search trace` prints each change to them,
+so the one that moves with the egg count is the one to keep.
+
+Catch: `list`, `watch` and `trace` refuse while more than 100000 addresses are left after `search start`. Narrow the search
+first with another filter.
+
+### `ramlog`
+
+Usage: `ramlog <seconds> [from] [to]` | `ramlog stop`
+
+Counts which RAM words change while you play. Every game update it compares each 32-bit word in the range with the
+previous update, and counts the changes. The default range is `80000000` to `80800000`. When the time is up, or when
+`ramlog stop` is given, it writes `traces/ramlog-<time>.csv` in the game folder. The file has one row per changed word:
+`address,changes,of_updates,first,last`, sorted busiest first. It also prints the 8 busiest and the 8 quietest words.
+
+```
+ramlog 20
+(do one thing in the game, then wait)
+ramlog 60 80000000 80100000
+ramlog stop
+```
+
+Only one ramlog can run at a time. It can slow the game a little.
+
+Tip: a word that changed only a few times during one action is usually that action's state, so the quietest ones are
+the ones to check first. The busiest are usually timers and the like.
+
+Catch: only one ramlog can run at a time, so `ramlog` is refused until the running one ends.
+
 ### `trace`
 
 Usage: `trace <address> [bytes] [8|16|32] [file <name>] [quiet]` | `trace list` | `trace stop <address>|all`
