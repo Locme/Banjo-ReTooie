@@ -2224,6 +2224,377 @@ void cmd_invincible(Ctx& c) {
     print(std::string("invincible ") + (on ? "on" : "off") + " (flag 0x53C; saving keeps it)");
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Quick testing: marks, scenarios, input recording, the split timer, autoexec, history, grep, input.
+
+std::filesystem::path app_file(const char* name) {
+    return recompui::file::get_app_folder_path() / name;
+}
+
+// mark <name> / recall <name>: a map and a position, kept in marks.txt as "name map x y z".
+struct Mark { uint16_t map; float pos[3]; };
+
+std::map<std::string, Mark> read_marks() {
+    std::map<std::string, Mark> marks;
+    std::ifstream in{ app_file("marks.txt") };
+    std::string line;
+    while (std::getline(in, line)) {
+        std::istringstream s{ line };
+        std::string name;
+        Mark m{};
+        unsigned map = 0;
+        if (line.empty() || line[0] == '#') continue;
+        if (s >> name >> std::hex >> map >> std::dec >> m.pos[0] >> m.pos[1] >> m.pos[2]) {
+            m.map = (uint16_t)map;
+            marks[name] = m;
+        }
+    }
+    return marks;
+}
+
+void write_marks(const std::map<std::string, Mark>& marks) {
+    std::ofstream out{ app_file("marks.txt") };
+    out << "# Console marks: name, map (hex), x y z. Written by mark.\n";
+    for (const auto& [name, m] : marks) out << format("%s %X %.3f %.3f %.3f\n", name.c_str(), m.map, m.pos[0], m.pos[1], m.pos[2]);
+}
+
+// The commands that put Banjo at a map and position: a warp first only when the map differs.
+std::string place_commands(uint8_t* rdram, uint16_t map, const float pos[3]) {
+    std::string go = format("goto %.3f %.3f %.3f", pos[0], pos[1], pos[2]);
+    if (rdram != nullptr && tooie::debug::current_map(rdram) == map) return go;
+    // 30 game updates after the map is in: the player is placed by then.
+    return format("warp id %X; wait map %X; wait 30; ", map, map) + go;
+}
+
+void cmd_mark(Ctx& c) {
+    std::map<std::string, Mark> marks = read_marks();
+    if (c.w.size() < 2 || lower(c.w[1]) == "list") {
+        std::string out;
+        for (const auto& [name, m] : marks) {
+            out += format("%s%s: map 0x%X (%s) %.1f %.1f %.1f", out.empty() ? "" : "\n", name.c_str(), m.map, map_name(m.map), m.pos[0], m.pos[1], m.pos[2]);
+        }
+        print(out.empty() ? "no marks (mark <name> keeps where Banjo is)" : out);
+        return;
+    }
+    if (lower(c.w[1]) == "delete" || lower(c.w[1]) == "del") {
+        if (c.w.size() < 3 || marks.erase(lower(c.w[2])) == 0) { error("mark delete <name> (mark list)"); return; }
+        write_marks(marks);
+        print("deleted " + lower(c.w[2]));
+        return;
+    }
+    if (c.rdram == nullptr) { error("the game has to be running"); return; }
+    Mark m{};
+    if (!tooie::player_cheats::position(c.rdram, m.pos)) { error("there is no player yet"); return; }
+    m.map = tooie::debug::current_map(c.rdram);
+    std::string name = lower(c.w[1]);
+    marks[name] = m;
+    write_marks(marks);
+    print(format("%s: map 0x%X (%s) %.1f %.1f %.1f", name.c_str(), m.map, map_name(m.map), m.pos[0], m.pos[1], m.pos[2]));
+}
+
+void cmd_recall(Ctx& c) {
+    if (c.w.size() < 2) { error("recall <name> (mark list)"); return; }
+    std::map<std::string, Mark> marks = read_marks();
+    auto it = marks.find(lower(c.w[1]));
+    if (it == marks.end()) { error("no mark called \"" + c.w[1] + "\" (mark list)"); return; }
+    enqueue_line(place_commands(c.rdram, it->second.map, it->second.pos), c.depth + 1, true);
+}
+
+// scenario <name>: runs scenarios/<name>.txt. scenario save <name> writes one from where Banjo is and the named items.
+std::filesystem::path scenario_dir() { return app_file("scenarios"); }
+
+void cmd_scenario(Ctx& c) {
+    std::error_code ec;
+    std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "list";
+    if (what == "list") {
+        std::vector<std::string> names;
+        for (const auto& e : std::filesystem::directory_iterator(scenario_dir(), ec)) {
+            if (e.path().extension() == ".txt") names.push_back(e.path().stem().string());
+        }
+        std::sort(names.begin(), names.end());
+        std::string out;
+        for (const std::string& n : names) out += (out.empty() ? "" : " ") + n;
+        print(out.empty() ? "no scenarios yet (scenario save <name>, or write scenarios/<name>.txt by hand)" : out);
+        return;
+    }
+    if (what == "save") {
+        if (c.w.size() < 3) { error("scenario save <name>"); return; }
+        if (c.rdram == nullptr || c.ctx == nullptr) { error("the game has to be running"); return; }
+        float pos[3];
+        if (!tooie::player_cheats::position(c.rdram, pos)) { error("there is no player yet"); return; }
+        uint16_t map = tooie::debug::current_map(c.rdram);
+        std::filesystem::create_directories(scenario_dir(), ec);
+        std::filesystem::path path = scenario_dir() / (lower(c.w[2]) + ".txt");
+        std::ofstream out{ path };
+        if (!out.good()) { error("cannot write " + path.string()); return; }
+        out << "# Scenario " << lower(c.w[2]) << ": map 0x" << format("%X", map) << " (" << map_name(map) << "). Add any console commands.\n";
+        out << format("warp id %X\nwait map %X\nwait 30\ngoto %.3f %.3f %.3f\n", map, map, pos[0], pos[1], pos[2]);
+        for (const ItemName& in : kItemNames) {
+            out << format("item %d %d\n", in.index, tooie::progress_cheats::get_item(c.rdram, c.ctx, 0x40 + in.index));
+        }
+        print("wrote " + path.string());
+        return;
+    }
+    if (what == "delete" || what == "del") {
+        if (c.w.size() < 3 || !std::filesystem::remove(scenario_dir() / (lower(c.w[2]) + ".txt"), ec)) { error("scenario delete <name> (scenario list)"); return; }
+        print("deleted " + lower(c.w[2]));
+        return;
+    }
+    std::filesystem::path path = scenario_dir() / (what + ".txt");
+    if (!std::filesystem::exists(path, ec)) { error("no scenario called \"" + what + "\" (scenario list)"); return; }
+    enqueue_line("exec " + path.string(), c.depth, true);
+}
+
+// record <name> / record stop / play <name>: controller 1, one entry per game update, in inputs/<name>.txt.
+struct InputFrame { uint64_t frame; uint16_t buttons; float x, y; bool got; };
+std::vector<InputFrame> g_rec;            // under g_input_mutex
+bool g_recording;
+uint64_t g_rec_start;
+std::string g_rec_name;
+std::vector<InputFrame> g_play;           // under g_input_mutex
+bool g_playing;
+uint64_t g_play_start;
+size_t g_play_at;
+InputFrame g_last_input;                  // the last input the game got, for `input`
+
+std::filesystem::path input_dir() { return app_file("inputs"); }
+
+bool save_recording() {
+    std::error_code ec;
+    std::filesystem::create_directories(input_dir(), ec);
+    std::filesystem::path path = input_dir() / (g_rec_name + ".txt");
+    std::ofstream out{ path };
+    if (!out.good()) { error("cannot write " + path.string()); return false; }
+    out << "# Controller 1, one line per game update: update, buttons (hex), stick x, stick y. Written by record.\n";
+    for (const InputFrame& f : g_rec) out << format("%llu %04X %.4f %.4f\n", (unsigned long long)f.frame, f.buttons, f.got ? f.x : 0.0f, f.got ? f.y : 0.0f);
+    print(format("%zu updates kept in %s", g_rec.size(), path.string().c_str()));
+    return true;
+}
+
+void cmd_record(Ctx& c) {
+    std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
+    std::lock_guard lock{ g_input_mutex };
+    if (what == "stop" || what == "off") {
+        if (!g_recording) { error("nothing is being recorded"); return; }
+        g_recording = false;
+        save_recording();
+        return;
+    }
+    if (what.empty() || what == "list") {
+        std::error_code ec;
+        std::string out;
+        for (const auto& e : std::filesystem::directory_iterator(input_dir(), ec)) {
+            if (e.path().extension() == ".txt") out += (out.empty() ? "" : " ") + e.path().stem().string();
+        }
+        print(out.empty() ? "no recordings (record <name>, then record stop)" : out);
+        return;
+    }
+    if (g_recording) { error("already recording " + g_rec_name + " (record stop)"); return; }
+    g_rec.clear();
+    g_rec_name = what;
+    g_rec_start = g_frames.load() + 1;
+    g_recording = true;
+    print("recording controller 1 as " + what + " (record stop ends it; savestate save first lets you replay from the same place)");
+}
+
+void cmd_play(Ctx& c) {
+    std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
+    std::lock_guard lock{ g_input_mutex };
+    if (what == "stop" || what == "off") {
+        g_playing = false;
+        print("playback stopped");
+        return;
+    }
+    if (what.empty()) { error("play <name> | play stop (record list)"); return; }
+    std::ifstream in{ input_dir() / (what + ".txt") };
+    if (!in.good()) { error("no recording called \"" + what + "\" (record list)"); return; }
+    std::vector<InputFrame> frames;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        std::istringstream s{ line };
+        InputFrame f{};
+        unsigned long long n;
+        unsigned b;
+        if (s >> n >> std::hex >> b >> std::dec >> f.x >> f.y) {
+            f.frame = n;
+            f.buttons = (uint16_t)b;
+            f.got = true;
+            frames.push_back(f);
+        }
+    }
+    if (frames.empty()) { error(what + " is empty"); return; }
+    g_play = std::move(frames);
+    g_play_at = 0;
+    g_play_start = g_frames.load() + 1;
+    g_playing = true;
+    print(format("playing %s: %llu updates (play stop ends it; the game's own input is ignored meanwhile)", what.c_str(), (unsigned long long)g_play.back().frame + 1));
+}
+
+void cmd_input(Ctx&) {
+    InputFrame f;
+    {
+        std::lock_guard lock{ g_input_mutex };
+        f = g_last_input;
+    }
+    std::string names;
+    for (const auto& [name, bit] : kButtons) {
+        if (std::strncmp(name, "d", 1) == 0 && std::strlen(name) > 1 && name[1] != 'o') continue; // dup etc.: same bits as up etc.
+        if ((f.buttons & bit) != 0) names += (names.empty() ? "" : "+") + std::string(name);
+    }
+    print(format("buttons %04X %s, stick %d %d (of 80)%s", f.buttons, names.empty() ? "(none)" : names.c_str(),
+        (int)std::lround(f.x * 80.0f), (int)std::lround(f.y * 80.0f), f.got ? "" : ", no controller"));
+}
+
+// timer start|stop|show: time between map changes, for practice runs.
+struct Split { uint16_t map; double seconds; uint64_t updates; };
+bool g_timer_on;
+Clock::time_point g_timer_start, g_split_start;
+uint64_t g_timer_frames, g_split_frames;
+uint16_t g_timer_map;
+std::vector<Split> g_splits;
+
+std::string split_text(const Split& s) {
+    return format("%s: %.2f s (%llu updates)", map_name(s.map), s.seconds, (unsigned long long)s.updates);
+}
+
+void timer_tick(uint8_t* rdram) {
+    if (!g_timer_on || tooie::debug::map_change_busy(rdram)) return;
+    uint16_t map = tooie::debug::current_map(rdram);
+    if (map == g_timer_map) return;
+    Clock::time_point now = Clock::now();
+    Split s{ g_timer_map, std::chrono::duration<double>(now - g_split_start).count(), g_frames.load() - g_split_frames };
+    g_splits.push_back(s);
+    g_split_start = now;
+    g_split_frames = g_frames.load();
+    g_timer_map = map;
+    {
+        std::lock_guard lock{ g_mutex };
+        g_current = "timer";
+    }
+    print("split " + split_text(s));
+}
+
+void cmd_timer(Ctx& c) {
+    std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "show";
+    if (what == "start") {
+        if (c.rdram == nullptr) { error("the game has to be running"); return; }
+        g_timer_on = true;
+        g_timer_start = g_split_start = Clock::now();
+        g_timer_frames = g_split_frames = g_frames.load();
+        g_timer_map = tooie::debug::current_map(c.rdram);
+        g_splits.clear();
+        print("timer started; it splits on every map change");
+        return;
+    }
+    if (what != "stop" && what != "show") { error("timer start | timer stop | timer show"); return; }
+    if (g_timer_start == Clock::time_point{}) { error("the timer has not run (timer start)"); return; }
+    Clock::time_point now = Clock::now();
+    std::string out;
+    for (const Split& s : g_splits) out += split_text(s) + "\n";
+    if (g_timer_on) {
+        out += split_text({ g_timer_map, std::chrono::duration<double>(now - g_split_start).count(), g_frames.load() - g_split_frames }) + " (so far)\n";
+        out += format("total %.2f s (%llu updates)", std::chrono::duration<double>(now - g_timer_start).count(), (unsigned long long)(g_frames.load() - g_timer_frames));
+    } else {
+        out += "stopped";
+    }
+    if (what == "stop") g_timer_on = false;
+    print(out);
+}
+
+// autoexec: autoexec.txt in the game folder runs when the game starts.
+void cmd_autoexec(Ctx& c) {
+    std::filesystem::path path = app_file("autoexec.txt");
+    std::error_code ec;
+    bool there = std::filesystem::exists(path, ec);
+    if (c.w.size() >= 2 && lower(c.w[1]) == "run") {
+        if (!there) { error(path.string() + " does not exist"); return; }
+        enqueue_line("exec " + path.string(), c.depth, true);
+        return;
+    }
+    print(path.string() + (there ? " runs at every start (autoexec run runs it now)" : " does not exist; put commands in it and they run at every start"));
+}
+
+// grep <text>: the console's lines that hold some text.
+void cmd_grep(Ctx& c) {
+    if (c.w.size() < 2) { error("grep <text>"); return; }
+    std::string want = lower(rest_of(c.line, 1));
+    std::vector<std::string> hits;
+    {
+        std::lock_guard lock{ g_mutex };
+        for (const std::string& l : g_lines) {
+            if (l.rfind("> grep", 0) == 0) continue;
+            if (lower(l).find(want) != std::string::npos) hits.push_back(l);
+        }
+    }
+    std::string out;
+    for (const std::string& h : hits) out += (out.empty() ? "" : "\n") + h;
+    print(out.empty() ? "no lines hold \"" + want + "\"" : out);
+}
+
+// The typed history, kept in console_history.txt between launches.
+void save_history() {
+    std::ofstream out{ app_file("console_history.txt") };
+    std::lock_guard lock{ g_mutex };
+    for (const std::string& h : g_history) out << h << "\n";
+}
+
+void load_history() {
+    std::ifstream in{ app_file("console_history.txt") };
+    std::string line;
+    std::lock_guard lock{ g_mutex };
+    while (std::getline(in, line)) {
+        if (!trim(line).empty()) g_history.push_back(trim(line));
+    }
+    while (g_history.size() > kKeptHistory) g_history.erase(g_history.begin());
+    g_history_pos = g_history.size();
+}
+
+void cmd_history(Ctx& c) {
+    if (c.w.size() >= 2 && lower(c.w[1]) == "clear") {
+        {
+            std::lock_guard lock{ g_mutex };
+            g_history.clear();
+            g_history_pos = 0;
+        }
+        save_history();
+        print("history cleared");
+        return;
+    }
+    std::string out;
+    {
+        std::lock_guard lock{ g_mutex };
+        for (const std::string& h : g_history) out += (out.empty() ? "" : "\n") + h;
+    }
+    print(out.empty() ? "no history" : out);
+}
+
+// open <folder>: shows one of the game's folders in the file manager.
+void cmd_open(Ctx& c) {
+    std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
+    std::filesystem::path path;
+    if (what == "config" || what == "data") path = recomp::get_config_path();
+    else if (what == "game" || what == "exe" || what == "app") path = recompui::file::get_app_folder_path();
+    else if (what == "mods") path = recomp::mods::get_mods_directory();
+    else if (what == "saves" || what == "save") {
+        path = ultramodern::get_save_file_path();
+        path = path.empty() ? recomp::get_config_path() / "saves" : path.parent_path();
+    }
+    else if (what == "backups") path = recomp::get_config_path() / "save_backups";
+    else if (what == "screenshots" || what == "shots") path = recomp::get_config_path() / "screenshots";
+    else if (what == "scenarios") path = scenario_dir();
+    else if (what == "inputs" || what == "recordings") path = input_dir();
+    else { error("open config | game | mods | saves | backups | screenshots | scenarios | inputs"); return; }
+    std::error_code ec;
+    std::filesystem::create_directories(path, ec);
+    std::string url = "file://" + std::filesystem::absolute(path, ec).generic_string();
+#ifdef _WIN32
+    if (url.size() > 7 && url[7] != '/') url = "file:///" + url.substr(7);
+#endif
+    if (SDL_OpenURL(url.c_str()) != 0) { error("could not open " + path.string() + ": " + SDL_GetError()); return; }
+    print("opened " + path.string());
+}
+
 const std::vector<Command>& commands() {
     static const std::vector<Command> list = {
         { "help", { "?" }, false, "help [command]", "list the commands, or one command's use", cmd_help },
@@ -2297,6 +2668,17 @@ const std::vector<Command>& commands() {
         { "echo", {}, false, "echo <text>", "print text and mark the session log", cmd_echo },
         { "clear", { "cls" }, false, "clear", "clear the console", cmd_clear },
         { "close", {}, false, "close", "hide the console (` too)", cmd_close },
+        { "mark", {}, false, "mark <name> | mark list | mark delete <name>", "keep Banjo's map and position under a name (marks.txt)", cmd_mark },
+        { "recall", {}, true, "recall <name>", "go back to a mark: warps first when it is in another map", cmd_recall },
+        { "scenario", { "sc" }, false, "scenario <name> | scenario list | scenario save <name> | scenario delete <name>", "set up a test in one word: runs scenarios/<name>.txt; save writes one from the map, position and items now", cmd_scenario },
+        { "record", {}, false, "record <name> | record stop | record list", "record controller 1 into inputs/<name>.txt", cmd_record },
+        { "play", {}, true, "play <name> | play stop", "play a recording back as controller 1", cmd_play },
+        { "input", {}, true, "input", "the buttons and stick the game got last", cmd_input },
+        { "timer", {}, false, "timer start | timer stop | timer show", "a stopwatch that splits on every map change", cmd_timer },
+        { "autoexec", {}, false, "autoexec [run]", "where autoexec.txt is (its commands run at every start)", cmd_autoexec },
+        { "grep", {}, false, "grep <text>", "the console lines that hold some text", cmd_grep },
+        { "history", {}, false, "history [clear]", "the commands you typed (kept between launches)", cmd_history },
+        { "open", {}, false, "open <config|game|mods|saves|backups|screenshots|scenarios|inputs>", "show a folder in the file manager", cmd_open },
     };
     return list;
 }
@@ -2454,6 +2836,7 @@ void create_ui() {
             if (g_history.size() > kKeptHistory) g_history.erase(g_history.begin());
             g_history_pos = g_history.size();
         }
+        save_history();
         refresh_output();
         enqueue_line(line);
     });
@@ -2687,6 +3070,11 @@ void pregame_thread() {
 // Program start (src/main/main.cpp): the binds and aliases, TOOIE_CONSOLE, --exec, and the stdin reader.
 void tooie::console::start(int argc, char** argv) {
     load_state();
+    load_history();
+    {
+        std::error_code ec;
+        if (std::filesystem::exists(app_file("autoexec.txt"), ec)) enqueue_line("exec " + app_file("autoexec.txt").string());
+    }
     for (int i = 1; i + 1 < argc; i++) {
         if (std::strcmp(argv[i], "--exec") == 0) enqueue_line(std::string("exec ") + argv[i + 1]);
     }
@@ -2727,6 +3115,22 @@ void tooie::console::frame(uint8_t* rdram, recomp_context* ctx) {
     poll_keys();
     pump(rdram, ctx);
     time_tick(rdram);
+    timer_tick(rdram);
+    bool play_ended = false;
+    {
+        std::lock_guard lock{ g_input_mutex };
+        if (g_playing && frame >= g_play_start && frame - g_play_start > g_play.back().frame) {
+            g_playing = false;
+            play_ended = true;
+        }
+    }
+    if (play_ended) {
+        {
+            std::lock_guard lock{ g_mutex };
+            g_current = "play";
+        }
+        print("playback finished");
+    }
     if (frame % 6 == 0) update_watch_panel(rdram);
     {
         static Clock::time_point last_state;
@@ -2751,6 +3155,19 @@ extern "C" int tooie_debug_log_on(const char* env_name) {
 bool tooie::console::apply_input(int controller, uint16_t* buttons, float* x, float* y, bool got) {
     if (controller != 0) return got;
     std::lock_guard lock{ g_input_mutex };
+    uint64_t now = g_frames.load();
+    if (g_playing && now >= g_play_start) {
+        // The last recorded update at or before this one (input is read more often than the game updates).
+        uint64_t at = now - g_play_start;
+        while (g_play_at + 1 < g_play.size() && g_play[g_play_at + 1].frame <= at) g_play_at++;
+        const InputFrame& f = g_play[g_play_at];
+        if (f.frame <= at) {
+            *buttons = f.buttons;
+            *x = f.x;
+            *y = f.y;
+            got = true;
+        }
+    }
     if (g_press_frames != 0) {
         *buttons = (got ? *buttons : 0) | g_press_buttons;
         if (g_press_stick) {
@@ -2760,6 +3177,14 @@ bool tooie::console::apply_input(int controller, uint16_t* buttons, float* x, fl
             *x = *y = 0.0f;
         }
         got = true;
+    }
+    g_last_input = { now, got ? *buttons : (uint16_t)0, got ? *x : 0.0f, got ? *y : 0.0f, got };
+    if (g_recording && now >= g_rec_start) {
+        // One entry per game update: the last read in an update wins.
+        InputFrame f = g_last_input;
+        f.frame = now - g_rec_start;
+        if (!g_rec.empty() && g_rec.back().frame == f.frame) g_rec.back() = f;
+        else g_rec.push_back(f);
     }
     return got;
 }
