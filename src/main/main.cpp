@@ -43,6 +43,7 @@
 #include "recompinput/input_events.h"
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
+#include "tooie_console.h"
 #include "tooie_hand_cursor.h"
 #include "tooie_launcher_background.h"
 #include "tooie_launcher_title.h"
@@ -980,6 +981,9 @@ int main(int argc, char** argv) {
     };
     recomp::mods::register_mod_content_type(asset_mod_content_type);
 
+    // The developer console (src/game/console.cpp): its queue reads stdin, --exec and TOOIE_CONSOLE from here.
+    tooie::console::start(argc, argv);
+
     recomp::start(
         project_version,
         {},
@@ -1006,5 +1010,6 @@ int main(int argc, char** argv) {
 
     tooie::api_restart::relaunch_if_requested(argc, argv);
 
-    return EXIT_SUCCESS;
+    // 1 if a console command failed, or the code `quit` was given; 0 otherwise.
+    return tooie::console::exit_code();
 }

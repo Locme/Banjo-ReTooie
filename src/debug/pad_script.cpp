@@ -33,6 +33,7 @@
 #include "ultramodern/ultramodern.hpp"
 #include "tooie_mirror_mode.h"
 #include "tooie_game_frame_rate.h"
+#include "tooie_console.h"
 #include "tooie_debug.h"
 #include "tooie_control_scheme.h"
 #include "tooie_photo_mode.h"
@@ -298,6 +299,8 @@ bool tooie::debug::get_scripted_right_stick(float* x_out, float* y_out) {
 
 bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float* x_out, float* y_out) {
     bool ok = merged_n64_input(player_index, buttons_out, x_out, y_out);
+    // The developer console's `press` (src/game/console.cpp).
+    ok = tooie::console::apply_input(player_index, buttons_out, x_out, y_out, ok);
     if (player_index == 0) {
         // Mirror Mode: the controls follow the flipped picture (left stick and the left/right camera buttons).
         if (tooie::mirror_mode::active()) {

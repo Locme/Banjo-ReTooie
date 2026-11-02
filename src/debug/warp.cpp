@@ -30,6 +30,7 @@ namespace tooie::debug {
     void explode_tick(uint8_t* rdram, recomp_context* ctx);
 }
 #include "funcs.h"
+#include "tooie_console.h"
 #include "tooie_debug.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_music_player.h"
@@ -157,6 +158,8 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     ticked = true;
     // First, so the other ticks act on a loaded state.
     tooie::save_state::tick(rdram, ctx);
+    // The developer console's queue, on the game thread between frames.
+    tooie::console::frame(rdram);
     last_map = tooie::debug::current_map(rdram);
     tooie::quick_start_tick(rdram);
     tooie::timer_save_tick(rdram, ctx);

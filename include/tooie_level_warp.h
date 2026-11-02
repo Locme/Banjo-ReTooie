@@ -1,6 +1,10 @@
 #ifndef __TOOIE_LEVEL_WARP_H__
 #define __TOOIE_LEVEL_WARP_H__
 
+#include <cstddef>
+#include <string>
+#include <vector>
+
 namespace recomp::config {
     class Config;
 }
@@ -20,6 +24,13 @@ namespace tooie::level_warp {
 
     // Starts the F9 key-watching thread (safe to call more than once).
     void start();
+
+    // The places the Warp tab lists, as "Group: Name", in the tab's order (for the developer console).
+    std::vector<std::string> place_names();
+
+    // Warps to place `index` of place_names() as a pick in the tab does (and F9 then repeats it). False if there is
+    // no such place.
+    bool warp_to_place(size_t index);
 }
 
 #endif

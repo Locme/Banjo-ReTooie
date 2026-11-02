@@ -16,6 +16,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <iterator>
 #include <thread>
 #include <variant>
 
@@ -184,4 +185,20 @@ void tooie::level_warp::start() {
 
 void tooie::level_warp::refresh() {
     show_tab(debug_tab_on());
+}
+
+std::vector<std::string> tooie::level_warp::place_names() {
+    std::vector<std::string> names;
+    for (const Place& place : places) {
+        names.push_back(std::string(place.group) + ": " + place.name);
+    }
+    return names;
+}
+
+bool tooie::level_warp::warp_to_place(size_t index) {
+    if (index >= std::size(places)) {
+        return false;
+    }
+    warp_to(places[index]);
+    return true;
 }

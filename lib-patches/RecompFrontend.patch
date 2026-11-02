@@ -3031,9 +3031,18 @@ index a60c585..cae83dd 100644
              if (next_top_element == nullptr) {
                  return false;
 diff --git a/recompui/src/elements/ui_element.cpp b/recompui/src/elements/ui_element.cpp
-index 4517152..f6ce79f 100644
+index 4517152..7228035 100644
 --- a/recompui/src/elements/ui_element.cpp
 +++ b/recompui/src/elements/ui_element.cpp
+@@ -306,7 +306,7 @@ void Element::ProcessEvent(Rml::Event &event) {
+             if (events_enabled & Events(EventType::Text)) {
+                 Rml::Variant *value_variant = base->GetAttribute("value");
+                 if (value_variant != nullptr) {
+-                    handle_event(Event::text_event(value_variant->Get<std::string>()));
++                    handle_event(Event::text_event(value_variant->Get<std::string>(), event.GetParameter("linebreak", false)));
+                 }
+             }
+ 
 @@ -520,6 +520,10 @@ float Element::get_scroll_top() {
      return base->GetScrollTop();
  }
@@ -3826,6 +3835,55 @@ index b8d3783..366fcd5 100644
      };
  
  } // namespace recompui
+diff --git a/recompui/src/elements/ui_text_input.cpp b/recompui/src/elements/ui_text_input.cpp
+index 42c74e7..398eed0 100644
+--- a/recompui/src/elements/ui_text_input.cpp
++++ b/recompui/src/elements/ui_text_input.cpp
+@@ -14,6 +14,12 @@ namespace recompui {
+                 function(text);
+             }
+ 
++            if (event.submit) {
++                for (const auto &function : submit_callbacks) {
++                    function(text);
++                }
++            }
++
+             break;
+         }
+         case EventType::Focus: {
+@@ -59,6 +65,10 @@ namespace recompui {
+         text_changed_callbacks.emplace_back(callback);
+     }
+ 
++    void TextInput::add_submit_callback(std::function<void(const std::string &)> callback) {
++        submit_callbacks.emplace_back(callback);
++    }
++
+     void TextInput::set_focus_callback(std::function<void(bool)> callback) {
+         focus_callback = callback;
+     }
+diff --git a/recompui/src/elements/ui_text_input.h b/recompui/src/elements/ui_text_input.h
+index 52282a7..f808d81 100644
+--- a/recompui/src/elements/ui_text_input.h
++++ b/recompui/src/elements/ui_text_input.h
+@@ -8,6 +8,7 @@ namespace recompui {
+     private:
+         std::string text;
+         std::vector<std::function<void(const std::string &)>> text_changed_callbacks;
++        std::vector<std::function<void(const std::string &)>> submit_callbacks;
+         std::function<void(bool)> focus_callback = nullptr;
+         Style focus_style;
+     protected:
+@@ -18,6 +19,8 @@ namespace recompui {
+         void set_text(std::string_view text) override;
+         const std::string &get_text();
+         void add_text_changed_callback(std::function<void(const std::string &)> callback);
++        // Called with the text when Enter is pressed in the input (developer console).
++        void add_submit_callback(std::function<void(const std::string &)> callback);
+         void set_focus_callback(std::function<void(bool)> callback);
+     };
+ 
 diff --git a/recompui/src/elements/ui_toggle.cpp b/recompui/src/elements/ui_toggle.cpp
 index da7039a..bd16469 100644
 --- a/recompui/src/elements/ui_toggle.cpp
@@ -3881,6 +3939,32 @@ index 507bffb..5de38d5 100644
      };
  
      class IconToggle : public Toggle {
+diff --git a/recompui/src/elements/ui_types.h b/recompui/src/elements/ui_types.h
+index af97fc4..d57ecbb 100644
+--- a/recompui/src/elements/ui_types.h
++++ b/recompui/src/elements/ui_types.h
+@@ -111,6 +111,8 @@ namespace recompui {
+ 
+     struct EventText {
+         std::string text;
++        // Enter was pressed in a one-line text input (RmlUi's change event with "linebreak").
++        bool submit = false;
+     };
+ 
+     struct EventNavigate {
+@@ -170,10 +172,10 @@ namespace recompui {
+             return e;
+         }
+ 
+-        static Event text_event(const std::string &text) {
++        static Event text_event(const std::string &text, bool submit = false) {
+             Event e;
+             e.type = EventType::Text;
+-            e.variant = EventText{ text };
++            e.variant = EventText{ text, submit };
+             return e;
+         }
+ 
 diff --git a/recompui/src/renderer/rt64_render_context.cpp b/recompui/src/renderer/rt64_render_context.cpp
 index a7954c7..8add9d9 100644
 --- a/recompui/src/renderer/rt64_render_context.cpp
