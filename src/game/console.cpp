@@ -2604,6 +2604,156 @@ void cmd_open(Ctx& c) {
     print("opened " + path.string());
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// RAM tracing: trace prints (and can log to a file) every change in a range; memview shows a range live.
+
+struct Trace {
+    uint32_t addr;
+    uint32_t bytes;           // a multiple of size
+    int size;                 // 1, 2 or 4: how the range is compared and printed
+    std::vector<uint32_t> last;
+    FILE* file = nullptr;     // trace ... file <name>: frame,address,old,new lines
+    bool quiet = false;       // trace ... quiet: only the file, nothing printed
+    uint64_t changes = 0;
+};
+std::vector<Trace> g_traces;  // under g_mutex
+constexpr int kTracePrintsPerUpdate = 16;
+
+struct MemView { uint32_t addr; int rows; };
+std::vector<MemView> g_memviews; // under g_mutex
+
+void close_trace(Trace& t) {
+    if (t.file != nullptr) {
+        std::fclose(t.file);
+        t.file = nullptr;
+    }
+}
+
+void cmd_trace(Ctx& c) {
+    const char* usage = "trace <address> [bytes] [8|16|32] [file <name>] [quiet] | trace list | trace stop <address>|all";
+    std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "list";
+    std::lock_guard lock{ g_mutex };
+    if (what == "list") {
+        std::string out;
+        for (const Trace& t : g_traces) {
+            out += format("%s%08X, %u bytes as %d-bit, %llu changes%s", out.empty() ? "" : "\n", t.addr, t.bytes, t.size * 8,
+                (unsigned long long)t.changes, t.file != nullptr ? ", to a file" : "");
+        }
+        print(out.empty() ? "nothing traced" : out);
+        return;
+    }
+    if (what == "stop" || what == "off") {
+        uint32_t addr = 0;
+        bool all = c.w.size() >= 3 && lower(c.w[2]) == "all";
+        if (!all && (c.w.size() < 3 || !parse_addr(c.w[2], &addr))) { error("trace stop <address> | trace stop all"); return; }
+        size_t before = g_traces.size();
+        for (Trace& t : g_traces) {
+            if (all || t.addr == addr) close_trace(t);
+        }
+        g_traces.erase(std::remove_if(g_traces.begin(), g_traces.end(), [&](const Trace& t) { return all || t.addr == addr; }), g_traces.end());
+        print(format("stopped %zu trace(s)", before - g_traces.size()));
+        return;
+    }
+    if (c.rdram == nullptr) { error("the game has to be running"); return; }
+    Trace t{};
+    if (!parse_addr(c.w[1], &t.addr)) { error(usage); return; }
+    t.size = 4;
+    t.bytes = 0;
+    std::string file_name;
+    for (size_t i = 2; i < c.w.size(); i++) {
+        std::string a = lower(c.w[i]);
+        uint32_t n;
+        if (a == "file" && i + 1 < c.w.size()) file_name = c.w[++i];
+        else if (a == "quiet") t.quiet = true;
+        else if (int s = parse_size(a); s != 0 && t.bytes != 0) t.size = s;
+        else if (t.bytes == 0 && parse_u32(a, &n) && n > 0) t.bytes = n;
+        else if (int s2 = parse_size(a); s2 != 0) t.size = s2;
+        else { error(usage); return; }
+    }
+    if (t.bytes == 0) t.bytes = t.size;
+    if (t.bytes > 0x10000) { error("at most 0x10000 bytes"); return; }
+    if ((t.addr & (t.size - 1)) != 0) { error("the address must be aligned to the size"); return; }
+    t.bytes = (t.bytes + t.size - 1) / t.size * t.size;
+    if (t.addr + t.bytes > kRamEnd || t.addr + t.bytes < t.addr) { error("the range runs past the end of RAM"); return; }
+    if (t.quiet && file_name.empty()) { error("quiet needs file <name>"); return; }
+    if (!file_name.empty()) {
+        std::filesystem::path path = file_name;
+        if (path.extension().empty()) path += ".csv";
+        if (path.is_relative()) path = recompui::file::get_app_folder_path() / "traces" / path;
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+        t.file = std::fopen(path.string().c_str(), "w");
+        if (t.file == nullptr) { error("cannot write " + path.string()); return; }
+        std::fprintf(t.file, "update,address,old,new\n");
+        print("logging to " + path.string());
+    }
+    for (uint32_t off = 0; off < t.bytes; off += t.size) t.last.push_back(read_ram(c.rdram, t.addr + off, t.size));
+    for (Trace& old : g_traces) {
+        if (old.addr == t.addr) close_trace(old);
+    }
+    g_traces.erase(std::remove_if(g_traces.begin(), g_traces.end(), [&](const Trace& o) { return o.addr == t.addr; }), g_traces.end());
+    print(format("tracing %08X..%08X as %d-bit values (trace stop %08X ends it)", t.addr, t.addr + t.bytes - 1, t.size * 8, t.addr));
+    g_traces.push_back(std::move(t));
+}
+
+// Every game update: compare each traced range with the last update and report what changed.
+void trace_tick(uint8_t* rdram) {
+    std::lock_guard lock{ g_mutex };
+    if (g_traces.empty()) return;
+    uint64_t frame = g_frames.load();
+    int printed = 0, held_back = 0;
+    std::string out;
+    for (Trace& t : g_traces) {
+        for (size_t i = 0; i < t.last.size(); i++) {
+            uint32_t a = t.addr + (uint32_t)i * t.size;
+            uint32_t now = read_ram(rdram, a, t.size);
+            if (now == t.last[i]) continue;
+            t.changes++;
+            if (t.file != nullptr) std::fprintf(t.file, "%llu,%08X,%s,%s\n", (unsigned long long)frame, a, hex(t.last[i], t.size).c_str(), hex(now, t.size).c_str());
+            if (!t.quiet) {
+                if (printed < kTracePrintsPerUpdate) {
+                    out += format("%s[%llu] %08X %s -> %s", out.empty() ? "" : "\n", (unsigned long long)frame, a, hex(t.last[i], t.size).c_str(), hex(now, t.size).c_str());
+                    printed++;
+                } else {
+                    held_back++;
+                }
+            }
+            t.last[i] = now;
+        }
+        if (t.file != nullptr) std::fflush(t.file);
+    }
+    if (held_back > 0) out += format("\n... and %d more changes this update (trace ... file <name> keeps them all)", held_back);
+    if (!out.empty()) {
+        g_current = "trace";
+        print(out);
+    }
+}
+
+// memview <address> [rows]: 16 bytes a row in the panel at the top right, updated live.
+void cmd_memview(Ctx& c) {
+    std::lock_guard lock{ g_mutex };
+    if (c.w.size() < 2) {
+        std::string out;
+        for (const MemView& m : g_memviews) out += format("%s%08X, %d rows", out.empty() ? "" : "\n", m.addr, m.rows);
+        print(out.empty() ? "no memview (memview <address> [rows])" : out);
+        return;
+    }
+    if (lower(c.w[1]) == "off" || lower(c.w[1]) == "stop") {
+        g_memviews.clear();
+        print("memview off");
+        return;
+    }
+    MemView m{};
+    int rows = 4;
+    if (!parse_addr(c.w[1], &m.addr) || (c.w.size() >= 3 && (!parse_int(c.w[2], &rows) || rows < 1))) { error("memview <address> [rows 1-16] | memview off"); return; }
+    m.addr &= ~0xFu;
+    m.rows = std::min(rows, 16);
+    if (m.addr + m.rows * 16u > kRamEnd) { error("the range runs past the end of RAM"); return; }
+    g_memviews.erase(std::remove_if(g_memviews.begin(), g_memviews.end(), [&](const MemView& o) { return o.addr == m.addr; }), g_memviews.end());
+    g_memviews.push_back(m);
+    print(format("showing %08X..%08X at the top right (memview off hides it)", m.addr, m.addr + m.rows * 16 - 1));
+}
+
 const std::vector<Command>& commands() {
     static const std::vector<Command> list = {
         { "help", { "?" }, false, "help [command]", "list the commands, or one command's use", cmd_help },
@@ -2677,6 +2827,8 @@ const std::vector<Command>& commands() {
         { "echo", {}, false, "echo <text>", "print text and mark the session log", cmd_echo },
         { "clear", { "cls" }, false, "clear", "clear the console", cmd_clear },
         { "close", {}, false, "close", "hide the console (` too)", cmd_close },
+        { "trace", {}, false, "trace <address> [bytes] [8|16|32] [file <name>] [quiet] | trace list | trace stop <address>|all", "print every change in a RAM range as it happens (file keeps them in traces/<name>.csv)", cmd_trace },
+        { "memview", { "hexview", "mv" }, false, "memview <address> [rows] | memview off", "a live hex view of RAM at the top right, 16 bytes a row", cmd_memview },
         { "mark", {}, false, "mark <name> | mark list | mark delete <name>", "keep Banjo's map and position under a name (marks.txt)", cmd_mark },
         { "recall", {}, true, "recall <name>", "go back to a mark: warps first when it is in another map", cmd_recall },
         { "scenario", { "sc" }, false, "scenario <name> | scenario list | scenario save <name> | scenario delete <name>", "set up a test in one word: runs scenarios/<name>.txt; save writes one from the map, position and items now", cmd_scenario },
@@ -2896,6 +3048,14 @@ void update_watch_panel(uint8_t* rdram) {
     {
         std::lock_guard lock{ g_mutex };
         {
+            for (const MemView& m : g_memviews) {
+                for (int r = 0; r < m.rows; r++) {
+                    uint32_t row = m.addr + r * 16;
+                    std::string line = format("%08X ", row);
+                    for (int k = 0; k < 16; k += 4) line += format(" %08X", read_ram(rdram, row + k, 4));
+                    lines.push_back(line);
+                }
+            }
             for (const Watch& w : g_watches) {
                 std::string label = w.name.empty() ? format("%08X", w.addr) : w.name;
                 uint32_t v = read_ram(rdram, w.addr, w.is_float ? 4 : w.size);
@@ -3125,6 +3285,7 @@ void tooie::console::frame(uint8_t* rdram, recomp_context* ctx) {
     pump(rdram, ctx);
     time_tick(rdram);
     timer_tick(rdram);
+    trace_tick(rdram);
     bool play_ended = false;
     {
         std::lock_guard lock{ g_input_mutex };
