@@ -1040,6 +1040,14 @@ void cmd_status(Ctx& c) {
         tooie::debug::warp_pending() ? "pending" : "none", tooie::debug::can_warp() ? "is loaded" : "is not loaded"));
 }
 
+void cmd_dev(Ctx& c) {
+    bool on = true;
+    if (c.w.size() >= 2 && !parse_bool(c.w[1], &on)) { error("dev | dev on | dev off"); return; }
+    std::string path;
+    if (!tooie::set_dev_file(on, &path)) { error(std::string(on ? "could not write " : "could not remove ") + path); return; }
+    print((on ? "dev.txt is in place: " : "dev.txt is gone: ") + path + "\nRestart the game for the tabs to " + (on ? "show." : "go back to their switches."));
+}
+
 void cmd_screenshot(Ctx&) {
     tooie::screenshot::take();
     print("screenshot of the next frame, saved to the screenshots folder of the app-data folder (as F12)");
@@ -1466,6 +1474,7 @@ const std::vector<Command>& commands() {
         { "toggle", {}, false, "toggle <setting>", "flip on/off, or the next choice", cmd_toggle },
         { "reset", {}, false, "reset <setting>", "a setting back to its default", cmd_reset },
         { "fps", {}, false, "fps [value]", "the Game Frame Rate setting", cmd_fps },
+        { "dev", {}, false, "dev [on|off]", "make dev.txt next to the exe (shows every hidden tab after a restart); off removes it", cmd_dev },
         { "screenshot", { "shot" }, true, "screenshot", "save the next frame as a PNG, as F12 does", cmd_screenshot },
         { "press", {}, true, "press <buttons> [stick <x> <y>] [frames]", "hold controller 1's buttons (a+b) and stick (-80..80), for n frames or until release", cmd_press },
         { "release", {}, false, "release", "let go of what press holds", cmd_release },

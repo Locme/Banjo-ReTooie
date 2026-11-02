@@ -41,6 +41,10 @@ namespace tooie {
     // switch shows (DEV, Cheats, Warp, Achievements and any added later), whatever the switches say
     // (L, 2026-10-23; recompui::config::set_show_all_tabs in init_config).
     bool dev_file_present();
+    // Makes (create true) or removes dev.txt, in the exe's folder or else the working directory. Only the next
+    // launch notices (dev_file_present is read once). Returns the file's path in `path`; false if it could not be
+    // written or removed.
+    bool set_dev_file(bool create, std::string* path);
 
     // Save backups (save_backup.cpp): at launch and every 120 s, copies the save file to
     // save_backups/<date-time>/ if it changed, keeping the newest N (General tab settings).

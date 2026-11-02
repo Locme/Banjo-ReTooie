@@ -65,6 +65,32 @@ bool tooie::dev_file_present() {
     return present;
 }
 
+bool tooie::set_dev_file(bool create, std::string* path) {
+    std::error_code ec;
+    const fs::path exe_dir = get_exe_dir();
+    fs::path file = exe_dir.empty() ? fs::path("dev.txt") : exe_dir / "dev.txt";
+    if (!create) {
+        // Both places dev_file_present looks in.
+        for (const fs::path& p : { fs::path("dev.txt"), file }) {
+            if (fs::exists(p, ec)) {
+                file = p;
+                break;
+            }
+        }
+        *path = file.string();
+        if (!fs::exists(file, ec)) {
+            return true; // nothing to remove
+        }
+        return fs::remove(file, ec);
+    }
+    *path = file.string();
+    if (fs::exists(file, ec)) {
+        return true;
+    }
+    std::ofstream f(file, std::ios::binary);
+    return f.good();
+}
+
 fs::path tooie::resolve_app_folder() {
     // The runtime's own choice: portable.txt in the working directory, else the per-user folder.
     const fs::path legacy = recompui::file::get_app_folder_path();
