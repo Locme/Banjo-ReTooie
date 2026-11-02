@@ -159,7 +159,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     // First, so the other ticks act on a loaded state.
     tooie::save_state::tick(rdram, ctx);
     // The developer console's queue, on the game thread between frames.
-    tooie::console::frame(rdram);
+    tooie::console::frame(rdram, ctx);
     last_map = tooie::debug::current_map(rdram);
     tooie::quick_start_tick(rdram);
     tooie::timer_save_tick(rdram, ctx);

@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+#include "recomp.h"
+
 // Developer console (src/game/console.cpp, ported from the Mario Party 3 port's): a prompt on the ` key, commands on
 // stdin, --exec <file> and TOOIE_CONSOLE="cmd; cmd". Results go to stdout as "[command] text".
 namespace tooie::console {
@@ -14,7 +16,7 @@ namespace tooie::console {
     int exit_code();
 
     // Once per game update, on the game thread (tooie_warp_tick), before that update's own work.
-    void frame(uint8_t* rdram);
+    void frame(uint8_t* rdram, recomp_context* ctx);
 
     // On every read of player 1's pad: a `press` holds buttons and the stick. Returns whether the pad has input.
     bool apply_input(int controller, uint16_t* buttons, float* x, float* y, bool got);

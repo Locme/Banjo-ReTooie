@@ -15,6 +15,10 @@ namespace tooie::player_cheats {
     // Call on every read of player 1's buttons: while flying with Fly anywhere on, B stops the flight
     // instead of reaching the game.
     void apply_input(uint16_t* buttons);
+    // The controlled player's position, for the developer console. False when there is no player yet.
+    bool position(uint8_t* rdram, float out[3]);
+    // Puts the player at a position (all the copies of it the game keeps) and stops the fall. Call on the game thread.
+    bool teleport(uint8_t* rdram, const float pos[3]);
 }
 
 #endif

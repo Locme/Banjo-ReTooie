@@ -431,3 +431,40 @@ extern "C" int tooie_split_join_check(uint8_t* rdram, recomp_context* ctx) {
     // Hold off the game's own join only for splits made with D-pad down; split-up pads work as before.
     return split_by_cheat ? 0 : -1;
 }
+
+bool tooie::player_cheats::position(uint8_t* rdram, float out[3]) {
+    const uint32_t player = read_word(rdram, player_table);
+    if (!valid_ptr(player)) {
+        return false;
+    }
+    const uint32_t physics = read_word(rdram, player + physics_offset);
+    if (!valid_ptr(physics)) {
+        return false;
+    }
+    for (int k = 0; k < 3; k++) {
+        out[k] = tooie::rdram::read_float(rdram, physics + pos_offset + 4 * k);
+    }
+    return true;
+}
+
+bool tooie::player_cheats::teleport(uint8_t* rdram, const float pos[3]) {
+    const uint32_t player = read_word(rdram, player_table);
+    if (!valid_ptr(player)) {
+        return false;
+    }
+    const uint32_t physics = read_word(rdram, player + physics_offset);
+    const uint32_t pos2 = read_word(rdram, player + pos_ptr_offset);
+    if (!valid_ptr(physics) || !valid_ptr(pos2)) {
+        return false;
+    }
+    // The same copies noclip writes each frame.
+    for (int k = 0; k < 3; k++) {
+        write_float(rdram, physics + pos_offset + 4 * k, pos[k]);
+        write_float(rdram, pos2 + 4 * k, pos[k]);
+        write_float(rdram, pos2 + 0xC + 4 * k, pos[k]);
+        write_float(rdram, pos2 + 0x18 + 4 * k, pos[k]);
+        write_float(rdram, player + last_pos_offset + 4 * k, pos[k]);
+    }
+    write_float(rdram, physics + vel_y_offset, 0.0f);
+    return true;
+}

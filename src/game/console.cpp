@@ -24,6 +24,8 @@
 #include "tooie_cheats.h"
 #include "tooie_debug.h"
 #include "tooie_enemy_spawner.h"
+#include "tooie_player_cheats.h"
+#include "tooie_progress_cheats.h"
 #include "tooie_game.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_level_warp.h"
@@ -271,6 +273,7 @@ std::string hex(uint32_t v, int size) {
 
 std::recursive_mutex g_mutex; // the output, the queue, and the console's lists below
 std::deque<std::string> g_lines;
+FILE* g_tee = nullptr; // tee <file>: the output copied to a file (under g_mutex)
 std::vector<std::string> g_history;
 size_t g_history_pos;
 int g_scroll;
@@ -367,6 +370,10 @@ void out_lines(const std::string& text, bool error) {
         for (const std::string& l : lines) {
             std::string line = prefix + l;
             std::fprintf(stdout, "%s\n", line.c_str());
+            if (g_tee != nullptr) {
+                std::fprintf(g_tee, "%s\n", line.c_str());
+                std::fflush(g_tee);
+            }
             g_lines.push_back(line);
         }
         std::fflush(stdout);
@@ -937,6 +944,7 @@ std::string rest_of(const std::string& line, size_t n) {
 
 struct Ctx {
     uint8_t* rdram; // null before the game starts
+    recomp_context* ctx; // the game update hook's registers (null before the game starts)
     std::vector<std::string> w;
     std::string line; // the whole command as typed
     int depth;
@@ -1056,6 +1064,83 @@ void cmd_status(Ctx& c) {
     print(format("map 0x%X (%s), game updates %llu (%.1f per second), warp %s, a save file %s",
         map, map_name(map), (unsigned long long)g_frames.load(), fps,
         tooie::debug::warp_pending() ? "pending" : "none", tooie::debug::can_warp() ? "is loaded" : "is not loaded"));
+}
+
+bool cheats_master_on(); // below
+
+// flag <hex id> [on|off]: the game's own progress flags (the getter and setter func_800DA298 / func_800DA3B8).
+void cmd_flag(Ctx& c) {
+    uint32_t id = 0;
+    auto hex_of = [](const std::string& s, uint32_t* out) {
+        std::string h = (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) ? s.substr(2) : s;
+        if (h.empty() || h.size() > 4) return false;
+        for (char ch : h) {
+            if (!std::isxdigit((unsigned char)ch)) return false;
+        }
+        *out = (uint32_t)std::strtoul(h.c_str(), nullptr, 16);
+        return true;
+    };
+    bool on;
+    if (c.w.size() < 2 || !hex_of(c.w[1], &id) || (c.w.size() >= 3 && !parse_bool(c.w[2], &on))) { error("flag <flag number in hex> [on|off]"); return; }
+    if (c.ctx == nullptr) { error("no game update is running"); return; }
+    if (c.w.size() >= 3) {
+        tooie::progress_cheats::set_flag(c.rdram, c.ctx, (int32_t)id, on);
+        print(format("flag 0x%X set %s (the save file keeps it if you save)", id, on ? "on" : "off"));
+        return;
+    }
+    print(format("flag 0x%X is %s", id, tooie::progress_cheats::get_flag(c.rdram, c.ctx, (int32_t)id) ? "on" : "off"));
+}
+
+void cmd_pos(Ctx& c) {
+    float p[3];
+    if (!tooie::player_cheats::position(c.rdram, p)) { error("there is no player yet"); return; }
+    print(format("%.2f %.2f %.2f (x y z), map 0x%X", p[0], p[1], p[2], tooie::debug::current_map(c.rdram)));
+}
+
+void cmd_goto(Ctx& c) {
+    float p[3];
+    double v[3];
+    if (c.w.size() < 4 || !parse_double(c.w[1], &v[0]) || !parse_double(c.w[2], &v[1]) || !parse_double(c.w[3], &v[2])) { error("goto <x> <y> <z> (pos shows where you are)"); return; }
+    for (int k = 0; k < 3; k++) p[k] = (float)v[k];
+    if (!tooie::player_cheats::teleport(c.rdram, p)) { error("there is no player yet"); return; }
+    print(format("moved to %.2f %.2f %.2f", p[0], p[1], p[2]));
+}
+
+// transform <form>: the Cheats tab's Transformation row (turns the cheats on).
+void cmd_transform(Ctx& c) {
+    SettingRef ref;
+    if (!lookup_setting("cheats.cheat_transform", &ref)) return;
+    if (c.w.size() < 2) { print(ref.full_id() + " = " + value_text(ref) + "   (takes " + value_help(ref) + ")"); return; }
+    if (!tooie::debug::can_warp()) { error("a save file has to be loaded first"); return; }
+    if (!cheats_master_on()) return;
+    set_setting("cheats.cheat_transform", join(c.w, 1));
+}
+
+// repeat <n> <command>: the command n times (up to 1000).
+void cmd_repeat(Ctx& c) {
+    int n;
+    std::string body = rest_of(c.line, 2);
+    if (c.w.size() < 3 || !parse_int(c.w[1], &n) || n < 1 || n > 1000) { error("repeat <times, 1 to 1000> <command>"); return; }
+    if (c.depth > 8) { error("repeat nests too deep"); return; }
+    for (int i = 0; i < n; i++) enqueue_line(body, c.depth + 1, true);
+    print(format("%d times: %s", n, body.c_str()));
+}
+
+// tee <file> | tee off: copy everything the console prints to a file.
+void cmd_tee(Ctx& c) {
+    std::lock_guard lock{ g_mutex };
+    if (c.w.size() >= 2 && lower(c.w[1]) == "off") {
+        if (g_tee != nullptr) { std::fclose(g_tee); g_tee = nullptr; }
+        print("tee off");
+        return;
+    }
+    if (c.w.size() < 2) { error("tee <file> | tee off"); return; }
+    std::filesystem::path path = rest_of(c.line, 1);
+    if (path.is_relative()) path = recompui::file::get_app_folder_path() / path;
+    if (g_tee != nullptr) std::fclose(g_tee);
+    g_tee = std::fopen(path.string().c_str(), "a");
+    if (g_tee == nullptr) { error("cannot write " + path.string()); return; }
+    print("copying the output to " + path.string());
 }
 
 void cmd_dev(Ctx& c) {
@@ -1722,6 +1807,12 @@ const std::vector<Command>& commands() {
         { "unlock", {}, false, "unlock moves | unlock everything", "the Unlock all moves / Unlock everything cheats", cmd_unlock },
         { "savestate", { "ss" }, true, "savestate save | savestate load", "the Save State / Load State keys (one snapshot, in a level)", cmd_savestate },
         { "spawn", {}, true, "spawn [enemy|number] [count]", "spawn an enemy in front of Banjo (the Enemy Spawner cheat); no argument lists them", cmd_spawn },
+        { "flag", {}, true, "flag <hex id> [on|off]", "read or set one of the game's progress flags (the getter and setter the cheats use)", cmd_flag },
+        { "pos", {}, true, "pos", "Banjo's position", cmd_pos },
+        { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
+        { "transform", {}, true, "transform [form]", "the Cheats tab's Transformation row (turns the cheats on)", cmd_transform },
+        { "repeat", {}, false, "repeat <n> <command>", "run a command n times", cmd_repeat },
+        { "tee", {}, false, "tee <file> | tee off", "copy everything the console prints to a file", cmd_tee },
         { "diff", {}, true, "diff snapshot | diff [compare] [n]", "keep RAM, then list the words that changed since", cmd_diff },
         { "perf", {}, true, "perf <seconds>", "time the game updates and write perf-<time>.csv", cmd_perf },
         { "sysinfo", {}, false, "sysinfo", "platform, CPUs, RAM, video driver and window size (for bug reports)", cmd_sysinfo },
@@ -1783,7 +1874,7 @@ std::string shortcut_body(const std::string& name, const std::string& line) {
 
 // Runs the front of the queue while nothing holds it. rdram is null before the game starts: then a command that
 // needs the game waits at the front until the game thread takes over.
-void pump(uint8_t* rdram) {
+void pump(uint8_t* rdram, recomp_context* hook_ctx) {
     static std::recursive_mutex pump_mutex;
     std::unique_lock pl{ pump_mutex, std::try_to_lock };
     if (!pl.owns_lock()) return;
@@ -1829,7 +1920,7 @@ void pump(uint8_t* rdram) {
             enqueue_line(body, e.depth + 1, true);
             continue;
         }
-        Ctx c{ rdram, w, e.text, e.depth };
+        Ctx c{ rdram, hook_ctx, w, e.text, e.depth };
         try {
             cmd->run(c);
         } catch (const std::exception& ex) {
@@ -2089,7 +2180,7 @@ void pregame_thread() {
     if (!ultramodern::is_game_started()) announce("READY launcher");
     int ticks = 0;
     while (!ultramodern::is_game_started()) {
-        pump(nullptr);
+        pump(nullptr, nullptr);
         if (ticks++ % 50 == 0) write_state_file(nullptr, -1);
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
@@ -2113,7 +2204,7 @@ int tooie::console::exit_code() {
 }
 
 // Once per game update, from tooie_warp_tick (src/debug/warp.cpp), on the game thread before the update's own logic.
-void tooie::console::frame(uint8_t* rdram) {
+void tooie::console::frame(uint8_t* rdram, recomp_context* ctx) {
     g_rdram = rdram;
     uint64_t frame = ++g_frames;
     if (frame == 1) announce("READY game");
@@ -2136,7 +2227,7 @@ void tooie::console::frame(uint8_t* rdram) {
     }
     perf_tick();
     poll_keys();
-    pump(rdram);
+    pump(rdram, ctx);
     if (frame % 6 == 0) update_watch_panel(rdram);
     {
         static Clock::time_point last_state;

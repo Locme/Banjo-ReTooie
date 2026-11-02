@@ -373,3 +373,11 @@ extern "C" void tooie_flag_get_leave(uint8_t* rdram, recomp_context* ctx) {
 bool tooie::progress_cheats::complete_reached() {
     return file_complete.load();
 }
+
+bool tooie::progress_cheats::get_flag(uint8_t* rdram, recomp_context* ctx, int32_t flag) {
+    return flag_get(rdram, ctx, flag);
+}
+
+void tooie::progress_cheats::set_flag(uint8_t* rdram, recomp_context* ctx, int32_t flag, bool value) {
+    flag_set(rdram, ctx, flag, value);
+}
