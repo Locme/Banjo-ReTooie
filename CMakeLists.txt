@@ -368,6 +368,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/dust.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/volumetric.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/volumetric_shadows.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/point_lights.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/night_sounds.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/hd_shadows.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/field_of_view.cpp

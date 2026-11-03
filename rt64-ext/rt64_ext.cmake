@@ -132,6 +132,9 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/s
 rt64_ext_shader(build_vertex_shader rt64 "src/shaders/SunShadowMapVS.hlsl")
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SunShadowMapPS.hlsl")
 
+# Point Lights (rt64_scene_lights.cpp, WIP tab): the lamps the scene effects pass lights the picture with.
+target_sources(rt64 PRIVATE ${RT64_EXT_DIR}/src/render/rt64_scene_lights.cpp)
+
 # Volumetric shadows (rt64_volumetric_shadows.cpp, WIP tab): the light's map, the lit air's mesh, the composite.
 target_sources(rt64 PRIVATE ${RT64_EXT_DIR}/src/render/rt64_volumetric_shadows.cpp)
 rt64_ext_shader(build_vertex_shader rt64 "src/shaders/VolumetricShadowMapVS.hlsl")

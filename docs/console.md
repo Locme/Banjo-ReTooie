@@ -60,7 +60,7 @@ last <the last output line>
   value up to 255 is one byte, up to 65535 is two, and larger is four. A negative value is four bytes.
 * Some commands need the game running. These are `warp`, `status`, `savestate`, `spawn`, `diff`, `perf`,
   `screenshot`, `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto`, `walkto`, `face`, `look`, `transform`, `pause`,
-  `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo`, `invincible`, `jiggies`, `challenge`, `recall`, `play` and `input`. Until the game
+  `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo`, `invincible`, `jiggies`, `challenge`, `lights`, `recall`, `play` and `input`. Until the game
   is running they wait at the front
   of the queue, so `start; warp place 1` works on one line. If the game never starts, they never run. The frame,
   control, map and until forms of `wait` report an error instead of waiting. `load` and `goload` work in the launcher too, and start the
@@ -1288,6 +1288,25 @@ Catch: it changes the save once the game saves. It only sets the count. Whether 
 over opens from the count or from flags of its own has not been checked, and lowering the count lets a challenge be
 played again. Use it on a test save. It has not been
 run yet. Needs the game running and a save file loaded.
+
+### `lights`
+
+Usage: `lights [add [r g b [radius [height]]] | undo | clear | list]`
+
+The lamps Point Lights (Graphics > WIP) uses in this map, besides the lit lamps it finds by their textures.
+`lights add` puts one at Banjo, `height` units above his feet: warm white 255 190 110, radius 500 and 80 up unless
+given. `lights undo` removes this map's last lamp, `lights clear` all of this map's, and `lights list` shows them.
+Each change is saved at once to `Dev Files/point_lights.txt` (one lamp a line: `<map hex> x y z r g b radius`). With
+no word it prints whether Point Lights is on and how many lamps this map has. It works with Point Lights off too, but
+the lamps only show with it on (`set point_lights on`). Needs the game running and a save file loaded.
+
+```
+lights add
+lights add 255 120 40 800 40
+set point_lights on; set point_lights_strength 100
+lights list
+lights undo
+```
 
 ### `ach`
 

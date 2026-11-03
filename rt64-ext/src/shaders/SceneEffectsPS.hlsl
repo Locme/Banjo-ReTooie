@@ -909,6 +909,34 @@ float3 ViewToWorldDirection(float3 view) {
     return float3(dot(view, gConstants.worldX.xyz), dot(view, gConstants.worldY.xyz), dot(view, gConstants.worldZ.xyz));
 }
 
+// Banjo-Tooie: Point Lights (Graphics > WIP, rt64_scene_lights.h): the lamps near the camera, in the dust buffer after
+// its first 16 bytes: the count, then each lamp's world x, y, z and radius, and its colour (times the strength).
+uint PointLampCount() {
+    return uint(asfloat(gDust.Load(16u)) + 0.5f);
+}
+
+// The lamps' light on a surface (view-space position and normal), on top of the light the game gave it: full at a lamp,
+// smoothly down to nothing at its radius, most on the side that faces it. The normals from the depth are rough, so
+// the side turned away keeps some of it (the game's own vertex light reads that way too).
+float3 PointLampsAt(float3 center, float3 normal) {
+    const float3 world = ViewToWorldPoint(center);
+    const float3 worldNormal = ViewToWorldDirection(normal);
+    float3 light = 0.0f;
+    const uint count = min(PointLampCount(), 8u);
+    for (uint i = 0u; i < count; i++) {
+        const float4 lamp = asfloat(gDust.Load4(32u + i * 32u));
+        const float3 colour = asfloat(gDust.Load3(48u + i * 32u));
+        const float3 toLamp = lamp.xyz - world;
+        const float distance2 = dot(toLamp, toLamp);
+        const float reach = saturate(1.0f - distance2 / max(lamp.w * lamp.w, 1.0f));
+        if (reach > 0.0f) {
+            const float facing = dot(worldNormal, toLamp * rsqrt(max(distance2, 1.0f)));
+            light += colour * (reach * reach * (0.4f + 0.6f * saturate(facing)));
+        }
+    }
+    return light;
+}
+
 // Inside a capsule round Banjo (world space): what the sun shadows leave out when they leave him out, and all
 // his contact shadow counts.
 bool InsideBanjo(float3 world) {
@@ -5196,7 +5224,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
     const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
     // Eye adaptation also draws the scene itself.
-    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (VolBits() != 0u) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (VolBits() != 0u) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f) || (PointLampCount() > 0u)) && (gConstants.view.x < 0.5f);
 
     if (depth >= 0.99999f) {
         // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -5280,7 +5308,9 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 #else
     const bool lightShadows = false;
 #endif
-    if (occlusion || globalIllumination || reflections || sunShadows || lightShadows) {
+    // Point Lights: the lamps light the surface where the pass draws the scene itself.
+    const bool pointLamps = redraw && (PointLampCount() > 0u);
+    if (occlusion || globalIllumination || reflections || sunShadows || lightShadows || pointLamps) {
         center = ViewPosition(pixel, depth);
         normal = ViewNormal(pixel, center);
 #ifdef RAY_TRACED
@@ -5339,6 +5369,9 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             }
         }
 #endif
+        if (pointLamps) {
+            lamp += PointLampsAt(center, normal);
+        }
     }
 
     // Toon outlines: dark where the distance jumps against a neighbour (silhouettes against what's behind),

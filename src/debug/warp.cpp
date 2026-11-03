@@ -71,6 +71,7 @@ namespace tooie::debug {
 #include "tooie_race_warp.h"
 #include "tooie_replays.h"
 #include "tooie_boss_rush.h"
+#include "tooie_point_lights.h"
 
 namespace {
     // Halfword holding the map that is loaded now (found by warping to two maps
@@ -189,6 +190,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::day_night::tick(rdram);
     tooie::volumetric::tick(rdram);
     tooie::volumetric_shadows::tick();
+    tooie::point_lights::tick(rdram);
     tooie::hd_shadows::tick();
     tooie::vram_log::start();
     tooie::memory_guard::tick(rdram);

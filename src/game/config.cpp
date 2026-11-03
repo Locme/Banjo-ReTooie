@@ -14,6 +14,7 @@
 #include "tooie_day_night.h"
 #include "tooie_volumetric.h"
 #include "tooie_volumetric_shadows.h"
+#include "tooie_point_lights.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_music_player.h"
 #include "tooie_mix_rate.h"
@@ -1077,6 +1078,15 @@ void tooie::init_config() {
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
         recompui::config::set_option_group(vs::sun_option, "Volumetric Shadows");
+    }
+    tooie::point_lights::add_options(graphics);
+    {
+        // Point Lights are WIP (L, 2026-11-03): the WIP tab, under their own heading, off by default.
+        namespace pl = tooie::point_lights;
+        for (const std::string* id : { &pl::option, &pl::strength_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        recompui::config::set_option_group(pl::option, "Point Lights");
     }
     {
         // Wet, snowy and dirty characters are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.

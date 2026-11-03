@@ -3,6 +3,7 @@
 //
 
 #include "rt64_scene_effects.h"
+#include "rt64_scene_lights.h"
 #include "shared/rt64_gpu_tile.h"
 #include "shared/rt64_rdp_tile.h"
 #include "rt64_gpu_sections.h"
@@ -2592,7 +2593,7 @@ namespace RT64 {
         const SceneEffectsSettings settings = GetSceneEffects();
         return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
             (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0) || VolumetricShadowsOn() || (settings.view != 0)) && (settings.depthAddress != 0);
+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0) || VolumetricShadowsOn() || ScenePointLights() || (settings.view != 0)) && (settings.depthAddress != 0);
     }
 
     bool SceneEffectsWanted(const RenderTarget *depthTarget) {
@@ -3713,21 +3714,38 @@ namespace RT64 {
             commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(tr.indirectTexture.get(), RenderTextureLayout::SHADER_READ) });
         }
 
+        // The dust buffer: the volumetric extras and the noise turn (16 bytes), then Point Lights' lamps (16 bytes for the
+        // count, 32 a lamp).
+        constexpr uint32_t DustBufferSize = 32 + 32 * ScenePointLightMax;
         // This pass's upload slot: its own dust buffer and scene set (one command list can record the pass more than once).
         std::unique_ptr<RenderBuffer> &dustBuffer = res.dustBuffer[res.uploadSlot];
         if (dustBuffer == nullptr) {
-            dustBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16));
+            dustBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(DustBufferSize));
             dustBuffer->setName("Scene Effects dust");
         }
         {
             float *dust = reinterpret_cast<float *>(dustBuffer->map());
-            memset(dust, 0, 16);
+            memset(dust, 0, DustBufferSize);
             {
                 const std::scoped_lock extraLock(volExtraMutex);
                 dust[1] = volExtra[0];
                 dust[2] = volExtra[1];
             }
             dust[3] = UpscalerNoiseOffset();
+            // Point Lights (rt64_scene_lights.h): the count, then each lamp's x, y, z, radius and its colour.
+            ScenePointLamp lamps[ScenePointLightMax];
+            const uint32_t lampCount = ScenePointLampsForFrame(lamps);
+            dust[4] = float(lampCount);
+            for (uint32_t i = 0; i < lampCount; i++) {
+                float *at = dust + 8 + i * 8;
+                at[0] = lamps[i].x;
+                at[1] = lamps[i].y;
+                at[2] = lamps[i].z;
+                at[3] = lamps[i].radius;
+                at[4] = lamps[i].r;
+                at[5] = lamps[i].g;
+                at[6] = lamps[i].b;
+            }
             dustBuffer->unmap();
         }
 
@@ -3754,7 +3772,7 @@ namespace RT64 {
         if (sceneSet == nullptr) {
             std::unique_ptr<SceneEffectsDescriptorSet> made = std::make_unique<SceneEffectsDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(), worker->device->getCapabilities().rayQuery, worker->device);
             SceneEffectsDescriptorSet *set = made.get();
-            set->setBuffer(set->gDust, dustBuffer.get(), 16);
+            set->setBuffer(set->gDust, dustBuffer.get(), DustBufferSize);
             set->setTexture(set->gInput, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
             set->setTexture(set->gBloom, tr.bloomTexture[4].get(), RenderTextureLayout::SHADER_READ);
             set->setTexture(set->gColor, color, RenderTextureLayout::SHADER_READ,

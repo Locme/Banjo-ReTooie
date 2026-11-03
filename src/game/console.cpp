@@ -26,6 +26,7 @@
 #include "tooie_path_text.h"
 #include "tooie_debug.h"
 #include "tooie_enemy_spawner.h"
+#include "tooie_point_lights.h"
 #include "tooie_player_cheats.h"
 #include "tooie_progress_cheats.h"
 #include "tooie_rdram.h"
@@ -1131,6 +1132,14 @@ void cmd_pos(Ctx& c) {
     float p[3];
     if (!tooie::player_cheats::position(c.rdram, p)) { error("there is no player yet"); return; }
     print(format("%.2f %.2f %.2f (x y z), map 0x%X", p[0], p[1], p[2], tooie::debug::current_map(c.rdram)));
+}
+
+// lights [add [r g b [radius [height]]] | undo | clear | list]: Point Lights' lamps for this map (src/gameplay/point_lights.cpp).
+void cmd_lights(Ctx& c) {
+    const std::vector<std::string> args(c.w.begin() + 1, c.w.end());
+    const std::string text = tooie::point_lights::console(c.rdram, args);
+    if (text.rfind("ERR ", 0) == 0) { error(text.substr(4)); return; }
+    print(text);
 }
 
 void cmd_goto(Ctx& c) {
@@ -3634,6 +3643,7 @@ const std::vector<Command>& commands() {
         { "spawn", {}, true, "spawn [enemy|number] [count]", "spawn an enemy in front of Banjo (the Enemy Spawner cheat); no argument lists them", cmd_spawn },
         { "flag", {}, true, "flag <hex id> [on|off]", "read or set one of the game's progress flags (the getter and setter the cheats use)", cmd_flag },
         { "pos", {}, true, "pos", "Banjo's position", cmd_pos },
+        { "lights", {}, true, "lights [add [r g b [radius [height]]] | undo | clear | list]", "Point Lights's lamps for this map: add one above Banjo (warm, radius 500, 80 up), remove the last, all, or list them (saved to Dev Files/point_lights.txt)", cmd_lights },
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
         { "face", {}, true, "face <x> <z>", "turn Banjo to face a point", cmd_face },
