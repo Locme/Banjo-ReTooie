@@ -32,6 +32,7 @@
 #include "tooie_free_camera.h"
 #include "tooie_game.h"
 #include "tooie_motion_aim.h"
+#include "tooie_rdram.h"
 
 namespace {
     // Camera controller +0x04: the dynamic camera, whose first-person view angles are at +0xBC (pitch)
@@ -39,6 +40,8 @@ namespace {
     constexpr uint32_t dynamic_offset = 0x04;
     constexpr uint32_t fp_pitch = 0xBC;
     constexpr uint32_t fp_yaw = 0xC0;
+    // The game's delta time for the frame, in seconds.
+    constexpr uint32_t game_delta_time = 0x8012C760;
     // The steepest the game's own stick aim goes (measured headless).
     constexpr float pitch_down_limit = -68.0f;
     constexpr float pitch_up_limit = 70.0f;
@@ -226,6 +229,16 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
     const float dt = last_tick_at == std::chrono::steady_clock::time_point{} ? 0.0f :
         std::min(std::chrono::duration<float>(now - last_tick_at).count(), 0.1f);
     last_tick_at = now;
+    // The game's own time step this update, in seconds (its delta time at 0x8012C760, src/game/game_frame_rate.cpp),
+    // for the frame shares below. Not above a 30th: at 30 and below nothing changes.
+    const float game_dt = std::clamp(tooie::rdram::read_float(rdram, game_delta_time), 0.0f, 1.0f / 30.0f);
+    // The first-person shooter sections (Targitzan's Temple) are left alone here: their view is not the dynamic
+    // camera's angles below (L, 2026-11-03; still being looked into).
+    if (tooie::fine_aim::in_shooter()) {
+        have_last = false;
+        return;
+    }
+    const bool shooter = false;
     if (!tooie::fine_aim::in_first_person()) {
         have_last = false;
         return;
@@ -253,13 +266,19 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
     // Fine aim: the game turned the view by (angle - last) with the stick since the last tick. Take
     // back the unwanted part of that turn. Scaling the stick instead barely slows the game's turning.
     const float fine = tooie::fine_aim::view_scale();
+    // The game turns the view a fixed step every update, made for 30 updates a second, so above 30 it turned faster the
+    // more updates there were (about ten times at Unlocked, L 2026-11-03): only this update's share of a 30th of a
+    // second of it is kept.
+    const float frame_share = std::clamp(game_dt * 30.0f, 0.0f, 1.0f);
     // Direct analog aim takes back all of the game's own turn and adds one that follows the stick's tilt.
-    const float keep = direct_on ? 0.0f : fine;
+    // In the shooter sections the stick also walks, so only the frame share applies there (no fine or direct aim).
+    const bool direct = direct_on && !shooter;
+    const float keep = direct ? 0.0f : (shooter ? 1.0f : fine) * frame_share;
     if (have_last && keep < 1.0f) {
         yaw_delta += wrap_delta(yaw - last_yaw) * (keep - 1.0f);
         pitch_delta += wrap_delta(pitch - last_pitch) * (keep - 1.0f);
     }
-    if (direct_on && have_last) {
+    if (direct && have_last) {
         const float rate = direct_degrees_per_second * fine * dt;
         // Stick left turns the view left (positive yaw); stick up looks up.
         yaw_delta += -direct_axis(stick_x.load()) * rate;

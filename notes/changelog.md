@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-03
 
+- First-person shooter (e.g. Targitzan's Temple lobby): above 30 FPS the view no longer turns faster than at 30 FPS, and the view bob while walking runs at its 30 FPS pace instead of shaking (at Unlocked it ran about 20 times too fast).
 - WIP > Transform Anywhere Menu (off by default, separate from Transform anywhere): the Transform key freezes the game and stands the forms you have been at least once (Banjo-Kazooie, Banjo, Kazooie, Humba's forms) as their 3D models in an arc in front of Banjo. The picked one is larger and spins, the others are faded back, with a SELECT / TRANSFORM / BACK bar along the bottom. Left and right pick, A changes (the area reloads), B goes back.
 
 ## Since 2026-10-13 23:00 UTC

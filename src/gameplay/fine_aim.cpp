@@ -45,6 +45,11 @@ namespace {
     constexpr uint32_t state_offset = 0x120;   // PlayerState -> state block
     constexpr uint32_t state_current = 0x4;    // state block -> current state id
     constexpr uint32_t state_first_person = 152;
+    // The first-person shooter sections (Targitzan's Temple): 202 walking, 209 and 210 seen while shooting and turning
+    // there; 203 and 204 are the way in (L, 2026-11-03).
+    constexpr uint32_t state_shooter_walk = 202;
+    constexpr uint32_t state_shooter_209 = 209;
+    constexpr uint32_t state_shooter_210 = 210;
     // C-up held this long before state 152 began makes it first person.
     constexpr auto c_up_window = 1000ms;
     constexpr uint16_t button_c_up = 0x0008;
@@ -129,6 +134,11 @@ void tooie::fine_aim::note_buttons(uint16_t buttons) {
 
 bool tooie::fine_aim::in_first_person() {
     return player_state.load() == state_first_person && first_person.load();
+}
+
+bool tooie::fine_aim::in_shooter() {
+    const uint32_t s = player_state.load();
+    return s == state_shooter_walk || s == state_shooter_209 || s == state_shooter_210;
 }
 
 bool tooie::fine_aim::game_has_player() {

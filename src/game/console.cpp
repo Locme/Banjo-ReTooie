@@ -1131,7 +1131,15 @@ void cmd_flag(Ctx& c) {
 void cmd_pos(Ctx& c) {
     float p[3];
     if (!tooie::player_cheats::position(c.rdram, p)) { error("there is no player yet"); return; }
-    print(format("%.2f %.2f %.2f (x y z), map 0x%X", p[0], p[1], p[2], tooie::debug::current_map(c.rdram)));
+    // His facing too (the yaw at PlayerState +0xF8, as face writes it), read through the pointers
+    // each time, as the PlayerState moves.
+    std::string facing;
+    uint32_t player = read_ram(c.rdram, 0x80135490, 4);
+    uint32_t yaw = tooie::rdram::valid_ptr(player) ? read_ram(c.rdram, player + 0xF8, 4) : 0;
+    if (tooie::rdram::valid_ptr(yaw)) {
+        facing = format(", facing %.2f", tooie::rdram::read_float(c.rdram, yaw));
+    }
+    print(format("%.2f %.2f %.2f (x y z), map 0x%X%s", p[0], p[1], p[2], tooie::debug::current_map(c.rdram), facing.c_str()));
 }
 
 // lights [add [r g b [radius [height]]] | undo | clear | list]: Point Lights' lamps for this map (src/gameplay/point_lights.cpp).
@@ -3642,7 +3650,7 @@ const std::vector<Command>& commands() {
         { "savestate", { "ss" }, true, "savestate save | savestate load", "the Save State / Load State keys (one snapshot, in a level)", cmd_savestate },
         { "spawn", {}, true, "spawn [enemy|number] [count]", "spawn an enemy in front of Banjo (the Enemy Spawner cheat); no argument lists them", cmd_spawn },
         { "flag", {}, true, "flag <hex id> [on|off]", "read or set one of the game's progress flags (the getter and setter the cheats use)", cmd_flag },
-        { "pos", {}, true, "pos", "Banjo's position", cmd_pos },
+        { "pos", {}, true, "pos", "Banjo's position and facing", cmd_pos },
         { "lights", {}, true, "lights [add [r g b [radius [height]]] | undo | clear | list]", "Point Lights's lamps for this map: add one above Banjo (warm, radius 500, 80 up), remove the last, all, or list them (saved to Dev Files/point_lights.txt)", cmd_lights },
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },

@@ -5265,6 +5265,7 @@ RECOMP_FUNC void func_80806AD0_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
     ctx->f4.u32l = MEM_W(ctx->r29, 0X50);
     // 0x80806AF8: lw          $a2, 0x1F0($s0)
     ctx->r6 = MEM_W(ctx->r16, 0X1F0);
+    tooie_shooter_turn_step(rdram, ctx);
     // 0x80806AFC: sub.s       $f2, $f0, $f12
     CHECK_FR(ctx, 2);
     CHECK_FR(ctx, 0);

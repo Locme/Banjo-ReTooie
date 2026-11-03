@@ -57,6 +57,9 @@ void tooie_gravity_bias(uint8_t* rdram, recomp_context* ctx, uint32_t physics_ow
 void tooie_current_push(uint8_t* rdram, recomp_context* ctx);
 void tooie_swim_turn(uint8_t* rdram, recomp_context* ctx);
 void tooie_fly_turn(uint8_t* rdram, recomp_context* ctx);
+void tooie_shooter_turn_step(uint8_t* rdram, recomp_context* ctx);
+void tooie_shooter_bob_step(uint8_t* rdram, recomp_context* ctx, int which);
+void tooie_shooter_follow(uint8_t* rdram, recomp_context* ctx, int which);
 void tooie_audio_list_queued(uint8_t* rdram, recomp_context* ctx);
 int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_storm_spawn_skip(uint8_t* rdram, recomp_context* ctx);

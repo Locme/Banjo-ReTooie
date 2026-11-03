@@ -1137,7 +1137,8 @@ Catch: a flag that is set stays set in the save file only if the game is saved. 
 
 Usage: `pos`
 
-Prints Banjo's position as x, y and z to two decimal places, and the current map as hex.
+Prints Banjo's position as x, y and z to two decimal places, the current map as hex, and the way he faces in degrees
+(the yaw at PlayerState +0xF8 that `face` writes, 0 facing +z).
 
 ```
 pos

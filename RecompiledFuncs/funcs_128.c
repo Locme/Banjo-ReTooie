@@ -2880,6 +2880,7 @@ RECOMP_FUNC void func_8080056C_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
     ctx->f2.u32l = MEM_W(ctx->r16, 0X40);
     // 0x808005F4: addiu       $a0, $s0, 0x38
     ctx->r4 = ADD32(ctx->r16, 0X38);
+    tooie_shooter_follow(rdram, ctx, 0);
     // 0x808005F8: mul.s       $f18, $f16, $f12
     CHECK_FR(ctx, 18);
     CHECK_FR(ctx, 16);
@@ -3058,6 +3059,7 @@ RECOMP_FUNC void func_8080056C_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
     CHECK_FR(ctx, 2);
     NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f2.fl); 
     ctx->f18.fl = ctx->f0.fl - ctx->f2.fl;
+    tooie_shooter_follow(rdram, ctx, 1);
     // 0x808006BC: mul.s       $f6, $f18, $f4
     CHECK_FR(ctx, 6);
     CHECK_FR(ctx, 18);

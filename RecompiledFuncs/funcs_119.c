@@ -2705,6 +2705,7 @@ L_80800754:
     ctx->f6.u32l = MEM_W(ctx->r16, 0X54);
     // 0x8080076C: swc1        $f14, 0x30($sp)
     MEM_W(0X30, ctx->r29) = ctx->f14.u32l;
+    tooie_shooter_bob_step(rdram, ctx, 0);
     // 0x80800770: mul.s       $f10, $f20, $f8
     CHECK_FR(ctx, 10);
     CHECK_FR(ctx, 20);
@@ -2834,6 +2835,7 @@ L_808007D8:
     ctx->f6.u32l = ctx->r1;
     // 0x808007EC: lwc1        $f8, 0x5C($s0)
     ctx->f8.u32l = MEM_W(ctx->r16, 0X5C);
+    tooie_shooter_bob_step(rdram, ctx, 1);
     // 0x808007F0: mul.s       $f10, $f20, $f6
     CHECK_FR(ctx, 10);
     CHECK_FR(ctx, 20);

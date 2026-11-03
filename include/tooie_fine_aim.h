@@ -23,6 +23,9 @@ namespace tooie::fine_aim {
     float view_scale();
     // Whether Banjo is in first person (as of the last tick): state 152 entered with C-up held just before.
     bool in_first_person();
+    // The game's first-person shooter sections (Targitzan's Temple and the like): states 202 (walking), 209 and 210, where
+    // the stick walks and turns the view. Not first person above, which is C-up's look-around (state 152).
+    bool in_shooter();
     // Whether the game has Banjo, not the player (a scripted walk or puzzle, talking, a cutscene, dead), as
     // of the last tick. False in first person. The free camera leaves the game's camera alone then.
     bool game_has_player();

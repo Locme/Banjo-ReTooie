@@ -1077,6 +1077,79 @@ extern "C" void tooie_fly_turn(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
+// The first-person shooter (the bsfirstp overlay, e.g. Targitzan's Temple lobby). At Unlocked it
+// turned too fast (565 degrees for 2 s of full stick, 344 at 30 FPS) and its view bob ran about 20
+// times too fast, which looked like the view shaking (L, 2026-11-03). TOOIE_NO_SHOOTER_FIX=1 turns all three fixes below off,
+// for A/B tests, and TOOIE_SHOOTER_LOG=1 prints what each one changes every frame.
+namespace {
+    bool shooter_fix_on() {
+        static const bool off = std::getenv("TOOIE_NO_SHOOTER_FIX") != nullptr;
+        return !off && above_30();
+    }
+
+    bool shooter_log() {
+        static const bool log = std::getenv("TOOIE_SHOOTER_LOG") != nullptr;
+        return log;
+    }
+}
+
+// func_80809AF8_bsfirstp (the turn) and func_80806AD0_bsfirstp (the same for the other stick
+// axis) move a speed toward the stick's speed and give how far it went, in two steps: a fixed
+// step ($f12, 1/30 s) and then the rest of the frame's time ($f0 minus $f12), skipped when that
+// is 0. Above 30 FPS the frame is shorter than the fixed step, so every frame still moved a full
+// 1/30 s first, and the second step was given a time below 0. Here, before $f12 is taken away from $f0 and
+// given as the first step's time, a frame shorter than the step uses its own time for the first
+// step, which leaves nothing for the second. At 30 FPS and below nothing changes.
+extern "C" void tooie_shooter_turn_step(uint8_t* rdram, recomp_context* ctx) {
+    (void)rdram;
+    const float dt = ctx->f0.fl;
+    const float step = ctx->f12.fl;
+    if (shooter_fix_on() && dt > 0.0f && dt < step) {
+        ctx->f12.fl = dt;
+    }
+    if (shooter_log()) {
+        std::printf("[shooter] t %.3f turn step dt %.4f step %.4f -> %.4f\n",
+            game_seconds_total.load(), dt, step, ctx->f12.fl);
+        std::fflush(stdout);
+    }
+}
+
+// func_808006DC_bsfirstp, the view bob while walking: it adds 12.5 and 25 degrees, times how fast
+// Banjo walks, to the two bob angles (+0x54 and +0x5C of the shooter's block) once per game frame,
+// with no delta time. The degrees are in $f8 (which = 0) and $f6 (which = 1) just before they are
+// multiplied by the walk speed; above 30 FPS they are scaled to the frame's time.
+extern "C" void tooie_shooter_bob_step(uint8_t* rdram, recomp_context* ctx, int which) {
+    const float dt = read_float(rdram, delta_time_addr);
+    float& degrees = which == 0 ? ctx->f8.fl : ctx->f6.fl;
+    const float before = degrees;
+    if (shooter_fix_on() && dt > 0.0f && dt < 1.0f / 30.0f) {
+        degrees *= dt * 30.0f;
+    }
+    if (shooter_log()) {
+        std::printf("[shooter] t %.3f bob %d dt %.4f degrees %.3f -> %.3f\n",
+            game_seconds_total.load(), which, dt, before, degrees);
+        std::fflush(stdout);
+    }
+}
+
+// func_8080056C_bsfirstp works out Banjo's speed from how far he moved this frame and moves the
+// kept speed (+0x38 and +0x40, $f12) and another kept value (+0x4C, $f4) a fixed part of the way
+// to the new one once per game frame. The walk speed it gives drives the view bob. Above 30 FPS
+// the part is made the one that covers the same ground in 1/30 s: 1 - (1 - part) ^ (dt x 30).
+extern "C" void tooie_shooter_follow(uint8_t* rdram, recomp_context* ctx, int which) {
+    const float dt = read_float(rdram, delta_time_addr);
+    float& part = which == 0 ? ctx->f12.fl : ctx->f4.fl;
+    const float before = part;
+    if (shooter_fix_on() && dt > 0.0f && dt < 1.0f / 30.0f && part > 0.0f && part < 1.0f) {
+        part = 1.0f - std::pow(1.0f - part, dt * 30.0f);
+    }
+    if (shooter_log()) {
+        std::printf("[shooter] t %.3f follow %d dt %.4f part %.4f -> %.4f\n",
+            game_seconds_total.load(), which, dt, before, part);
+        std::fflush(stdout);
+    }
+}
+
 // Character blinking: func_80101A50 runs an object's blink ($a0, state in the
 // bits of +0x78 and +0x7A): each frame a random chance to start a blink, then
 // the eyelid frame goes 0 to 3 and back one step a frame. It ends by giving the

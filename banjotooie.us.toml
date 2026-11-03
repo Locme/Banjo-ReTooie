@@ -904,6 +904,46 @@ func = "bafly_entrypoint_9"
 before_vram = 0x80800554
 text = "tooie_fly_turn(rdram, ctx);"
 
+# The first-person shooter (bsfirstp) turns with a speed that is moved in a fixed 1/30 s step
+# and then the rest of the frame's time ($f0 the frame's time, $f12 the step), so above 30 FPS
+# each frame still turned a whole step. The hook gives a shorter frame its own time as the step
+# (src/game/game_frame_rate.cpp). func_80806AD0_bsfirstp does the same for the other axis.
+[[patches.hook]]
+func = "func_80809AF8_bsfirstp"
+before_vram = 0x80809B2C
+text = "tooie_shooter_turn_step(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_80806AD0_bsfirstp"
+before_vram = 0x80806AFC
+text = "tooie_shooter_turn_step(rdram, ctx);"
+
+# func_808006DC_bsfirstp moves the shooter's two view-bob angles by 12.5 ($f8) and 25 ($f6)
+# degrees times the walk speed once per game frame; above 30 FPS the degrees are scaled to
+# the frame's time (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_808006DC_bsfirstp"
+before_vram = 0x80800770
+text = "tooie_shooter_bob_step(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "func_808006DC_bsfirstp"
+before_vram = 0x808007F0
+text = "tooie_shooter_bob_step(rdram, ctx, 1);"
+
+# func_8080056C_bsfirstp moves the shooter's kept walk speed ($f12) and another kept value
+# ($f4) a fixed part of the way to the new ones once per game frame; above 30 FPS the part is
+# made the one that covers the same ground in 1/30 s (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_8080056C_bsfirstp"
+before_vram = 0x808005F8
+text = "tooie_shooter_follow(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "func_8080056C_bsfirstp"
+before_vram = 0x808006BC
+text = "tooie_shooter_follow(rdram, ctx, 1);"
+
 # func_8080156C_gczoombox steps a talking-head portrait's mouth and blink once
 # per game frame ($a0 = the box). Above 30 FPS it is skipped until 1/30 s of
 # game time has gone by for that box (src/game/game_frame_rate.cpp).
