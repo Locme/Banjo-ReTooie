@@ -72,6 +72,7 @@
 #include "tooie_free_camera.h"
 #include "tooie_game.h"
 #include "tooie_game_frame_rate.h"
+#include "tooie_rdram.h"
 #include "tooie_screenshot.h"
 #include "tooie_torch_enemy.h"
 
@@ -140,7 +141,6 @@ namespace {
     constexpr uint32_t marker_model = 0x14;
     // PlayerState pointers by player; +0xE4 points at the position, +0x120 at the state block (+4 state).
     constexpr uint32_t player_table = 0x80135490;
-    constexpr gpr game_state_addr = (int32_t)0x80127630;
     // Frames to wait after the area loads before spawning.
     constexpr int settle_frames = 30;
 
@@ -192,34 +192,15 @@ namespace {
     bool shots_on = false;
     std::vector<int> shot_frames;
 
-    bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x81000000u;
-    }
-
-    uint32_t read_word(uint8_t* rdram, uint32_t addr) {
-        return (uint32_t)MEM_W(0, (int32_t)addr);
-    }
-
-    float read_float(uint8_t* rdram, uint32_t addr) {
-        const uint32_t bits = read_word(rdram, addr);
-        float value;
-        std::memcpy(&value, &bits, sizeof(value));
-        return value;
-    }
+    using tooie::rdram::valid_ptr;
+    using tooie::rdram::read_word;
+    using tooie::rdram::read_float;
+    using tooie::rdram::write_word;
+    using tooie::rdram::write_float;
 
     uint16_t read_half(uint8_t* rdram, uint32_t addr) {
         const uint32_t word = read_word(rdram, addr & ~3u);
         return (uint16_t)((addr & 2) ? (word & 0xFFFF) : (word >> 16));
-    }
-
-    void write_word(uint8_t* rdram, uint32_t addr, uint32_t value) {
-        MEM_W(0, (int32_t)addr) = (int32_t)value;
-    }
-
-    void write_float(uint8_t* rdram, uint32_t addr, float value) {
-        uint32_t bits;
-        std::memcpy(&bits, &value, sizeof(bits));
-        write_word(rdram, addr, bits);
     }
 
     uint32_t float_bits(float value) {
@@ -370,7 +351,6 @@ namespace {
     // textures 0x50, type 2, display list 0x25A8 }. The display list's commands start 8 bytes in, the vertices
     // 0x18 bytes into the vertex block at 0x2F08.
     constexpr uint32_t model_header[4] = { 0x0000000B, 0x00003A70, 0x00500002, 0x000025A8 };
-    constexpr uint32_t model_dl = 0x25A8 + 8;
     constexpr uint32_t model_vertices = 0x2F08 + 0x18;
     constexpr uint32_t model_size = 0x3A70;
     uint32_t model_addr = 0;

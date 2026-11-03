@@ -4536,10 +4536,10 @@ void tooie::picture_filters::apply() {
 
     // The Shaders switch is gone (L, 2026-10-23): the effects below are always on.
     const bool shaders = true;
-    auto shader = [shaders](double v) { return shaders ? v : 0.0; };
+    auto shader = [](double v) { return shaders ? v : 0.0; };
     // Reflections is an enable switch (L, 2026-10-23): off, its four reflection effects are off.
     const bool reflections_on = value<bool>(reflections_section_option, true);
-    auto reflection = [shaders, reflections_on](double v) { return (shaders && reflections_on) ? v : 0.0; };
+    auto reflection = [reflections_on](double v) { return (shaders && reflections_on) ? v : 0.0; };
 
     RT64::SetPictureFilters(
         (int)value<double>(brightness_option, 0.0),

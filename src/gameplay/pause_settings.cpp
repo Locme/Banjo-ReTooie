@@ -34,7 +34,6 @@
 
 namespace {
     // PauseState (decomp include/gc/newpause.h).
-    constexpr uint32_t pause_page = 0x00;
     constexpr uint32_t pause_sub_page = 0x01;
     constexpr uint32_t pause_last_option = 0x05;
     constexpr uint32_t pause_variant = 0x0D;
