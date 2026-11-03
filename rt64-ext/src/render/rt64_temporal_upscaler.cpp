@@ -205,10 +205,14 @@ namespace RT64 {
             uint32_t height = 0;
             RenderFormat format = RenderFormat::UNKNOWN;
             bool fresh = false;
+            uint64_t usedTake = 0;
         };
         std::mutex snapshotMutex;
-        // One per color target (the game double buffers, so at least two): see UpscalerWorldSnapshot.
+        // One per color target (the game double buffers, so at least two): see UpscalerWorldSnapshot. At most
+        // MaxSnapshots: render targets come and go (resizes, other framebuffers), and each kept a full-size copy for good.
+        constexpr size_t MaxSnapshots = 6;
         std::unordered_map<const RenderTarget *, WorldSnapshot> snapshots;
+        uint64_t snapshotTakes = 0;
     }
 
     void SetUpscalerHudSplit(bool enabled) {
@@ -231,7 +235,15 @@ namespace RT64 {
         }
         GpuSectionScope timed(WorkloadGpuSections(), GpuSection::UpscalerSnapshot, worker->commandList.get());
         const std::scoped_lock lock(snapshotMutex);
+        snapshotTakes++;
+        if ((snapshots.find(colorTarget) == snapshots.end()) && (snapshots.size() >= MaxSnapshots)) {
+            // The one taken longest ago goes (many takes ago, so no frame still being drawn uses it).
+            auto oldest = std::min_element(snapshots.begin(), snapshots.end(),
+                [](const auto &a, const auto &b) { return a.second.usedTake < b.second.usedTake; });
+            snapshots.erase(oldest);
+        }
         WorldSnapshot &snapshot = snapshots[colorTarget];
+        snapshot.usedTake = snapshotTakes;
         if ((snapshot.texture == nullptr) || (snapshot.width != colorTarget->width) || (snapshot.height != colorTarget->height) || (snapshot.format != colorTarget->format)) {
             snapshot.texture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format));
             snapshot.texture->setName("Upscaler World Snapshot");
@@ -585,7 +597,11 @@ namespace RT64 {
             historyValid = false;
         }
 
-        if ((outputWidth != lastOutputWidth) || (outputHeight != lastOutputHeight) || (resolved[0] == nullptr)) {
+        // A frame resolved by DLSS or FSR in between leaves the history in resolved[] behind as well.
+        if ((outputWidth != lastOutputWidth) || (outputHeight != lastOutputHeight)) {
+            reset = true;
+        }
+        if ((outputWidth != resolvedWidth) || (outputHeight != resolvedHeight) || (resolved[0] == nullptr)) {
             for (int i = 0; i < 2; i++) {
                 resolvedFramebuffer[i].reset();
                 resolved[i] = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format));
@@ -593,10 +609,12 @@ namespace RT64 {
                 const RenderTexture *tex = resolved[i].get();
                 resolvedFramebuffer[i] = device->createFramebuffer(RenderFramebufferDesc(&tex, 1));
             }
-            lastOutputWidth = outputWidth;
-            lastOutputHeight = outputHeight;
+            resolvedWidth = outputWidth;
+            resolvedHeight = outputHeight;
             reset = true;
         }
+        lastOutputWidth = outputWidth;
+        lastOutputHeight = outputHeight;
 
         if (resolveDescriptorSet == nullptr) {
             resolveDescriptorSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),

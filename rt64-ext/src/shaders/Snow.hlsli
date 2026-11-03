@@ -21,7 +21,7 @@
 #define RT64_EXT_SHADERS_SNOW_HLSLI
 
 #include "FbRendererCommon.hlsli"
-#include "Grass.hlsli"
+#include "CellHash.hlsli"
 
 // Snowy ground: light and not very colourful (white, lilac or a little warm in the sun). On Icy Side not the ice's
 // cyan (its pale streaks are as light as snow, but greener and bluer than red); in Chilly Willy's arena the snow
@@ -36,10 +36,10 @@ float SnowNoise(float2 p) {
     const float2 i = floor(p);
     const float2 f = frac(p);
     const float2 u = f * f * (3.0f - 2.0f * f);
-    const float a = GrassHash(i).x;
-    const float b = GrassHash(i + float2(1.0f, 0.0f)).x;
-    const float c = GrassHash(i + float2(0.0f, 1.0f)).x;
-    const float d = GrassHash(i + float2(1.0f, 1.0f)).x;
+    const float a = SceneCellHash(i).x;
+    const float b = SceneCellHash(i + float2(1.0f, 0.0f)).x;
+    const float c = SceneCellHash(i + float2(0.0f, 1.0f)).x;
+    const float d = SceneCellHash(i + float2(1.0f, 1.0f)).x;
     return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
 }
 
@@ -442,7 +442,7 @@ bool SnowShellShade(float3 world, float3 baseColor, float share, SnowSample s, b
     // A few glints in the sun close by, each catching the light from some places and not others.
     if (s.cameraDistance < 700.0f) {
         const float3 camera = FrParams.snowCamera.xyz;
-        const float3 glint = GrassHash(floor(world.xz * 1.6f) + floor(camera.xz * 0.04f) * 17.0f);
+        const float3 glint = SceneCellHash(floor(world.xz * 1.6f) + floor(camera.xz * 0.04f) * 17.0f);
         if ((glint.x > 0.992f) && (s.height - s.shellY < FrParams.snowParams.y * 0.12f)) {
             shade += 0.35f * (1.0f - s.cameraDistance / 700.0f) * glint.y;
         }

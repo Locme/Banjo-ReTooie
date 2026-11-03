@@ -54,6 +54,13 @@ uint GroundCameraBase() {
     return ((gConstants.nightLight & RASTER_PARALLAX_CAMERA) >> RASTER_PARALLAX_CAMERA_SHIFT) * 5;
 }
 
+// Whether the draw's framebuffer has a ground camera: one SceneGroundCamera couldn't work out is all zeros, and its clip
+// space w of 0 made GroundOffScreen leave every triangle of the ground out (a black floor) instead of leaving it flat.
+bool GroundCameraKnown() {
+    const float4 w = FrParams.groundCameras[GroundCameraBase() + 3];
+    return any(w != 0.0f);
+}
+
 float3 GroundCameraPosition() {
     return FrParams.groundCameras[GroundCameraBase() + 4].xyz;
 }
@@ -97,6 +104,12 @@ bool GroundOffScreen(float4 a, float4 b, float4 c) {
     if ((a.w <= 0.0f) && (b.w <= 0.0f) && (c.w <= 0.0f)) {
         return true;
     }
+    // A corner behind the camera has its x and y flipped, so the side tests below can call a triangle that runs
+    // under the camera (the floor right in front of it) off one side and leave it out: a black hole at the bottom
+    // of the screen (Jiggywiggy's Temple). Such a triangle is kept.
+    if ((a.w <= 0.0f) || (b.w <= 0.0f) || (c.w <= 0.0f)) {
+        return false;
+    }
     return ((a.x > a.w * m) && (b.x > b.w * m) && (c.x > c.w * m)) || ((a.x < -a.w * m) && (b.x < -b.w * m) && (c.x < -c.w * m)) ||
         ((a.y > a.w * m) && (b.y > b.w * m) && (c.y > c.w * m)) || ((a.y < -a.w * m) && (b.y < -b.w * m) && (c.y < -c.w * m));
 }
@@ -110,8 +123,8 @@ GroundPatch GroundPatchConstants(InputPatch<GroundVertex, 3> patch) {
     p.inside = 1.0f;
     const float3 normal = cross(b - a, c - a);
     const float normalLength = length(normal);
-    // A wall, or a sliver: drawn as it is.
-    if ((normalLength <= 1e-6f) || (abs(normal.y) < GroundFloorShare * normalLength)) {
+    // A wall, or a sliver, or no camera to place the dips with: drawn as it is.
+    if ((normalLength <= 1e-6f) || (abs(normal.y) < GroundFloorShare * normalLength) || !GroundCameraKnown()) {
         return p;
     }
     // Off screen: left out (a factor of 0 draws nothing).
@@ -162,7 +175,7 @@ GroundVertex DSMain(GroundPatch p, float3 w : SV_DomainLocation, const OutputPat
     const float cameraDistance = distance(world, GroundCameraPosition());
     // Left as it is on a wall or a sliver, far off, and (below) at the triangle's own edges.
     float fade = 1.0f - smoothstep(FrParams.groundParams.w * 0.75f, FrParams.groundParams.w, cameraDistance);
-    if ((normalLength <= 1e-6f) || (abs(normal.y) < GroundFloorShare * normalLength) || (FrParams.groundParams.x <= 0.0f)) {
+    if ((normalLength <= 1e-6f) || (abs(normal.y) < GroundFloorShare * normalLength) || (FrParams.groundParams.x <= 0.0f) || !GroundCameraKnown()) {
         fade = 0.0f;
     }
     // (The pixel shader's anchor w: -1 on a wall or a sliver, which is shaded as it was drawn, with its parallax.)

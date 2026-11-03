@@ -59,11 +59,14 @@ last <the last output line>
   the value typed. Hex digits decide it: up to two digits is one byte, up to four is two bytes, more is four. A decimal
   value up to 255 is one byte, up to 65535 is two, and larger is four. A negative value is four bytes.
 * Some commands need the game running. These are `warp`, `status`, `savestate`, `spawn`, `diff`, `perf`,
-  `screenshot`, `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto`, `transform`, `pause`,
+  `screenshot`, `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto`, `walkto`, `face`, `look`, `transform`, `pause`,
   `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo`, `invincible`, `recall`, `play` and `input`. Until the game
   is running they wait at the front
-  of the queue, so `start; warp place 1` works on one line. If the game never starts, they never run. The frame, map and
-  until forms of `wait` report an error instead of waiting.
+  of the queue, so `start; warp place 1` works on one line. If the game never starts, they never run. The frame,
+  control, map and until forms of `wait` report an error instead of waiting. `load` and `goload` work in the launcher too, and start the
+  game themselves.
+* A length of time is a number with `ms` or `s` after it and no space (`200ms`, `1.5s`), counted on the clock. A plain
+  number of frames is game updates, and at an Unlocked frame rate there can be 300 to 600 of those a second.
 * Nothing runs until the launcher is on screen, or until the game has started some other way.
 
 ## Starting and quitting
@@ -82,6 +85,49 @@ start; warp place 1
 ```
 
 Catch: `start` works before the game runs, so it can be the first line of a script.
+
+### `load`
+
+Usage: `load [file 1-3] [timeout s]`
+
+Gets into a save file with no hands, from the launcher, the logos and title (map 0x18B) or the file select (map 0x158).
+The file is 1 when not given, and the timeout is 60 seconds (600 at most). In the launcher it starts the game as `start`
+does. On the logos or the title it asks for the file select, as Start does with Quick start on. On the file select it
+moves the cursor with the stick until the game's open-file byte (0x8012B3F1) shows the file, then presses A for 200 ms,
+and again every 3 seconds while the file select is still up. Every press is timed on the clock, so the frame rate does
+not matter. The queue is held until a save file is loaded (the same test as `wait save`) and the file's first map has
+finished coming in. Then it prints `file 1 loaded after 9.3 s` with the map.
+
+```
+load
+load 2
+load 3 90
+```
+
+Catch: when another file is already loaded, or the game loads another one, it reports `ERR file 2 is loaded, not file 1`
+and the queue goes on. It does not go back to the file select by itself. When the timeout passes, it reports `ERR file 1
+did not load` with the map and the file the cursor was on, and lets go of the controller.
+
+Catch: an empty file starts a new game, and its opening cutscene already counts as loaded.
+
+Catch: how the cursor is read, and which way the stick moves it, come from the game's code and are learned while it
+runs. This has not been run yet. If the cursor never gets to the file, the timeout ends it.
+
+### `goload`
+
+Usage: `goload <file 1-3> <map hex> [exit hex]`
+
+`load` and a warp in one line, for test scripts. Once the file is loaded it runs `wait 30`, `warp id <map> <exit>`,
+`wait map <map> 60` and `wait 30` at the front of the queue, so the script's next line runs with Banjo in the map. The
+exit is 0 when not given. The load's timeout is 60 seconds.
+
+```
+goload 1 AF
+goload 2 1A 1
+```
+
+Catch: when the load fails, the warp and its waits do not run, so a script does not sit through their timeouts. When the
+file is already in that map, the warp does nothing and the `wait map` ends at once.
 
 ### `quit`
 
@@ -371,6 +417,57 @@ Each start runs the scenario. Its first line, `wait save`, holds it until you pr
 need one). Then the warp takes Banjo to the saved map and the `goto` puts him where he stood when `scenario save` ran.
 The scenario sets the ten named item counters to their saved values on every start too. The mark is separate:
 `scenario save` does not read it, and `recall ledge` uses it later.
+
+Worked example: a whole test with no hands, from the launcher. Save it as `test.txt` and run `BanjoReTooie < test.txt`
+(or `--exec test.txt`):
+
+```
+# into file 1, then Spiral Mountain (map AF)
+goload 1 AF
+# walk up to a spot, turn to what is there, and jump
+pos
+walkto 1200 -340 20 15
+face 1300 -340
+press a 200ms
+wait 1s
+# check where Banjo ended up and keep a picture
+pos
+screenshot
+wait 500ms
+quit
+```
+
+`goload` starts the game, gets through the title and the file select, loads file 1 and warps, and holds the queue until
+Banjo is in the map. `walkto` holds it again until he is within 20 of the point, for 15 seconds at most. The jump's 200
+ms is clock time, the same at any frame rate, where `press a 5` would be over in about 10 ms at an Unlocked frame rate.
+A step that fails prints `ERR`, and `quit` then exits with code 1. The numbers are only an example: run `pos` where
+Banjo should go to get real ones.
+
+Worked example: a rendering sweep, the same spot from four sides. Entering Jiggywiggy's Temple (map 151) plays the
+monolith scene every time, and a `goto` made during it is undone, so `wait control` comes first:
+
+```
+goload 1 151
+wait control
+goto 0 0 0
+wait control
+look 0 -20
+wait 100ms
+screenshot
+look 90 -20
+wait 100ms
+screenshot
+look 180 -20
+wait 100ms
+screenshot
+look 270 -20
+wait 100ms
+screenshot
+look off
+```
+
+Each `look` turns the camera where it stands, and the `wait 100ms` lets the game draw from the new angle before
+`screenshot` keeps the frame. Put real coordinates from `pos` in place of `0 0 0`.
 
 ### `mark`
 
@@ -690,23 +787,27 @@ Catch: needs a game update running. Before the game runs it reports `no game upd
 
 ### `press`
 
-Usage: `press <buttons> [stick <x> <y>] [frames]`
+Usage: `press <buttons> [stick <x> <y>] [frames|n ms|n s]`
 
 Holds controller 1's buttons and stick. Buttons are `a`, `b`, `z`, `start`, `l`, `r`, the directions `up`, `down`, `left`
 and `right`, the D-pad names `dup`, `ddown`, `dleft` and `dright`, and the C buttons `cup`, `cdown`, `cleft` and `cright`.
 Join buttons with `+`, as in `a+b`. The stick's x and y run from -80 to 80, and larger values are limited to that range.
-Frames are game updates. With no frame count, the buttons are held until `release`. A new `press` replaces what is held.
-The command returns at once, so use `wait` to hold the queue while the buttons are down.
+The length is a number of game updates, or a time with `ms` or `s` (`200ms`, `1.5s`, up to an hour), counted on the
+clock. With no length, the buttons are held until `release`. A new `press` replaces what is held. The command returns
+at once, so use `wait` to hold the queue while the buttons are down.
 
 ```
+press a 200ms
+press stick 0 80 1.5s
 press a 30
 press a+b 10
-press stick 80 0 60
 press start
 release
 ```
 
-Catch: needs the game running. Only controller 1 is affected.
+Catch: needs the game running. Only controller 1 is affected. A count of game updates gets shorter as the frame rate
+goes up: at an Unlocked frame rate `press a 5` lasts about 10 ms, and the title and the file select miss it. Use a time
+in menus.
 
 ### `release`
 
@@ -1034,6 +1135,71 @@ tp 120.5 300 -40
 Catch: it moves Banjo within the map he is in. It does not change the map, and `warp` does that. Needs a player in the
 game.
 
+### `walkto`
+
+Usage: `walkto <x> <z> [radius] [timeout s]` (also `walk`)
+
+Walks Banjo to a point on the ground with controller 1's stick, as a player would, so the game's own movement and
+collision take him there instead of placing him as `goto` does. Every game update it takes the way from Banjo to the
+point and turns it into a stick direction by the way the camera looks: up on the stick is away from the camera. Near the
+point the stick is pushed less, so he stops on it. The queue is held until Banjo is within the radius of the point
+across the ground, or until the timeout passes, and then the stick is let go. The radius is 30 and the timeout 10
+seconds when not given (600 at most). It prints how long it took and where Banjo stopped.
+
+```
+pos
+walkto 1200 -340
+walkto 1200 -340 15 20
+```
+
+Catch: when the timeout passes it reports `ERR still 140 away after 10 s` with where Banjo is, and the queue goes on.
+Nothing in the way, such as a wall or a gap, is walked round.
+
+Catch: the height is not checked, so a point above or below Banjo counts as reached once he is under or over it.
+
+Catch: the camera's direction is worked out from the camera's position (0x8012D500) and Banjo's, so a fixed camera that
+does not look at Banjo can steer him wrong. Mirror Mode is allowed for. Needs a player in the game.
+
+### `face`
+
+Usage: `face <x> <z>`
+
+Turns Banjo to face a point on the ground at once. It writes his facing and the facing he turns to (the yaw at PlayerState
++0xF8 that the dive and the enemy spawner read), and prints the angle in degrees, 0 facing +z.
+
+```
+face 1200 -340
+```
+
+Catch: a point under Banjo's feet is an error. A move that sets the facing itself, such as swimming or flying, can turn
+him again. Needs a player in the game.
+
+### `look`
+
+Usage: `look <yaw deg> [pitch deg] | look at <x> <y> <z> | look off`
+
+Holds the gameplay camera at an angle where it stands, for screenshots. `look <yaw> [pitch]` turns it to that yaw and
+pitch in degrees: yaw 0 looks along -z and grows turning left, and a positive pitch looks up. The pitch is 0 when not
+given and is kept between -89 and 89. `look at <x> <y> <z>` turns it to a point. Another `look` turns it again from the
+same place. It prints where the camera is and the angles. `look off` gives the camera back to the game.
+
+The camera stays held until `look off` or a map change. It is held by stopping the game's dynamic camera (its +0x72)
+and writing that camera's position and rotation every game update, which the game then draws from. The game keeps
+running: Banjo can still move, but the camera does not follow him.
+
+```
+look 0 -20
+look 90 -20
+look at 1200 150 -340
+look off
+```
+
+Catch: it only works while the gameplay camera is running, and not in a scene, with a fixed camera, or with no file
+loaded. A scene that starts while it is held draws with its own camera. Photo mode, when on, places the camera over it.
+
+Catch: give the camera an update before a screenshot (`wait 100ms`), so the frame saved is drawn from the new angle.
+This has not been run yet. Needs the game running.
+
 ### `invincible`
 
 Usage: `invincible [on|off]` (also `god`)
@@ -1126,11 +1292,16 @@ does not apply, except to the update that a `step` runs. Needs the game running.
 
 ### `wait`
 
-Usage: `wait <frames> | wait <n>ms | wait <n>s | wait save [timeout s] | wait map <map hex> [timeout s] | wait until <address> <value> [8|16|32] [timeout s]`
+Usage: `wait <frames> | wait <n>ms | wait <n>s | wait save [timeout s] | wait control [timeout s] | wait map <map hex> [timeout s] | wait until <address> <value> [8|16|32] [timeout s]`
 
 Holds the queue, so the commands after it wait. A plain number is a count of game updates. `ms` and `s` are time, and
 fractions are allowed. `wait save` waits until a save file is loaded, which is what warps need; its timeout is 600
-seconds, so it also works from `autoexec.txt` while you get through the launcher and file select. `wait map` waits until the current map is the given id and no map change is in progress. `wait
+seconds, so it also works from `autoexec.txt` while you get through the launcher and file select. `wait control` waits
+until the player has Banjo: a file is loaded, no letterboxed scene is on (the test Skip cutscenes uses), no map change is
+in progress, the pause menu is shut, and Banjo is not in one of the states where the game moves him. Those are door
+walk-ins and the scripted walk characters call him over with (state 152), signposts, talking, cutscenes and dying. It
+has to stay that way for half a second, because a scene can give control back for a moment between its shots. Its
+timeout is 60 seconds. `wait map` waits until the current map is the given id and no map change is in progress. `wait
 until` waits until RAM holds the value. The size is the one given, or the one the typed value implies. The default
 timeout is 120 seconds. When the timeout passes, the console prints `ERR gave up waiting (timed out)`, and the queue goes
 on.
@@ -1140,12 +1311,16 @@ wait 60
 wait 500ms
 wait 1.5s
 wait save
+wait control
 wait map 0x1A 30
 wait until 80127630 0x05 8 10
 ```
 
-Catch: the frame, map and until forms need the game running and report an error without it. The `ms` and `s` forms work
-before the game starts.
+Catch: the frame, control, map and until forms need the game running and report an error without it. The `ms` and `s`
+forms work before the game starts.
+
+Catch: `wait control` does not look at the dialogue system itself, only at the talking states Banjo is put in. A text
+box that leaves him in an ordinary state, if there is one, passes. This has not been run yet.
 
 ### `exec`
 
@@ -1268,6 +1443,23 @@ screenshot
 ```
 
 Catch: needs the game running.
+
+### `burst`
+
+Usage: `burst start | burst stop`
+
+Keeps every presented frame from `start` to `stop`, the same as holding F12. `stop` writes them as PNGs, shrunk 4x,
+to `screenshots/burst-<stamp>/000.png` and on, and the log names the folder. For glitches that last a frame or two,
+such as a picture that flickers black: a single `screenshot` can land on a good frame.
+
+```
+burst start
+wait 2s
+burst stop
+```
+
+Catch: only the last 150 frames are kept, so at high frame rates a long burst keeps only its end. `stop` without a
+`start` does nothing. Needs the game running.
 
 ### `tee`
 

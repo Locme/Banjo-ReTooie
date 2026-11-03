@@ -65,7 +65,20 @@ namespace {
     std::atomic<uint32_t> total_hits{0};
 
     thread_local uint8_t* open_page = nullptr;
+    // Wide on Windows, so a folder named outside the ANSI code page (バンジョー on a Western PC) still opens.
+#ifdef _WIN32
+    wchar_t passed_over_path[1024] = {};
+#else
     char passed_over_path[1024] = {};
+#endif
+
+    FILE* open_passed_over() {
+#ifdef _WIN32
+        return _wfopen(passed_over_path, L"a");
+#else
+        return std::fopen(passed_over_path, "a");
+#endif
+    }
 
     constexpr size_t page_size = 4096;
 
@@ -137,7 +150,7 @@ namespace {
             timestamp(ts, sizeof(ts));
             std::printf("[pass-over] %s %s\n", ts, line);
             std::fflush(stdout);
-            if (FILE* f = std::fopen(passed_over_path, "a")) {
+            if (FILE* f = open_passed_over()) {
                 std::fprintf(f, "%s %s\n", ts, line);
                 std::fclose(f);
             }
@@ -259,7 +272,7 @@ void tooie::memory_guard::log_passed_over(const char* line) {
     if (passed_over_path[0] == '\0') {
         return;
     }
-    if (FILE* f = std::fopen(passed_over_path, "a")) {
+    if (FILE* f = open_passed_over()) {
         std::fprintf(f, "%s %s\n", ts, line);
         std::fclose(f);
     }
@@ -271,7 +284,14 @@ void tooie::memory_guard::tick(uint8_t* rdram) {
         std::error_code ec;
         std::filesystem::path logs = recomp::get_config_path() / "logs";
         std::filesystem::create_directories(logs, ec);
-        std::snprintf(passed_over_path, sizeof(passed_over_path), "%s", (logs / "PassedOver.txt").string().c_str());
+        // native(): wide on Windows (path::string() throws for a name outside the ANSI code page), UTF-8 elsewhere.
+        const auto path = (logs / "PassedOver.txt").native();
+        const size_t room = sizeof(passed_over_path) / sizeof(passed_over_path[0]) - 1;
+        const size_t length = path.size() < room ? path.size() : room;
+        for (size_t i = 0; i < length; i++) {
+            passed_over_path[i] = path[i];
+        }
+        passed_over_path[length] = 0;
     }
     if (base.load() == nullptr) {
         base = rdram;

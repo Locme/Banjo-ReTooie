@@ -368,7 +368,14 @@ namespace {
             tilt_direction(l);
         }
         const float n[3] = {nx, ny, nz};
-        const float inv = 1.0f / (l[0] * nx + l[1] * ny + l[2] * nz);
+        // A light grazing the floor (or behind it: a slope facing away from a tilted light) would stretch the
+        // shadow out of sight or flip it, and at 0 divide by zero: no shadow then.
+        const float l_dot_n = l[0] * nx + l[1] * ny + l[2] * nz;
+        if (!(l_dot_n >= 0.2f)) {
+            count(Steep);
+            return;
+        }
+        const float inv = 1.0f / l_dot_n;
         ctx->r4 = flatten;
         func_800F274C(rdram, ctx);
         for (int i = 0; i < 3; i++) {
@@ -418,6 +425,11 @@ namespace {
             }
             const float sx = load_float(rdram, screen + i * 8);
             const float sy = load_float(rdram, screen + i * 8 + 4);
+            // A NaN gets through clamp and the size check below, so a corner that projects to nothing real counts as off screen.
+            if (!std::isfinite(sx) || !std::isfinite(sy)) {
+                count(Offscreen);
+                return;
+            }
             if (i == 0 || sx < min_x) min_x = sx;
             if (i == 0 || sx > max_x) max_x = sx;
             if (i == 0 || sy < min_y) min_y = sy;

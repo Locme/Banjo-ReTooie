@@ -7,7 +7,7 @@
 // Each pixel follows the view ray from its place on the flat triangle down into that height field, a step at a time,
 // and the textures are then looked up where the ray meets it, so the faces of the stones stand out of the wall and
 // hide the gaps behind them as the camera moves. The triangle's own place and slope come from the camera's terms
-// (ComputeSceneGrass) and the pixel's depth, as for 3D grass, so the game's models need nothing new.
+// (ComputeSceneGrass) and the pixel's depth, as for deep snow, so the game's models need nothing new.
 
 #pragma once
 // Include guard as well as #pragma once: DXC on Windows reaches a file here by two spellings of its path
@@ -19,7 +19,7 @@
 #include "TextureSampler.hlsli"
 
 // The view space position at a pixel (the camera at the origin, looking down -z), from its depth, as
-// GrassWorldPosition finds it before it goes to world space.
+// ScenePixelWorldPosition finds it before it goes to world space.
 // With the camera of the draw's own framebuffer (RASTER_PARALLAX_CAMERA, FrameParams.parallaxCameras).
 float3 ParallaxViewPosition(float4 pixelPosition, uint bits) {
     const uint camera = (bits & RASTER_PARALLAX_CAMERA) >> RASTER_PARALLAX_CAMERA_SHIFT;
@@ -140,7 +140,10 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
     const float distance = length(p);
     float3 n = cross(dp1, dp2);
     const float nLength = length(n);
-    if ((nLength <= 1e-12f) || (distance <= 1e-4f) || (params.x <= 0.0f)) {
+    // Written as "go on only if it is a real value", so a NaN or infinite place (the camera's terms giving none) stops
+    // here too instead of marching on into a black surface. Plain compares, no isfinite on the march's result: that
+    // made every pipeline several times bigger to compile.
+    if (!(nLength > 1e-12f) || !(distance > 1e-4f) || !(distance < 1e30f) || (params.x <= 0.0f)) {
         return float3(0.0f, 0.0f, 1.0f);
     }
 
@@ -152,7 +155,7 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
     }
     const float vn = dot(n, v);
     const float fade = saturate((vn - 0.2f) / 0.35f) * (1.0f - smoothstep(params.y, params.z, distance));
-    if (fade <= 0.0f) {
+    if (!(fade > 0.0f)) {
         return float3(0.0f, 0.0f, 1.0f);
     }
 

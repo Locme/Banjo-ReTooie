@@ -59,6 +59,11 @@ bool WaterOffScreen(float4 a, float4 b, float4 c) {
     if ((a.w <= 0.0f) && (b.w <= 0.0f) && (c.w <= 0.0f)) {
         return true;
     }
+    // A corner behind the camera has its x and y flipped, so the side tests below could leave out water that runs
+    // under the camera (as GroundOffScreen did with the floor). Such a triangle is kept.
+    if ((a.w <= 0.0f) || (b.w <= 0.0f) || (c.w <= 0.0f)) {
+        return false;
+    }
     return ((a.x > a.w * m) && (b.x > b.w * m) && (c.x > c.w * m)) || ((a.x < -a.w * m) && (b.x < -b.w * m) && (c.x < -c.w * m)) ||
         ((a.y > a.w * m) && (b.y > b.w * m) && (c.y > c.w * m)) || ((a.y < -a.w * m) && (b.y < -b.w * m) && (c.y < -c.w * m));
 }

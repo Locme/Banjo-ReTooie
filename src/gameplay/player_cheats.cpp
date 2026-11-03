@@ -19,6 +19,8 @@
 #include "tooie_hold_to_run.h"
 #include "tooie_hooks.h"
 #include "tooie_hotkeys.h"
+#include "tooie_menu_pause.h"
+#include "tooie_photo_mode.h"
 #include "tooie_rdram.h"
 
 namespace {
@@ -121,6 +123,8 @@ namespace {
     // older copies after the one player+0xE4 points at), not from the ones above. Without these written too,
     // walls and floors pulled the player back every frame.
     constexpr uint32_t last_pos_offset = 0x29C;
+    constexpr uint32_t delta_time_addr = 0x8012C760;
+    constexpr uint32_t game_pause_addr = 0x80128AF0;   // the game's pause menu object while it is open
     constexpr uint32_t vel_x_offset = 0x10;
     constexpr uint32_t vel_z_offset = 0x18;
     constexpr float noclip_vertical_speed = 600.0f;
@@ -328,10 +332,14 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         static uint16_t anchor_map = 0;
         static uint8_t anchor_form = 0;
         static int settle = 0;
-        static auto last = std::chrono::steady_clock::now();
-        const auto now = std::chrono::steady_clock::now();
-        const float dt = std::min(std::chrono::duration<float>(now - last).count(), 0.1f);
-        last = now;
+        // The game's frame time (0x8012C760), so noclip keeps the game's pace with Speed-Up, and none while the
+        // game stands still: the game's pause menu, the ESC menu's pause and photo mode (those two freeze the
+        // delta time only after this tick, so they are asked). The velocity left in the physics block would
+        // otherwise carry Banjo on through walls behind the menu.
+        const bool frozen = read_word(rdram, game_pause_addr) != 0 || tooie::menu_pause::pausing() ||
+            tooie::photo_mode::active();
+        float dt = frozen ? 0.0f : tooie::rdram::read_float(rdram, delta_time_addr);
+        dt = (dt > 1.0e-4f) ? std::min(dt, 0.1f) : 0.0f;
 
         const bool on = tooie::cheats::is_on("cheat_noclip");
         noclip_on = on;

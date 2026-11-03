@@ -85,7 +85,7 @@ namespace RT64 {
         uint32_t cpuFrames = 0;
         double cpuMs[5] = {};
         double snowMs[4] = {};
-        double effectsMs[6] = {};
+        double effectsMs[5] = {};
         uint32_t snowRedone = 0;
     };
     FrameStats TakeFrameStats();
@@ -689,9 +689,9 @@ namespace {
                 text.push_back(line);
             }
             const double *e = frames.effectsMs;
-            if (e[0] + e[1] + e[2] + e[3] + e[4] + e[5] > 0.0) {
-                std::snprintf(line, sizeof(line), "Effects setup: fur %.2f, grass mask, snow and sand %.2f, grass %.2f, ray traced scene %.2f, uploads %.2f, shader views %.2f",
-                    e[0] / n, e[1] / n, e[2] / n, e[3] / n, e[4] / n, e[5] / n);
+            if (e[0] + e[1] + e[2] + e[3] + e[4] > 0.0) {
+                std::snprintf(line, sizeof(line), "Effects setup: fur %.2f, snow and sand %.2f, ray traced scene %.2f, uploads %.2f, shader views %.2f",
+                    e[0] / n, e[1] / n, e[2] / n, e[3] / n, e[4] / n);
                 text.push_back(line);
             }
         }

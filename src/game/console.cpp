@@ -15,7 +15,8 @@
 //
 // Commands run in order from one queue. Most need the game running and run on the game thread once per game update
 // (tooie_warp_tick, the start of func_800A7D84); before the game starts, the ones that don't (start, settings, quit and
-// the like) run on a small thread of their own. `wait` holds the queue until it is done.
+// the like) run on a small thread of their own. `wait` holds the queue until it is done, and so do `load` and `walkto`,
+// which drive controller 1 once per game update until they get where they are going (drive_tick).
 //
 // The warps go through the Warp tab's own code (src/game/level_warp.cpp) and src/debug/warp.cpp, and the settings
 // through the same config calls as the settings menu, so nothing here is a second copy of a feature.
@@ -29,7 +30,9 @@
 #include "tooie_rdram.h"
 #include "tooie_game.h"
 #include "tooie_game_frame_rate.h"
+#include "tooie_free_camera.h"
 #include "tooie_level_warp.h"
+#include "tooie_mirror_mode.h"
 #include "tooie_save_state.h"
 #include "tooie_screenshot.h"
 #include "tooie_achievements.h"
@@ -310,7 +313,8 @@ std::mutex g_input_mutex;
 uint16_t g_press_buttons;
 int8_t g_press_x, g_press_y;
 bool g_press_stick;
-int64_t g_press_frames;                   // -1: until release; 0: nothing held
+int64_t g_press_frames;                   // -1: until release (or g_press_until); 0: nothing held
+Clock::time_point g_press_until;          // a press timed in ms or s ends here (epoch: not timed)
 
 // watch, freeze, binds, aliases.
 struct Watch { uint32_t addr; int size; bool is_float; std::string name; };
@@ -996,14 +1000,20 @@ void cmd_help(Ctx& c) {
     print(out);
 }
 
-void cmd_start(Ctx&) {
-    if (ultramodern::is_game_started()) { print("the game is already running"); return; }
+// Play in the launcher (start, load). False, with the error printed, when no ROM has been loaded yet.
+bool start_game() {
     std::u8string id = u8"bt.n64.us.1.0"; // supported_games[0] in src/main/main.cpp
-    if (!recomp::is_rom_valid(id)) { error("no Banjo-Tooie ROM is loaded yet (load it once in the launcher)"); return; }
+    if (!recomp::is_rom_valid(id)) { error("no Banjo-Tooie ROM is loaded yet (load it once in the launcher)"); return false; }
     recompui::update_game_mod_id("bt");
     recomp::start_game(id, {});
     recompui::hide_all_contexts();
     print("starting the game (the launcher's Play option also sets the picture preset; start does not)");
+    return true;
+}
+
+void cmd_start(Ctx&) {
+    if (ultramodern::is_game_started()) { print("the game is already running"); return; }
+    start_game();
 }
 
 void cmd_quit(Ctx& c) {
@@ -1170,6 +1180,17 @@ void cmd_dev(Ctx& c) {
 void cmd_screenshot(Ctx&) {
     tooie::screenshot::take();
     print("screenshot of the next frame, saved to the screenshots folder of the app-data folder (as F12)");
+}
+
+void cmd_burst(Ctx& c) {
+    if (c.w.size() != 2 || (c.w[1] != "start" && c.w[1] != "stop")) { error("burst start | burst stop"); return; }
+    if (c.w[1] == "start") {
+        tooie::screenshot::burst_start();
+        print("burst on: every frame is kept (the last 150, shrunk 4x) until burst stop");
+    } else {
+        tooie::screenshot::burst_stop();
+        print("burst off: the frames go to screenshots/burst-<stamp>/ (the log names the folder)");
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1439,8 +1460,40 @@ void cmd_fps(Ctx& c) {
     set_setting(tooie::game_frame_rate::option, c.w[1]);
 }
 
+// What controller 1 is held at (press, load, walkto): for `frames` game updates (-1 until release), or until `until`
+// when it is set.
+void hold(uint16_t buttons, bool stick, int x, int y, int64_t frames, Clock::time_point until = {}) {
+    std::lock_guard lock{ g_input_mutex };
+    g_press_buttons = buttons;
+    g_press_stick = stick;
+    g_press_x = (int8_t)std::clamp(x, -80, 80);
+    g_press_y = (int8_t)std::clamp(y, -80, 80);
+    g_press_frames = frames;
+    g_press_until = until;
+}
+
+// Lets go of a press timed in ms or s once its time is up (g_input_mutex held).
+void end_timed_press() {
+    if (g_press_until == Clock::time_point{} || Clock::now() < g_press_until) return;
+    g_press_until = Clock::time_point{};
+    g_press_frames = 0;
+    g_press_buttons = 0;
+    g_press_stick = false;
+}
+
+// A press's length: game updates ("30"), or time ("200ms", "1.5s", up to an hour). Time is counted on the clock, so a
+// high frame rate does not shorten it (at 500 updates a second, 5 updates are 10 ms, which menus miss).
+bool parse_length(const std::string& s, int* frames, double* seconds) {
+    std::string v = lower(s);
+    double n;
+    *seconds = 0;
+    if (v.size() > 2 && v.substr(v.size() - 2) == "ms" && parse_double(v.substr(0, v.size() - 2), &n) && n > 0 && n <= 3.6e6) { *seconds = n / 1000.0; return true; }
+    if (v.size() > 1 && v.back() == 's' && parse_double(v.substr(0, v.size() - 1), &n) && n > 0 && n <= 3600) { *seconds = n; return true; }
+    return parse_int(v, frames) && *frames >= 1;
+}
+
 void cmd_press(Ctx& c) {
-    // press <buttons> [frames] | press stick <x> <y> [frames] | press <buttons> stick <x> <y> [frames]
+    // press <buttons> [length] | press stick <x> <y> [length] | press <buttons> stick <x> <y> [length]
     uint16_t buttons = 0;
     bool stick = false;
     int x = 0, y = 0;
@@ -1450,38 +1503,50 @@ void cmd_press(Ctx& c) {
         i++;
     }
     if (i < c.w.size() && lower(c.w[i]) == "stick") {
-        if (i + 2 >= c.w.size() || !parse_int(c.w[i + 1], &x) || !parse_int(c.w[i + 2], &y)) { error("press stick <x> <y> [frames], x and y from -80 to 80"); return; }
-        x = std::clamp(x, -80, 80);
-        y = std::clamp(y, -80, 80);
+        if (i + 2 >= c.w.size() || !parse_int(c.w[i + 1], &x) || !parse_int(c.w[i + 2], &y)) { error("press stick <x> <y> [frames|n ms|n s], x and y from -80 to 80"); return; }
         stick = true;
         i += 3;
     }
     int frames = -1;
-    if (i < c.w.size() && (!parse_int(c.w[i], &frames) || frames < 1)) { error("press <buttons> [frames]"); return; }
-    if (buttons == 0 && !stick) { error("press <buttons> [frames] | press stick <x> <y> [frames]"); return; }
-    {
-        std::lock_guard lock{ g_input_mutex };
-        g_press_buttons = buttons;
-        g_press_stick = stick;
-        g_press_x = (int8_t)x;
-        g_press_y = (int8_t)y;
-        g_press_frames = frames;
+    double seconds = 0;
+    if (i < c.w.size() && !parse_length(c.w[i], &frames, &seconds)) { error("press <buttons> [frames|n ms|n s]"); return; }
+    if (buttons == 0 && !stick) { error("press <buttons> [frames|n ms|n s] | press stick <x> <y> [frames|n ms|n s]"); return; }
+    if (seconds > 0) {
+        hold(buttons, stick, x, y, -1, Clock::now() + std::chrono::microseconds((int64_t)(seconds * 1e6)));
+        print(format("held for %.0f ms", seconds * 1000.0));
+        return;
     }
+    hold(buttons, stick, x, y, frames);
     print(frames < 0 ? "held until release" : format("held for %d frames", frames));
 }
 
 void cmd_release(Ctx&) {
-    std::lock_guard lock{ g_input_mutex };
-    g_press_frames = 0;
-    g_press_buttons = 0;
-    g_press_stick = false;
+    hold(0, false, 0, 0, 0);
     print("released");
 }
 
+bool in_control(uint8_t* rdram); // below
+
 void cmd_wait(Ctx& c) {
-    const char* usage = "wait <frames> | wait <n>ms | wait <n>s | wait save [timeout s] | wait map <map hex> [timeout s] | wait until <address> <value> [8|16|32] [timeout s]";
+    const char* usage = "wait <frames> | wait <n>ms | wait <n>s | wait save [timeout s] | wait control [timeout s] | wait map <map hex> [timeout s] | wait until <address> <value> [8|16|32] [timeout s]";
     if (c.w.size() < 2) { error(usage); return; }
     std::string v = lower(c.w[1]);
+    if (v == "control") {
+        // wait control [timeout s]: until the player has Banjo again (no scene, talk, map change or scripted walk), and
+        // has kept him for half a second, since a scene can hand back control for a moment between its shots.
+        double timeout = 60;
+        if (c.w.size() >= 3 && !parse_double(c.w[2], &timeout)) { error(usage); return; }
+        if (!ultramodern::is_game_started()) { error("wait control needs the game running"); return; }
+        Clock::time_point since{};
+        g_wait_cond = [since]() mutable {
+            if (g_rdram == nullptr || !in_control(g_rdram)) { since = Clock::time_point{}; return false; }
+            if (since == Clock::time_point{}) since = Clock::now();
+            return Clock::now() - since >= std::chrono::milliseconds(500);
+        };
+        g_wait_cond_deadline = Clock::now() + std::chrono::microseconds((int64_t)(timeout * 1e6));
+        print("waiting for the player to have control");
+        return;
+    }
     if (v == "save") {
         // wait save [timeout s]: until a save file is loaded (what warp needs), for autoexec and scenarios.
         double timeout = 600;
@@ -1532,6 +1597,403 @@ void cmd_wait(Ctx& c) {
         g_wait_frames_until = g_frames.load() + (uint64_t)f;
     }
     print("waiting " + v);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// load, goload, walkto and face: controller 1 driven once per game update (drive_tick) until a state is reached, so a
+// test script needs no hands and no screenshots to get somewhere.
+
+constexpr uint16_t kTitleMap = 0x18B;         // the logos, title flight and title screen (src/game/quick_start.cpp)
+constexpr uint16_t kFileSelectMap = 0x158;    // the file select (quick_start.cpp, src/debug/warp.cpp)
+// The open save file, 0 to 2, -1 for none (src/game/timer_save.cpp, src/gameplay/progress_cheats.cpp). On the file
+// select the game sets it as a file is picked out (func_808005D4_chgameselect calls func_800D37C0 with the file), and
+// to -1 for the choices that are not files (func_800D37D4).
+constexpr uint32_t kSaveSlot = 0x8012B3F1;
+// Player 0's PlayerState (src/gameplay/player_cheats.cpp); its +0xF8 points at Banjo's yaw and, after it, the yaw he
+// turns to (degrees, 0 faces +z; src/gameplay/dive.cpp, src/game/game_frame_rate.cpp).
+constexpr uint32_t kPlayerTable = 0x80135490;
+constexpr uint32_t kPlayerYaw = 0xF8;
+// Points at the camera, its position first (src/game/widescreen.cpp's camera_position).
+constexpr uint32_t kCameraPtr = 0x8012D500;
+constexpr uint16_t kButtonA = 0x8000;
+constexpr double kPi = 3.14159265358979;
+
+enum { kDriveNone = 0, kDriveLoad, kDriveWalk };
+
+struct Drive {
+    std::atomic<int> kind{ kDriveNone }; // stored last, after the rest is filled in (the command may run before the game)
+    std::string name;                    // the command, for the "[command]" prefix
+    Clock::time_point start, deadline;
+    // load
+    int slot = 0;                        // 0 to 2
+    std::string then;                    // queued at the front once the file is loaded (goload)
+    Clock::time_point next;              // no new input before this
+    Clock::time_point arrived;           // when the file select was first seen (epoch: not yet)
+    int moved = 0;                       // the stick's last move on the file select (+1 right, -1 left), 0 none
+    int moved_from = 0;                  // the file the cursor was on before it (3: a choice that is not a file)
+    int right = 1;                       // which way right moves the cursor, learned from the moves
+    int stuck = 0;                       // moves in a row that did not move the cursor
+    // walkto
+    float x = 0, z = 0, radius = 0;
+    float fx = 0, fz = 0;                // the camera's last forward across the ground (0 0: none yet)
+};
+Drive g_drive;
+
+void drive_say(const std::string& text, bool failed) {
+    {
+        std::lock_guard lock{ g_mutex };
+        g_current = g_drive.name;
+    }
+    if (failed) error(text);
+    else print(text);
+}
+
+// Stops driving: controller 1 is let go and the queue goes on.
+void drive_end() {
+    hold(0, false, 0, 0, 0);
+    g_drive.kind = kDriveNone;
+}
+
+// Holds the queue while a drive runs. Its own deadline ends it with an ERR from drive_tick; this one, a little later,
+// only lets the queue go if no game update ever comes to run it.
+void drive_begin(const std::string& name, int kind, double seconds) {
+    g_drive.name = name;
+    g_drive.start = Clock::now();
+    g_drive.deadline = g_drive.start + std::chrono::microseconds((int64_t)(seconds * 1e6));
+    g_drive.kind = kind;
+    g_wait_cond = [] { return g_drive.kind.load() == kDriveNone; };
+    g_wait_cond_deadline = g_drive.deadline + std::chrono::seconds(5);
+}
+
+// The file select's slot under the cursor, 0 to 2, or 3 for the other choices.
+int cursor_file(uint8_t* rdram) {
+    int open = (int8_t)read_ram(rdram, kSaveSlot, 1);
+    return open >= 0 && open <= 2 ? open : 3;
+}
+
+void load_tick(uint8_t* rdram) {
+    Clock::time_point now = Clock::now();
+    uint16_t map = tooie::debug::current_map(rdram);
+    double took = std::chrono::duration<double>(now - g_drive.start).count();
+    if (tooie::debug::can_warp()) {
+        if (tooie::debug::map_change_busy(rdram)) return; // the file's first map is still coming in
+        int open = (int8_t)read_ram(rdram, kSaveSlot, 1);
+        std::string then = g_drive.then;
+        drive_end();
+        if (open != g_drive.slot) {
+            drive_say(format("file %d is loaded, not file %d (map 0x%X); go back to the file select first", open + 1, g_drive.slot + 1, map), true);
+            return;
+        }
+        drive_say(format("file %d loaded after %.1f s, map 0x%X (%s)", open + 1, took, map, map_name(map)), false);
+        if (!then.empty()) enqueue_line(then, 1, true);
+        return;
+    }
+    if (now >= g_drive.deadline) {
+        drive_end();
+        drive_say(format("file %d did not load in %.0f s (map 0x%X, cursor on %d)", g_drive.slot + 1, took, map, cursor_file(rdram) + 1), true);
+        return;
+    }
+    if (now < g_drive.next || tooie::debug::map_change_busy(rdram) || tooie::debug::warp_pending()) return;
+    if (map == kTitleMap) {
+        // What Start does with Quick start on, at any point of the logos and the title: the file select, exit 0.
+        tooie::debug::request_warp(kFileSelectMap, 0);
+        g_drive.arrived = Clock::time_point{};
+        g_drive.next = now + std::chrono::seconds(2);
+        return;
+    }
+    if (map != kFileSelectMap) return; // still booting
+    if (g_drive.arrived == Clock::time_point{}) {
+        // The screen comes in with its own camera move first.
+        g_drive.arrived = now;
+        g_drive.next = now + std::chrono::seconds(2);
+        return;
+    }
+    int cur = cursor_file(rdram);
+    if (g_drive.moved != 0) {
+        // Learn which way right goes from the last move. A step of two is the cursor wrapping round, which says nothing;
+        // two moves that went nowhere mean the cursor is against the end of the row, so the other way is tried.
+        int step = cur - g_drive.moved_from;
+        if (step == 0 && ++g_drive.stuck >= 2) {
+            g_drive.right = -g_drive.right;
+            g_drive.stuck = 0;
+        } else if (step == 1 || step == -1) {
+            g_drive.right = (step > 0) == (g_drive.moved > 0) ? 1 : -1;
+            g_drive.stuck = 0;
+        }
+        g_drive.moved = 0;
+    }
+    if (cur == g_drive.slot) {
+        // A on the file, long enough for the menu to see it at any frame rate; again every 3 s while the file select
+        // stays (a new file asks more than once).
+        hold(kButtonA, false, 0, 0, -1, now + std::chrono::milliseconds(200));
+        g_drive.next = now + std::chrono::seconds(3);
+        return;
+    }
+    int dir = (g_drive.slot > cur ? 1 : -1) * g_drive.right;
+    g_drive.moved = dir;
+    g_drive.moved_from = cur;
+    hold(0, true, dir * 80, 0, -1, now + std::chrono::milliseconds(150));
+    g_drive.next = now + std::chrono::milliseconds(700);
+}
+
+// The way the camera looks across the ground, as a unit x, z: from the camera to Banjo. The game turns the stick by the
+// camera's yaw (src/gameplay/free_camera.cpp) and the camera looks at Banjo, so up on the stick walks this way.
+bool camera_forward(uint8_t* rdram, const float player[3], float* fx, float* fz) {
+    uint32_t camera = read_ram(rdram, kCameraPtr, 4);
+    if (!tooie::rdram::valid_ptr(camera)) return false;
+    float ax = player[0] - tooie::rdram::read_float(rdram, camera);
+    float az = player[2] - tooie::rdram::read_float(rdram, camera + 8);
+    float len = std::sqrt(ax * ax + az * az);
+    if (!(len > 1.0f)) return false; // straight above him: no way across the ground
+    *fx = ax / len;
+    *fz = az / len;
+    return true;
+}
+
+void walk_tick(uint8_t* rdram) {
+    Clock::time_point now = Clock::now();
+    double took = std::chrono::duration<double>(now - g_drive.start).count();
+    float p[3];
+    if (!tooie::player_cheats::position(rdram, p)) {
+        drive_end();
+        drive_say("there is no player any more", true);
+        return;
+    }
+    float dx = g_drive.x - p[0], dz = g_drive.z - p[2];
+    float dist = std::sqrt(dx * dx + dz * dz);
+    if (dist <= g_drive.radius) {
+        drive_end();
+        drive_say(format("there after %.1f s, %.1f away, at %.2f %.2f %.2f", took, dist, p[0], p[1], p[2]), false);
+        return;
+    }
+    if (now >= g_drive.deadline) {
+        drive_end();
+        drive_say(format("still %.0f away after %.0f s, at %.2f %.2f %.2f", dist, took, p[0], p[1], p[2]), true);
+        return;
+    }
+    float fx, fz;
+    if (camera_forward(rdram, p, &fx, &fz)) {
+        g_drive.fx = fx;
+        g_drive.fz = fz;
+    }
+    if (g_drive.fx == 0 && g_drive.fz == 0) return; // no camera yet
+    // The way to go on the stick: up is the camera's forward, right is that turned a quarter clockwise seen from above
+    // (+x on screen when the camera looks along -z). Slower near the point, so he stops on it instead of past it.
+    float ux = dx / dist, uz = dz / dist;
+    float sx = ux * -g_drive.fz + uz * g_drive.fx;
+    float sy = ux * g_drive.fx + uz * g_drive.fz;
+    if (tooie::mirror_mode::active()) sx = -sx; // the stick is flipped after the console's input (src/debug/pad_script.cpp)
+    float speed = std::clamp(dist / (g_drive.radius * 4.0f), 0.45f, 1.0f) * 80.0f;
+    hold(0, true, (int)std::lround(sx * speed), (int)std::lround(sy * speed), -1);
+}
+
+// Once per game update, before the queue runs, so a drive that ends lets the next command run in the same update.
+void drive_tick(uint8_t* rdram) {
+    int kind = g_drive.kind.load();
+    if (kind == kDriveLoad) load_tick(rdram);
+    else if (kind == kDriveWalk) walk_tick(rdram);
+}
+
+// Starts the game if it is not running, then drives to file `slot` (0 to 2); `then` runs once it is loaded.
+void begin_load(const std::string& name, int slot, double timeout, const std::string& then) {
+    if (!ultramodern::is_game_started() && !start_game()) return;
+    g_drive.slot = slot;
+    g_drive.then = then;
+    g_drive.next = Clock::time_point{};
+    g_drive.arrived = Clock::time_point{};
+    g_drive.moved = 0;
+    g_drive.right = 1;
+    g_drive.stuck = 0;
+    drive_begin(name, kDriveLoad, timeout);
+    print(format("loading file %d (up to %.0f s)", slot + 1, timeout));
+}
+
+// load [file 1-3] [timeout s]: from the launcher, the title or the file select into a save file.
+void cmd_load(Ctx& c) {
+    int slot = 1;
+    double timeout = 60;
+    if ((c.w.size() >= 2 && (!parse_int(c.w[1], &slot) || slot < 1 || slot > 3)) || (c.w.size() >= 3 && (!parse_double(c.w[2], &timeout) || timeout <= 0))) {
+        error("load [file 1 to 3] [timeout s]");
+        return;
+    }
+    begin_load("load", slot - 1, std::min(timeout, 600.0), "");
+}
+
+// goload <file> <map hex> [exit hex]: load, then warp id and wait map, as one line for test scripts.
+void cmd_goload(Ctx& c) {
+    int slot;
+    uint32_t map = 0, exit = 0;
+    auto hex_of = [](const std::string& s, uint32_t* out) {
+        std::string h = (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) ? s.substr(2) : s;
+        if (h.empty() || h.size() > 4) return false;
+        for (char ch : h) {
+            if (!std::isxdigit((unsigned char)ch)) return false;
+        }
+        *out = (uint32_t)std::strtoul(h.c_str(), nullptr, 16);
+        return true;
+    };
+    if (c.w.size() < 3 || !parse_int(c.w[1], &slot) || slot < 1 || slot > 3 || !hex_of(c.w[2], &map) || (c.w.size() >= 4 && (!hex_of(c.w[3], &exit) || exit > 0xFF))) {
+        error("goload <file 1 to 3> <map hex> [exit hex]");
+        return;
+    }
+    // The 30 updates either side let the file's first map settle before the warp, and the game place Banjo after it.
+    begin_load("goload", slot - 1, 60, format("wait 30; warp id %X %X; wait map %X 60; wait 30", map, exit, map));
+}
+
+// walkto <x> <z> [radius] [timeout s]: walks Banjo to a point with the stick.
+void cmd_walkto(Ctx& c) {
+    double x, z, radius = 30, timeout = 10;
+    if (c.w.size() < 3 || !parse_double(c.w[1], &x) || !parse_double(c.w[2], &z)
+        || (c.w.size() >= 4 && (!parse_double(c.w[3], &radius) || radius <= 0))
+        || (c.w.size() >= 5 && (!parse_double(c.w[4], &timeout) || timeout <= 0))) {
+        error("walkto <x> <z> [radius] [timeout s] (pos shows where you are)");
+        return;
+    }
+    float p[3];
+    if (!tooie::player_cheats::position(c.rdram, p)) { error("there is no player yet"); return; }
+    g_drive.x = (float)x;
+    g_drive.z = (float)z;
+    g_drive.radius = (float)radius;
+    g_drive.fx = g_drive.fz = 0;
+    timeout = std::min(timeout, 600.0);
+    drive_begin("walkto", kDriveWalk, timeout);
+    print(format("walking to %.2f %.2f, %.0f away (to within %.0f, up to %.0f s)", x, z, std::hypot(x - p[0], z - p[2]), radius, timeout));
+}
+
+// face <x> <z>: turns Banjo to a point at once.
+void cmd_face(Ctx& c) {
+    double x, z;
+    if (c.w.size() < 3 || !parse_double(c.w[1], &x) || !parse_double(c.w[2], &z)) { error("face <x> <z> (pos shows where you are)"); return; }
+    float p[3];
+    uint32_t player = read_ram(c.rdram, kPlayerTable, 4);
+    uint32_t yaw = tooie::rdram::valid_ptr(player) ? read_ram(c.rdram, player + kPlayerYaw, 4) : 0;
+    if (!tooie::player_cheats::position(c.rdram, p) || !tooie::rdram::valid_ptr(yaw)) { error("there is no player yet"); return; }
+    double dx = x - p[0], dz = z - p[2];
+    if (std::hypot(dx, dz) < 1.0) { error("Banjo is standing on that point"); return; }
+    float deg = (float)std::fmod(std::atan2(dx, dz) * 180.0 / kPi + 360.0, 360.0);
+    // The yaw and the one he turns to both, or the game turns him back.
+    tooie::rdram::write_float(c.rdram, yaw, deg);
+    tooie::rdram::write_float(c.rdram, yaw + 4, deg);
+    print(format("facing %.0f degrees, towards %.2f %.2f", deg, x, z));
+}
+
+// Player states where the game has Banjo, not the player: none (0), door walk-ins and loading zones (0x98, also the
+// scripted walk Mumbo, Heggy, Master Jiggywiggy and King Jingaling call him over with), the locked states for
+// signposts, talking and cutscenes (src/gameplay/player_cheats.cpp's noclip_paused_state and src/gameplay/test_room.cpp),
+// and dead (0x41, src/gameplay/boss_rush.cpp).
+bool locked_state(uint32_t s) {
+    return s == 0 || s == 0x98 || s == 0x97 || s == 0x93 || s == 0x92 || s == 0x5D || s == 0x75 || s == 0x9A || s == 0x41;
+}
+
+constexpr uint32_t kPlayerStateBlock = 0x120; // PlayerState -> state block, whose +0x4 is the current state id
+constexpr uint32_t kGamePause = 0x80128AF0;   // the game's pause menu object while it is open (player_cheats.cpp)
+
+// wait control: a file is being played, no letterboxed scene is on (src/game/field_of_view.cpp, as Skip cutscenes
+// uses), no map change is under way, the pause menu is shut, and Banjo is in a state of the player's.
+bool in_control(uint8_t* rdram) {
+    if (!tooie::debug::can_warp() || tooie::in_letterboxed_scene() || tooie::debug::map_change_busy(rdram)) return false;
+    if (read_ram(rdram, kGamePause, 4) != 0) return false;
+    uint32_t player = read_ram(rdram, kPlayerTable, 4);
+    if (!tooie::rdram::valid_ptr(player)) return false;
+    uint32_t block = read_ram(rdram, player + kPlayerStateBlock, 4);
+    if (!tooie::rdram::valid_ptr(block)) return false;
+    return !locked_state(read_ram(rdram, block + 0x4, 4));
+}
+
+// look: the gameplay camera held at an angle, for screenshots. The dynamic camera's update (func_80110588) skips its
+// own work while its +0x72 is set and still hands its position (+0x74) and rotation (+0x80, pitch, yaw and roll in
+// degrees) on to the viewport camera, so look writes those with +0x72 set on every game update. The free camera
+// (src/gameplay/free_camera.cpp) leaves a camera held that way alone. Yaw 0 looks along -z and grows turning left, and
+// a positive pitch looks up (src/gameplay/photo_mode.cpp).
+constexpr uint32_t kCtlDynamic = 0x04;        // camera controller -> the dynamic camera (free_camera.cpp)
+constexpr uint32_t kCtlMode = 0x16;           // camera controller -> its mode, 2 the dynamic camera
+constexpr int16_t kModeDynamic = 2;
+constexpr uint32_t kDynFrozen = 0x72;
+constexpr uint32_t kDynPos = 0x74;
+constexpr uint32_t kDynRot = 0x80;
+
+struct Look {
+    bool on = false;
+    uint32_t dynamic = 0;
+    uint16_t map = 0;                         // a map change ends the look (the camera is made again)
+    uint32_t frozen_before = 0;               // +0x72 as the game had it, put back by look off
+    float pos[3] = { 0, 0, 0 };
+    float pitch = 0, yaw = 0;
+};
+Look g_look;
+
+// The gameplay camera of the viewport stepped last, 0 while another kind of camera is running (a scene, a fixed one).
+uint32_t gameplay_camera(uint8_t* rdram) {
+    uint32_t ctl = tooie::free_camera::last_controller();
+    if (!tooie::rdram::valid_ptr(ctl) || (int16_t)read_ram(rdram, ctl + kCtlMode, 2) != kModeDynamic) return 0;
+    uint32_t dynamic = read_ram(rdram, ctl + kCtlDynamic, 4);
+    return tooie::rdram::valid_ptr(dynamic) ? dynamic : 0;
+}
+
+float wrap_360(double deg) {
+    double d = std::fmod(deg, 360.0);
+    return (float)(d < 0 ? d + 360.0 : d);
+}
+
+// Once per game update. After a map change the old camera is gone, so nothing is written or put back.
+void look_tick(uint8_t* rdram) {
+    if (!g_look.on) return;
+    if (tooie::debug::current_map(rdram) != g_look.map || tooie::debug::map_change_busy(rdram)) {
+        g_look.on = false;
+        {
+            std::lock_guard lock{ g_mutex };
+            g_current = "look";
+        }
+        print("the camera is the game's again (the map changed)");
+        return;
+    }
+    write_ram(rdram, g_look.dynamic + kDynFrozen, 1, 1);
+    for (int k = 0; k < 3; k++) tooie::rdram::write_float(rdram, g_look.dynamic + kDynPos + 4 * k, g_look.pos[k]);
+    tooie::rdram::write_float(rdram, g_look.dynamic + kDynRot, g_look.pitch);
+    tooie::rdram::write_float(rdram, g_look.dynamic + kDynRot + 4, g_look.yaw);
+}
+
+// look <yaw> [pitch] | look at <x> <y> <z> | look off: turns the camera where it stands.
+void cmd_look(Ctx& c) {
+    const char* usage = "look <yaw deg> [pitch deg] | look at <x> <y> <z> | look off";
+    if (c.w.size() < 2) { error(usage); return; }
+    std::string v = lower(c.w[1]);
+    if (v == "off") {
+        if (!g_look.on) { print("the camera is the game's already"); return; }
+        write_ram(c.rdram, g_look.dynamic + kDynFrozen, g_look.frozen_before, 1);
+        g_look.on = false;
+        print("the camera is the game's again");
+        return;
+    }
+    uint32_t dynamic = g_look.on ? g_look.dynamic : gameplay_camera(c.rdram);
+    if (dynamic == 0 || !tooie::debug::can_warp()) { error("the gameplay camera is not running (a scene, a fixed camera, or no file loaded)"); return; }
+    float pos[3];
+    for (int k = 0; k < 3; k++) pos[k] = g_look.on ? g_look.pos[k] : tooie::rdram::read_float(c.rdram, dynamic + kDynPos + 4 * k);
+    double yaw, pitch = 0;
+    if (v == "at") {
+        double t[3];
+        if (c.w.size() < 5 || !parse_double(c.w[2], &t[0]) || !parse_double(c.w[3], &t[1]) || !parse_double(c.w[4], &t[2])) { error(usage); return; }
+        double dx = t[0] - pos[0], dy = t[1] - pos[1], dz = t[2] - pos[2];
+        double across = std::hypot(dx, dz);
+        if (across < 1.0 && std::fabs(dy) < 1.0) { error("the camera is on that point"); return; }
+        yaw = std::atan2(-dx, -dz) * 180.0 / kPi;
+        pitch = std::atan2(dy, across) * 180.0 / kPi;
+    } else if (!parse_double(c.w[1], &yaw) || (c.w.size() >= 3 && !parse_double(c.w[2], &pitch))) {
+        error(usage);
+        return;
+    }
+    pitch = std::clamp(pitch, -89.0, 89.0);
+    if (!g_look.on) {
+        g_look.dynamic = dynamic;
+        g_look.map = tooie::debug::current_map(c.rdram);
+        g_look.frozen_before = read_ram(c.rdram, dynamic + kDynFrozen, 1);
+        for (int k = 0; k < 3; k++) g_look.pos[k] = pos[k];
+    }
+    g_look.yaw = wrap_360(yaw);
+    g_look.pitch = wrap_360(pitch); // the game keeps its angles from 0 to 360 (src/input/motion_aim.cpp)
+    g_look.on = true;
+    look_tick(c.rdram);
+    print(format("camera at %.0f %.0f %.0f looking yaw %.1f, pitch %.1f (look off gives it back)", pos[0], pos[1], pos[2], wrap_360(yaw), pitch));
 }
 
 void cmd_peek(Ctx& c) {
@@ -1935,7 +2397,8 @@ void cmd_findptr(Ctx& c) {
     size_t total = 0;
     for (uint32_t a = kRamStart; a + 4 <= kFindEnd; a += 4) {
         uint32_t v = read_ram(c.rdram, a, 4);
-        if (v >= addr && v < addr + std::max<uint32_t>(range, 1)) {
+        // v - addr, not addr + range: a large range would wrap past 0xFFFFFFFF and match nothing.
+        if (v >= addr && v - addr < std::max<uint32_t>(range, 1)) {
             if (hits.size() < 32) hits.push_back(a);
             total++;
         }
@@ -2972,6 +3435,8 @@ const std::vector<Command>& commands() {
     static const std::vector<Command> list = {
         { "help", { "?" }, false, "help [command]", "list the commands, or one command's use", cmd_help },
         { "start", {}, false, "start", "press Play in the launcher", cmd_start },
+        { "load", {}, false, "load [file 1-3] [timeout s]", "from the launcher, title or file select into a save file with no hands (holds the queue until it is loaded; 60 s)", cmd_load },
+        { "goload", {}, false, "goload <file 1-3> <map hex> [exit hex]", "load a save file, warp to a map and wait for it, in one line", cmd_goload },
         { "quit", { "exit" }, false, "quit [code]", "exit the program; the exit code is 1 if any command failed, unless given", cmd_quit },
         { "warp", { "go" }, true, "warp <list> <n|name> | warp <name> | warp id <map hex> [exit hex]", "warp like the Warp tab (lists: place map), or to a map id", cmd_warp },
         { "list", { "ls" }, false, "list [list] [filter]", "the warp lists with their numbers", cmd_list },
@@ -2989,6 +3454,9 @@ const std::vector<Command>& commands() {
         { "flag", {}, true, "flag <hex id> [on|off]", "read or set one of the game's progress flags (the getter and setter the cheats use)", cmd_flag },
         { "pos", {}, true, "pos", "Banjo's position", cmd_pos },
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
+        { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
+        { "face", {}, true, "face <x> <z>", "turn Banjo to face a point", cmd_face },
+        { "look", {}, true, "look <yaw deg> [pitch deg] | look at <x> <y> <z> | look off", "hold the gameplay camera at an angle where it stands, for screenshots (a map change ends it)", cmd_look },
         { "transform", {}, true, "transform [form]", "the Cheats tab's Transformation row (turns the cheats on)", cmd_transform },
         { "repeat", {}, false, "repeat <n> <command>", "run a command n times", cmd_repeat },
         { "tee", {}, false, "tee <file> | tee off", "copy everything the console prints to a file", cmd_tee },
@@ -3021,9 +3489,10 @@ const std::vector<Command>& commands() {
         { "sysinfo", {}, false, "sysinfo", "platform, CPUs, RAM, video driver and window size (for bug reports)", cmd_sysinfo },
         { "dev", {}, false, "dev [on|off]", "make dev.txt next to the exe (shows every hidden tab after a restart); off removes it", cmd_dev },
         { "screenshot", { "shot" }, true, "screenshot", "save the next frame as a PNG, as F12 does", cmd_screenshot },
-        { "press", {}, true, "press <buttons> [stick <x> <y>] [frames]", "hold controller 1's buttons (a+b) and stick (-80..80), for n frames or until release", cmd_press },
+        { "burst", {}, true, "burst start | burst stop", "keep every frame from start to stop and save them, as F12 held does", cmd_burst },
+        { "press", {}, true, "press <buttons> [stick <x> <y>] [frames|n ms|n s]", "hold controller 1's buttons (a+b) and stick (-80..80), for n game updates, a time, or until release", cmd_press },
         { "release", {}, false, "release", "let go of what press holds", cmd_release },
-        { "wait", {}, false, "wait <frames|n ms|n s|save|map <hex>|until <addr> <value>>", "hold the next commands (frames are game updates; save, map and until wait for a state)", cmd_wait },
+        { "wait", {}, false, "wait <frames|n ms|n s|save|control|map <hex>|until <addr> <value>>", "hold the next commands (frames are game updates; save, control, map and until wait for a state)", cmd_wait },
         { "peek", {}, true, "peek <address> [bytes]", "read RAM (hex address)", cmd_peek },
         { "poke", {}, true, "poke <address> <value> [8|16|32]", "write RAM", cmd_poke },
         { "expect", {}, true, "expect <address> <value> [8|16|32]", "ERR when RAM does not hold the value", cmd_expect },
@@ -3486,6 +3955,7 @@ void tooie::console::frame(uint8_t* rdram, recomp_context* ctx) {
     }
     {
         std::lock_guard lock{ g_input_mutex };
+        end_timed_press();
         if (g_press_frames > 0 && --g_press_frames == 0) {
             g_press_buttons = 0;
             g_press_stick = false;
@@ -3498,7 +3968,9 @@ void tooie::console::frame(uint8_t* rdram, recomp_context* ctx) {
     perf_tick();
     break_tick(rdram);
     poll_keys();
+    drive_tick(rdram);
     pump(rdram, ctx);
+    look_tick(rdram);
     time_tick(rdram);
     timer_tick(rdram);
     trace_tick(rdram);
@@ -3555,6 +4027,7 @@ bool tooie::console::apply_input(int controller, uint16_t* buttons, float* x, fl
             got = true;
         }
     }
+    end_timed_press();
     if (g_press_frames != 0) {
         *buttons = (got ? *buttons : 0) | g_press_buttons;
         if (g_press_stick) {

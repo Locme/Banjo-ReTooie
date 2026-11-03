@@ -20,6 +20,10 @@ namespace tooie::menu_pause {
     // main thread; set by tick().
     bool open_allowed();
 
+    // True while the pause applies (game thread). The frozen delta time is only written at the end of
+    // tooie_warp_tick, so the ticks before it read the game's own delta time and ask this instead.
+    bool pausing();
+
     // Call each game frame from the game thread (tooie_warp_tick), after photo mode's: freezes the
     // frame's delta time and handles the pause music while the pause applies.
     void tick(uint8_t* rdram, recomp_context* ctx);

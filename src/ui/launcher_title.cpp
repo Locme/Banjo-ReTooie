@@ -95,6 +95,12 @@ namespace {
         // Sized by the window's height, so on very wide windows (32:9), where the art is cropped top and
         // bottom, the title doesn't grow with it, and kept below the window's top edge.
         float title_scale = title_art_width * (window_height / art_height) / title_box_width;
+        // Narrow or tall windows (4:3, 16:10, portrait): the art's place for it runs off the left edge, so it is
+        // kept inside the window's sides as it is below the top, and made smaller if it can't fit at all.
+        const float side_margin = 0.03f * window_width;
+        title_scale = std::min(title_scale, (window_width - 2.0f * side_margin) / title_box_width);
+        const float half_width = 0.5f * title_box_width * title_scale;
+        center_x = std::clamp(center_x, side_margin + half_width, window_width - side_margin - half_width);
         float min_center_y = 0.03f * window_height + title_box_middle * title_scale;
         float center_y = std::max(window_height * 0.5f + (title_art_y - art_height * 0.5f) * art_scale, min_center_y);
         for (TitleLetter& l : title_letters) {

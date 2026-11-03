@@ -14,6 +14,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -73,6 +75,12 @@ namespace {
         return recomp::get_config_path() / "screenshots";
     }
 
+    // A path as UTF-8 text. path::string() throws on Windows for a name outside the ANSI code page
+    // (バンジョー on a Western PC).
+    std::string utf8(const std::u8string& text) {
+        return std::string(text.begin(), text.end());
+    }
+
     std::vector<Photo> find_photos() {
         std::vector<Photo> photos;
         std::error_code ec;
@@ -82,7 +90,7 @@ namespace {
             }
             Photo p;
             p.path = entry.path();
-            p.name = entry.path().filename().string();
+            p.name = utf8(entry.path().filename().u8string());
             p.time = entry.last_write_time(ec);
             p.key = p.name + "/" + std::to_string(entry.file_size(ec)) + "/" +
                 std::to_string((long long)p.time.time_since_epoch().count());
@@ -108,8 +116,21 @@ namespace {
                 return true;
             }
         }
+        // Read through the path and decoded from memory: stbi_load takes a narrow name, which Windows reads in
+        // the ANSI code page.
+        std::vector<stbi_uc> file;
+        {
+            std::ifstream in(photo.path, std::ios::binary);
+            if (!in) {
+                return false;
+            }
+            file.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        }
+        if (file.empty()) {
+            return false;
+        }
         int w = 0, h = 0, channels = 0;
-        stbi_uc* pixels = stbi_load(photo.path.string().c_str(), &w, &h, &channels, 4);
+        stbi_uc* pixels = stbi_load_from_memory(file.data(), (int)file.size(), &w, &h, &channels, 4);
         if (pixels == nullptr || w <= 0 || h <= 0) {
             if (pixels != nullptr) {
                 stbi_image_free(pixels);
@@ -146,7 +167,7 @@ namespace {
 
     // "2026-10-16_21-33-00.png" reads as "2026-10-16 21:33:00".
     std::string caption(const Photo& p) {
-        std::string s = p.path.stem().string();
+        std::string s = utf8(p.path.stem().u8string());
         if (s.size() >= 19 && s[10] == '_') {
             s[10] = ' ';
             s[13] = ':';
@@ -208,7 +229,8 @@ namespace {
     void open_folder() {
         std::error_code ec;
         fs::create_directories(folder(), ec);
-        std::string url = "file://" + fs::absolute(folder(), ec).generic_string();
+        // SDL_OpenURL takes UTF-8.
+        std::string url = "file://" + utf8(fs::absolute(folder(), ec).generic_u8string());
 #ifdef _WIN32
         if (url.rfind("file://", 0) == 0 && url.size() > 7 && url[7] != '/') {
             url = "file:///" + url.substr(7);
@@ -222,7 +244,7 @@ namespace {
         namespace style = recompui::sidebar_style;
         const std::vector<Photo> photos = find_photos();
         if (log_on()) {
-            std::printf("[album] %zu photos in %s\n", photos.size(), folder().string().c_str());
+            std::printf("[album] %zu photos in %s\n", photos.size(), utf8(folder().u8string()).c_str());
             std::fflush(stdout);
         }
 

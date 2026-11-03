@@ -364,6 +364,18 @@ void tooie::boss_rush::tick(uint8_t* rdram, recomp_context* ctx) {
             }
             break;
         }
+        // Left some other way than the game's end of the replay (to the title, a Load State back into a
+        // file being played, a warp): the rush is over, or a later game select would chain the next fight.
+        // (The replay's own end, a change to the game select, is judged below, whatever the mode byte holds.)
+        const bool to_select = changing(rdram) && change_target(rdram) == game_select_map;
+        const bool replay_mode = MEM_BU(0, game_mode_addr) == 2;
+        const bool elsewhere = changing(rdram) ? (change_target(rdram) != boss.map && !to_select) : map != boss.map;
+        if (!to_select && (!replay_mode || elsewhere)) {
+            std::fprintf(stderr, "[boss-rush] %s's fight left (map 0x%X, mode %u)\n", boss.name, map,
+                MEM_BU(0, game_mode_addr));
+            finish("Boss rush stopped: left " + std::string(boss.name) + "'s fight");
+            break;
+        }
         // "Yes, play again" reloads the arena: a new try once it has loaded.
         if (changing(rdram) && change_target(rdram) == boss.map) {
             retrying = true;

@@ -94,9 +94,21 @@ namespace {
     // Frames between checks. A cheat only needs to take hold within a fraction of a second.
     constexpr int check_interval = 10;
 
-    std::array<bool, cheato_count> set_by_us{};
-    std::array<bool, swop_count> swop_set_by_us{};
+    // What the Cheato and Stop 'n' Swop cheats switched on, per save file (by slot + 1, as Bottles' Revenge
+    // keeps its intro tries; 0 is a debug warp with no file open), so a cheat switched off only undoes
+    // what it set in the file being played, and a code typed in another file's Code Chamber stays.
+    constexpr int file_count = 9;
+    std::array<std::array<bool, cheato_count>, file_count> set_by_us{};
+    std::array<std::array<bool, swop_count>, file_count> swop_set_by_us{};
+    constexpr gpr save_slot_addr = (int32_t)0x8012B3F1;   // the open save file, -1 for none
+    constexpr gpr game_mode_addr = (int32_t)0x8012B3F2;   // 2 in a replay, which swaps in flags of its own
     int frame_counter = 0;
+
+    // The flag the getter is currently asked about, saved at its entry for the hook at its return.
+    thread_local int32_t pending_flag = -1;
+    // Set while this file reads a flag as the save has it: the getter's hook then leaves the answer alone
+    // (Unlock all moves and the race warp's stand-ins would otherwise report flags that aren't set).
+    thread_local bool raw_read = false;
 
     // The game's flag getter and setter (func_800DA298 and func_800DA3B8), called on the game thread
     // with a copy of the hook's context so the caller's registers stay untouched.
@@ -106,6 +118,16 @@ namespace {
         func_800DA298(rdram, ctx);
         bool value = (int32_t)ctx->r2 != 0;
         *ctx = saved;
+        return value;
+    }
+
+    // The flag as the save file has it, without the getter hook's overrides. Used by the cheats that write
+    // flags, so with Unlock all moves on Learn Every Move still writes the moves it reports as learned.
+    bool flag_get_raw(uint8_t* rdram, recomp_context* ctx, int32_t flag) {
+        const bool was = raw_read;
+        raw_read = true;
+        const bool value = flag_get(rdram, ctx, flag);
+        raw_read = was;
         return value;
     }
 
@@ -150,9 +172,6 @@ namespace {
         return tooie::debug::can_warp() && level >= 0x0F && level < 0x1C && level != 0x11 &&
             MEM_B(0x12, (gpr)(int32_t)0x80127630) == 0;
     }
-
-    // The flag the getter is currently asked about, saved at its entry for the hook at its return.
-    thread_local int32_t pending_flag = -1;
 }
 
 void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
@@ -196,7 +215,7 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         // Only flags that were still clear count, so a save that already has everything isn't reloaded.
         int count = 0;
         auto unlock = [&](int32_t f) {
-            if (!flag_get(rdram, ctx, f)) {
+            if (!flag_get_raw(rdram, ctx, f)) {
                 flag_set(rdram, ctx, f, true);
                 count++;
             }
@@ -227,7 +246,7 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
     if (learn_on && !learn_was_on && in_level(rdram)) {
         int count = 0;
         for (int32_t f = first_move_flag; f <= last_move_flag; f++) {
-            if (!flag_get(rdram, ctx, f)) {
+            if (!flag_get_raw(rdram, ctx, f)) {
                 flag_set(rdram, ctx, f, true);
                 count++;
             }
@@ -248,7 +267,7 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         int count = 0;
         for (const auto& range : complete_ranges) {
             for (int32_t f = range[0]; f <= range[1]; f++) {
-                if (!flag_get(rdram, ctx, f)) {
+                if (!flag_get_raw(rdram, ctx, f)) {
                     flag_set(rdram, ctx, f, true);
                     count++;
                 }
@@ -285,7 +304,7 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
     if (beat_hag_on && !beat_hag_was_on && in_level(rdram) && file_complete) {
         int count = 0;
         for (int32_t f : beat_hag_flags) {
-            if (!flag_get(rdram, ctx, f)) {
+            if (!flag_get_raw(rdram, ctx, f)) {
                 flag_set(rdram, ctx, f, true);
                 count++;
             }
@@ -310,30 +329,37 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         dragon_was_on = dragon_on;
     }
 
-    for (size_t i = 0; i < cheato_count; i++) {
-        const bool want = tooie::cheats::is_on(cheato_list[i].option);
-        if (want) {
-            if (!flag_get(rdram, ctx, cheato_list[i].flag)) {
-                flag_set(rdram, ctx, cheato_list[i].flag, true);
-                set_by_us[i] = true;
+    // The Cheato and Stop 'n' Swop flags: only while a save file is being played (not the title, the game
+    // select or a replay's own flags), and undone only in the file they were set in.
+    const int file = (int8_t)MEM_B(0, save_slot_addr) + 1;
+    if (tooie::debug::can_warp() && MEM_BU(0, game_mode_addr) != 2 && file >= 0 && file < file_count) {
+        auto& ours = set_by_us[file];
+        for (size_t i = 0; i < cheato_count; i++) {
+            const bool want = tooie::cheats::is_on(cheato_list[i].option);
+            if (want) {
+                if (!flag_get_raw(rdram, ctx, cheato_list[i].flag)) {
+                    flag_set(rdram, ctx, cheato_list[i].flag, true);
+                    ours[i] = true;
+                }
+            } else if (ours[i]) {
+                // Only undo what this cheat switched on, so a code typed in the Code Chamber stays.
+                flag_set(rdram, ctx, cheato_list[i].flag, false);
+                ours[i] = false;
             }
-        } else if (set_by_us[i]) {
-            // Only undo what this cheat switched on, so a code typed in the Code Chamber stays.
-            flag_set(rdram, ctx, cheato_list[i].flag, false);
-            set_by_us[i] = false;
         }
-    }
 
-    const bool swop = tooie::cheats::is_on("cheat_stop_n_swop");
-    for (size_t i = 0; i < swop_count; i++) {
-        if (swop) {
-            if (!flag_get(rdram, ctx, swop_flags[i])) {
-                flag_set(rdram, ctx, swop_flags[i], true);
-                swop_set_by_us[i] = true;
+        auto& swop_ours = swop_set_by_us[file];
+        const bool swop = tooie::cheats::is_on("cheat_stop_n_swop");
+        for (size_t i = 0; i < swop_count; i++) {
+            if (swop) {
+                if (!flag_get_raw(rdram, ctx, swop_flags[i])) {
+                    flag_set(rdram, ctx, swop_flags[i], true);
+                    swop_ours[i] = true;
+                }
+            } else if (swop_ours[i]) {
+                flag_set(rdram, ctx, swop_flags[i], false);
+                swop_ours[i] = false;
             }
-        } else if (swop_set_by_us[i]) {
-            flag_set(rdram, ctx, swop_flags[i], false);
-            swop_set_by_us[i] = false;
         }
     }
 
@@ -361,6 +387,9 @@ extern "C" void tooie_flag_get_enter(uint8_t* rdram, recomp_context* ctx) {
 }
 
 extern "C" void tooie_flag_get_leave(uint8_t* rdram, recomp_context* ctx) {
+    if (raw_read) {
+        return;
+    }
     bool race_value = false;
     if (tooie::race_warp::override_flag(pending_flag, race_value)) {
         ctx->r2 = race_value ? 1 : 0;

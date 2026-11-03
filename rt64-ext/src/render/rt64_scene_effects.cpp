@@ -3,7 +3,6 @@
 //
 
 #include "rt64_scene_effects.h"
-#include "shared/rt64_grass_instances.h"
 #include "shared/rt64_gpu_tile.h"
 #include "shared/rt64_rdp_tile.h"
 #include "rt64_gpu_sections.h"
@@ -55,9 +54,83 @@ namespace RT64 {
         constexpr uint32_t SunFarRefresh = 12;
         constexpr double SunFarMoveCosine = 0.9999985;
 
-        // The pass's own textures and descriptor sets. Ones replaced after a resize are kept (not freed)
-        // since frames still in flight may use them; resizes are rare.
-        struct Resources {
+        // What a scene set was made with; a set is reused only for the same.
+        struct SceneSetKey {
+            const RenderTexture *depth = nullptr;
+            const RenderTexture *bloom = nullptr;
+            const RenderTexture *color = nullptr;
+            const RenderTexture *adapted = nullptr;
+            const RenderTexture *water = nullptr;
+            const RenderTexture *waterColor = nullptr;
+            const RenderTexture *ripples = nullptr;
+            const RenderTexture *sunMap = nullptr;
+            const RenderTexture *fireflies = nullptr;
+            const RenderTexture *half = nullptr;
+            const RenderTexture *indirect = nullptr;
+            const RenderAccelerationStructure *bvh = nullptr;
+            const RenderBuffer *dust = nullptr;
+            const RenderBuffer *lights = nullptr;
+
+            bool operator==(const SceneSetKey &other) const {
+                return (depth == other.depth) && (bloom == other.bloom) && (color == other.color) && (adapted == other.adapted) && (water == other.water) &&
+                    (waterColor == other.waterColor) && (ripples == other.ripples) && (sunMap == other.sunMap) && (fireflies == other.fireflies) &&
+                    (half == other.half) && (indirect == other.indirect) && (bvh == other.bvh) && (dust == other.dust) && (lights == other.lights);
+            }
+        };
+
+        // A small cache of descriptor sets by what they were made with, least recently used out first. A descriptor set is
+        // a descriptor pool and layout of its own in plume, so making one every pass (the game draws into two framebuffers
+        // in turn, and a one-entry cache was replaced each time) piled up hundreds of thousands of them for the driver and
+        // lost the device at high frame rates (Jiggywiggy's Temple, Unlocked, 2026-11-03).
+        template <typename Set, typename Key, size_t Capacity>
+        struct SetCache {
+            struct Entry {
+                Key key;
+                std::unique_ptr<Set> set;
+                uint64_t usedPass = 0;
+            };
+            std::vector<Entry> entries;
+
+            // The set for key (null when there is none yet).
+            Set *find(const Key &key, uint64_t pass) {
+                for (Entry &entry : entries) {
+                    if (entry.key == key) {
+                        entry.usedPass = pass;
+                        return entry.set.get();
+                    }
+                }
+                return nullptr;
+            }
+
+            // Keeps set for key; the least recently used one goes to retired when the cache is full.
+            template <typename Retire>
+            Set *add(const Key &key, std::unique_ptr<Set> &&set, uint64_t pass, Retire &&retire) {
+                if (entries.size() >= Capacity) {
+                    auto oldest = std::min_element(entries.begin(), entries.end(), [](const Entry &a, const Entry &b) { return a.usedPass < b.usedPass; });
+                    retire(std::move(oldest->set));
+                    entries.erase(oldest);
+                }
+                entries.push_back({ key, std::move(set), pass });
+                return entries.back().set.get();
+            }
+        };
+
+        // A texture as a cache key.
+        struct TextureKey {
+            const RenderTexture *texture = nullptr;
+            bool operator==(const TextureKey &other) const { return texture == other.texture; }
+        };
+
+        // The pass's textures and sets that follow the color target's size, sample count and format (and the depth target,
+        // which the water mask's framebuffers attach): one for each such target the worker draws the effects into, so two
+        // framebuffers drawn in turn don't replace each other's every pass.
+        struct TargetResources {
+            uint32_t width = 0;
+            uint32_t height = 0;
+            uint32_t samples = 0;
+            RenderFormat format = RenderFormat::UNKNOWN;
+            const RenderTexture *depth = nullptr;
+            uint64_t usedPass = 0;
             // Bloom: the bright parts at a quarter of the size [0] (blurred through [1]), again at an eighth [2]
             // (blurred through [3]) for a wider glow, and both together [4], which the pass reads.
             static constexpr int BloomTextures = 5;
@@ -70,19 +143,64 @@ namespace RT64 {
             std::unique_ptr<RenderTexture> copyTexture;
             uint32_t copyWidth = 0;
             uint32_t copyHeight = 0;
-            std::unique_ptr<SmaaDescriptorSet> sourceSet;
-            const RenderTexture *sourceSetTexture = nullptr;
-            std::unique_ptr<SceneEffectsDescriptorSet> sceneSet;
-            const RenderTexture *sceneSetDepth = nullptr;
-            const RenderTexture *sceneSetBloom = nullptr;
-            const RenderTexture *sceneSetColor = nullptr;
-            const RenderTexture *sceneSetAdapted = nullptr;
-            const RenderTexture *sceneSetWater = nullptr;
+            // The sets that read the scene so far (source) and measure its brightness, by the texture read: the resolve of
+            // whichever framebuffer of this size is drawn this pass.
+            SetCache<SmaaDescriptorSet, TextureKey, 4> sourceSets;
+            SetCache<SmaaDescriptorSet, TextureKey, 4> measureSets;
+            // The scene sets: a few colour targets of this size, each with every upload slot's buffers.
+            SetCache<SceneEffectsDescriptorSet, SceneSetKey, 16> sceneSets;
+            // The scene at half size (BloomPS pass 8), the bounce light's colour source: one read a sample there
+            // instead of four of the scene.
+            std::unique_ptr<RenderTexture> halfTexture;
+            std::unique_ptr<RenderFramebuffer> halfFramebuffer;
+            // The indirect pass's target (SceneEffectsPS.hlsl INDIRECT_PASS): GTAO's visibility and SSGI's light at
+            // half size, which the pass gathers (IndirectAt).
+            std::unique_ptr<RenderTexture> indirectTexture;
+            std::unique_ptr<RenderFramebuffer> indirectFramebuffer;
+            uint32_t indirectWidth = 0;
+            uint32_t indirectHeight = 0;
+            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
+            // framebuffer renderer into this target, at the scene's size and sample count.
+            std::unique_ptr<RenderTexture> waterTexture;
+            std::unique_ptr<RenderTextureView> waterTextureView;
+            std::unique_ptr<RenderFramebuffer> waterFramebuffer;
+            const RenderTexture *waterFramebufferDepth = nullptr;
+            uint32_t waterWidth = 0;
+            uint32_t waterHeight = 0;
+            uint32_t waterSamples = 0;
+            RenderFormat waterFormat = RenderFormat::UNKNOWN;
+            // Modern water: the same draws' own colours (rgb) and blending alpha (a), the same size.
+            std::unique_ptr<RenderTexture> waterColorTexture;
+            std::unique_ptr<RenderTextureView> waterColorTextureView;
+            std::unique_ptr<RenderFramebuffer> waterColorFramebuffer;
+        };
+
+        // The pass's own textures and descriptor sets. Ones replaced after a resize are kept (not freed)
+        // since frames still in flight may use them; resizes are rare.
+        struct Resources {
+            static constexpr int BloomTextures = TargetResources::BloomTextures;
+            // The colour targets' resources (TargetResources), at most MaxTargets, least recently used out first; target is
+            // the one this pass draws into (targetFor).
+            static constexpr size_t MaxTargets = 4;
+            std::vector<std::unique_ptr<TargetResources>> targets;
+            TargetResources *target = nullptr;
+            // The buffers the CPU writes for a pass (the lights, the volumetric settings, the traced scene's geometry table)
+            // come in a ring of UploadSlots, one slot a pass in turn: one command list can record the pass more than once
+            // (two framebuffers with the game's depth in one workload), and rewriting one buffer in place had the first
+            // pass read the second's data when the list ran. Each worker waits for its list before recording the next.
+            static constexpr uint32_t UploadSlots = 4;
+            uint32_t uploadSlot = 0;
+            uint64_t uploadSlotPass = UINT64_MAX;
+
+            // The next upload slot, for the pass about to be recorded (BuildSceneBVH, or RecordSceneEffects when there was none).
+            void nextUploadSlot() {
+                uploadSlot = (uploadSlot + 1) % UploadSlots;
+                uploadSlotPass = passes;
+            }
             // The sun shadow map: the 3D world's solid triangles as seen from the sun, depth only.
             std::unique_ptr<RenderTexture> sunMapTexture;
             std::unique_ptr<RenderTextureView> sunMapTextureView;
             std::unique_ptr<RenderFramebuffer> sunMapFramebuffer;
-            const RenderTexture *sceneSetSunMap = nullptr;
             uint32_t sunMapSize = 0;
             // The far map is drawn again only now and then (SunFarRefresh): where its middle was (SUN_SHADOW_MAP_FAR_CELL),
             // the sun's world direction it was drawn with, and how many maps have been drawn since.
@@ -94,19 +212,6 @@ namespace RT64 {
             // once (FireflyTablePS) rather than in every pixel.
             std::unique_ptr<RenderTexture> fireflyTexture;
             std::unique_ptr<RenderFramebuffer> fireflyFramebuffer;
-            const RenderTexture *sceneSetFireflies = nullptr;
-            // The scene at half size (BloomPS pass 8), the bounce light's colour source: one read a sample there
-            // instead of four of the scene.
-            std::unique_ptr<RenderTexture> halfTexture;
-            std::unique_ptr<RenderFramebuffer> halfFramebuffer;
-            const RenderTexture *sceneSetHalf = nullptr;
-            // The indirect pass's target (SceneEffectsPS.hlsl INDIRECT_PASS): GTAO's visibility and SSGI's light at
-            // half size, which the pass gathers (IndirectAt).
-            std::unique_ptr<RenderTexture> indirectTexture;
-            std::unique_ptr<RenderFramebuffer> indirectFramebuffer;
-            uint32_t indirectWidth = 0;
-            uint32_t indirectHeight = 0;
-            const RenderTexture *sceneSetIndirect = nullptr;
             // Traced reflections (ray queries, Graphics > Ray tracing): the world's solid triangles as one bottom level
             // structure (a geometry for each run of the index buffer) under a top level one, rebuilt each frame by
             // BuildSceneBVH; bvhReady says this frame's is built. The buffers only grow.
@@ -119,15 +224,8 @@ namespace RT64 {
             uint64_t bvhBlasSize = 0;
             uint64_t bvhTlasSize = 0;
             uint64_t bvhScratchSize = 0;
-            // The 3D grass's blades near the camera: their own bottom level structure (rebuilt when the grass's culling
-            // pass writes them again), a second instance in the top level one (instance 1, mask 2; the world is mask 1).
-            std::unique_ptr<RenderBuffer> grassBlasBuffer;
-            std::unique_ptr<RenderAccelerationStructure> grassBlas;
-            uint64_t grassBlasSize = 0;
-            uint64_t grassBuiltGeneration = UINT64_MAX;
-            const RenderBuffer *grassBuiltVertices = nullptr;
             uint32_t bvhInstanceCount = 0;
-            const RenderBuffer *bvhInstanceBuffers[3] = {};
+            const RenderBuffer *bvhInstanceBuffers[2] = {};
             // The level's own draws (bvhBlas holds the models'): kept while their fingerprint (levelKey) is the same.
             std::unique_ptr<RenderBuffer> levelBlasBuffer;
             std::unique_ptr<RenderAccelerationStructure> levelBlas;
@@ -138,48 +236,38 @@ namespace RT64 {
             // A structure has been built at least once: a pass with no casters of its own reuses it (it holds the world
             // in world space, so it stays right as the camera moves).
             bool bvhBuiltOnce = false;
-            // The level's lights for the traced shadows: the count, then each one's x, y, z, range (16 bytes each).
-            std::unique_ptr<RenderBuffer> lightsBuffer;
+            // The level's lights for the traced shadows: the count, then each one's x, y, z, range (16 bytes each). One an
+            // upload slot.
+            std::unique_ptr<RenderBuffer> lightsBuffer[UploadSlots];
             // The volumetric settings buffer (SceneEffectsPS.hlsl gDust): the extras in its first 16 bytes, the last
-            // float the upscaler's noise turn (NoiseFrameOffset).
-            std::unique_ptr<RenderBuffer> dustBuffer;
+            // float the upscaler's noise turn (NoiseFrameOffset). One an upload slot.
+            std::unique_ptr<RenderBuffer> dustBuffer[UploadSlots];
             // The world radiance cache: a hash table of 16-unit cells (check word, colour), 1 M entries.
             std::unique_ptr<RenderBuffer> radianceBuffer;
             // The traced scene's geometries (first index, tile, flags, 0: 16 bytes each, in the structure's order) and the
             // set the rays read the textures of what they meet through (SceneRayTexturesDescriptorSet), with the frame's
             // buffers it holds; a set of empty stand-ins until there are some. rayTexturesValid: the structure was built
             // this pass, so its geometries match this frame's buffers (a reused one's don't: its textures aren't read).
-            std::unique_ptr<RenderBuffer> rayGeometryBuffer;
+            // The geometry table has one buffer an upload slot, written only by a pass that builds the structure; a pass that
+            // reuses the last structure reads the table of the slot it was built with (rayGeometrySlot).
+            std::unique_ptr<RenderBuffer> rayGeometryBuffer[UploadSlots];
+            uint32_t rayGeometrySlot = 0;
             std::unique_ptr<RenderBuffer> rayDummyBuffer;
             // A few of the sets are kept, one for each group of buffers a workload hands over, so switching between workloads
             // doesn't make a new descriptor pool and layout every pass (thousands a minute; the NVIDIA driver crashed in
             // the update of one after ten minutes, 2026-10-21). rayTexturesSet is the one for this pass.
+            // buffers: the frame's four, then the geometry table's.
             struct RayTexturesEntry {
                 std::unique_ptr<SceneRayTexturesDescriptorSet> set;
-                const RenderBuffer *buffers[4] = {};
+                const RenderBuffer *buffers[5] = {};
                 uint64_t usedPass = 0;
             };
             std::vector<RayTexturesEntry> rayTexturesCache;
             SceneRayTexturesDescriptorSet *rayTexturesSet = nullptr;
             RenderDescriptorSet *rayTextureCacheSet = nullptr;
             bool rayTexturesValid = false;
-            const RenderAccelerationStructure *sceneSetBvh = nullptr;
-            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
-            // framebuffer renderer into this target, at the scene's size and sample count.
-            std::unique_ptr<RenderTexture> waterTexture;
-            std::unique_ptr<RenderTextureView> waterTextureView;
-            std::unique_ptr<RenderFramebuffer> waterFramebuffer;
-            const RenderTexture *waterFramebufferDepth = nullptr;
-            uint32_t waterWidth = 0;
-            uint32_t waterHeight = 0;
-            uint32_t waterSamples = 0;
-            RenderFormat waterFormat = RenderFormat::UNKNOWN;
+            // The water mask (TargetResources' water textures) was drawn for this pass, and Modern water's colours with it.
             bool waterDrawn = false;
-            // Modern water: the same draws' own colours (rgb) and blending alpha (a), the same size.
-            std::unique_ptr<RenderTexture> waterColorTexture;
-            std::unique_ptr<RenderTextureView> waterColorTextureView;
-            std::unique_ptr<RenderFramebuffer> waterColorFramebuffer;
-            const RenderTexture *sceneSetWaterColor = nullptr;
             bool waterColorDrawn = false;
             // Banjo-Tooie: the flat water went into the mask tessellated this frame (WaterTess.hlsl).
             bool waterTessDrawn = false;
@@ -188,7 +276,6 @@ namespace RT64 {
             std::unique_ptr<RenderTexture> rippleTexture[2];
             std::unique_ptr<RenderFramebuffer> rippleFramebuffer[2];
             std::unique_ptr<SmaaDescriptorSet> rippleSet[2];
-            const RenderTexture *sceneSetRipples = nullptr;
             int32_t rippleCornerX = 0;
             int32_t rippleCornerZ = 0;
             bool rippleCornerKnown = false;
@@ -202,8 +289,6 @@ namespace RT64 {
             // beside it) and a copy of last frame's [2].
             std::unique_ptr<RenderTexture> luminanceTexture[3];
             std::unique_ptr<RenderFramebuffer> luminanceFramebuffer[3];
-            std::unique_ptr<SmaaDescriptorSet> measureSet;
-            const RenderTexture *measureSetTexture = nullptr;
             std::unique_ptr<SmaaDescriptorSet> adaptSet;
             std::chrono::steady_clock::time_point lastAdapt;
             // Replaced textures, framebuffers, views and descriptor sets, kept until the GPU can no longer be using
@@ -242,25 +327,62 @@ namespace RT64 {
                     retiredSinceLog = 0;
                     retiredLogTime = now;
                 }
+                // Past RetireAfterQueue waiting, the time is no longer waited for: the worker waits for each command list it
+                // runs before recording the next, so RetireAfterPasses passes are already enough, and at hundreds of frames
+                // a second half a second's worth of replaced objects was a queue hundreds long.
                 while (!retiredObjects.empty() && ((retiredObjects.front().pass + RetireAfterPasses) <= passes) &&
-                    ((now - retiredObjects.front().time) >= RetireAfterTime))
+                    (((now - retiredObjects.front().time) >= RetireAfterTime) || (retiredObjects.size() > RetireAfterQueue)))
                 {
                     retiredObjects.pop_front();
                 }
             }
 
-            void retire() {
-                if (bloomCombineSet != nullptr) {
-                    retireLater(std::move(bloomCombineSet));
+            static constexpr size_t RetireAfterQueue = 64;
+
+            void retireBloom(TargetResources &tr) {
+                if (tr.bloomCombineSet != nullptr) {
+                    retireLater(std::move(tr.bloomCombineSet));
                 }
                 for (int i = 0; i < BloomTextures; i++) {
-                    if (bloomTexture[i] != nullptr) {
+                    if (tr.bloomTexture[i] != nullptr) {
                         // Users first: the set and framebuffer go before the texture they point at.
-                        retireLater(std::move(bloomSet[i]));
-                        retireLater(std::move(bloomFramebuffer[i]));
-                        retireLater(std::move(bloomTexture[i]));
+                        retireLater(std::move(tr.bloomSet[i]));
+                        retireLater(std::move(tr.bloomFramebuffer[i]));
+                        retireLater(std::move(tr.bloomTexture[i]));
                     }
                 }
+            }
+
+            // The resources for a colour target (with this depth target), made when there are none yet; the least recently
+            // used go (to the retired queue, all at once) past MaxTargets. Also makes them this pass's (target).
+            TargetResources &targetFor(const RenderTarget *colorTarget, const RenderTarget *depthTarget) {
+                const uint32_t samples = colorTarget->multisampling.sampleCount;
+                const RenderTexture *depth = (depthTarget != nullptr) ? depthTarget->texture.get() : nullptr;
+                for (const std::unique_ptr<TargetResources> &entry : targets) {
+                    if ((entry->width == colorTarget->width) && (entry->height == colorTarget->height) && (entry->samples == samples) &&
+                        (entry->format == colorTarget->format) && (entry->depth == depth))
+                    {
+                        entry->usedPass = passes;
+                        target = entry.get();
+                        return *entry;
+                    }
+                }
+                if (targets.size() >= MaxTargets) {
+                    auto oldest = std::min_element(targets.begin(), targets.end(),
+                        [](const std::unique_ptr<TargetResources> &a, const std::unique_ptr<TargetResources> &b) { return a->usedPass < b->usedPass; });
+                    retireLater(std::move(*oldest));
+                    targets.erase(oldest);
+                }
+                std::unique_ptr<TargetResources> entry = std::make_unique<TargetResources>();
+                entry->width = colorTarget->width;
+                entry->height = colorTarget->height;
+                entry->samples = samples;
+                entry->format = colorTarget->format;
+                entry->depth = depth;
+                entry->usedPass = passes;
+                target = entry.get();
+                targets.push_back(std::move(entry));
+                return *target;
             }
         };
 
@@ -280,38 +402,38 @@ namespace RT64 {
 
         // The water mask target, matching the scene's color target (so the game's own pipelines can draw
         // into it) with the scene's depth target attached.
-        void ensureWaterTarget(RenderWorker *worker, Resources &res, RenderTarget *colorTarget, RenderTarget *depthTarget) {
+        void ensureWaterTarget(RenderWorker *worker, Resources &res, TargetResources &tr, RenderTarget *colorTarget, RenderTarget *depthTarget) {
             const uint32_t samples = colorTarget->multisampling.sampleCount;
-            if ((res.waterTexture != nullptr) && (res.waterWidth == colorTarget->width) && (res.waterHeight == colorTarget->height) &&
-                (res.waterSamples == samples) && (res.waterFormat == colorTarget->format) && (res.waterFramebufferDepth == depthTarget->texture.get()))
+            if ((tr.waterTexture != nullptr) && (tr.waterWidth == colorTarget->width) && (tr.waterHeight == colorTarget->height) &&
+                (tr.waterSamples == samples) && (tr.waterFormat == colorTarget->format) && (tr.waterFramebufferDepth == depthTarget->texture.get()))
             {
                 return;
             }
-            if (res.waterTexture != nullptr) {
-                res.retireLater(std::move(res.waterFramebuffer));
-                res.retireLater(std::move(res.waterTextureView));
-                res.retireLater(std::move(res.waterTexture));
-                res.retireLater(std::move(res.waterColorFramebuffer));
-                res.retireLater(std::move(res.waterColorTextureView));
-                res.retireLater(std::move(res.waterColorTexture));
+            if (tr.waterTexture != nullptr) {
+                res.retireLater(std::move(tr.waterFramebuffer));
+                res.retireLater(std::move(tr.waterTextureView));
+                res.retireLater(std::move(tr.waterTexture));
+                res.retireLater(std::move(tr.waterColorFramebuffer));
+                res.retireLater(std::move(tr.waterColorTextureView));
+                res.retireLater(std::move(tr.waterColorTexture));
             }
             RenderClearValue clearValue = RenderClearValue::Color(RenderColor(0.0f, 0.0f, 0.0f, 0.0f), colorTarget->format);
-            res.waterTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format, colorTarget->multisampling, &clearValue));
-            res.waterTexture->setName("Scene Effects Water Mask");
-            res.waterTextureView = res.waterTexture->createTextureView(RenderTextureViewDesc::Texture2D(colorTarget->format));
-            const RenderTexture *attachment = res.waterTexture.get();
-            res.waterFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&attachment, 1, depthTarget->texture.get()));
-            res.waterColorTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format, colorTarget->multisampling, &clearValue));
-            res.waterColorTexture->setName("Scene Effects Water Colours");
-            res.waterColorTextureView = res.waterColorTexture->createTextureView(RenderTextureViewDesc::Texture2D(colorTarget->format));
-            const RenderTexture *colorAttachment = res.waterColorTexture.get();
-            res.waterColorFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&colorAttachment, 1, depthTarget->texture.get()));
+            tr.waterTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format, colorTarget->multisampling, &clearValue));
+            tr.waterTexture->setName("Scene Effects Water Mask");
+            tr.waterTextureView = tr.waterTexture->createTextureView(RenderTextureViewDesc::Texture2D(colorTarget->format));
+            const RenderTexture *attachment = tr.waterTexture.get();
+            tr.waterFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&attachment, 1, depthTarget->texture.get()));
+            tr.waterColorTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format, colorTarget->multisampling, &clearValue));
+            tr.waterColorTexture->setName("Scene Effects Water Colours");
+            tr.waterColorTextureView = tr.waterColorTexture->createTextureView(RenderTextureViewDesc::Texture2D(colorTarget->format));
+            const RenderTexture *colorAttachment = tr.waterColorTexture.get();
+            tr.waterColorFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&colorAttachment, 1, depthTarget->texture.get()));
             res.waterColorDrawn = false;
-            res.waterWidth = colorTarget->width;
-            res.waterHeight = colorTarget->height;
-            res.waterSamples = samples;
-            res.waterFormat = colorTarget->format;
-            res.waterFramebufferDepth = depthTarget->texture.get();
+            tr.waterWidth = colorTarget->width;
+            tr.waterHeight = colorTarget->height;
+            tr.waterSamples = samples;
+            tr.waterFormat = colorTarget->format;
+            tr.waterFramebufferDepth = depthTarget->texture.get();
             res.waterDrawn = false;
         }
     }
@@ -820,32 +942,6 @@ namespace RT64 {
         }
     }
 
-    // The night light textures: read on the render thread while it builds a frame's draws, so they are kept apart
-    // from the effects settings and swapped in whole.
-    static std::mutex grassTextureMutex;
-    static std::unordered_set<uint64_t> grassTextures;
-    static std::unordered_set<uint64_t> grassEdgeTextures;
-
-    void SetSceneGrassTextures(const uint64_t *hashes, size_t count) {
-        std::unordered_set<uint64_t> textures(hashes, hashes + count);
-        const std::scoped_lock lock(grassTextureMutex);
-        grassTextures.swap(textures);
-    }
-
-    void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count) {
-        std::unordered_set<uint64_t> textures(hashes, hashes + count);
-        const std::scoped_lock lock(grassTextureMutex);
-        grassEdgeTextures.swap(textures);
-    }
-
-    uint32_t SceneGrassTexture(uint64_t hash) {
-        const std::scoped_lock lock(grassTextureMutex);
-        if (grassTextures.empty() || (grassTextures.count(hash) != 0)) {
-            return 1;
-        }
-        return (grassEdgeTextures.count(hash) != 0) ? 2 : 0;
-    }
-
     // Shiny textures (metal, tiles) for screen-space reflections: read on the render thread like the ice ones,
     // and only looked up while the reflections are on.
     static std::mutex shinyTextureMutex;
@@ -866,7 +962,7 @@ namespace RT64 {
         return shinyWanted.load();
     }
 
-    // Ice textures: read on the render thread like the grass ones.
+    // Ice textures: read on the render thread, like the night light ones.
     static std::mutex iceTextureMutex;
     static std::unordered_set<uint64_t> iceTextures;
 
@@ -1223,15 +1319,6 @@ namespace RT64 {
         effectsSettings.dayShafts = enabled ? std::clamp(shafts, 0.0f, 1.0f) : 1.0f;
     }
 
-    void SetSceneGrass(float amount, float height, float distance, float density, float patches) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.grass = amount;
-        effectsSettings.grassHeight = height;
-        effectsSettings.grassDistance = distance;
-        effectsSettings.grassDensity = std::clamp(density, 0.1f, 2.0f);
-        effectsSettings.grassPatches = std::clamp(patches, 0.0f, 1.0f);
-    }
-
     void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand) {
         const std::scoped_lock lock(effectsMutex);
         effectsSettings.snowRefillAfter = std::max(refillAfter, 0.0f);
@@ -1246,59 +1333,6 @@ namespace RT64 {
         effectsSettings.snowSand = sand;
         effectsSettings.snow = on && (height > 0.0f);
         effectsSettings.snowHeight = std::clamp(height, 0.0f, 3.0f);
-    }
-
-    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.grassThickness = std::clamp(thickness, 0.25f, 4.0f);
-        effectsSettings.grassRandomLength = std::clamp(randomLength, 0.0f, 1.0f);
-        effectsSettings.grassChunky = chunky;
-        effectsSettings.grassChunkSize = std::clamp(chunkSize, 1.0f, 4.0f);
-        effectsSettings.grassPixelated = pixelated;
-        effectsSettings.grassPixelSize = std::clamp(pixelSize, 0.25f, 8.0f);
-        effectsSettings.grassBlend = std::clamp(blend, 0.0f, 1.0f);
-    }
-
-    void SetSceneGrassCulling(bool frustum, bool occlusion, bool chunking) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.grassCulling = (frustum ? GRASS_CULL_FRUSTUM : 0u) | (occlusion ? GRASS_CULL_OCCLUSION : 0u) | (chunking ? GRASS_CULL_CHUNKS : 0u);
-    }
-
-    uint32_t SceneGrassCulling() {
-        const std::scoped_lock lock(effectsMutex);
-        // Test aid: TOOIE_GRASS_CULL=<0-7> sets the flags instead (1 frustum, 2 occlusion, 4 chunking).
-        static const char *forced = getenv("TOOIE_GRASS_CULL");
-        return (forced != nullptr) ? (uint32_t(atoi(forced)) & 0x7u) : effectsSettings.grassCulling;
-    }
-
-    void SetSceneGrassLod(float lod, bool halfRate) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.grassLod = std::clamp(lod, 0.0f, 1.0f);
-        effectsSettings.grassHalfRate = halfRate;
-    }
-
-    bool SceneGrassHalfRate() {
-        const std::scoped_lock lock(effectsMutex);
-        // Test aid: TOOIE_GRASS_HALF=0 or 1 instead of the setting.
-        static const char *forced = getenv("TOOIE_GRASS_HALF");
-        return (forced != nullptr) ? (forced[0] == '1') : effectsSettings.grassHalfRate;
-    }
-
-    void SetSceneGrassRayTracing(bool enabled) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.grassRayTracing = enabled;
-    }
-
-    float SceneGrassRayReach() {
-        if (!RayTracingActive()) {
-            return 0.0f;
-        }
-        const std::scoped_lock lock(effectsMutex);
-        // Test aid: TOOIE_GRASS_RT=0 or 1 instead of the setting.
-        static const char *forced = getenv("TOOIE_GRASS_RT");
-        const bool wanted = (forced != nullptr) ? (forced[0] == '1') : effectsSettings.grassRayTracing;
-        // Out to 1500 units: further off a blade's shadow is too small to see, and the blades too many.
-        return wanted ? std::min(effectsSettings.grassDistance, 1500.0f) : 0.0f;
     }
 
     void SetSceneFur(float amount, float length, float density, float noisiness) {
@@ -1519,28 +1553,6 @@ namespace RT64 {
         return true;
     }
 
-    // Enough shells that the knee-high blades look solid from the side.
-    static constexpr uint32_t GrassShells = 24;
-
-    // Real blades (GrassGS.hlsl): the finest grid's cell size at density 1, and how many blades a pass can grow on a triangle.
-    static constexpr float GrassBladeCell = 3.0f;
-    static constexpr uint32_t GrassBladeInvocations = 32;
-    static constexpr uint32_t GrassBladesPerInvocation = 11;
-    static constexpr uint32_t GrassBladeMaxPasses = 31;
-
-    uint32_t SceneGrassBladePasses(const float (&low)[2], const float (&high)[2], float distanceToCamera, float lodNear, float baseCell) {
-        // As GrassCellSize in GrassGS.hlsl: the passes the triangle's grid needs at its distance, at most GrassBladeMaxPasses.
-        const float cell = baseCell * std::exp2(std::max(std::floor(std::log2(std::max(distanceToCamera, 1.0f) / lodNear)), 0.0f));
-        const float cells = (std::floor((high[0] - low[0]) / cell) + 2.0f) * (std::floor((high[1] - low[1]) / cell) + 2.0f);
-        const float perPass = float(GrassBladeInvocations * GrassBladesPerInvocation);
-        return std::clamp(uint32_t(std::ceil(cells / perPass)), 1u, GrassBladeMaxPasses);
-    }
-
-    uint32_t SceneGrassShells() {
-        const std::scoped_lock lock(effectsMutex);
-        return (effectsSettings.grass > 0.0f) ? GrassShells : 0;
-    }
-
     // Gauss-Jordan elimination with partial pivoting; false when the matrix can't be inverted.
     static bool InvertMatrix4(const double (&m)[4][4], double (&out)[4][4]) {
         double a[4][8];
@@ -1592,7 +1604,7 @@ namespace RT64 {
     {
         SceneEffectsSettings settings = GetSceneEffects();
         // (Deep snow, Kazooie's and NPCs' feathers and parallax mapping need the camera's terms worked out here too.)
-        if (((settings.grass <= 0.0f) && !settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f) && (settings.groundDisplacement <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
+        if ((!settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f) && (settings.groundDisplacement <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
             return false;
         }
         UsePlayerFrame(settings, workloadId);
@@ -1604,23 +1616,9 @@ namespace RT64 {
             return false;
         }
 
-        // The full blade height straight up in world space, in the game's clip space, then as RasterVS has its
-        // positions: the RSP's screen position (ndc * viewport scale + translate) back over the resolution, times w.
-        const float height = 36.0f * settings.grassHeight;
-        float clip[4];
-        for (int c = 0; c < 4; c++) {
-            clip[c] = height * (rowVector ? viewProj.m[1][c] : viewProj.m[c][1]);
-        }
         const float halfWidth = resolution.x / 2.0f;
         const float halfHeight = resolution.y / 2.0f;
-        frameParams.grassClipUp = {
-            clip[0] * (viewportScale.x / halfWidth) + clip[3] * ((viewportTranslate.x - halfWidth) / halfWidth),
-            clip[1] * (viewportScale.y / halfHeight) - clip[3] * ((viewportTranslate.y - halfHeight) / halfHeight),
-            clip[2] * viewportScale.z + clip[3] * viewportTranslate.z,
-            clip[3]
-        };
-
-        // Real blades (GrassGS.hlsl): the whole map from world space to those positions, and back.
+        // Kazooie's feathers (FeatherGS.hlsl): the whole map from world space to RasterVS's positions, and back.
         double toClip[4][4];
         for (int j = 0; j < 4; j++) {
             float c[4];
@@ -1641,7 +1639,6 @@ namespace RT64 {
             frameParams.grassClipToWorld[r] = { float(inverse[r][0]), float(inverse[r][1]), float(inverse[r][2]), float(inverse[r][3]) };
         }
 
-        frameParams.grassDepthTerms = DepthTermsForViewport(rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] }, viewportScale.z, viewportTranslate.z);
         frameParams.grassProjection = { m[0][0], m[1][1], viewportWidth, viewportHeight };
 
         // View space back to world space, as RecordSceneEffects does it.
@@ -1668,21 +1665,6 @@ namespace RT64 {
         frameParams.grassWorldY = { y0, y1, y2, -(v[3][0] * y0 + v[3][1] * y1 + v[3][2] * y2) };
         frameParams.grassWorldZ = { z0, z1, z2, -(v[3][0] * z0 + v[3][1] * z1 + v[3][2] * z2) };
 
-        // A tuft of five blades every 6 units (Banjo is about 150 tall); fewer cells hold one at lower amounts.
-        frameParams.grassParams = { height, std::sqrt(settings.grassDensity) / 6.0f, std::max(settings.grassDistance, 100.0f), 0.35f + 0.65f * std::min(settings.grass, 1.0f) };
-        frameParams.grassPlayer = { settings.player[0], settings.player[2], settings.player[1], 45.0f };
-
-        // A breeze from one side; Grass.hlsli rolls waves across the field along it.
-        static const auto startTime = std::chrono::steady_clock::now();
-        const float now = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
-        frameParams.grassWind = { 0.85f, 0.5f, std::fmod(now, 3600.0f), 1.0f };
-        // Real blades: the grid coarsens from the LOD distance (none with LOD off: every blade out to the grass
-        // distance; from 150 units away at full LOD, between them evenly in doublings), wind noise 260 units across
-        // drifting 0.12 of that a second, and the finest grid's cells 3 units wide at density 1 (twice the density,
-        // twice the blades).
-        const float grassReach = std::max(settings.grassDistance, 100.0f);
-        const float grassLodNear = (settings.grassLod <= 0.0f) ? 1.0e6f : grassReach * std::pow(std::min(150.0f / grassReach, 1.0f), settings.grassLod);
-        frameParams.grassBlades = { grassLodNear, 260.0f, 0.12f, (settings.grassChunky ? settings.grassChunkSize : 1.0f) * GrassBladeCell / std::sqrt(settings.grassDensity) };
         // Kazooie's feathers: about 5.5 units long and 2.4 wide at size 1 (her head is about 25 units across), packed
         // so each spot of her is under about two of them.
         const float featherLength = 5.5f * settings.featherSize * settings.featherLength;
@@ -1695,58 +1677,6 @@ namespace RT64 {
         frameParams.npcFeatherParams = { npcFeatherLength, npcFeatherWidth,
             (0.8f + 1.6f * settings.npcFeathers) * settings.npcFeatherDensity / (npcFeatherLength * npcFeatherWidth * 0.55f), 0.35f };
         frameParams.npcFeatherStyle = { settings.npcFeatherNoisiness, settings.npcFeatherTransparency, 0.0f, 0.0f };
-        // Patches of grass about 220 units across (Banjo is about 150 tall), from a few to all the green ground.
-        frameParams.grassPatches = { settings.grassPatches, 220.0f, settings.grassThickness, settings.grassRandomLength };
-        frameParams.grassStyle = { settings.grassChunky ? 1.0f : 0.0f, settings.grassPixelated ? 1.0f : 0.0f, settings.grassChunkSize, settings.grassPixelSize };
-        frameParams.grassLook = { settings.grassBlend, 0.0f, 0.0f, 0.0f };
-
-        // Banjo's trail: a point every tenth of a second he moves, each springing back up over about a second.
-        struct TrailPoint { float x, y, z, time; };
-        static TrailPoint trail[12] = {};
-        static uint32_t trailNext = 0;
-        static float trailLast = -1.0f;
-        const bool havePlayer = settings.player[1] > -1e8f;
-        if (havePlayer && (now - trailLast >= 0.1f)) {
-            const TrailPoint &last = trail[(trailNext + 11) % 12];
-            const float dx = settings.player[0] - last.x, dy = settings.player[1] - last.y, dz = settings.player[2] - last.z;
-            const float moved = std::sqrt(dx * dx + dy * dy + dz * dz);
-            if (moved > 400.0f) {
-                // A warp or a new map: the old trail is somewhere else.
-                for (TrailPoint &point : trail) {
-                    point.time = 0.0f;
-                }
-            }
-            if ((last.time == 0.0f) || (moved > 3.0f)) {
-                trail[trailNext] = { settings.player[0], settings.player[1], settings.player[2], std::max(now, 1e-3f) };
-                trailNext = (trailNext + 1) % 12;
-            }
-            trailLast = now;
-        }
-        float low[2] = { 1e30f, 1e30f }, high[2] = { -1e30f, -1e30f };
-        if (havePlayer) {
-            low[0] = high[0] = settings.player[0];
-            low[1] = high[1] = settings.player[2];
-        }
-        for (uint32_t i = 0; i < 12; i++) {
-            const TrailPoint &point = trail[i];
-            const float age = now - point.time;
-            float pressed = 0.0f;
-            if (havePlayer && (point.time > 0.0f) && (age < 2.0f)) {
-                // Held down briefly, then a damped spring back up that just overshoots.
-                const float t = std::max(age - 0.15f, 0.0f);
-                pressed = std::exp(-2.6f * t) * std::cos(3.4f * t);
-                if (std::abs(pressed) < 1e-3f) {
-                    pressed = 0.0f;
-                }
-            }
-            frameParams.grassTrail[i] = { point.x, point.z, point.y, pressed };
-            if (pressed != 0.0f) {
-                low[0] = std::min(low[0], point.x); low[1] = std::min(low[1], point.z);
-                high[0] = std::max(high[0], point.x); high[1] = std::max(high[1], point.z);
-            }
-        }
-        const float trailRadius = frameParams.grassPlayer.w;
-        frameParams.grassTrailBounds = { low[0] - trailRadius, low[1] - trailRadius, high[0] + trailRadius, high[1] + trailRadius };
         return true;
     }
 
@@ -2366,7 +2296,7 @@ namespace RT64 {
             return false;
         }
 
-        // The snow's full height straight up, as RasterVS has its positions (as ComputeSceneGrass's grassClipUp).
+        // The snow's full height straight up, as RasterVS has its positions (as snowClipUp).
         const float depth = SnowDepth * settings.snowHeight;
         const float full = depth * (1.0f + SnowBank);
         float clip[4];
@@ -2533,9 +2463,11 @@ namespace RT64 {
     RenderFramebuffer *BeginSceneWaterMask(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget, bool colors) {
         Resources &res = resourcesFor(worker);
         RenderCommandList *commandList = worker->commandList.get();
-        ensureWaterTarget(worker, res, colorTarget, depthTarget);
-        RenderTexture *texture = colors ? res.waterColorTexture.get() : res.waterTexture.get();
-        RenderFramebuffer *framebuffer = colors ? res.waterColorFramebuffer.get() : res.waterFramebuffer.get();
+        // The same target's resources the effects pass that follows gets (RecordSceneEffects).
+        TargetResources &tr = res.targetFor(colorTarget, depthTarget);
+        ensureWaterTarget(worker, res, tr, colorTarget, depthTarget);
+        RenderTexture *texture = colors ? tr.waterColorTexture.get() : tr.waterTexture.get();
+        RenderFramebuffer *framebuffer = colors ? tr.waterColorFramebuffer.get() : tr.waterFramebuffer.get();
         commandList->barriers(RenderBarrierStage::GRAPHICS, {
             RenderTextureBarrier(texture, RenderTextureLayout::COLOR_WRITE),
             RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE)
@@ -2630,21 +2562,22 @@ namespace RT64 {
     // positions the vertex processor worked out, under one instance of the identity transform. Does nothing unless
     // RayTracingActive(); on a failure the pass falls back to the depth march (bvhReady stays false).
     void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
-        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, const SceneRayGrass &grass, uint64_t levelKey)
+        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, uint64_t levelKey)
     {
         Resources &res = resourcesFor(worker);
+        // This pass's upload slot (RecordSceneEffects, which follows, uses the same one).
+        res.nextUploadSlot();
         res.bvhReady = false;
         res.rayTexturesValid = false;
         if (!RayTracingActive() || !worker->device->getCapabilities().rayQuery) {
             return;
         }
-        constexpr size_t MaxGeometries = 8192;
+        constexpr size_t MaxGeometries = SCENE_RAY_MAX_GEOMETRIES;
+        // The level's geometries, the models', then the ray tracing materials' records (SCENE_RAY_MATERIAL_BASE).
+        constexpr size_t GeometryTableEntries = SCENE_RAY_MATERIAL_BASE + SceneMaxRayMaterials + 1;
+        static_assert(SCENE_RAY_MATERIAL_BASE >= 2 * MaxGeometries, "the materials' records would overlap the models' geometries");
         // The set the rays read textures through: this frame's buffers when it has them all, else empty stand-ins.
         res.rayTextureCacheSet = textures.textureSet;
-        if (res.rayGeometryBuffer == nullptr) {
-            res.rayGeometryBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (MaxGeometries + SceneMaxRayMaterials + 1)));
-            res.rayGeometryBuffer->setName("Scene Effects ray geometries");
-        }
         if (res.rayDummyBuffer == nullptr) {
             res.rayDummyBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(256));
             res.rayDummyBuffer->setName("Scene Effects ray stand-in");
@@ -2652,19 +2585,32 @@ namespace RT64 {
             res.rayDummyBuffer->unmap();
         }
         const bool building = (worldPos != nullptr) && (indices != nullptr) && (worldPosVertexCount != 0) && (drawCount != 0);
+        // A pass that builds writes its own slot's geometry table; one that reuses the last structure reads the table it was
+        // built with.
+        if (building) {
+            res.rayGeometrySlot = res.uploadSlot;
+        }
+        std::unique_ptr<RenderBuffer> &rayGeometryBuffer = res.rayGeometryBuffer[res.rayGeometrySlot];
+        if (rayGeometryBuffer == nullptr) {
+            rayGeometryBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * GeometryTableEntries));
+            rayGeometryBuffer->setName("Scene Effects ray geometries");
+            memset(rayGeometryBuffer->map(), 0, 16 * GeometryTableEntries);
+            rayGeometryBuffer->unmap();
+        }
         // Only a pass that builds binds its texture buffers: a pass with nothing drawn (warping from Photo mode) can hand
         // over buffers not yet made for this frame, and binding one crashed the driver in setBuffer (L, 2026-10-21).
         const bool haveTextureBuffers = building && (textures.indices != nullptr) && (textures.texcoords != nullptr) && (textures.rdpTiles != nullptr) && (textures.gpuTiles != nullptr);
-        const RenderBuffer *wanted[4] = {
+        const RenderBuffer *wanted[5] = {
             haveTextureBuffers ? textures.indices : res.rayDummyBuffer.get(),
             haveTextureBuffers ? textures.texcoords : res.rayDummyBuffer.get(),
             haveTextureBuffers ? textures.rdpTiles : res.rayDummyBuffer.get(),
-            haveTextureBuffers ? textures.gpuTiles : res.rayDummyBuffer.get()
+            haveTextureBuffers ? textures.gpuTiles : res.rayDummyBuffer.get(),
+            rayGeometryBuffer.get()
         };
         // Sets not used for a while are dropped: the buffers they name may have been replaced since (a new buffer at an old one's
-        // address would match).
+        // address would match). Room for each group of buffers in every upload slot's geometry table.
         constexpr uint64_t RayCacheKeepPasses = 240;
-        constexpr size_t RayCacheMax = 8;
+        constexpr size_t RayCacheMax = 8 * Resources::UploadSlots;
         for (size_t i = 0; i < res.rayTexturesCache.size();) {
             if (res.rayTexturesCache[i].usedPass + RayCacheKeepPasses < res.passes) {
                 res.retireLater(std::move(res.rayTexturesCache[i].set));
@@ -2676,7 +2622,7 @@ namespace RT64 {
         }
         res.rayTexturesSet = nullptr;
         for (Resources::RayTexturesEntry &entry : res.rayTexturesCache) {
-            if (std::equal(wanted, wanted + 4, entry.buffers)) {
+            if (std::equal(wanted, wanted + 5, entry.buffers)) {
                 entry.usedPass = res.passes;
                 res.rayTexturesSet = entry.set.get();
                 break;
@@ -2695,36 +2641,36 @@ namespace RT64 {
             const RenderBufferStructuredView tilesView(haveTextureBuffers ? sizeof(interop::RDPTile) : 16);
             const RenderBufferStructuredView gpuTilesView(haveTextureBuffers ? sizeof(interop::GPUTile) : 16);
             const int faulted =
-                RaySetBufferSafe(set, set->gRayGeometries, res.rayGeometryBuffer.get(), nullptr) ? (RaySetBufferSafe(set, set->gRayIndices, wanted[0], nullptr) ?
+                RaySetBufferSafe(set, set->gRayGeometries, wanted[4], nullptr) ? (RaySetBufferSafe(set, set->gRayIndices, wanted[0], nullptr) ?
                 (RaySetBufferSafe(set, set->gRayTexcoords, wanted[1], nullptr) ? (RaySetBufferSafe(set, set->gRayRDPTiles, wanted[2], &tilesView) ?
                 (RaySetBufferSafe(set, set->gRayGPUTiles, wanted[3], &gpuTilesView) ? 0 : 5) : 4) : 3) : 2) : 1;
             if (faulted != 0) {
                 // The driver faulted on writing that buffer (the crashes of 2026-10-21/22): the traced pass falls back this frame.
-                fprintf(stderr, "[rt] the driver faulted writing ray texture buffer %d (%p), no traced pass this frame\n", faulted, (const void *)wanted[faulted - 1]);
+                fprintf(stderr, "[rt] the driver faulted writing ray texture buffer %d (%p), no traced pass this frame\n", faulted, (const void *)((faulted == 1) ? wanted[4] : wanted[faulted - 2]));
                 res.retireLater(std::move(entry.set));
                 res.rayTexturesSet = nullptr;
                 return;
             }
-            std::copy(wanted, wanted + 4, entry.buffers);
+            std::copy(wanted, wanted + 5, entry.buffers);
             entry.usedPass = res.passes;
             res.rayTexturesSet = set;
             res.rayTexturesCache.push_back(std::move(entry));
         }
-        const bool withGrass = building && (grass.vertices != nullptr) && (grass.vertexCount >= 3);
         // A pass with no casters (some in-between frames have none) traces through the last structure built, rather than
         // dropping to the depth march and its shadow map, which made the shadows come and go.
-        // The lights are written every pass, whatever the casters.
-        if (res.lightsBuffer == nullptr) {
-            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 4)));
-            res.lightsBuffer->setName("Scene Effects lights");
+        // The lights are written every pass, whatever the casters, into this pass's upload slot.
+        std::unique_ptr<RenderBuffer> &lightsBuffer = res.lightsBuffer[res.uploadSlot];
+        if (lightsBuffer == nullptr) {
+            lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 4)));
+            lightsBuffer->setName("Scene Effects lights");
         }
         if (res.radianceBuffer == nullptr) {
             res.radianceBuffer = worker->device->createBuffer(RenderBufferDesc::DefaultBuffer(8ull << 20, RenderBufferFlag::STORAGE | RenderBufferFlag::UNORDERED_ACCESS));
             res.radianceBuffer->setName("Scene Effects radiance cache");
         }
-        if (res.lightsBuffer != nullptr) {
+        if (lightsBuffer != nullptr) {
             const SceneEffectsSettings lightSettings = GetSceneEffects();
-            float *mapped = reinterpret_cast<float *>(res.lightsBuffer->map());
+            float *mapped = reinterpret_cast<float *>(lightsBuffer->map());
             memset(mapped, 0, 16 * (SceneMaxLights + 4));
             mapped[0] = float(lightSettings.lightCount);
             mapped[1] = rayTracingHitColours.load() ? 1.0f : 0.0f;
@@ -2748,10 +2694,7 @@ namespace RT64 {
             // percent times 8 and the subsurface scattering strength in percent times 1024.
             mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayTracingHalf.load() ? 2.0f : 0.0f) + (rayScenesPbr.load() ? 4.0f : 0.0f) +
                 float(rayTracingBrdfPercent.load() * 8u + rayTracingSubsurfacePercent.load() * 1024u);
-            // The 3D grass (when it is in the structure): how far along a ray its blades are passed by, so a ray from a
-            // blade or the ground among them (whose surfaces the picture only roughly has) isn't stopped by its own
-            // blade and its neighbours: one and a half blade heights.
-            mapped[10] = withGrass ? 54.0f * lightSettings.grassHeight : 0.0f;
+            mapped[10] = 0.0f;
             // How much the Parallax materials reflect (Graphics > Ray Tracing's sliders), in hundredths packed together: Metal,
             // then Tiles times 256, then Smooth times 65536.
             mapped[11] = !rayScenesShine.load() ? 0.0f : std::round(rayTracingMaterials[0].load() * 100.0f) + std::round(rayTracingMaterials[1].load() * 100.0f) * 256.0f +
@@ -2775,7 +2718,7 @@ namespace RT64 {
                 memcpy(mapped + 16 + lightSettings.lightCount * 4, lampLights, size_t(lamps) * 4 * sizeof(float));
                 mapped[0] = float(lightSettings.lightCount + lamps);
             }
-            res.lightsBuffer->unmap();
+            lightsBuffer->unmap();
         }
         res.bvhReady = res.bvhBuiltOnce;
         if (!building) {
@@ -2796,7 +2739,7 @@ namespace RT64 {
         bool sceneShine = false;
         bool sceneLevelCutouts = false;
         bool scenePbr = false;
-        uint32_t *geometryTable = reinterpret_cast<uint32_t *>(res.rayGeometryBuffer->map());
+        uint32_t *geometryTable = reinterpret_cast<uint32_t *>(rayGeometryBuffer->map());
         for (size_t i = 0; i < drawCount; i++) {
             const SceneRayDraw &draw = draws[i];
             if (draw.indexCount < 3) {
@@ -2821,9 +2764,10 @@ namespace RT64 {
             meshes.emplace_back(RenderBufferReference(indices, uint64_t(draw.indexStart) * sizeof(uint32_t)), RenderBufferReference(worldPos, 0),
                 RenderFormat::R32_UINT, RenderFormat::R32G32B32_FLOAT, draw.indexCount - (draw.indexCount % 3), worldPosVertexCount, uint32_t(sizeof(float) * 4), !cutout);
         }
-        // The ray tracing materials' records after the geometries' (record 0 is none).
+        // The ray tracing materials' records after both ranges of geometries (record 0 is none): from MaxGeometries they would
+        // overwrite the models' first entries, and the models past the 256th ran off the end of the buffer.
         {
-            uint32_t *table = geometryTable + MaxGeometries * 4;
+            uint32_t *table = geometryTable + size_t(SCENE_RAY_MATERIAL_BASE) * 4;
             memset(table, 0, size_t(SceneMaxRayMaterials + 1) * 16);
             const std::scoped_lock lock(rayMaterialMutex);
             for (size_t i = 0; (i * 2 + 1) < rayMaterialWords.size(); i++) {
@@ -2831,7 +2775,7 @@ namespace RT64 {
                 table[(i + 1) * 4 + 1] = rayMaterialWords[i * 2 + 1];
             }
         }
-        res.rayGeometryBuffer->unmap();
+        rayGeometryBuffer->unmap();
         rayScenesPbr.store(scenePbr);
         rayScenesShine.store(sceneShine);
         rayScenesLevelCutouts.store(sceneLevelCutouts);
@@ -2852,12 +2796,6 @@ namespace RT64 {
         RenderBottomLevelASBuildInfo modelInfo;
         if (withModels) {
             device->setBottomLevelASBuildInfo(modelInfo, modelMeshes.data(), uint32_t(modelMeshes.size()), true, false);
-        }
-        RenderBottomLevelASBuildInfo grassInfo;
-        if (withGrass) {
-            const RenderBottomLevelASMesh grassMesh(RenderBufferReference(), RenderBufferReference(grass.vertices, 0), RenderFormat::UNKNOWN, RenderFormat::R32G32B32_FLOAT,
-                0, grass.vertexCount - (grass.vertexCount % 3), uint32_t(sizeof(float) * 4), false);
-            device->setBottomLevelASBuildInfo(grassInfo, &grassMesh, 1, true, false);
         }
 
         // Buffers that are too small are replaced (the old ones kept until the GPU is done with them).
@@ -2880,16 +2818,9 @@ namespace RT64 {
         if (withModels) {
             grow(res.bvhBlasBuffer, res.bvhBlas, res.bvhBlasSize, modelInfo.accelerationStructureSize, "Scene Effects models BLAS");
         }
-        if (withGrass && grow(res.grassBlasBuffer, res.grassBlas, res.grassBlasSize, grassInfo.accelerationStructureSize, "Scene Effects grass BLAS")) {
-            res.grassBuiltGeneration = UINT64_MAX;
-        }
-        bool grassBuild = false;
-        if (withGrass) {
-            grassBuild = (res.grassBuiltGeneration != grass.generation) || (res.grassBuiltVertices != grass.vertices);
-        }
-        // Instance 0 the level (mask 1), the models (mask 4, custom index MaxGeometries), the grass (mask 2, RayGrassInstance).
-        RenderTopLevelASInstance instances[3];
-        const RenderBuffer *instanceBuffers[3] = {};
+        // Instance 0 the level (mask 1), the models (mask 4, custom index MaxGeometries).
+        RenderTopLevelASInstance instances[2];
+        const RenderBuffer *instanceBuffers[2] = {};
         uint32_t instanceCount = 0;
         if (withLevel) {
             instanceBuffers[instanceCount] = res.levelBlasBuffer.get();
@@ -2899,13 +2830,9 @@ namespace RT64 {
             instanceBuffers[instanceCount] = res.bvhBlasBuffer.get();
             instances[instanceCount++] = RenderTopLevelASInstance(RenderBufferReference(res.bvhBlasBuffer.get()), uint32_t(MaxGeometries), 0x04, 0, true, RenderAffineTransform());
         }
-        if (withGrass) {
-            instanceBuffers[instanceCount] = res.grassBlasBuffer.get();
-            instances[instanceCount++] = RenderTopLevelASInstance(RenderBufferReference(res.grassBlasBuffer.get()), 0xFFFFFFu, 0x02, 0, true, RenderAffineTransform());
-        }
-        const bool instancesChanged = (instanceCount != res.bvhInstanceCount) || !std::equal(instanceBuffers, instanceBuffers + 3, res.bvhInstanceBuffers);
+        const bool instancesChanged = (instanceCount != res.bvhInstanceCount) || !std::equal(instanceBuffers, instanceBuffers + 2, res.bvhInstanceBuffers);
         res.bvhInstanceCount = instanceCount;
-        std::copy(instanceBuffers, instanceBuffers + 3, res.bvhInstanceBuffers);
+        std::copy(instanceBuffers, instanceBuffers + 2, res.bvhInstanceBuffers);
         RenderTopLevelASBuildInfo tlasInfo;
         device->setTopLevelASBuildInfo(tlasInfo, instances, instanceCount, true, false);
         if ((res.bvhTlas == nullptr) || (res.bvhTlasSize < tlasInfo.accelerationStructureSize)) {
@@ -2917,8 +2844,7 @@ namespace RT64 {
             res.bvhTlas = device->createAccelerationStructure(RenderAccelerationStructureDesc(RenderAccelerationStructureType::TOP_LEVEL, RenderBufferReference(res.bvhTlasBuffer.get()), size));
             res.bvhTlasSize = size;
         }
-        const uint64_t scratchNeeded = std::max({ (withLevel && !levelKept) ? levelInfo.scratchSize : 0, withModels ? modelInfo.scratchSize : 0, tlasInfo.scratchSize,
-            withGrass ? grassInfo.scratchSize : 0 });
+        const uint64_t scratchNeeded = std::max({ (withLevel && !levelKept) ? levelInfo.scratchSize : 0, withModels ? modelInfo.scratchSize : 0, tlasInfo.scratchSize });
         if ((res.bvhScratchBuffer == nullptr) || (res.bvhScratchSize < scratchNeeded)) {
             const uint64_t size = std::max<uint64_t>(scratchNeeded + scratchNeeded / 2, 1u << 20);
             res.retireLater(std::move(res.bvhScratchBuffer));
@@ -2958,11 +2884,6 @@ namespace RT64 {
         if (withModels) {
             buildBottom(res.bvhBlas.get(), res.bvhBlasBuffer.get(), modelInfo, worldPos);
         }
-        if (grassBuild) {
-            buildBottom(res.grassBlas.get(), res.grassBlasBuffer.get(), grassInfo, grass.vertices);
-            res.grassBuiltGeneration = grass.generation;
-            res.grassBuiltVertices = grass.vertices;
-        }
         commandList->barriers(RenderBarrierStage::COMPUTE, {
             RenderBufferBarrier(res.bvhScratchBuffer.get(), RenderBufferAccess::WRITE),
             RenderBufferBarrier(res.bvhTlasBuffer.get(), RenderBufferAccess::WRITE)
@@ -2983,9 +2904,8 @@ namespace RT64 {
             static auto lastLog = std::chrono::steady_clock::now();
             if (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(1000)) {
                 lastLog = std::chrono::steady_clock::now();
-                fprintf(stderr, "[rt] BVH built: level %zu geometries (%s, BLAS %llu KB), models %zu geometries (BLAS %llu KB), TLAS %llu KB, scratch %llu KB, grass %s (BLAS %llu KB, reach %.0f)\n",
-                    levelMeshes.size(), levelKept ? "kept" : "rebuilt", (unsigned long long)(res.levelBlasSize / 1024), modelMeshes.size(), (unsigned long long)(res.bvhBlasSize / 1024), (unsigned long long)(res.bvhTlasSize / 1024), (unsigned long long)(res.bvhScratchSize / 1024),
-                    withGrass ? (grassBuild ? "rebuilt" : "kept") : "none", (unsigned long long)(res.grassBlasSize / 1024), grass.reach);
+                fprintf(stderr, "[rt] BVH built: level %zu geometries (%s, BLAS %llu KB), models %zu geometries (BLAS %llu KB), TLAS %llu KB, scratch %llu KB\n",
+                    levelMeshes.size(), levelKept ? "kept" : "rebuilt", (unsigned long long)(res.levelBlasSize / 1024), modelMeshes.size(), (unsigned long long)(res.bvhBlasSize / 1024), (unsigned long long)(res.bvhTlasSize / 1024), (unsigned long long)(res.bvhScratchSize / 1024));
                 uint32_t modelDraws = 0, modelTris = 0, cutDraws = 0, shineDraws = 0, materialDraws = 0;
                 for (size_t i = 0; i < drawCount; i++) {
                     const uint32_t material = (draws[i].flags >> SceneRayDrawMaterialShift) & 0xFFu;
@@ -3171,58 +3091,66 @@ namespace RT64 {
 
         RenderCommandList *commandList = worker->commandList.get();
         Resources &res = resourcesFor(worker);
+        // BuildSceneBVH took this pass's upload slot already when it ran for it (before the pass is counted below).
+        if (res.uploadSlotPass != res.passes) {
+            res.nextUploadSlot();
+        }
         res.freeRetired();
+        // This colour target's textures and sets (kept for each target the effects are drawn into).
+        TargetResources &tr = res.targetFor(colorTarget, depthTarget);
         const RenderFormat format = RenderTarget::colorBufferFormat(shaderLibrary->usesHDR);
         const uint32_t bloomWidth = std::max(colorTarget->width / 4, 1U);
         const uint32_t bloomHeight = std::max(colorTarget->height / 4, 1U);
-        if ((res.bloomTexture[0] == nullptr) || (res.bloomWidth != bloomWidth) || (res.bloomHeight != bloomHeight)) {
-            res.retire();
+        if ((tr.bloomTexture[0] == nullptr) || (tr.bloomWidth != bloomWidth) || (tr.bloomHeight != bloomHeight)) {
+            res.retireBloom(tr);
             for (int i = 0; i < Resources::BloomTextures; i++) {
                 const bool eighth = (i == 2) || (i == 3);
-                res.bloomTexture[i] = worker->device->createTexture(RenderTextureDesc::ColorTarget(eighth ? std::max(bloomWidth / 2, 1U) : bloomWidth,
+                tr.bloomTexture[i] = worker->device->createTexture(RenderTextureDesc::ColorTarget(eighth ? std::max(bloomWidth / 2, 1U) : bloomWidth,
                     eighth ? std::max(bloomHeight / 2, 1U) : bloomHeight, format));
-                res.bloomTexture[i]->setName("Scene Effects Bloom");
-                const RenderTexture *texture = res.bloomTexture[i].get();
-                res.bloomFramebuffer[i] = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
-                res.bloomSet[i] = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+                tr.bloomTexture[i]->setName("Scene Effects Bloom");
+                const RenderTexture *texture = tr.bloomTexture[i].get();
+                tr.bloomFramebuffer[i] = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
+                tr.bloomSet[i] = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
                     shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
-                res.bloomSet[i]->setTexture(res.bloomSet[i]->gTexture0, texture, RenderTextureLayout::SHADER_READ);
-                res.bloomSet[i]->setTexture(res.bloomSet[i]->gTexture1, texture, RenderTextureLayout::SHADER_READ);
-                res.bloomSet[i]->setTexture(res.bloomSet[i]->gTexture2, texture, RenderTextureLayout::SHADER_READ);
+                tr.bloomSet[i]->setTexture(tr.bloomSet[i]->gTexture0, texture, RenderTextureLayout::SHADER_READ);
+                tr.bloomSet[i]->setTexture(tr.bloomSet[i]->gTexture1, texture, RenderTextureLayout::SHADER_READ);
+                tr.bloomSet[i]->setTexture(tr.bloomSet[i]->gTexture2, texture, RenderTextureLayout::SHADER_READ);
             }
-            res.bloomCombineSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+            tr.bloomCombineSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
                 shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
-            res.bloomCombineSet->setTexture(res.bloomCombineSet->gTexture0, res.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ);
-            res.bloomCombineSet->setTexture(res.bloomCombineSet->gTexture1, res.bloomTexture[2].get(), RenderTextureLayout::SHADER_READ);
-            res.bloomCombineSet->setTexture(res.bloomCombineSet->gTexture2, res.bloomTexture[2].get(), RenderTextureLayout::SHADER_READ);
-            res.bloomWidth = bloomWidth;
-            res.bloomHeight = bloomHeight;
-            res.halfTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(std::max(colorTarget->width / 2, 1U), std::max(colorTarget->height / 2, 1U), format));
-            res.halfTexture->setName("Scene Effects Half Scene");
-            const RenderTexture *halfTexturePtr = res.halfTexture.get();
-            res.halfFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&halfTexturePtr, 1));
-            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.halfTexture.get(), RenderTextureLayout::COLOR_WRITE));
-            commandList->setFramebuffer(res.halfFramebuffer.get());
+            tr.bloomCombineSet->setTexture(tr.bloomCombineSet->gTexture0, tr.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ);
+            tr.bloomCombineSet->setTexture(tr.bloomCombineSet->gTexture1, tr.bloomTexture[2].get(), RenderTextureLayout::SHADER_READ);
+            tr.bloomCombineSet->setTexture(tr.bloomCombineSet->gTexture2, tr.bloomTexture[2].get(), RenderTextureLayout::SHADER_READ);
+            tr.bloomWidth = bloomWidth;
+            tr.bloomHeight = bloomHeight;
+            tr.halfTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(std::max(colorTarget->width / 2, 1U), std::max(colorTarget->height / 2, 1U), format));
+            tr.halfTexture->setName("Scene Effects Half Scene");
+            const RenderTexture *halfTexturePtr = tr.halfTexture.get();
+            tr.halfFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&halfTexturePtr, 1));
+            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(tr.halfTexture.get(), RenderTextureLayout::COLOR_WRITE));
+            commandList->setFramebuffer(tr.halfFramebuffer.get());
             commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
-            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.halfTexture.get(), RenderTextureLayout::SHADER_READ));
+            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(tr.halfTexture.get(), RenderTextureLayout::SHADER_READ));
             std::vector<RenderTextureBarrier> barriers;
             for (int i = 0; i < Resources::BloomTextures; i++) {
-                barriers.emplace_back(res.bloomTexture[i].get(), RenderTextureLayout::COLOR_WRITE);
+                barriers.emplace_back(tr.bloomTexture[i].get(), RenderTextureLayout::COLOR_WRITE);
             }
             commandList->barriers(RenderBarrierStage::GRAPHICS, barriers);
             // Start black, so a frame that skips the bloom reads nothing from them.
             for (int i = 0; i < Resources::BloomTextures; i++) {
-                commandList->setFramebuffer(res.bloomFramebuffer[i].get());
+                commandList->setFramebuffer(tr.bloomFramebuffer[i].get());
                 commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
             }
             barriers.clear();
             for (int i = 0; i < Resources::BloomTextures; i++) {
-                barriers.emplace_back(res.bloomTexture[i].get(), RenderTextureLayout::SHADER_READ);
+                barriers.emplace_back(tr.bloomTexture[i].get(), RenderTextureLayout::SHADER_READ);
             }
             commandList->barriers(RenderBarrierStage::GRAPHICS, barriers);
         }
 
         RenderTexture *source = nullptr;
+        // The set that reads source (null without one).
+        SmaaDescriptorSet *sourceSet = nullptr;
         if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0)) {
             // The scene so far, without multisampling: the target's resolve, or a copy of the target.
             const RenderTextureView *sourceView = nullptr;
@@ -3233,34 +3161,34 @@ namespace RT64 {
                 sourceView = colorTarget->getResolvedTextureView();
             }
             else {
-                if ((res.copyTexture == nullptr) || (res.copyWidth != colorTarget->width) || (res.copyHeight != colorTarget->height)) {
-                    if (res.copyTexture != nullptr) {
-                        res.retireLater(std::move(res.copyTexture));
+                if ((tr.copyTexture == nullptr) || (tr.copyWidth != colorTarget->width) || (tr.copyHeight != colorTarget->height)) {
+                    if (tr.copyTexture != nullptr) {
+                        res.retireLater(std::move(tr.copyTexture));
                     }
-                    res.copyTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, format));
-                    res.copyTexture->setName("Scene Effects Copy");
-                    res.copyWidth = colorTarget->width;
-                    res.copyHeight = colorTarget->height;
+                    tr.copyTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, format));
+                    tr.copyTexture->setName("Scene Effects Copy");
+                    tr.copyWidth = colorTarget->width;
+                    tr.copyHeight = colorTarget->height;
                 }
 
                 commandList->barriers(RenderBarrierStage::COPY, {
                     RenderTextureBarrier(colorTarget->texture.get(), RenderTextureLayout::COPY_SOURCE),
-                    RenderTextureBarrier(res.copyTexture.get(), RenderTextureLayout::COPY_DEST)
+                    RenderTextureBarrier(tr.copyTexture.get(), RenderTextureLayout::COPY_DEST)
                 });
-                commandList->copyTexture(res.copyTexture.get(), colorTarget->texture.get());
-                source = res.copyTexture.get();
+                commandList->copyTexture(tr.copyTexture.get(), colorTarget->texture.get());
+                source = tr.copyTexture.get();
             }
 
-            if ((res.sourceSet == nullptr) || (res.sourceSetTexture != source)) {
-                if (res.sourceSet != nullptr) {
-                    res.retireLater(std::move(res.sourceSet));
-                }
-                res.sourceSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+            // One set for each texture read (the game's framebuffers drawn in turn each have their own resolve).
+            sourceSet = tr.sourceSets.find(TextureKey{ source }, res.passes);
+            if (sourceSet == nullptr) {
+                std::unique_ptr<SmaaDescriptorSet> set = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
                     shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
-                res.sourceSet->setTexture(res.sourceSet->gTexture0, source, RenderTextureLayout::SHADER_READ, sourceView);
-                res.sourceSet->setTexture(res.sourceSet->gTexture1, source, RenderTextureLayout::SHADER_READ, sourceView);
-                res.sourceSet->setTexture(res.sourceSet->gTexture2, source, RenderTextureLayout::SHADER_READ, sourceView);
-                res.sourceSetTexture = source;
+                set->setTexture(set->gTexture0, source, RenderTextureLayout::SHADER_READ, sourceView);
+                set->setTexture(set->gTexture1, source, RenderTextureLayout::SHADER_READ, sourceView);
+                set->setTexture(set->gTexture2, source, RenderTextureLayout::SHADER_READ, sourceView);
+                sourceSet = tr.sourceSets.add(TextureKey{ source }, std::move(set), res.passes,
+                    [&](std::unique_ptr<SmaaDescriptorSet> &&old) { res.retireLater(std::move(old)); });
             }
 
             commandList->barriers(RenderBarrierStage::GRAPHICS, {
@@ -3293,17 +3221,16 @@ namespace RT64 {
         }
 
         if ((settings.eyeAdaptation > 0.0f) && (source != nullptr)) {
-            if ((res.measureSet == nullptr) || (res.measureSetTexture != source)) {
-                if (res.measureSet != nullptr) {
-                    res.retireLater(std::move(res.measureSet));
-                }
-                res.measureSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+            SmaaDescriptorSet *measureSet = tr.measureSets.find(TextureKey{ source }, res.passes);
+            if (measureSet == nullptr) {
+                std::unique_ptr<SmaaDescriptorSet> set = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
                     shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
                 const RenderTextureView *view = colorTarget->usesResolve() ? colorTarget->getResolvedTextureView() : nullptr;
-                res.measureSet->setTexture(res.measureSet->gTexture0, source, RenderTextureLayout::SHADER_READ, view);
-                res.measureSet->setTexture(res.measureSet->gTexture1, source, RenderTextureLayout::SHADER_READ, view);
-                res.measureSet->setTexture(res.measureSet->gTexture2, source, RenderTextureLayout::SHADER_READ, view);
-                res.measureSetTexture = source;
+                set->setTexture(set->gTexture0, source, RenderTextureLayout::SHADER_READ, view);
+                set->setTexture(set->gTexture1, source, RenderTextureLayout::SHADER_READ, view);
+                set->setTexture(set->gTexture2, source, RenderTextureLayout::SHADER_READ, view);
+                measureSet = tr.measureSets.add(TextureKey{ source }, std::move(set), res.passes,
+                    [&](std::unique_ptr<SmaaDescriptorSet> &&old) { res.retireLater(std::move(old)); });
             }
 
             // The time step as a rate (63% of the way each second); BloomPS.hlsl makes it quicker or slower.
@@ -3329,7 +3256,7 @@ namespace RT64 {
             };
 
             GpuSectionScope timed(WorkloadGpuSections(), GpuSection::EyeAdaptation, commandList);
-            luminancePass(res.measureSet.get(), 0, 3.0f, 0.0f);
+            luminancePass(measureSet, 0, 3.0f, 0.0f);
             luminancePass(res.adaptSet.get(), 1, 4.0f, rate);
             commandList->barriers(RenderBarrierStage::COPY, {
                 RenderTextureBarrier(res.luminanceTexture[1].get(), RenderTextureLayout::COPY_SOURCE),
@@ -3348,7 +3275,7 @@ namespace RT64 {
             auto bloomPass = [&](const SmaaDescriptorSet *input, RenderTexture *inputTexture, int output, uint32_t inputWidth, uint32_t inputHeight, float pass) {
                 commandList->barriers(RenderBarrierStage::GRAPHICS, {
                     RenderTextureBarrier(inputTexture, RenderTextureLayout::SHADER_READ),
-                    RenderTextureBarrier(res.bloomTexture[output].get(), RenderTextureLayout::COLOR_WRITE)
+                    RenderTextureBarrier(tr.bloomTexture[output].get(), RenderTextureLayout::COLOR_WRITE)
                 });
 
                 const bool eighth = (output == 2) || (output == 3);
@@ -3356,7 +3283,7 @@ namespace RT64 {
                 const uint32_t outputHeight = eighth ? std::max(bloomHeight / 2, 1U) : bloomHeight;
                 interop::BloomCB bloomConstants;
                 bloomConstants.params = { 1.0f / float(inputWidth), 1.0f / float(inputHeight), pass, settings.bloomThreshold };
-                commandList->setFramebuffer(res.bloomFramebuffer[output].get());
+                commandList->setFramebuffer(tr.bloomFramebuffer[output].get());
                 commandList->setViewports(RenderViewport(0.0f, 0.0f, float(outputWidth), float(outputHeight)));
                 commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));
                 commandList->setPipeline(shaderLibrary->bloom.pipeline.get());
@@ -3370,14 +3297,14 @@ namespace RT64 {
             const uint32_t eighthWidth = std::max(bloomWidth / 2, 1U);
             const uint32_t eighthHeight = std::max(bloomHeight / 2, 1U);
             GpuSectionScope timed(WorkloadGpuSections(), GpuSection::Bloom, commandList);
-            bloomPass(res.sourceSet.get(), source, 0, colorTarget->width, colorTarget->height, 0.0f);
-            bloomPass(res.bloomSet[0].get(), res.bloomTexture[0].get(), 1, bloomWidth, bloomHeight, 1.0f);
-            bloomPass(res.bloomSet[1].get(), res.bloomTexture[1].get(), 0, bloomWidth, bloomHeight, 2.0f);
-            bloomPass(res.bloomSet[0].get(), res.bloomTexture[0].get(), 2, bloomWidth, bloomHeight, 5.0f);
-            bloomPass(res.bloomSet[2].get(), res.bloomTexture[2].get(), 3, eighthWidth, eighthHeight, 1.0f);
-            bloomPass(res.bloomSet[3].get(), res.bloomTexture[3].get(), 2, eighthWidth, eighthHeight, 2.0f);
-            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ));
-            bloomPass(res.bloomCombineSet.get(), res.bloomTexture[2].get(), 4, bloomWidth, bloomHeight, 6.0f);
+            bloomPass(sourceSet, source, 0, colorTarget->width, colorTarget->height, 0.0f);
+            bloomPass(tr.bloomSet[0].get(), tr.bloomTexture[0].get(), 1, bloomWidth, bloomHeight, 1.0f);
+            bloomPass(tr.bloomSet[1].get(), tr.bloomTexture[1].get(), 0, bloomWidth, bloomHeight, 2.0f);
+            bloomPass(tr.bloomSet[0].get(), tr.bloomTexture[0].get(), 2, bloomWidth, bloomHeight, 5.0f);
+            bloomPass(tr.bloomSet[2].get(), tr.bloomTexture[2].get(), 3, eighthWidth, eighthHeight, 1.0f);
+            bloomPass(tr.bloomSet[3].get(), tr.bloomTexture[3].get(), 2, eighthWidth, eighthHeight, 2.0f);
+            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(tr.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ));
+            bloomPass(tr.bloomCombineSet.get(), tr.bloomTexture[2].get(), 4, bloomWidth, bloomHeight, 6.0f);
         }
 
         // The scene at half size for the bounce light and SSGI (BloomPS pass 8).
@@ -3385,19 +3312,19 @@ namespace RT64 {
             GpuSectionScope timed(WorkloadGpuSections(), GpuSection::Bloom, commandList);
             const uint32_t halfWidth = std::max(colorTarget->width / 2, 1U);
             const uint32_t halfHeight = std::max(colorTarget->height / 2, 1U);
-            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.halfTexture.get(), RenderTextureLayout::COLOR_WRITE));
+            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(tr.halfTexture.get(), RenderTextureLayout::COLOR_WRITE));
             interop::BloomCB halfConstants;
             halfConstants.params = { 1.0f / float(colorTarget->width), 1.0f / float(colorTarget->height), 8.0f, 0.0f };
-            commandList->setFramebuffer(res.halfFramebuffer.get());
+            commandList->setFramebuffer(tr.halfFramebuffer.get());
             commandList->setViewports(RenderViewport(0.0f, 0.0f, float(halfWidth), float(halfHeight)));
             commandList->setScissors(RenderRect(0, 0, halfWidth, halfHeight));
             commandList->setPipeline(shaderLibrary->bloom.pipeline.get());
             commandList->setGraphicsPipelineLayout(shaderLibrary->bloom.pipelineLayout.get());
-            commandList->setGraphicsDescriptorSet(res.sourceSet->get(), 0);
+            commandList->setGraphicsDescriptorSet(sourceSet->get(), 0);
             commandList->setGraphicsPushConstants(0, &halfConstants);
             commandList->setVertexBuffers(0, nullptr, 0, nullptr);
             commandList->drawInstanced(3, 1, 0, 0);
-            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.halfTexture.get(), RenderTextureLayout::SHADER_READ));
+            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(tr.halfTexture.get(), RenderTextureLayout::SHADER_READ));
         }
 
         // Modern water's ripples: the player pushes the water of a grid that follows them (RippleCells cells of
@@ -3499,10 +3426,10 @@ namespace RT64 {
         }
 
         // The pass's inputs: the depth target, the bloom and the scene so far (the bloom stands in when unused).
-        const RenderTexture *color = (source != nullptr) ? source : res.bloomTexture[0].get();
+        const RenderTexture *color = (source != nullptr) ? source : tr.bloomTexture[0].get();
         const RenderTexture *adapted = res.luminanceTexture[1].get();
         // The water mask is always bound; the shader reads it only when it was drawn this frame.
-        ensureWaterTarget(worker, res, colorTarget, depthTarget);
+        ensureWaterTarget(worker, res, tr, colorTarget, depthTarget);
         const bool waterDrawn = res.waterDrawn;
         res.waterDrawn = false;
         // Toon shading's character part reads the characters in the water mask, so it is left out when none was drawn.
@@ -3515,8 +3442,8 @@ namespace RT64 {
         res.waterColorDrawn = false;
         const bool waterTessellated = modern && res.waterTessDrawn;
         res.waterTessDrawn = false;
-        RenderTexture *water = res.waterTexture.get();
-        RenderTexture *waterColor = res.waterColorTexture.get();
+        RenderTexture *water = tr.waterTexture.get();
+        RenderTexture *waterColor = tr.waterColorTexture.get();
         // water.y 3: Modern water with no water drawn this frame (its caustics under the water still show).
         const bool modernOn = settings.modernWater;
         // water.x: Water reflections plus twice Ice reflections' hundredths (see WaterReflectionStrength in SceneEffectsPS).
@@ -3595,7 +3522,10 @@ namespace RT64 {
         static const char *sunMapOffAfter = getenv("TOOIE_SUN_MAP_OFF_AFTER");
         const bool sunMapOffNow = sunMapOff || ((sunMapOffAfter != nullptr) && (std::chrono::duration<float>(std::chrono::steady_clock::now() - sunMapProcessStart).count() > float(atof(sunMapOffAfter))));
         // The traced pass (the structures are built) traces its shadows, so the map isn't drawn for it.
-        const bool tracedShadows = res.bvhReady && (shaderLibrary->sceneEffectsTraced.pipeline != nullptr);
+        // The same test as the traced pass below (traced): with any of its sets missing it falls back to the depth march,
+        // which needs the map.
+        const bool tracedShadows = res.bvhReady && (shaderLibrary->sceneEffectsTraced.pipeline != nullptr) && (res.rayTexturesSet != nullptr) &&
+            (res.rayTextureCacheSet != nullptr) && worker->device->getCapabilities().rayQuery;
         if (drawSunCasters && !sunMapOffNow && !tracedShadows && (constants.shadows.x > 0.0f)) {
             GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::SunShadowMap, false));
             const int sunMapSpan = WorkloadGpuSections().start(GpuSection::SunShadowMap, commandList);
@@ -3681,29 +3611,31 @@ namespace RT64 {
         // that is on.
         const uint32_t indirectWidth = std::max(colorTarget->width / 2, 1U);
         const uint32_t indirectHeight = std::max(colorTarget->height / 2, 1U);
-        if ((res.indirectTexture != nullptr) && ((res.indirectWidth != indirectWidth) || (res.indirectHeight != indirectHeight))) {
-            res.retireLater(std::move(res.indirectFramebuffer));
-            res.retireLater(std::move(res.indirectTexture));
+        if ((tr.indirectTexture != nullptr) && ((tr.indirectWidth != indirectWidth) || (tr.indirectHeight != indirectHeight))) {
+            res.retireLater(std::move(tr.indirectFramebuffer));
+            res.retireLater(std::move(tr.indirectTexture));
         }
-        if (res.indirectTexture == nullptr) {
-            res.indirectTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(indirectWidth, indirectHeight * 3, RenderFormat::R16G16B16A16_FLOAT));
-            res.indirectTexture->setName("Scene Effects Indirect");
-            const RenderTexture *texture = res.indirectTexture.get();
-            res.indirectFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
-            res.indirectWidth = indirectWidth;
-            res.indirectHeight = indirectHeight;
-            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
-            commandList->setFramebuffer(res.indirectFramebuffer.get());
+        if (tr.indirectTexture == nullptr) {
+            tr.indirectTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(indirectWidth, indirectHeight * 3, RenderFormat::R16G16B16A16_FLOAT));
+            tr.indirectTexture->setName("Scene Effects Indirect");
+            const RenderTexture *texture = tr.indirectTexture.get();
+            tr.indirectFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
+            tr.indirectWidth = indirectWidth;
+            tr.indirectHeight = indirectHeight;
+            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(tr.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
+            commandList->setFramebuffer(tr.indirectFramebuffer.get());
             commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 1.0f));
-            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::SHADER_READ) });
+            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(tr.indirectTexture.get(), RenderTextureLayout::SHADER_READ) });
         }
 
-        if (res.dustBuffer == nullptr) {
-            res.dustBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16));
-            res.dustBuffer->setName("Scene Effects dust");
+        // This pass's upload slot: its own dust buffer and scene set (one command list can record the pass more than once).
+        std::unique_ptr<RenderBuffer> &dustBuffer = res.dustBuffer[res.uploadSlot];
+        if (dustBuffer == nullptr) {
+            dustBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16));
+            dustBuffer->setName("Scene Effects dust");
         }
         {
-            float *dust = reinterpret_cast<float *>(res.dustBuffer->map());
+            float *dust = reinterpret_cast<float *>(dustBuffer->map());
             memset(dust, 0, 16);
             {
                 const std::scoped_lock extraLock(volExtraMutex);
@@ -3711,49 +3643,55 @@ namespace RT64 {
                 dust[2] = volExtra[1];
             }
             dust[3] = UpscalerNoiseOffset();
-            res.dustBuffer->unmap();
+            dustBuffer->unmap();
         }
 
-        if ((res.sceneSet == nullptr) || (res.sceneSetIndirect != res.indirectTexture.get()) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[4].get()) ||
-            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water) || (res.sceneSetWaterColor != waterColor) ||
-            (res.sceneSetRipples != res.rippleTexture[0].get()) || (res.sceneSetBvh != (res.bvhReady ? res.bvhTlas.get() : nullptr)) || (res.sceneSetSunMap != res.sunMapTexture.get()) || (res.sceneSetFireflies != res.fireflyTexture.get()) || (res.sceneSetHalf != res.halfTexture.get())) {
-            if (res.sceneSet != nullptr) {
-                res.retireLater(std::move(res.sceneSet));
-            }
-            res.sceneSet = std::make_unique<SceneEffectsDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(), worker->device->getCapabilities().rayQuery, worker->device);
-            res.sceneSet->setBuffer(res.sceneSet->gDust, res.dustBuffer.get(), 16);
-            res.sceneSet->setTexture(res.sceneSet->gInput, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
-            res.sceneSet->setTexture(res.sceneSet->gBloom, res.bloomTexture[4].get(), RenderTextureLayout::SHADER_READ);
-            res.sceneSetDepth = depthTarget->texture.get();
-            res.sceneSet->setTexture(res.sceneSet->gColor, color, RenderTextureLayout::SHADER_READ,
+        // The structure and lights are bound only while this pass's structure is ready (BuildSceneBVH wrote this slot's lights).
+        const RenderBuffer *slotLights = res.lightsBuffer[res.uploadSlot].get();
+        const bool bindBvh = worker->device->getCapabilities().rayQuery && res.bvhReady && (slotLights != nullptr) && (res.radianceBuffer != nullptr);
+        SceneSetKey sceneKey;
+        sceneKey.depth = depthTarget->texture.get();
+        sceneKey.bloom = tr.bloomTexture[4].get();
+        sceneKey.color = color;
+        sceneKey.adapted = adapted;
+        sceneKey.water = water;
+        sceneKey.waterColor = waterColor;
+        sceneKey.ripples = res.rippleTexture[0].get();
+        sceneKey.sunMap = res.sunMapTexture.get();
+        sceneKey.fireflies = res.fireflyTexture.get();
+        sceneKey.half = tr.halfTexture.get();
+        sceneKey.indirect = tr.indirectTexture.get();
+        sceneKey.bvh = bindBvh ? res.bvhTlas.get() : nullptr;
+        sceneKey.dust = dustBuffer.get();
+        sceneKey.lights = bindBvh ? slotLights : nullptr;
+        // A set for each key seen lately (the framebuffers drawn in turn and the upload slots each have theirs), made once.
+        SceneEffectsDescriptorSet *sceneSet = tr.sceneSets.find(sceneKey, res.passes);
+        if (sceneSet == nullptr) {
+            std::unique_ptr<SceneEffectsDescriptorSet> made = std::make_unique<SceneEffectsDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(), worker->device->getCapabilities().rayQuery, worker->device);
+            SceneEffectsDescriptorSet *set = made.get();
+            set->setBuffer(set->gDust, dustBuffer.get(), 16);
+            set->setTexture(set->gInput, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
+            set->setTexture(set->gBloom, tr.bloomTexture[4].get(), RenderTextureLayout::SHADER_READ);
+            set->setTexture(set->gColor, color, RenderTextureLayout::SHADER_READ,
                 ((source != nullptr) && colorTarget->usesResolve()) ? colorTarget->getResolvedTextureView() : nullptr);
-            res.sceneSetBloom = res.bloomTexture[4].get();
-            res.sceneSet->setTexture(res.sceneSet->gAdapted, adapted, RenderTextureLayout::SHADER_READ);
-            res.sceneSetColor = color;
-            res.sceneSetAdapted = adapted;
-            res.sceneSet->setTexture(res.sceneSet->gWater, water, RenderTextureLayout::SHADER_READ, res.waterTextureView.get());
-            res.sceneSetWater = water;
-            res.sceneSet->setTexture(res.sceneSet->gWaterColor, waterColor, RenderTextureLayout::SHADER_READ, res.waterColorTextureView.get());
-            res.sceneSetWaterColor = waterColor;
-            res.sceneSet->setTexture(res.sceneSet->gWaterRipples, res.rippleTexture[0].get(), RenderTextureLayout::SHADER_READ);
-            res.sceneSetRipples = res.rippleTexture[0].get();
-            res.sceneSet->setTexture(res.sceneSet->gSunShadowMap, res.sunMapTexture.get(), RenderTextureLayout::SHADER_READ, res.sunMapTextureView.get());
-            res.sceneSetSunMap = res.sunMapTexture.get();
-            res.sceneSet->setTexture(res.sceneSet->gFireflies, res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ);
-            res.sceneSetFireflies = res.fireflyTexture.get();
-            res.sceneSet->setTexture(res.sceneSet->gColorHalf, res.halfTexture.get(), RenderTextureLayout::SHADER_READ);
-            res.sceneSetHalf = res.halfTexture.get();
-            res.sceneSet->setTexture(res.sceneSet->gIndirect, res.indirectTexture.get(), RenderTextureLayout::SHADER_READ);
-            res.sceneSetIndirect = res.indirectTexture.get();
-            res.sceneSetBvh = nullptr;
-            if (worker->device->getCapabilities().rayQuery && res.bvhReady) {
-                res.sceneSet->setAccelerationStructure(res.sceneSet->gSceneBVH, res.bvhTlas.get());
-                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 4));
-                res.sceneSet->setBuffer(res.sceneSet->gRadianceCache, res.radianceBuffer.get(), 8ull << 20);
-                res.sceneSetBvh = res.bvhTlas.get();
+            set->setTexture(set->gAdapted, adapted, RenderTextureLayout::SHADER_READ);
+            set->setTexture(set->gWater, water, RenderTextureLayout::SHADER_READ, tr.waterTextureView.get());
+            set->setTexture(set->gWaterColor, waterColor, RenderTextureLayout::SHADER_READ, tr.waterColorTextureView.get());
+            set->setTexture(set->gWaterRipples, res.rippleTexture[0].get(), RenderTextureLayout::SHADER_READ);
+            set->setTexture(set->gSunShadowMap, res.sunMapTexture.get(), RenderTextureLayout::SHADER_READ, res.sunMapTextureView.get());
+            set->setTexture(set->gFireflies, res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ);
+            set->setTexture(set->gColorHalf, tr.halfTexture.get(), RenderTextureLayout::SHADER_READ);
+            set->setTexture(set->gIndirect, tr.indirectTexture.get(), RenderTextureLayout::SHADER_READ);
+            if (bindBvh) {
+                set->setAccelerationStructure(set->gSceneBVH, res.bvhTlas.get());
+                set->setBuffer(set->gLights, slotLights, 16 * (SceneMaxLights + 4));
+                set->setBuffer(set->gRadianceCache, res.radianceBuffer.get(), 8ull << 20);
             }
+            sceneSet = tr.sceneSets.add(sceneKey, std::move(made), res.passes,
+                [&](std::unique_ptr<SceneEffectsDescriptorSet> &&old) { res.retireLater(std::move(old)); });
         }
-
+        // The structure bound in this pass's set (null: none, the depth march).
+        const RenderAccelerationStructure *sceneSetBvh = sceneKey.bvh;
         GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::SceneEffects, false));
         const int effectsSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
 
@@ -3761,7 +3699,7 @@ namespace RT64 {
         commandList->barriers(RenderBarrierStage::GRAPHICS, {
             RenderTextureBarrier(colorTarget->texture.get(), RenderTextureLayout::COLOR_WRITE),
             RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::SHADER_READ),
-            RenderTextureBarrier(res.bloomTexture[4].get(), RenderTextureLayout::SHADER_READ),
+            RenderTextureBarrier(tr.bloomTexture[4].get(), RenderTextureLayout::SHADER_READ),
             RenderTextureBarrier(water, RenderTextureLayout::SHADER_READ),
             RenderTextureBarrier(waterColor, RenderTextureLayout::SHADER_READ)
         });
@@ -3776,7 +3714,7 @@ namespace RT64 {
             commandList->setScissors(RenderRect(0, 0, FireflyCount, FireflyTableRows));
             commandList->setPipeline(shaderLibrary->fireflyTable.pipeline.get());
             commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
-            commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
+            commandList->setGraphicsDescriptorSet(sceneSet->get(), 0);
             commandList->setGraphicsPushConstants(0, &constants);
             commandList->setVertexBuffers(0, nullptr, 0, nullptr);
             commandList->drawInstanced(3, 1, 0, 0);
@@ -3785,7 +3723,7 @@ namespace RT64 {
 
         // The radiance cache is written by the passes below (the effects) and read by them (the indirect pass and the next
         // frame's): its writes from the last pass are made visible first.
-        if ((res.sceneSetBvh != nullptr) && (res.radianceBuffer != nullptr) && rayTracingHitColours.load()) {
+        if ((sceneSetBvh != nullptr) && (res.radianceBuffer != nullptr) && rayTracingHitColours.load()) {
             commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderBufferBarrier(res.radianceBuffer.get(), RenderBufferAccess::READ | RenderBufferAccess::WRITE) });
         }
 
@@ -3799,15 +3737,15 @@ namespace RT64 {
         // The indirect pass: GTAO and SSGI at half size, with the same constants and inputs as the pass, which
         // gathers them. Only when one of them is on (SSGI only while the pass draws the scene, as it reads it), or
         // for Half-resolution ray tracing: its lower half, the traced sun shadows and light beams for the pass to read.
-        const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr) &&
+        const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (sceneSetBvh != nullptr) &&
             (res.rayTexturesSet != nullptr) && (res.rayTextureCacheSet != nullptr);
         const bool tracedHalf = tracedIndirect && rayTracingHalf.load();
         // The traced light beams are a soft haze: below Ray tracing resolution High they come from the indirect pass's
         // second band at half size too (a quarter of their rays), whatever the shadows do (SceneEffectsPS BeamsHalf).
         const bool tracedBeamsHalf = tracedIndirect && (tracedBeams[0] > 0.0f) && (rayTracingResolution.load() < 2u);
         if ((((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) || tracedHalf || tracedBeamsHalf) {
-            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
-            commandList->setFramebuffer(res.indirectFramebuffer.get());
+            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(tr.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
+            commandList->setFramebuffer(tr.indirectFramebuffer.get());
             GpuSectionScope timedIndirect(WorkloadGpuSections(), GpuSection::IndirectLight, commandList);
             const uint32_t drawnHeight = tracedHalf ? indirectHeight * 3 : (tracedBeamsHalf ? indirectHeight * 2 : indirectHeight);
             commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(drawnHeight)));
@@ -3816,7 +3754,7 @@ namespace RT64 {
             // traced pass's layout and sets.
             commandList->setPipeline(tracedIndirect ? shaderLibrary->sceneIndirectTraced.pipeline.get() : shaderLibrary->sceneIndirect.pipeline.get());
             commandList->setGraphicsPipelineLayout(tracedIndirect ? shaderLibrary->sceneEffectsTraced.pipelineLayout.get() : shaderLibrary->sceneEffects.pipelineLayout.get());
-            commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
+            commandList->setGraphicsDescriptorSet(sceneSet->get(), 0);
             if (tracedIndirect) {
                 commandList->setGraphicsDescriptorSet(res.rayTexturesSet->get(), 1);
                 commandList->setGraphicsDescriptorSet(res.rayTextureCacheSet, 2);
@@ -3824,7 +3762,7 @@ namespace RT64 {
             commandList->setGraphicsPushConstants(0, &constants);
             commandList->setVertexBuffers(0, nullptr, 0, nullptr);
             commandList->drawInstanced(3, 1, 0, 0);
-            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::SHADER_READ) });
+            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(tr.indirectTexture.get(), RenderTextureLayout::SHADER_READ) });
         }
 
         commandList->setFramebuffer(colorTarget->textureFramebuffer.get());
@@ -3840,7 +3778,7 @@ namespace RT64 {
         }
         commandList->setScissors(effectsArea);
         // Traced reflections while this frame's structure is built (BuildSceneBVH), else the depth march.
-        const bool traced = res.bvhReady && (shaderLibrary->sceneEffectsTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr) &&
+        const bool traced = res.bvhReady && (shaderLibrary->sceneEffectsTraced.pipeline != nullptr) && (sceneSetBvh != nullptr) &&
             (res.rayTexturesSet != nullptr) && (res.rayTextureCacheSet != nullptr);
         {
             static const bool tracedLog = (getenv("TOOIE_RT_LOG") != nullptr);
@@ -3854,7 +3792,7 @@ namespace RT64 {
         const int mainSpan = WorkloadGpuSections().start(traced ? GpuSection::TracedEffects : GpuSection::SceneEffects, commandList);
         commandList->setPipeline(traced ? shaderLibrary->sceneEffectsTraced.pipeline.get() : shaderLibrary->sceneEffects.pipeline.get());
         commandList->setGraphicsPipelineLayout(traced ? shaderLibrary->sceneEffectsTraced.pipelineLayout.get() : shaderLibrary->sceneEffects.pipelineLayout.get());
-        commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
+        commandList->setGraphicsDescriptorSet(sceneSet->get(), 0);
         if (traced) {
             commandList->setGraphicsDescriptorSet(res.rayTexturesSet->get(), 1);
             commandList->setGraphicsDescriptorSet(res.rayTextureCacheSet, 2);

@@ -15,6 +15,12 @@ namespace tooie::mix_rate {
     // as a physical address and size. The size is 0 if the sound memory didn't move.
     uint32_t extra_region_start();
     uint32_t extra_region_size();
+
+    // The rate factor the sound in RDRAM is set up for (1 at 22 kHz, 2 at 44 kHz). A save state keeps it
+    // with its RDRAM and puts it back on a load, so the next sound frame switches the reverb, the synthesizer's
+    // rate and the AI back to what the menu asks for (a load otherwise left the music at double or half speed).
+    uint32_t factor();
+    void restore_factor(uint32_t factor);
 }
 
 #endif

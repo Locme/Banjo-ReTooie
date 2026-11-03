@@ -117,11 +117,12 @@ namespace {
         }
 
         if (written) {
-            std::fprintf(stderr, "[screenshot] saved %s (%ux%u)\n", path.string().c_str(), width, height);
+            // u8string, here and below: string() throws on Windows for a name outside the ANSI code page.
+            std::fprintf(stderr, "[screenshot] saved %s (%ux%u)\n", (const char*)path.u8string().c_str(), width, height);
             tooie::toast::show("Screenshot saved");
         }
         else {
-            std::fprintf(stderr, "[screenshot] could not save %s\n", path.string().c_str());
+            std::fprintf(stderr, "[screenshot] could not save %s\n", (const char*)path.u8string().c_str());
             tooie::toast::show("Screenshot not saved");
         }
     }
@@ -198,7 +199,7 @@ namespace {
         std::error_code ec;
         fs::create_directories(folder, ec);
         fs::path stamped = next_path(folder);
-        fs::path dir = folder / ("burst-" + stamped.stem().string());
+        fs::path dir = folder / (u8"burst-" + stamped.stem().u8string());
         fs::create_directories(dir, ec);
         size_t written = 0;
         for (size_t i = 0; i < frames.size(); i++) {
@@ -226,7 +227,7 @@ namespace {
                 std::fclose(file);
             }
         }
-        std::fprintf(stderr, "[screenshot] burst: %zu of %zu frames saved in %s\n", written, frames.size(), dir.string().c_str());
+        std::fprintf(stderr, "[screenshot] burst: %zu of %zu frames saved in %s\n", written, frames.size(), (const char*)dir.u8string().c_str());
         tooie::toast::show("Burst saved: " + std::to_string(written) + " frames");
     }
 
@@ -313,6 +314,16 @@ namespace {
                 }
             }
         }
+    }
+}
+
+void tooie::screenshot::burst_start() {
+    burst_begin();
+}
+
+void tooie::screenshot::burst_stop() {
+    if (burst_on.load()) {
+        burst_end();
     }
 }
 

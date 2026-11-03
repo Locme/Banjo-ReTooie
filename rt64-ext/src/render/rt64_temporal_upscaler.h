@@ -117,6 +117,9 @@ namespace RT64 {
         uint32_t height = 0;
         uint32_t lastOutputWidth = 0;
         uint32_t lastOutputHeight = 0;
+        // The size resolved[] were made at (DLSS and FSR change lastOutputWidth/Height without touching them).
+        uint32_t resolvedWidth = 0;
+        uint32_t resolvedHeight = 0;
         uint32_t historyResets = 0;
         float currentJitter[2] = {};
         bool velocityValid = false;

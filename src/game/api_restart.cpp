@@ -76,10 +76,12 @@ void tooie::api_restart::add_prompt(recomp::config::Config& graphics) {
     graphics.add_option_change_callback(recompui::config::graphics::options::api_option,
         [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value,
            recomp::config::OptionChangeContext change_context) {
-            if (const uint32_t* api = std::get_if<uint32_t>(&cur_value)) {
-                tooie::upscaler::api_changed(*api);
-            }
             if (change_context == recomp::config::OptionChangeContext::Load) {
+                // The upscaler goes by the API the renderer runs with, the loaded one: a new choice only takes
+                // effect after the restart, and "Later" keeps this session on the old API.
+                if (const uint32_t* api = std::get_if<uint32_t>(&cur_value)) {
+                    tooie::upscaler::api_changed(*api);
+                }
                 running_api = cur_value;
                 return;
             }

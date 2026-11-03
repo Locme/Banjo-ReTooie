@@ -106,7 +106,7 @@ bool FurShell(float3 anchor, float3 baseColor, float share, bool white, float ma
     return true;
 }
 
-// Banjo-Tooie: one of Kazooie's feathers (GrassGS.hlsl): anchor is its place across (-1 to 1) and along it (0 root,
+// Banjo-Tooie: one of Kazooie's feathers (FeatherGS.hlsl): anchor is its place across (-1 to 1) and along it (0 root,
 // 1 tip), then its own shade. Only on her feathers (reds and oranges), not her beak or legs. Cut to a feather's
 // shape, narrow at the root and round at the tip, darker towards the root where the one above lies over it, with a
 // faint shaft down its middle. known: her model marks it a feather by its own colour (SetFurVertexFlags), so its

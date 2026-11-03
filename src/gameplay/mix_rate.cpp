@@ -107,6 +107,19 @@ uint32_t tooie::mix_rate::extra_region_size() {
     return relocated ? region_size : 0;
 }
 
+// Game thread, between frames (save_state.cpp), where no sound frame is being built.
+uint32_t tooie::mix_rate::factor() {
+    return ::factor;   // the file's own (this function's name hides it here)
+}
+
+void tooie::mix_rate::restore_factor(uint32_t restored) {
+    if (restored == 1 || restored == 2) {
+        // The reverb's parameters, its delays in the heap and the synthesizer's rate are back at this
+        // factor with the RDRAM; switch_rate takes them (and the AI) to the menu's rate from here.
+        ::factor = restored;
+    }
+}
+
 // func_800125B0, after the audio heap is set up and before func_8001268C builds the synthesizer.
 extern "C" void tooie_mix_rate_heap(uint8_t* rdram, recomp_context* /*ctx*/) {
     factor = high_picked() ? 2 : 1;

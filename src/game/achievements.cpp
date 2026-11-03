@@ -145,9 +145,18 @@ namespace {
             return;
         }
         nlohmann::json json = nlohmann::json::parse(file, nullptr, false);
+        file.close();
         if (json.is_object() && json.contains("unlocked") && json["unlocked"].is_object()) {
             unlocked = json["unlocked"];
+            return;
         }
+        // Unreadable: keep it as achievements.json.bad, so the next unlock (which rewrites the file with
+        // only what is unlocked from now on) doesn't lose what it held.
+        std::error_code ec;
+        std::filesystem::path bad = file_path();
+        bad += ".bad";
+        std::filesystem::copy_file(file_path(), bad, std::filesystem::copy_options::overwrite_existing, ec);
+        std::fprintf(stderr, "[achievements] achievements.json could not be read; kept as achievements.json.bad\n");
     }
 
     // Called with unlocked_mutex held.
@@ -155,7 +164,8 @@ namespace {
         nlohmann::json json = nlohmann::json::object();
         json["unlocked"] = unlocked;
         const std::filesystem::path path = file_path();
-        const std::filesystem::path temp = path.string() + ".tmp";
+        std::filesystem::path temp = path;
+        temp += ".tmp";
         {
             std::ofstream file(temp, std::ios::trunc);
             if (!file) {
@@ -411,7 +421,9 @@ namespace {
                 }
                 seen.push_back(once_key);
             }
-            count = unlocked.value(count_key, 0) + 1;
+            // A count that isn't a whole number (a hand-edited file) starts again from 0 instead of throwing.
+            const auto found = unlocked.find(count_key);
+            count = (found != unlocked.end() && found->is_number_integer() ? found->get<int>() : 0) + 1;
             unlocked[count_key] = count;
             if (count >= c->goal && !unlocked.contains(id)) {
                 unlocked[id] = now_text();

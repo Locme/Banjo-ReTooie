@@ -149,6 +149,9 @@ namespace {
         // Caps as the game had them before the cheat touched them, so turning a cheat off puts them back.
         std::array<uint16_t, item_count> original{};
         std::array<bool, item_count> overridden{};
+        // The last cap the game itself had for each item (0 = none seen yet). A Load State taken with a cheat
+        // on puts the no-limit cap back while the cheat may now be off: the cap then goes back to this.
+        std::array<uint16_t, item_count> last_real{};
 
         for (;;) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -176,6 +179,7 @@ namespace {
                         if (*cap != infinite_cap) {
                             // Remember what the game has now (it also changes caps when Banjo learns upgrades).
                             original[idx] = *cap;
+                            last_real[idx] = *cap;
                             overridden[idx] = true;
                             *cap = infinite_cap;
                         }
@@ -184,6 +188,11 @@ namespace {
                             *cap = original[idx];
                         }
                         overridden[idx] = false;
+                    } else if (*cap != infinite_cap) {
+                        last_real[idx] = *cap;
+                    } else if (last_real[idx] != 0) {
+                        // The no-limit cap with no cheat on: put back by a Load State.
+                        *cap = last_real[idx];
                     }
                 }
             }

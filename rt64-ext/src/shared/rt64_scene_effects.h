@@ -31,6 +31,12 @@
 // the rounding (x * (1 / cell) + 0.5, then floor) comes out the same on the CPU and in shaders.
 #define SUN_SHADOW_MAP_FAR_CELL 8192.0f
 
+// Banjo-Tooie: the traced scene's geometry table (gRayGeometries, 16 bytes an entry): the level's geometries from entry 0,
+// the models' from SCENE_RAY_MAX_GEOMETRIES (their instance's custom index), then the ray tracing materials' records from
+// SCENE_RAY_MATERIAL_BASE (record 0 is none).
+#define SCENE_RAY_MAX_GEOMETRIES 8192u
+#define SCENE_RAY_MATERIAL_BASE (2u * SCENE_RAY_MAX_GEOMETRIES)
+
 inline unsigned int SunShadowMapSize(float halfWidth) {
     if (halfWidth > SUN_SHADOW_MAP_FAR_HALF - 1.0f) {
         return (unsigned int)(SUN_SHADOW_MAP_FAR_SIZE);

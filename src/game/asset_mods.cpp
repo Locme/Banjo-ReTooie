@@ -187,7 +187,7 @@ namespace {
             out.write((const char*)bytes.data(), bytes.size());
             written++;
         }
-        printf("[assets] dumped %u assets to %s (%u could not be unpacked)\n", written, folder.string().c_str(), failed);
+        printf("[assets] dumped %u assets to %s (%u could not be unpacked)\n", written, (const char*)folder.u8string().c_str(), failed);
         fflush(stdout);
         tooie::toast::show("Assets dumped: " + std::to_string(written) + " new files");
         dump_running = false;
@@ -237,7 +237,9 @@ namespace {
         for (const fs::path& folder : folders) {
             std::error_code ec;
             for (const auto& entry : fs::directory_iterator(folder, ec)) {
-                std::string name = entry.path().filename().string();
+                // u8string: string() throws for a name outside the Windows ANSI code page.
+                const std::u8string u8_name = entry.path().filename().u8string();
+                const std::string name(u8_name.begin(), u8_name.end());
                 unsigned id = 0;
                 char tail[8] = {};
                 if (std::sscanf(name.c_str(), "asset_%x%7s", &id, tail) == 2 && std::strcmp(tail, ".bin") == 0) {

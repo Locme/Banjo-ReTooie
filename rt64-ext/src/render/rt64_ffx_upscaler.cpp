@@ -32,6 +32,16 @@ namespace RT64 {
         std::string code(ffxReturnCode_t result) {
             return "FFX error " + std::to_string(result);
         }
+
+        // FFX binds its own descriptor heaps, root signature and pipeline on the command list: plume's record of what is
+        // bound is dropped so it sets its own again on next use (it would bind its descriptor tables into FFX's heaps).
+        void resetStateAfterDispatch(D3D12CommandList *commandList) {
+            commandList->notifyDescriptorHeapWasChangedExternally();
+            commandList->activeComputePipelineLayout = nullptr;
+            commandList->activeGraphicsPipelineLayout = nullptr;
+            commandList->activeGraphicsPipeline = nullptr;
+            commandList->activeTopology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+        }
     }
 
     void FfxBackend::fail(const std::string &why) {
@@ -211,6 +221,7 @@ namespace RT64 {
 
         ffxContext ctx = context;
         const ffxReturnCode_t result = functions.Dispatch(&ctx, &dispatch.header);
+        resetStateAfterDispatch(d3dCommandList);
         if (result != FFX_API_RETURN_OK) {
             fail("FSR failed to run (" + code(result) + ")");
             return false;

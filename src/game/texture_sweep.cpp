@@ -278,11 +278,29 @@ namespace {
         // Write to a temporary name first, so a game that stops halfway leaves no broken PNG.
         fs::path temp = path;
         temp += ".part";
-        if (stbi_write_png(temp.string().c_str(), t.width, t.height, 4, rgba.data(), t.width * 4)) {
+        // Encoded in memory and written through the path, as stbi_write_png takes a narrow name that Windows
+        // reads in the ANSI code page (a folder named outside it would not open).
+        std::vector<uint8_t> png;
+        auto append = [](void* context, void* data, int size) {
+            auto* out = static_cast<std::vector<uint8_t>*>(context);
+            out->insert(out->end(), static_cast<uint8_t*>(data), static_cast<uint8_t*>(data) + size);
+        };
+        if (!stbi_write_png_to_func(append, &png, t.width, t.height, 4, rgba.data(), t.width * 4)) {
+            return;
+        }
+        bool written = false;
+        {
+            std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+            out.write(reinterpret_cast<const char*>(png.data()), (std::streamsize)png.size());
+            written = out.good();
+        }
+        if (written) {
             fs::rename(temp, path, ec);
             if (!ec) {
                 new_pngs++;
             }
+        } else {
+            fs::remove(temp, ec);
         }
     }
 
@@ -305,7 +323,9 @@ namespace {
 
     // Called by RT64 on its renderer thread for each texture it dumps the first time.
     void on_texture_dumped(const fs::path& base_path, const uint8_t* tmem, const RT64::LoadTile& tile, uint16_t width, uint16_t height, uint32_t tlut) {
-        std::string name = base_path.filename().string();
+        // u8string, here and below: string() throws on Windows for a name outside the ANSI code page.
+        const std::u8string file_name = base_path.filename().u8string();
+        std::string name(file_name.begin(), file_name.end());
         name = name.substr(0, name.find('.'));
         DumpedTexture t{name, std::vector<uint8_t>(tmem, tmem + tmem_bytes), tile, width, height, tlut};
         {
@@ -321,7 +341,8 @@ namespace {
         std::vector<std::string> hashes;
         for (const auto& entry : fs::directory_iterator(folder, ec)) {
             if (entry.path().extension() == ".png") {
-                hashes.push_back(entry.path().stem().string());
+                const std::u8string stem = entry.path().stem().u8string();
+                hashes.emplace_back(stem.begin(), stem.end());
             }
         }
         std::sort(hashes.begin(), hashes.end());
@@ -369,7 +390,7 @@ namespace {
             png_folder = root / "png";
         }
         RT64::SetTextureDumpDirectory(root / "raw", on_texture_dumped);
-        printf("[texture-dump] dumping to %s\n", root.string().c_str());
+        printf("[texture-dump] dumping to %s\n", (const char*)root.u8string().c_str());
         fflush(stdout);
     }
 
@@ -486,8 +507,21 @@ namespace {
     }
 
 
-    // For the crash handler and the watchdog, which can't build paths or strings safely.
+    // For the crash handler and the watchdog, which can't build paths or strings safely. Wide on Windows, so a
+    // folder named outside the ANSI code page (バンジョー on a Western PC) still opens.
+#ifdef _WIN32
+    wchar_t progress_path[1024] = {};
+#else
     char progress_path[1024] = {};
+#endif
+
+    FILE* open_progress() {
+#ifdef _WIN32
+        return _wfopen(progress_path, L"a");
+#else
+        return std::fopen(progress_path, "a");
+#endif
+    }
     char entry_now[160] = {};
     std::atomic<bool> pass_over_armed{false};
     std::atomic<bool> pass_over_enabled{true};
@@ -620,7 +654,16 @@ namespace {
             fs::remove(progress_file(), ec);
             log_line("begin, " + std::to_string(targets.size()) + " maps");
         }
-        std::snprintf(progress_path, sizeof(progress_path), "%s", progress_file().string().c_str());
+        {
+            // native(): wide on Windows (path::string() throws for a name outside the ANSI code page), UTF-8 elsewhere.
+            const auto path = progress_file().native();
+            const size_t room = sizeof(progress_path) / sizeof(progress_path[0]) - 1;
+            const size_t length = path.size() < room ? path.size() : room;
+            for (size_t i = 0; i < length; i++) {
+                progress_path[i] = path[i];
+            }
+            progress_path[length] = 0;
+        }
         phase = Phase::WaitForFile;
         phase_start = steady::now();
     }
@@ -909,7 +952,7 @@ void tooie::texture_sweep::note_major(const char* why) {
     if (!pass_over_armed.load() || progress_path[0] == '\0') {
         return;
     }
-    if (FILE* f = std::fopen(progress_path, "a")) {
+    if (FILE* f = open_progress()) {
         // "noted": the sweep carried on in this entrance; a resume reads it as a remark only.
         std::fprintf(f, "noted MAJOR %s: %s\n", entry_now, why);
         std::fclose(f);
@@ -923,7 +966,7 @@ bool tooie::texture_sweep::pass_over(const char* why) {
     passed_over = true;
     char line[1400];
     std::snprintf(line, sizeof(line), "MAJOR %s passed over: %s", entry_now, why);
-    if (FILE* f = std::fopen(progress_path, "a")) {
+    if (FILE* f = open_progress()) {
         std::fprintf(f, "%s\n", line);
         std::fclose(f);
     }

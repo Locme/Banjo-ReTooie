@@ -10,6 +10,7 @@
 #include "ultramodern/config.hpp"
 
 #include "tooie_upscaler.h"
+#include "tooie_watchdog.h"
 
 namespace RT64 {
     // rt64-ext/src/render/rt64_upscaler.h.
@@ -34,11 +35,35 @@ namespace {
 
 namespace {
     // List order: Off, Temporal, FSR 3, FSR 4, FSR 4 Native AA, DLSS, DLAA (Windows).
+    // Whether the renderer of this session runs on Vulkan: the API loaded at start, not one picked since (that
+    // waits for a restart, and "Later" keeps the old one).
     bool vulkan_selected = false;
+
+    // Auto is Direct3D 12 on Windows and Vulkan everywhere else (Linux has no Direct3D 12).
+    bool runs_on_vulkan(uint32_t api) {
+        if (api == (uint32_t)ultramodern::renderer::GraphicsApi::Auto) {
+#if defined(_WIN32)
+            return false;
+#else
+            return true;
+#endif
+        }
+        return api == (uint32_t)ultramodern::renderer::GraphicsApi::Vulkan;
+    }
+
+    // The API RT64 reports it chose once the game draws (Auto can fall back to Vulkan on a card without
+    // Direct3D 12), else the loaded choice.
+    bool running_vulkan() {
+        const ultramodern::renderer::GraphicsApi reported = tooie::watchdog::renderer_info().api;
+        if (reported != ultramodern::renderer::GraphicsApi::Auto) {
+            return reported == ultramodern::renderer::GraphicsApi::Vulkan;
+        }
+        return vulkan_selected;
+    }
 }
 
 void tooie::upscaler::api_changed(uint32_t api) {
-    vulkan_selected = (api == (uint32_t)ultramodern::renderer::GraphicsApi::Vulkan);
+    vulkan_selected = runs_on_vulkan(api);
     if (!created) {
         return;
     }
@@ -71,7 +96,7 @@ void tooie::upscaler::apply() {
     }
 #if !defined(__ANDROID__)
     // FSR needs Direct3D 12; on Vulkan the built-in upscaler stands in.
-    if (vulkan_selected && ((mode == (uint32_t)Mode::Fsr3) || (mode == (uint32_t)Mode::Fsr4) || (mode == (uint32_t)Mode::Fsr4NativeAA))) {
+    if (running_vulkan() && ((mode == (uint32_t)Mode::Fsr3) || (mode == (uint32_t)Mode::Fsr4) || (mode == (uint32_t)Mode::Fsr4NativeAA))) {
         mode = (uint32_t)Mode::Temporal;
     }
 #endif
@@ -124,7 +149,7 @@ void tooie::upscaler::add_option(recomp::config::Config& graphics) {
             api = std::get<uint32_t>(graphics.get_option_value(recompui::config::graphics::options::api_option));
         } catch (...) {
         }
-        vulkan_selected = (api == (uint32_t)ultramodern::renderer::GraphicsApi::Vulkan);
+        vulkan_selected = runs_on_vulkan(api);
     }
 
     // Only the upscalers a platform can run are listed: Android has no FSR 3, FSR 4 or DLSS (their DLLs are Windows only), and Windows no Snapdragon GSR. Arm ASR is not made yet.

@@ -327,6 +327,13 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     if (valid_ptr(camera) && tooie::photo_mode::place_camera(rdram, ctx, camera)) {
         state.active = false;
         player_fade = 1.0f;
+        // Photo mode's mouse motion, wheel and clicks are not the free camera's: drained here, so they don't
+        // all land on the first step after it.
+        float drop[4];
+        tooie::motion_aim::take_orbit(&drop[0], &drop[1], &drop[2], &drop[3]);
+        state.wheel = recompinput::get_game_mouse_wheel();
+        state.middle = recompinput::get_game_mouse_clicks(2);
+        state.has_wheel = true;
         return;
     }
     const uint32_t dynamic = read_word(rdram, ctl + ctl_dynamic);
@@ -397,7 +404,10 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     // Mouse wheel zoom and the middle button (snap behind) while the mouse is on; counts since last step.
     const int32_t wheel_now = recompinput::get_game_mouse_wheel();
     const uint32_t middle_now = recompinput::get_game_mouse_clicks(2);
-    const bool mouse_on = mouse_mode != (uint32_t)tooie::FreeCameraMouse::Off;
+    // Not while something else has the wheel and buttons: Move Sun held, a pick mode, or the cursor shown (Tab).
+    const bool mouse_on = mouse_mode != (uint32_t)tooie::FreeCameraMouse::Off &&
+        !tooie::hotkeys::down(recompinput::GameInput::SUN_MOVE) && !recompinput::pick_mode() &&
+        !recompinput::cursor_shown_by_key();
     const int32_t wheel_notches = mouse_on && state.has_wheel ? wheel_now - state.wheel : 0;
     const bool middle_clicked = mouse_on && state.has_wheel && middle_now != state.middle;
     state.wheel = wheel_now;

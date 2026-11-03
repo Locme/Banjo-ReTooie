@@ -33,6 +33,16 @@ namespace RT64 {
     std::wstring exeFolderForDlss() { return exeFolder(); }
     const char *DlssProjectIdString() { return DlssProjectId; }
 
+    // After a third-party dispatch (NGX here, FFX in rt64_ffx_upscaler.cpp) on a Direct3D 12 command list: it bound its own
+    // descriptor heaps, root signature and pipeline, so plume's record of what is bound is dropped and set again on next use.
+    static void ResetD3D12StateAfterExternalDispatch(D3D12CommandList *commandList) {
+        commandList->notifyDescriptorHeapWasChangedExternally();
+        commandList->activeComputePipelineLayout = nullptr;
+        commandList->activeGraphicsPipelineLayout = nullptr;
+        commandList->activeGraphicsPipeline = nullptr;
+        commandList->activeTopology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+    }
+
     namespace {
         std::wstring exeFolder() {
             wchar_t path[MAX_PATH] = {};
@@ -194,6 +204,10 @@ namespace RT64 {
             NVSDK_NGX_Handle *handle = nullptr;
             const NVSDK_NGX_Result result = useVulkan ? NGX_VULKAN_CREATE_DLSS_EXT(vkCommandList->vk, 1, 1, &handle, ngxParams, &create) :
                 NGX_D3D12_CREATE_DLSS_EXT(d3dCommandList->d3d, 1, 1, &handle, ngxParams, &create);
+            // Making the feature records into the command list too.
+            if (!useVulkan) {
+                ResetD3D12StateAfterExternalDispatch(d3dCommandList);
+            }
             if (NVSDK_NGX_FAILED(result)) {
                 fail("could not create the DLSS feature: " + narrow(GetNGXResultAsString(result)));
                 return false;
@@ -270,6 +284,8 @@ namespace RT64 {
         eval.InMVScaleX = 1.0f;
         eval.InMVScaleY = 1.0f;
         const NVSDK_NGX_Result result = NGX_D3D12_EVALUATE_DLSS_EXT(d3dCommandList->d3d, static_cast<NVSDK_NGX_Handle *>(feature), ngxParams, &eval);
+        // Without this plume would go on binding its descriptor tables into NGX's heaps (garbage textures or a removed device).
+        ResetD3D12StateAfterExternalDispatch(d3dCommandList);
         if (NVSDK_NGX_FAILED(result)) {
             fail("DLSS failed to run: " + narrow(GetNGXResultAsString(result)));
             return false;

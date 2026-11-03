@@ -533,8 +533,14 @@ void tooie::menu_mouse::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
     static int hand_idle = 100;
     hand_idle = hand_active ? 0 : hand_idle + 1;
     const bool hand_hides_cursor = on && !pause_open && hand_idle < 30;
+    // The wheel's count when the last tick looked (kept in step while the menu is shut, so turning it in play
+    // doesn't move the highlight once the menu opens).
+    static int32_t wheel_seen = recompinput::get_game_mouse_wheel();
     if (!on) {
         pad_used.store(false);
+        // Up pushes in play (walking forward) are not a wrap in the menu.
+        pad_up.store(false);
+        wheel_seen = recompinput::get_game_mouse_wheel();
         take_mouse_use(true);
         clear_steer();
         return;
@@ -543,7 +549,6 @@ void tooie::menu_mouse::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
     // The Start menu's rows, for the wrap and the wheel (L, 2026-10-21): Up at the top goes to the bottom row, and the
     // wheel moves the highlight a row a notch. The highlight is written straight into the menu with its first row kept
     // in view, as for a hover.
-    static int32_t wheel_seen = recompinput::get_game_mouse_wheel();
     const int32_t wheel_now = recompinput::get_game_mouse_wheel();
     const int wheel_notches = (int)(wheel_now - wheel_seen);
     wheel_seen = wheel_now;

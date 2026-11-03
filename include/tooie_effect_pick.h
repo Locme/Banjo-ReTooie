@@ -3,15 +3,14 @@
 
 // Shader Effects pick mode (src/debug/parallax_pick.cpp, beside parallax pick mode): the Shader Effects Pick Mode key
 // frees the mouse as a crosshair and the texture under it is highlighted. A texture can hold several effects at once:
-// right click chooses an effect (Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, Text (Mirror Mode flips it
+// right click chooses an effect (Disable, Deep Snow, Ice Reflection, Shiny Reflection, Text (Mirror Mode flips it
 // back so it reads normally), Lamp (a lit lamp: Graphics > Ray tracing lights the scene from it), Slight Glow, Light Source (lights the
 // scene like a lamp, with no glow in the air round it; Shift + wheel sets its strength), Disable RT (left out of
 // the traced scene)) and left
 // click turns it on or off for that texture (or keys 1 to 9 choose and turn on or off in one; hold left click and sweep
 // to paint it over more textures; middle click shows every texture with it); Disable turns the others off, and Shift + left click goes back to the built-in
 // choice. The picks
-// are kept in shader_effect_tags.txt in the Dev Files folder and override the built-in lists (grass_textures[],
-// ice_textures[], and the shiny list from parallax_textures[] in picture_filters.cpp), which they can be folded into.
+// are kept in shader_effect_tags.txt in the Dev Files folder and override the built-in lists (ice_textures[], and the shiny list from parallax_textures[] in picture_filters.cpp), which they can be folded into.
 #include <cstdint>
 #include <functional>
 #include <vector>
@@ -19,20 +18,19 @@
 namespace tooie::effect_pick {
     enum Effect : uint8_t {
         effect_disable = 0,
-        effect_grass = 1,
-        effect_deep_snow = 2,
-        effect_ice = 3,
-        effect_shiny = 4,
-        effect_text = 5,
-        effect_lamp = 6,
+        effect_deep_snow = 1,
+        effect_ice = 2,
+        effect_shiny = 3,
+        effect_text = 4,
+        effect_lamp = 5,
         // Drawn a little brighter, as if lit from inside (RT64 SetSceneGlowTextures).
-        effect_glow = 7,
+        effect_glow = 6,
         // Lights the traced scene like a lamp (Graphics > Ray tracing), with no glow in the air round the light, at
         // the texture's own strength (light_strength).
-        effect_light = 8,
+        effect_light = 7,
         // Left out of the traced scene (Graphics > Ray tracing): casts no traced shadow and blocks no traced light.
-        effect_rt_off = 9,
-        effect_count = 10
+        effect_rt_off = 8,
+        effect_count = 9
     };
 
     // A texture's effects, one bit each (1 << Effect). A picked texture gets exactly these, none of its built-in ones.

@@ -151,6 +151,21 @@ namespace {
         send();
     }
 
+    // The Effect Debug View and Effect Compare keys (the worker thread below): the view changes at once, but the
+    // settings are not written from here. The config has no lock, and the menu writes and saves it on the UI
+    // thread, so a key pressed with the menu open could race it (or save the file twice at once). Both settings
+    // start Off each launch anyway, so nothing needs saving; the menu rows show the new view the next time the
+    // menu sets one.
+    void key_view(uint32_t v) {
+        view = v % view_count;
+        send();
+    }
+
+    void key_compare(bool on) {
+        compare = on;
+        send();
+    }
+
     bool key_down(SDL_Scancode key) {
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
         return keys != nullptr && keys[key] != 0;
@@ -167,11 +182,11 @@ namespace {
                 // Shift+F6 steps back.
                 const bool back = key_down(SDL_SCANCODE_LSHIFT) || key_down(SDL_SCANCODE_RSHIFT);
                 const uint32_t next = (view + (back ? view_count - 1 : 1)) % view_count;
-                set_view(next);
+                key_view(next);
                 tooie::toast::show(next == 0 ? "Effect view off" : views[next].name);
             }
             if (compare_down && !compare_was_down) {
-                set_compare(!compare);
+                key_compare(!compare);
                 tooie::toast::show(compare ? "Compare: effects on the left, original on the right" : "Compare off");
             }
             view_was_down = view_down;

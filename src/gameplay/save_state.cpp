@@ -81,6 +81,8 @@ namespace {
         std::pair<PTR(void), PTR(void)> vi_framebuffers;
         std::vector<ultramodern::ExternalMessage> external_messages;
         PTR(OSThread) running_queue = NULLPTR;
+        // The mix rate the sound in rdram is set up for (src/gameplay/mix_rate.cpp keeps it on the host).
+        uint32_t mix_factor = 1;
         uint16_t map = 0;
         uint8_t exit = 0;
     } snapshot;
@@ -219,7 +221,8 @@ namespace {
         fprintf(stderr, "[savestate] %s %s\n", out.good() ? "wrote" : "could not write", path.string().c_str());
     }
 
-    enum class Result { done, retry };
+    // give_up: a load whose warp back to the snapshot's area didn't get there.
+    enum class Result { done, retry, give_up };
 
     // The renderer and the RSP task thread read and write RDRAM: let what they have finish first.
     bool wait_for_tasks() {
@@ -248,6 +251,7 @@ namespace {
         snapshot.running_queue = ultramodern::get_running_queue_head();
         recomp::overlays::save_overlay_state(snapshot.overlays);
         snapshot.mapped_overlays = tooie::mapped_overlays();
+        snapshot.mix_factor = tooie::mix_rate::factor();
         snapshot.map = tooie::debug::current_map(rdram);
         snapshot.exit = MEM_B(0x13, game_state_addr);
         snapshot.valid = true;
@@ -265,6 +269,12 @@ namespace {
     constexpr int settle_frames = 20;
     bool warping = false;
     int settle = 0;
+    // The warp is given up when the game has settled on another map for this many frames with no warp
+    // waiting (another warp took its place, or the map change led somewhere else), or after warp_timeout.
+    constexpr int warp_away_limit = 30;
+    constexpr auto warp_timeout = std::chrono::seconds(30);
+    int warp_away_frames = 0;
+    std::chrono::steady_clock::time_point warp_started;
 
     Result load(uint8_t* rdram, recomp_context* ctx, Snapshot& snapshot = ::snapshot, bool quiet = false) {
         if (!snapshot.valid) {
@@ -275,8 +285,22 @@ namespace {
         if (tooie::debug::current_map(rdram) != snapshot.map) {
             if (!warping) {
                 warping = true;
+                warp_away_frames = 0;
+                warp_started = std::chrono::steady_clock::now();
                 tooie::debug::request_warp(snapshot.map, snapshot.exit);
                 fprintf(stderr, "[savestate] warping to map 0x%X first\n", snapshot.map);
+            } else if (!tooie::debug::warp_pending() && !tooie::debug::map_change_busy(rdram)) {
+                // The warp has been taken and the game is on another map: it was replaced or led elsewhere.
+                if (++warp_away_frames >= warp_away_limit) {
+                    last_refusal = "the warp back did not reach the snapshot's area";
+                    return Result::give_up;
+                }
+            } else {
+                warp_away_frames = 0;
+            }
+            if (std::chrono::steady_clock::now() - warp_started > warp_timeout) {
+                last_refusal = "the warp back timed out";
+                return Result::give_up;
             }
             last_refusal = "warping";
             return Result::retry;
@@ -317,6 +341,9 @@ namespace {
         ultramodern::set_vi_framebuffers(snapshot.vi_framebuffers);
         ultramodern::set_external_messages(snapshot.external_messages);
         ultramodern::set_running_queue_head(snapshot.running_queue);
+        // The reverb and the synthesizer's rate in rdram are the snapshot's again: so is the factor, and the
+        // next sound frame switches them to the menu's rate if that has changed since the save.
+        tooie::mix_rate::restore_factor(snapshot.mix_factor);
         if (quiet) {
             return Result::done;
         }
@@ -507,9 +534,17 @@ void tooie::save_state::tick(uint8_t* rdram, recomp_context* ctx) {
             load_requested = false;
             tooie::toast::show("Save states work in a level");
         }
-        else if (load(rdram, ctx) == Result::done) {
+        else if (const Result r = load(rdram, ctx); r == Result::done) {
             load_requested = false;
             load_tries = 0;
+        }
+        else if (r == Result::give_up) {
+            load_requested = false;
+            load_tries = 0;
+            warping = false;
+            settle = 0;
+            tooie::toast::show("Couldn't load the state: the way back to its area was interrupted");
+            fprintf(stderr, "[savestate] load gave up (%s)\n", last_refusal);
         }
         else if (warping || settle > 0) {
             // The warp back to the snapshot's area doesn't count against the tries.

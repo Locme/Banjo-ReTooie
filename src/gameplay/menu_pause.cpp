@@ -91,6 +91,10 @@ bool tooie::menu_pause::open_allowed() {
     return allowed.load();
 }
 
+bool tooie::menu_pause::pausing() {
+    return paused;
+}
+
 void tooie::menu_pause::tick(uint8_t* rdram, recomp_context* ctx) {
     // Start can't open the pause menu in a cutscene or while a map loads, so the ESC menu stays shut too.
     const bool now_allowed = !(enabled() && tooie::debug::can_warp() &&

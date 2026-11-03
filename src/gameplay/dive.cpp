@@ -33,7 +33,8 @@ namespace {
     constexpr uint32_t state_offset = 0x120;   // PlayerState -> state block
     constexpr uint32_t state_current = 0x4;    // state block -> current state id
     constexpr uint32_t yaw_ptr_offset = 0xF8;  // PlayerState -> pointer to Banjo's yaw (degrees, 0 faces +z)
-    constexpr uint32_t form_addr = 0x8012704C; // 1 Banjo-Kazooie (hold_to_run.cpp)
+    constexpr uint32_t form_block_offset = 0xA0; // PlayerState -> the block holding the form
+    constexpr uint32_t form_offset = 0x29;       // that block -> the current form, 1 Banjo-Kazooie
     constexpr uint8_t form_banjo_kazooie = 1;
 
     constexpr uint16_t button_b = 0x4000;
@@ -218,8 +219,11 @@ static void tick_inner(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t player = read_word(rdram, player_table);
     const uint32_t physics = valid_ptr(player) ? read_word(rdram, player + physics_offset) : 0;
     const uint32_t block = valid_ptr(player) ? read_word(rdram, player + state_offset) : 0;
-    if (!valid_ptr(physics) || !valid_ptr(block) || !enabled(now)
-        || rdram[(form_addr - 0x80000000u) ^ 3u] != form_banjo_kazooie) {
+    // The player's own form (+0xA0 block, +0x29), as Transform anywhere and the Transformation cheat read it:
+    // 0x8012704C is the form an area is entered in, and stays Banjo-Kazooie after a change in place.
+    const uint32_t form_block = valid_ptr(player) ? read_word(rdram, player + form_block_offset) : 0;
+    const uint8_t form = valid_ptr(form_block) ? rdram[(form_block + form_offset - 0x80000000u) ^ 3u] : 0;
+    if (!valid_ptr(physics) || !valid_ptr(block) || !enabled(now) || form != form_banjo_kazooie) {
         can_dive = false;
         end("off");
         getup = 0.0f;

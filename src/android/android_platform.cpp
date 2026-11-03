@@ -78,7 +78,10 @@ void tooie::android::setup_paths() {
     // Android throws stdout and stderr away; keep them where the player can copy them from.
     fs::create_directories(app_folder / "logs", ec);
     const fs::path console_log = app_folder / "logs" / "console.log";
-    if (std::freopen(console_log.c_str(), "w", stdout) != nullptr) {
+    // Emptied first and then both streams append, as on Windows (main.cpp): with stdout opened "w" its writes
+    // went at its own offset and overwrote the lines stderr had appended.
+    fs::resize_file(console_log, 0, ec);
+    if (std::freopen(console_log.c_str(), "a", stdout) != nullptr) {
         std::setvbuf(stdout, nullptr, _IONBF, 0);
     }
     if (std::freopen(console_log.c_str(), "a", stderr) != nullptr) {

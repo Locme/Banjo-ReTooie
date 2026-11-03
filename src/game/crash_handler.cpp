@@ -32,10 +32,48 @@
 namespace fs = std::filesystem;
 
 namespace {
-    // Kept as plain buffers so the handlers do as little allocation as possible.
+    // Kept as plain buffers so the handlers do as little allocation as possible. They hold UTF-8, opened through
+    // open_file and the others below: Windows' narrow file calls read the ANSI code page, so a folder named
+    // outside it (バンジョー on a Western PC) would not open.
     char logs_dir[1024];
     char marker_path[1100];
     char crash_log_path[1100];
+
+#ifdef _WIN32
+    constexpr int wide_path_size = 1200;
+
+    bool to_wide(const char* utf8, wchar_t* out, int size) {
+        return MultiByteToWideChar(CP_UTF8, 0, utf8, -1, out, size) > 0;
+    }
+#endif
+
+    FILE* open_file(const char* path, const char* mode) {
+#ifdef _WIN32
+        wchar_t wide_path[wide_path_size];
+        wchar_t wide_mode[8];
+        if (!to_wide(path, wide_path, wide_path_size) || !to_wide(mode, wide_mode, 8)) {
+            return nullptr;
+        }
+        return _wfopen(wide_path, wide_mode);
+#else
+        return std::fopen(path, mode);
+#endif
+    }
+
+    void remove_file(const char* path) {
+#ifdef _WIN32
+        wchar_t wide_path[wide_path_size];
+        if (to_wide(path, wide_path, wide_path_size)) {
+            _wremove(wide_path);
+        }
+#else
+        std::remove(path);
+#endif
+    }
+
+    fs::path utf8_path(const char* path) {
+        return fs::path(std::u8string(reinterpret_cast<const char8_t*>(path)));
+    }
     std::atomic_flag crashing;
 
     // Build and settings for the crash log (set_crash_context). Two buffers so a crash never reads
@@ -54,9 +92,9 @@ namespace {
     void prune_dumps(const char* prefix, size_t keep) {
         std::error_code ec;
         std::vector<fs::path> dumps;
-        for (const auto& entry : fs::directory_iterator(fs::path(logs_dir), ec)) {
-            const std::string name = entry.path().filename().string();
-            if (name.rfind(prefix, 0) == 0 && entry.path().extension() == ".dmp") {
+        for (const auto& entry : fs::directory_iterator(utf8_path(logs_dir), ec)) {
+            const std::u8string name = entry.path().filename().u8string();
+            if (name.rfind(reinterpret_cast<const char8_t*>(prefix), 0) == 0 && entry.path().extension() == ".dmp") {
                 dumps.push_back(entry.path());
             }
         }
@@ -93,7 +131,7 @@ namespace {
     void append_log_line(const char* line) {
         add_to_report(line);
         add_to_report("\n");
-        FILE* f = std::fopen(crash_log_path, "a");
+        FILE* f = open_file(crash_log_path, "a");
         if (f) {
             std::fprintf(f, "%s\n", line);
             std::fclose(f);
@@ -103,7 +141,7 @@ namespace {
     // The build and settings, each line indented under the crash line.
     void append_context() {
         const char* text = context[context_index.load()];
-        FILE* f = std::fopen(crash_log_path, "a");
+        FILE* f = open_file(crash_log_path, "a");
         if (!f) {
             return;
         }
@@ -126,7 +164,7 @@ namespace {
     }
 
     void remove_marker() {
-        std::remove(marker_path);
+        remove_file(marker_path);
     }
 
     void clean_exit() {
@@ -303,7 +341,10 @@ namespace {
         append_backtrace(ep);
 
         bool dumped = false;
-        HANDLE file = CreateFileA(dump_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        wchar_t wide_dump_name[wide_path_size];
+        HANDLE file = to_wide(dump_name, wide_dump_name, wide_path_size)
+            ? CreateFileW(wide_dump_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)
+            : INVALID_HANDLE_VALUE;
         if (file != INVALID_HANDLE_VALUE) {
             MINIDUMP_EXCEPTION_INFORMATION info{};
             info.ThreadId = GetCurrentThreadId();
@@ -429,7 +470,10 @@ std::string tooie::write_hang_dump(const std::string& report_text, const uint8_t
     timestamp(ts, sizeof(ts));
     char dump_name[1200];
     std::snprintf(dump_name, sizeof(dump_name), "%s\\hang_%s.dmp", logs_dir, ts);
-    HANDLE file = CreateFileA(dump_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    wchar_t wide_dump_name[wide_path_size];
+    HANDLE file = to_wide(dump_name, wide_dump_name, wide_path_size)
+        ? CreateFileW(wide_dump_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)
+        : INVALID_HANDLE_VALUE;
     if (file == INVALID_HANDLE_VALUE) {
         return {};
     }
@@ -457,7 +501,7 @@ std::string tooie::write_hang_dump(const std::string& report_text, const uint8_t
     }
     CloseHandle(file);
     if (!dumped) {
-        std::remove(dump_name);
+        remove_file(dump_name);
         return {};
     }
     return dump_name;
@@ -476,7 +520,7 @@ void tooie::crash_log_line(const char* line) {
     if (crash_log_path[0] == '\0') {
         return;
     }
-    FILE* f = std::fopen(crash_log_path, "a");
+    FILE* f = open_file(crash_log_path, "a");
     if (f) {
         std::fprintf(f, "%s\n", line);
         std::fclose(f);
@@ -520,12 +564,12 @@ void tooie::install_crash_handler(const fs::path& app_folder) {
     std::error_code ec;
     fs::path logs = app_folder / "logs";
     fs::create_directories(logs, ec);
-    std::snprintf(logs_dir, sizeof(logs_dir), "%s", logs.string().c_str());
+    std::snprintf(logs_dir, sizeof(logs_dir), "%s", reinterpret_cast<const char*>(logs.u8string().c_str()));
     std::snprintf(marker_path, sizeof(marker_path), "%s/running.marker", logs_dir);
     std::snprintf(crash_log_path, sizeof(crash_log_path), "%s/crashes.log", logs_dir);
 
     // A marker left over from the last run, with no crash logged since, means the process died silently.
-    if (fs::exists(marker_path, ec)) {
+    if (fs::exists(utf8_path(marker_path), ec)) {
         char ts[32];
         timestamp(ts, sizeof(ts));
         char line[256];
@@ -533,7 +577,7 @@ void tooie::install_crash_handler(const fs::path& app_folder) {
         append_log_line(line);
     }
     {
-        std::ofstream marker(marker_path);
+        std::ofstream marker(utf8_path(marker_path));
         char ts[32];
         timestamp(ts, sizeof(ts));
         marker << "started " << ts << "\n";

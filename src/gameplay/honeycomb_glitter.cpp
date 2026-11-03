@@ -10,8 +10,8 @@
 // read the way Tooie's own empty honeycomb reads it), to the left and right of
 // it as seen from Banjo, above and below, each flashing about 0.9 times a
 // second (3% a frame at 30 frames a second), with Tooie's twinkle sprite
-// (_fxtwinkle_entrypoint_0, sprite 0x9E2). The rate is per second of real time,
-// so it does not depend on the frame rate.
+// (_fxtwinkle_entrypoint_0, sprite 0x9E2). The rate is per second of game time,
+// so it does not depend on the frame rate and stops while the game stands still.
 //
 // Objects: the pointer at 0x80136EE0 is the object array; +4 and +8 point at
 // its first and last object, each 0x9C bytes from +0x10. An object's +0 points
@@ -29,6 +29,8 @@
 #include "funcs.h"
 #include "recompui/config.h"
 #include "tooie_honeycomb_glitter.h"
+#include "tooie_menu_pause.h"
+#include "tooie_photo_mode.h"
 #include "tooie_rdram.h"
 
 namespace {
@@ -54,8 +56,8 @@ namespace {
     constexpr int max_objects = 2048;
 
     std::mt19937 rng{1234};
-    std::chrono::steady_clock::time_point last_tick;
-    bool have_last = false;
+    constexpr uint32_t delta_time_addr = 0x8012C760;
+    constexpr uint32_t game_pause_addr = 0x80128AF0;   // the game's pause menu object while it is open
 
     using tooie::rdram::read_float;
     using tooie::rdram::read_word;
@@ -128,10 +130,13 @@ namespace {
 void tooie::honeycomb_glitter::tick(uint8_t* rdram, recomp_context* ctx) {
     static const bool log = std::getenv("TOOIE_HONEYCOMB_LOG") != nullptr;
     auto now = std::chrono::steady_clock::now();
-    double dt = have_last ? std::chrono::duration<double>(now - last_tick).count() : 0.0;
-    last_tick = now;
-    have_last = true;
-    if (dt <= 0.0 || dt > 0.25 || (!enabled() && !log)) {
+    // The game's frame time (0x8012C760, as func_800D8FA0 writes it), not real time, and none while the game
+    // stands still (its pause menu, the ESC menu's pause, photo mode; the last two freeze the delta time only
+    // after this tick, so they are asked): sparkles added then would not play out and fade until it moves on.
+    const bool frozen = read_word(rdram, game_pause_addr) != 0 || tooie::menu_pause::pausing() ||
+        tooie::photo_mode::active();
+    const double dt = frozen ? 0.0 : read_float(rdram, delta_time_addr);
+    if (!(dt > 1.0e-4) || dt > 0.25 || (!enabled() && !log)) {
         return;
     }
 

@@ -36,6 +36,7 @@
 namespace {
     constexpr gpr game_mode_addr = (int32_t)0x8012B3F2;
     constexpr uint8_t mode_bottles_revenge = 1;
+    constexpr uint8_t mode_replay = 2;
     // The game-state block holding map change requests: +0x12 go byte, +0x13 exit.
     constexpr gpr game_state_addr = (int32_t)0x80127630;
 
@@ -170,13 +171,20 @@ void tooie::bottles_revenge::tick(uint8_t* rdram, recomp_context* ctx) {
         recompinput::set_split_controllers(on);
         fprintf(stderr, "[bottles] %s\n", on ? "on" : "off");
     }
-    if (on) {
+    // A replay (boss rush, Cheats > Replays, the game's own Replay menu) holds the byte at 2 and the game
+    // puts the file's moves and items back by it when the replay ends: left alone until it has.
+    const bool in_replay = MEM_BU(0, game_mode_addr) == mode_replay;
+    if (on && !in_replay) {
         MEM_B(0, game_mode_addr) = mode_bottles_revenge;
     }
-    else if (MEM_BU(0, game_mode_addr) == mode_bottles_revenge) {
+    else if (!on && MEM_BU(0, game_mode_addr) == mode_bottles_revenge) {
         MEM_B(0, game_mode_addr) = 0;
     }
 
+    // No intro warp or reload out of a replay's fight or minigame either.
+    if (in_replay) {
+        return;
+    }
     if (intro_tick(rdram, ctx, on)) {
         // The warp to or from the intro loads an area with the mode as it is now.
         reload_requested = false;

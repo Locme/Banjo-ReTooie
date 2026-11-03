@@ -132,27 +132,6 @@ namespace RT64 {
         // Banjo stands on the ground (not jumping or falling): only then does he press a trail into deep snow.
         bool playerGrounded = true;
         float waveSpeed = 1.0f;
-        float grass = 0.0f;
-        float grassHeight = 1.0f;
-        float grassDistance = 2500.0f;
-        float grassDensity = 1.0f;
-        float grassPatches = 1.0f;
-        // 3D grass blades: width (1 as before) and how much their lengths differ (0 all alike, 1 from none to full).
-        float grassThickness = 1.0f;
-        float grassRandomLength = 0.4f;
-        bool grassChunky = false;
-        float grassChunkSize = 2.0f;
-        bool grassPixelated = false;
-        float grassPixelSize = 1.0f;
-        float grassBlend = 0.5f;
-        // Banjo-Tooie: instanced 3D grass's culling (GRASS_CULL_* in rt64_grass_instances.h): frustum culling,
-        // occlusion culling and chunking.
-        uint32_t grassCulling = 0x7;
-        // 3D grass LOD (0 off: every blade out to the grass distance; 1 thins it from 150 units away) and whether the
-        // instanced grass's culling pass runs every other frame.
-        float grassLod = 0.0f;
-        bool grassHalfRate = true;
-        bool grassRayTracing = true;
         float fur = 0.0f;
         float furLength = 1.0f;
         float furDensity = 1.0f;
@@ -335,16 +314,8 @@ namespace RT64 {
         const RenderBuffer *gpuTiles = nullptr;
         RenderDescriptorSet *textureSet = nullptr;
     };
-    // The 3D grass's blades near the camera as triangles (world positions, float4, three a triangle; unused ones NaN), and
-    // a count that changes whenever they are written again. No vertices: no grass in the structures.
-    struct SceneRayGrass {
-        const RenderBuffer *vertices = nullptr;
-        uint32_t vertexCount = 0;
-        uint64_t generation = 0;
-        float reach = 0.0f;
-    };
     void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
-        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, const SceneRayGrass &grass, uint64_t levelKey = 0);
+        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, uint64_t levelKey = 0);
     void SetSceneRayTracing(bool enabled);
     // Banjo-Tooie: Graphics > Ray tracing strength (0 to 1, 0.6 the default): the least each traced effect shows at while
     // ray tracing is active (see RefreshReflections).
@@ -394,29 +365,9 @@ namespace RT64 {
     // ones the drawn frame had, not the game's newest (it can run frames ahead of what is drawn).
     void NoteSceneWorkloadSubmitted(uint64_t workloadId);
     void SetSceneEffectsWorkload(uint64_t workloadId);
-    // Banjo-Tooie: 3D grass on green, level ground of the 3D world (0 off, 1 the most blades), blade height
-    // (1 normal), the distance from the camera they fade out by, in world units, and how closely they grow (1 normal)
-    // and how much of the green ground their patches cover (1 all of it).
-    void SetSceneGrass(float amount, float height, float distance, float density, float patches);
-    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend);
-    // Instanced 3D grass's culling: blades out of view, blades hidden behind what was drawn in front of them last frame,
-    // and whether the grass ground is grouped into world chunks that are culled whole first.
-    void SetSceneGrassCulling(bool frustum, bool occlusion, bool chunking);
-    uint32_t SceneGrassCulling();
-    void SetSceneGrassLod(float lod, bool halfRate);
-    bool SceneGrassHalfRate();
-    // Whether the 3D grass near the camera is in the traced effects' structures (casting traced shadows, seen in traced
-    // reflections), and how far from the camera it is (0 while ray tracing isn't active or this is off).
-    void SetSceneGrassRayTracing(bool enabled);
-    float SceneGrassRayReach();
-    // The blades drawn over each grass draw: 0 when 3D grass is off.
-    uint32_t SceneGrassShells();
-    // Real blades: how many passes of blades a ground triangle spanning low to high (world x and z) this far from the
-    // camera needs (GrassGS.hlsl grows up to 352 a pass), with the finest grid's cells baseCell wide, coarsening from lodNear on.
-    uint32_t SceneGrassBladePasses(const float (&low)[2], const float (&high)[2], float distanceToCamera, float lodNear, float baseCell);
-    // Fills the frame's grass terms from the 3D world's projection (as adjusted for the aspect ratio), view,
+    // Fills the frame's camera terms (also used by deep snow, Kazooie's feathers and parallax) from the 3D world's projection (as adjusted for the aspect ratio), view,
     // view-projection and viewport (as the RSP used them), the framebuffer's resolution in game pixels and
-    // the size of its viewport in target pixels. False when there is no grass to draw this frame.
+    // the size of its viewport in target pixels. False when none of those needs them this frame.
     bool ComputeSceneGrass(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
         const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution,
         float viewportWidth, float viewportHeight, uint64_t workloadId, interop::FrameParams &frameParams);
@@ -457,7 +408,7 @@ namespace RT64 {
         const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams);
     // Banjo-Tooie: Kazooie's feathers (0 off, 1 the fullest), their size, length and density (1 normal), how uneven
     // they are (0 to 1, 0.5 normal) and how see-through (0 solid to 1). The game marks her draws
-    // (G_EX_SETFURSHELLS_V1 2); a geometry shader grows little feathers over them (GrassGS.hlsl).
+    // (G_EX_SETFURSHELLS_V1 2); a geometry shader grows little feathers over them (FeatherGS.hlsl).
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     // Banjo-Tooie: furry NPCs' white fur (G_EX_SETFURSHELLS_V1 3) and feathered NPCs' feathers (4), with their own
     // settings as Banjo's fur and Kazooie's feathers.
@@ -517,13 +468,6 @@ namespace RT64 {
     uint32_t SceneSnowTrailRowSize();
     // Banjo-Tooie: the textures (RT64 hashes) of windows and lamps that light up at night with the day and night cycle.
     void SetSceneNightLights(const uint64_t *hashes, size_t count);
-    // Banjo-Tooie: the textures 3D grass grows on (RT64 texture hashes); with none set, any green ground.
-    void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
-    // Textures with grass only along an edge (cliff tops, the foot of a wall): blades grow on their green parts
-    // whatever way they face. None set, none.
-    void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count);
-    // 1 for a grass texture, 2 for one with a grassy edge, 0 for neither.
-    uint32_t SceneGrassTexture(uint64_t hash);
     // Banjo-Tooie: the ice textures (RT64 hashes): floors, walls and blocks drawn with them reflect with Ice reflections.
     void SetSceneIceTextures(const uint64_t *hashes, size_t count);
     // Banjo-Tooie: ice textures that reflect in any map, not only the icy ones (Shader Effects pick mode's Ice picks and

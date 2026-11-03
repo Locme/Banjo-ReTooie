@@ -261,6 +261,9 @@ namespace {
         float x = 0.0f, y = 0.0f;
     } pad;
     uint16_t last_buttons = 0;
+    // Buttons held as photo mode closes stay away from the game until they are let go, so the B that closed it
+    // (or anything else held) doesn't reach the game as a fresh press. Set on leaving, read by apply_input.
+    std::atomic<uint16_t> exit_mask{0};
 
     // Game-thread state.
     struct Camera {
@@ -277,6 +280,9 @@ namespace {
     } cam;
     bool hud_was_hidden = false;
     uint16_t entered_map = 0;
+    // Photo mode ended while the game was not playing (a pose still on Banjo): his own animation goes back
+    // once the game plays again in the same map.
+    bool pose_restore_pending = false;
 
     struct TestHold {
         bool active = false;
@@ -674,6 +680,11 @@ namespace {
     }
 
     void enter(uint8_t* rdram) {
+        if (pose_restore_pending) {
+            pose_restore_pending = false;
+            saved_anim.saved = false;
+        }
+        exit_mask = 0;
         is_active = true;
         speed = 0;
         fov_scale = 1.0f;
@@ -700,13 +711,16 @@ namespace {
     }
 
     void leave() {
+        // Before is_active goes false, so no pad read in between passes a held button.
+        exit_mask = 0xFFFF;
         is_active = false;
         apply_filters(false);
         RT64::SetPhotoFocus(0.5f, 0.5f);
         players_hidden = false;
         others_hidden = false;
-        if (!hud_was_hidden && tooie::hide_hud::is_hidden()) {
-            tooie::hide_hud::set_hidden(false);
+        // The HUD as it was on entering, whichever way the HUD row left it.
+        if (tooie::hide_hud::is_hidden() != hud_was_hidden) {
+            tooie::hide_hud::set_hidden(hud_was_hidden);
         }
         if (timer_running) {
             stop_timer();
@@ -854,6 +868,12 @@ float tooie::photo_mode::adjust_fov(float fov) {
 
 void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
     if (!is_active) {
+        // Held since photo mode closed: kept from the game until let go.
+        if (const uint16_t mask = exit_mask.load(); mask != 0) {
+            const uint16_t held = mask & *buttons;
+            exit_mask = held;
+            *buttons = (uint16_t)(*buttons & ~held);
+        }
         return;
     }
     uint16_t pressed;
@@ -946,12 +966,33 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     }
     if (is_active && (leave_requested.exchange(false) || !playing || tooie::debug::current_map(rdram) != entered_map)) {
-        if (saved_anim.saved && playing && tooie::debug::current_map(rdram) == entered_map) {
-            apply_pose(rdram, ctx, 0);
+        if (saved_anim.saved && tooie::debug::current_map(rdram) == entered_map) {
+            if (playing) {
+                apply_pose(rdram, ctx, 0);
+                saved_anim.saved = false;
+            }
+            else {
+                // Not safe to call the animation functions now: put it back once the game plays again.
+                pose_restore_pending = true;
+            }
         }
-        saved_anim.saved = false;
+        else {
+            saved_anim.saved = false;
+        }
         pose_choice = 0;
         leave();
+    }
+    if (pose_restore_pending && !is_active) {
+        if (tooie::debug::current_map(rdram) != entered_map) {
+            // A new map loads Banjo afresh.
+            pose_restore_pending = false;
+            saved_anim.saved = false;
+        }
+        else if (playing) {
+            apply_pose(rdram, ctx, 0);
+            pose_restore_pending = false;
+            saved_anim.saved = false;
+        }
     }
     leave_requested = false;
     if (!is_active) {
