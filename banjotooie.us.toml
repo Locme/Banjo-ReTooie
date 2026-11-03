@@ -1213,6 +1213,13 @@ func = "func_800A6250"
 before_vram = 0x800A62C0
 text = "tooie_player_shadow_model(rdram, ctx);"
 
+# Circle shadow (src/gameplay/circle_shadow.cpp): the form's shadow model id ($v0, from func_80084F40) before
+# func_800D674C fetches the model; the disc's id goes in its place while Simple Circle Shadow is on.
+[[patches.hook]]
+func = "func_800A6250"
+before_vram = 0x800A62A4
+text = "tooie_circle_shadow_id(rdram, ctx);"
+
 # HD Shadows: the player's shadow draws (two func_800DE448 calls) are over by 0x800A66C4; 0x800A69E0
 # is the way out for the early return. Ends tooie::hd_shadows::drawing_shadow() for Banjo.
 [[patches.hook]]

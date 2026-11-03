@@ -4576,6 +4576,7 @@ RECOMP_FUNC void func_800A6250(uint8_t* rdram, recomp_context* ctx) {
     // 0x800A62A0: addiu       $a1, $sp, 0x1BC
     ctx->r5 = ADD32(ctx->r29, 0X1BC);
     after_2:
+    tooie_circle_shadow_id(rdram, ctx);
     // 0x800A62A4: jal         0x800D674C
     // 0x800A62A8: or          $a0, $v0, $zero
     ctx->r4 = ctx->r2 | 0;

@@ -5,6 +5,9 @@ regenerated code, CI, notes and tooling are left out.
 
 ## Since 2026-10-13 23:00 UTC
 
+### Graphics
+- **Demake** is a new section at the bottom of Graphics. Its first option, **Simple Circle Shadow** (off by default), gives the player a soft round shadow under the feet, dark in the middle and fading to nothing at the edge, instead of the shadow shaped like him. It takes the place of HD Shadows for the player.
+
 ### Cheats and controls
 - **Direct analog aim** (QOL, off by default): in first person the left stick turns the view faster the further you tilt it, like a modern shooter, with a Slow, Medium or Fast top speed. Off keeps the game's own aiming.
 - **Openable settings**: an effect with settings of its own (Fog, 3D grass, Banjo fur, Sun shadows, Toon outlines and others) is one on/off switch with a down arrow in front of its name; press the arrow to open its sliders on a darker panel, press again to close. An effect that is only a slider (Bloom, SSGI) stays a slider.

@@ -11,6 +11,7 @@
 #include "tooie_hand_cursor.h"
 #include "tooie_menu_tree.h"
 #include "tooie_hd_shadows.h"
+#include "tooie_circle_shadow.h"
 #include "tooie_day_night.h"
 #include "tooie_volumetric.h"
 #include "tooie_volumetric_shadows.h"
@@ -1204,6 +1205,14 @@ void tooie::init_config() {
     recompui::config::set_option_group(recompui::config::graphics::options::msaa_option, "Anti-Aliasing And Scaling");
     recompui::config::set_option_group(tooie::game_frame_rate::option, "Frame Rate And Overlay");
     recompui::config::set_option_group(tooie::effect_views::option, "Debug");
+    // Demake (L, 2026-11-03): retro-style options, a section at the bottom of the Graphics tab.
+    graphics.add_bool_option(
+        tooie::circle_shadow::option,
+        "Simple Circle Shadow",
+        "Banjo (and whoever you play as) gets a soft round shadow under his feet, like the blob shadows of early 3D games, instead of the shadow shaped like him. It is darkest in the middle and fades to nothing at the edge. It sits on slopes like the game's own shadow. Replaces HD Shadows for the player.",
+        false);
+    recompui::config::set_option_display_last(tooie::circle_shadow::option);
+    recompui::config::set_option_group(tooie::circle_shadow::option, "Demake");
 
     // Display tab under Graphics (L, 2026-10-23; was Performance, L 2026-10-16): the Display section, Anti-Aliasing
     // and Scaling, and the frame rate and latency options. They stay in the graphics config (graphics.json), so
