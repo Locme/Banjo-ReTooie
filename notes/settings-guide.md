@@ -144,6 +144,13 @@ framework, not from this port's code, so it is not described here.
   controller's B button by default, which is then no longer a second C-right;
   not bound on the keyboard) run faster as Banjo-Kazooie, Banjo or Kazooie.
   Default: On.
+- **Transform Anywhere Menu**: On or Off. Default: Off. A separate switch from
+  Transform anywhere. While it is on, the Transform key opens a menu over the
+  frozen game with every form this save has already unlocked (Humba's forms once
+  changed into at her pool, Mumbo once played, Banjo and Kazooie once Split Up is
+  learnt, Golden Goliath, Clockwork Kazooie). Locked forms are left out. The
+  d-pad or stick picks one, A changes into it (the area reloads at the entrance
+  you came in by), B, Start or the Transform key goes back.
 - **Transform anywhere**: On or Off. On lets the Transform key (Controls tab,
   Movement; T on the keyboard, LT + Y on a controller) change Banjo-Kazooie
   into the world's Humba Wumba form where he stands, with the game's own spin-up

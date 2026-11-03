@@ -50,6 +50,7 @@
 #include "tooie_menu_mouse.h"
 #include "tooie_texture_sweep.h"
 #include "tooie_totals_checklist.h"
+#include "tooie_transform_menu.h"
 #include "recompinput/profiles.h"
 #include "recompinput/input_mapping.h"
 
@@ -316,6 +317,8 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
             std::printf("[vi] pad %.2f\n", (now - ultramodern::get_last_vi_tick_ns()) / 1e6);
         }
         tooie::photo_mode::apply_input(buttons_out, x_out, y_out);
+        // The Transform Anywhere Menu takes the pad while it is up, before anything else reads it.
+        tooie::transform_menu::apply_input(buttons_out, x_out, y_out);
         tooie::control_scheme::apply(buttons_out, x_out, y_out);
         tooie::input::apply_tiptoe(buttons_out, x_out, y_out);
         tooie::hold_to_run::apply(x_out, y_out);

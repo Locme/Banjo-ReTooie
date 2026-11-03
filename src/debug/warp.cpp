@@ -51,6 +51,7 @@ namespace tooie::debug {
 #include "tooie_progress_cheats.h"
 #include "tooie_transform_picker.h"
 #include "tooie_transform_anywhere.h"
+#include "tooie_transform_menu.h"
 #include "tooie_menu_pause.h"
 #include "tooie_music_player.h"
 #include "tooie_classic_sounds.h"
@@ -178,6 +179,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::progress_cheats::tick(rdram, ctx);
     tooie::transform_picker::tick(rdram, ctx);
     tooie::transform_anywhere::tick(rdram, ctx);
+    tooie::transform_menu::tick(rdram, ctx);
     tooie::music_player::tick(rdram, ctx);
     tooie::bottles_revenge::tick(rdram, ctx);
     tooie::torch_enemy::tick(rdram, ctx);

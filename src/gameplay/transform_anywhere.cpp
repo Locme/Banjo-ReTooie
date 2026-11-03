@@ -61,6 +61,7 @@
 #include "tooie_free_camera.h"
 #include "tooie_game.h"
 #include "tooie_transform_anywhere.h"
+#include "tooie_transform_menu.h"
 
 namespace {
     using Clock = std::chrono::steady_clock;
@@ -525,6 +526,10 @@ void tooie::transform_anywhere::tick(uint8_t* rdram, recomp_context* ctx) {
     }
 
     if (!pressed) {
+        return;
+    }
+    // With the Transform Anywhere Menu on, the key opens that menu instead (transform_menu.cpp).
+    if (tooie::transform_menu::enabled()) {
         return;
     }
     // Paused or a map change under way: the key does nothing.

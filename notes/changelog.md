@@ -3,6 +3,10 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-03
+
+- QOL > Transform Anywhere Menu (off by default, separate from Transform anywhere): the Transform key opens a menu of every form the save has unlocked, laid round Banjo-Kazooie in the middle of the screen with a SELECT / TRANSFORM / BACK bar along the bottom. Pick with the d-pad or stick, A to change (the area reloads), B to go back.
+
 ## Since 2026-10-13 23:00 UTC
 
 ### Graphics

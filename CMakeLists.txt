@@ -318,6 +318,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/enemy_spawner.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/explode_test.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_anywhere.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/transform_menu.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/menu_pause.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/music_player.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/mix_rate.cpp
