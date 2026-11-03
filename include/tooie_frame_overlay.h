@@ -33,6 +33,10 @@ namespace tooie::frame_overlay {
     void note_input_read();
     void note_scene_done();
     void note_screen_update();
+
+    // Starts the Effect Cost Check, or stops it if it is running, as its key does (for the console).
+    // The list goes to the overlay and benchmarks/effect_cost_<date>.txt when it ends.
+    void toggle_cost_check();
 }
 
 #endif

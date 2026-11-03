@@ -1336,6 +1336,10 @@ void tooie::frame_overlay::note_scene_done() {
     }
 }
 
+void tooie::frame_overlay::toggle_cost_check() {
+    cost_toggle.store(true, std::memory_order_relaxed);
+}
+
 void tooie::frame_overlay::note_screen_update() {
     int64_t read = scene_read_ns.exchange(0, std::memory_order_relaxed);
     if (read != 0) {

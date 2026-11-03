@@ -2081,7 +2081,7 @@ index 69a82ac..d686c2d 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +668,142 @@ namespace RT64 {
+@@ -659,6 +668,144 @@ namespace RT64 {
          }
      };
  
@@ -2185,6 +2185,7 @@ index 69a82ac..d686c2d 100644
 +        uint32_t gRayTexcoords;
 +        uint32_t gRayRDPTiles;
 +        uint32_t gRayGPUTiles;
++        uint32_t gRayPositions;
 +
 +        SceneRayTexturesDescriptorSet(RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -2193,6 +2194,7 @@ index 69a82ac..d686c2d 100644
 +            gRayTexcoords = builder.addByteAddressBuffer(2);
 +            gRayRDPTiles = builder.addStructuredBuffer(3);
 +            gRayGPUTiles = builder.addStructuredBuffer(4);
++            gRayPositions = builder.addByteAddressBuffer(5);
 +            builder.end();
 +
 +            if (device != nullptr) {

@@ -1474,6 +1474,23 @@ burst stop
 Catch: only the last 150 frames are kept, so at high frame rates a long burst keeps only its end. `stop` without a
 `start` does nothing. Needs the game running.
 
+### `costcheck`
+
+Usage: `costcheck` (also `cost`)
+
+Starts the Effect Cost Check, the same as its key in the Controls tab. It measures the GPU time per game frame with
+every effect as set, then with each effect that is on turned off in turn for a few seconds (the saved settings stay
+as they are), then as set again. The list, heaviest first, shows in the frame rate overlay and goes to
+`benchmarks/effect_cost_<date>.txt` in the app folder. A second `costcheck` while it runs stops it.
+
+```
+costcheck
+wait 120s
+```
+
+Catch: it takes a few seconds per effect that is on (at least 2 s each, up to 30 s on a slow PC), so wait long
+enough before reading the file. Keep the camera still: what is on screen changes the times. Needs the game running.
+
 ### `tee`
 
 Usage: `tee <file> | tee off`

@@ -36,6 +36,7 @@
 #include "tooie_mirror_mode.h"
 #include "tooie_save_state.h"
 #include "tooie_screenshot.h"
+#include "tooie_frame_overlay.h"
 #include "tooie_achievements.h"
 #include "tooie_gfx_budget.h"
 #include "tooie_photo_mode.h"
@@ -1187,6 +1188,11 @@ void cmd_dev(Ctx& c) {
 void cmd_screenshot(Ctx&) {
     tooie::screenshot::take();
     print("screenshot of the next frame, saved to the screenshots folder of the app-data folder (as F12)");
+}
+
+void cmd_costcheck(Ctx&) {
+    tooie::frame_overlay::toggle_cost_check();
+    print("Effect Cost Check toggled: each effect that is on is turned off in turn for a few seconds; the list goes to the overlay and benchmarks/effect_cost_<date>.txt");
 }
 
 void cmd_burst(Ctx& c) {
@@ -3527,6 +3533,7 @@ const std::vector<Command>& commands() {
         { "dev", {}, false, "dev [on|off]", "make dev.txt next to the exe (shows every hidden tab after a restart); off removes it", cmd_dev },
         { "screenshot", { "shot" }, true, "screenshot", "save the next frame as a PNG, as F12 does", cmd_screenshot },
         { "burst", {}, true, "burst start | burst stop", "keep every frame from start to stop and save them, as F12 held does", cmd_burst },
+        { "costcheck", { "cost" }, true, "costcheck", "start or stop the Effect Cost Check (GPU time of each effect that is on)", cmd_costcheck },
         { "press", {}, true, "press <buttons> [stick <x> <y>] [frames|n ms|n s]", "hold controller 1's buttons (a+b) and stick (-80..80), for n game updates, a time, or until release", cmd_press },
         { "release", {}, false, "release", "let go of what press holds", cmd_release },
         { "wait", {}, false, "wait <frames|n ms|n s|save|control|map <hex>|until <addr> <value>>", "hold the next commands (frames are game updates; save, control, map and until wait for a state)", cmd_wait },

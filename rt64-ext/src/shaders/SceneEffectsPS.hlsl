@@ -65,6 +65,8 @@ ByteAddressBuffer gRayIndices : register(t1, space1);
 ByteAddressBuffer gRayTexcoords : register(t2, space1);
 StructuredBuffer<RDPTile> gRayRDPTiles : register(t3, space1);
 StructuredBuffer<GPUTile> gRayGPUTiles : register(t4, space1);
+// The world positions the traced structure was built from (four floats a vertex), for the face a ray met (HitFaceNormal).
+ByteAddressBuffer gRayPositions : register(t5, space1);
 Texture2D<float4> gRayTextures[8192] : register(t0, space2);
 #endif
 
@@ -113,6 +115,11 @@ float RayBrdfRoughness() {
 }
 float RaySssStrength() {
     return float(RayHeaderWord() >> 10u) / 100.0f;
+}
+// Whether the traced scene has anything subsurface scattering lights without a Ray Tracing Material (lights word 10: leaves
+// or grass, with the Parallax materials in use).
+bool RaySubsurfaceScene() {
+    return asfloat(gLights.Load(40)) > 0.5f;
 }
 #else
 bool RayPbrOn() {
@@ -1338,6 +1345,7 @@ RayPbr PbrAt(float3 center) {
 // (a rough surface's lobe); a surface with a Ray Tracing Material Pick Mode material tints it by its albedo and adds its
 // emissive, as the ray's payload.
 float3 HitNormal(float3 origin, float3 direction, float t);
+float3 HitFaceNormal(float3 origin, float3 direction, float t, uint geometry, uint primitive);
 float3 PathDirectLight(float3 at, float3 normal);
 
 // The light round about, for a reflected spot the screen can't show: the picture's average brightness from five points
@@ -1419,7 +1427,7 @@ float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
         const uint hitGeometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
         if ((RayGeometryFlags(hitGeometry) & 2u) != 0u) {
             const float3 texel = RayTexel(hitGeometry, query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics()).rgb;
-            const float3 hitNormal = HitNormal(origin, direction, query.CommittedRayT());
+            const float3 hitNormal = HitFaceNormal(origin, direction, query.CommittedRayT(), hitGeometry, query.CommittedPrimitiveIndex());
             const float3 light = RoomLight() * 1.6f + PathDirectLight(hit, hitNormal);
             return float4(texel * light, 0.85f);
         }
@@ -1654,6 +1662,12 @@ float ModelShadow(float3 center, float3 normal) {
     if (worldNormal.y < 0.4f) {
         return 1.0f;
     }
+    // Faded out from 3000 to 4000 units away: there a model's shadow is a pixel or two, and its rays were traced for every
+    // floor pixel out to the horizon.
+    const float distanceFade = saturate((4000.0f + center.z) / 1000.0f);
+    if (distanceFade <= 0.0f) {
+        return 1.0f;
+    }
     const float3 start = ViewToWorldPoint(center + normal * max(-center.z * 0.002f + 1.0f, 2.0f));
     const float reach = 400.0f;
     float shade = 0.0f;
@@ -1706,7 +1720,7 @@ float ModelShadow(float3 center, float3 normal) {
             }
         }
     }
-    return 1.0f - 0.55f * shade / float(max(traced, 1));
+    return 1.0f - 0.55f * distanceFade * shade / float(max(traced, 1));
 }
 
 // The indirect pass's traced rays: a cosine-spread direction round the normal (ray index of 32 in a 4x4 block's
@@ -1734,8 +1748,9 @@ float TraceDistance(float3 origin, float3 direction, float reach) {
 }
 
 // TraceDistance with the geometry it met too (any where it met none), from the same ray.
-float TraceDistanceGeometry(float3 origin, float3 direction, float reach, out uint geometry) {
+float TraceDistanceGeometry(float3 origin, float3 direction, float reach, out uint geometry, out uint primitive) {
     geometry = 0u;
+    primitive = 0u;
     RayDesc ray;
     ray.Origin = ViewToWorldPoint(origin);
     ray.Direction = ViewToWorldDirection(direction);
@@ -1749,6 +1764,7 @@ float TraceDistanceGeometry(float3 origin, float3 direction, float reach, out ui
         return -1.0f;
     }
     geometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
+    primitive = query.CommittedPrimitiveIndex();
     return query.CommittedRayT();
 }
 
@@ -1855,6 +1871,28 @@ float3 HitNormal(float3 origin, float3 direction, float t) {
     return (dot(normal, direction) > 0.0f) ? -normal : normal;
 }
 
+// The normal of the face a ray (view space) met at t, from the triangle's own corners (the world positions the traced
+// structure was built from), turned back towards the ray: what HitNormal found with two more rays a hit, for none.
+// Where this frame's buffers aren't bound to the rays (a pass that reuses an earlier structure), HitNormal.
+float3 HitFaceNormal(float3 origin, float3 direction, float t, uint geometry, uint primitive) {
+    if (!RayTexturesOn()) {
+        return HitNormal(origin, direction, t);
+    }
+    const uint base = (gRayGeometries.Load(geometry * 16u) + primitive * 3u) * 4u;
+    const uint3 v = uint3(gRayIndices.Load(base), gRayIndices.Load(base + 4u), gRayIndices.Load(base + 8u));
+    const float3 p0 = asfloat(gRayPositions.Load3(v.x * 16u));
+    const float3 p1 = asfloat(gRayPositions.Load3(v.y * 16u));
+    const float3 p2 = asfloat(gRayPositions.Load3(v.z * 16u));
+    const float3 worldNormal = cross(p1 - p0, p2 - p0);
+    // Into view space: a normal goes by the transpose of view to world (whose scale normalizing takes out).
+    float3 normal = gConstants.worldX.xyz * worldNormal.x + gConstants.worldY.xyz * worldNormal.y + gConstants.worldZ.xyz * worldNormal.z;
+    const float lengthSquared = dot(normal, normal);
+    if (!(lengthSquared > 1e-12f)) {
+        return -direction;
+    }
+    normal *= rsqrt(lengthSquared);
+    return (dot(normal, direction) > 0.0f) ? -normal : normal;
+}
 // What a view-space ray first meets, seen-through things included (ice, glass and cut-outs count as solid), within reach.
 float TraceDistanceSolid(float3 origin, float3 direction, float reach) {
     RayDesc ray;
@@ -1972,8 +2010,8 @@ float3 TracedGI(float3 center, float3 normal, uint cell, out float2 distances) {
     distances = -1.0f;
     [loop] for (int r = 0; r < 2; r++) {
         const float3 direction = IndirectDirection(normal, cell * 2u + uint(r));
-        uint hitGeometry;
-        const float t = TraceDistanceGeometry(origin, direction, 15000.0f, hitGeometry);
+        uint hitGeometry, hitPrimitive;
+        const float t = TraceDistanceGeometry(origin, direction, 15000.0f, hitGeometry, hitPrimitive);
         distances[r] = t;
         if (t < 0.0f) {
             light += SkyLight(normalize(ViewToWorldDirection(direction)));
@@ -2001,15 +2039,18 @@ float3 TracedGI(float3 center, float3 normal, uint cell, out float2 distances) {
         float3 from = direction;
         float reach = t;
         float3 previous = origin;
+        // (The face each hop landed on, for its normal from the triangle itself: HitFaceNormal.)
+        uint atGeometry = hitGeometry;
+        uint atPrimitive = hitPrimitive;
         [loop] for (uint b = 0u; b < bounces; b++) {
-            const float3 surfaceNormal = HitNormal(previous, from, reach);
+            const float3 surfaceNormal = HitFaceNormal(previous, from, reach, atGeometry, atPrimitive);
             // Direct light on the first spot the path lands on only: further hops add little of it for their rays.
             if (b == 0u) {
                 light += throughput * PathDirectLight(at, surfaceNormal);
             }
             const float3 start = at + surfaceNormal * max(-at.z * 0.002f, 1.0f);
             const float3 next = IndirectDirection(surfaceNormal, (cell * 2u + uint(r) + 11u * (b + 1u)) & 31u);
-            const float tn = TraceDistance(start, next, 15000.0f);
+            const float tn = TraceDistanceGeometry(start, next, 15000.0f, atGeometry, atPrimitive);
             if (tn < 0.0f) {
                 light += throughput * SkyLight(normalize(ViewToWorldDirection(next)));
                 break;
@@ -5206,7 +5247,8 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // How much light passes through this surface (traced subsurface scattering): a Ray Tracing Material pick's own, else
     // Graphics > Ray tracing's slider on the leaves and grass Parallax knows (materials 13 and 7).
     float subsurface = 0.0f;
-    if (redraw && (RayPbrOn() || (RaySssStrength() > 0.0f))) {
+    // (Not for every pixel when nothing in the scene could use what the surface ray finds.)
+    if (redraw && (RayPbrOn() || ((RaySssStrength() > 0.0f) && RaySubsurfaceScene()))) {
         uint surfaceGeometry;
         if (SurfaceGeometry(ViewPosition(pixel, depth), surfaceGeometry)) {
             pbr = RayGeometryPbr(surfaceGeometry);

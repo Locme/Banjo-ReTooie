@@ -271,10 +271,10 @@ namespace RT64 {
             // A few of the sets are kept, one for each group of buffers a workload hands over, so switching between workloads
             // doesn't make a new descriptor pool and layout every pass (thousands a minute; the NVIDIA driver crashed in
             // the update of one after ten minutes, 2026-10-21). rayTexturesSet is the one for this pass.
-            // buffers: the frame's four, then the geometry table's.
+            // buffers: the frame's four, then the geometry table's, then the world positions'.
             struct RayTexturesEntry {
                 std::unique_ptr<SceneRayTexturesDescriptorSet> set;
-                const RenderBuffer *buffers[5] = {};
+                const RenderBuffer *buffers[6] = {};
                 uint64_t usedPass = 0;
             };
             std::vector<RayTexturesEntry> rayTexturesCache;
@@ -480,6 +480,8 @@ namespace RT64 {
     // Whether the last traced scene held a draw with a ray tracing material (SetSceneRayMaterials), so the traced pass looks
     // for them.
     static std::atomic<bool> rayScenesPbr{ false };
+    // Whether it held a draw traced subsurface scattering can light (Parallax's leaves or grass, materials 13 and 7), so the main pass's surface ray isn't traced for every pixel of a scene with none.
+    static std::atomic<bool> rayScenesSubsurface{ false };
     // Ray traced BRDF's roughness and traced subsurface scattering's strength, in percent.
     static std::atomic<uint32_t> rayTracingBrdfPercent{ 0 };
     static std::atomic<uint32_t> rayTracingSubsurfacePercent{ 0 };
@@ -2627,12 +2629,14 @@ namespace RT64 {
         // Only a pass that builds binds its texture buffers: a pass with nothing drawn (warping from Photo mode) can hand
         // over buffers not yet made for this frame, and binding one crashed the driver in setBuffer (L, 2026-10-21).
         const bool haveTextureBuffers = building && (textures.indices != nullptr) && (textures.texcoords != nullptr) && (textures.rdpTiles != nullptr) && (textures.gpuTiles != nullptr);
-        const RenderBuffer *wanted[5] = {
+        const RenderBuffer *wanted[6] = {
             haveTextureBuffers ? textures.indices : res.rayDummyBuffer.get(),
             haveTextureBuffers ? textures.texcoords : res.rayDummyBuffer.get(),
             haveTextureBuffers ? textures.rdpTiles : res.rayDummyBuffer.get(),
             haveTextureBuffers ? textures.gpuTiles : res.rayDummyBuffer.get(),
-            rayGeometryBuffer.get()
+            rayGeometryBuffer.get(),
+            // The world positions the structure was built from, for the face a ray met (SceneEffectsPS.hlsl RayFaceNormal).
+            haveTextureBuffers ? worldPos : res.rayDummyBuffer.get()
         };
         // Sets not used for a while are dropped: the buffers they name may have been replaced since (a new buffer at an old one's
         // address would match). Room for each group of buffers in every upload slot's geometry table.
@@ -2649,7 +2653,7 @@ namespace RT64 {
         }
         res.rayTexturesSet = nullptr;
         for (Resources::RayTexturesEntry &entry : res.rayTexturesCache) {
-            if (std::equal(wanted, wanted + 5, entry.buffers)) {
+            if (std::equal(wanted, wanted + 6, entry.buffers)) {
                 entry.usedPass = res.passes;
                 res.rayTexturesSet = entry.set.get();
                 break;
@@ -2670,15 +2674,15 @@ namespace RT64 {
             const int faulted =
                 RaySetBufferSafe(set, set->gRayGeometries, wanted[4], nullptr) ? (RaySetBufferSafe(set, set->gRayIndices, wanted[0], nullptr) ?
                 (RaySetBufferSafe(set, set->gRayTexcoords, wanted[1], nullptr) ? (RaySetBufferSafe(set, set->gRayRDPTiles, wanted[2], &tilesView) ?
-                (RaySetBufferSafe(set, set->gRayGPUTiles, wanted[3], &gpuTilesView) ? 0 : 5) : 4) : 3) : 2) : 1;
+                (RaySetBufferSafe(set, set->gRayGPUTiles, wanted[3], &gpuTilesView) ? (RaySetBufferSafe(set, set->gRayPositions, wanted[5], nullptr) ? 0 : 6) : 5) : 4) : 3) : 2) : 1;
             if (faulted != 0) {
                 // The driver faulted on writing that buffer (the crashes of 2026-10-21/22): the traced pass falls back this frame.
-                fprintf(stderr, "[rt] the driver faulted writing ray texture buffer %d (%p), no traced pass this frame\n", faulted, (const void *)((faulted == 1) ? wanted[4] : wanted[faulted - 2]));
+                fprintf(stderr, "[rt] the driver faulted writing ray texture buffer %d (%p), no traced pass this frame\n", faulted, (const void *)((faulted == 1) ? wanted[4] : ((faulted == 6) ? wanted[5] : wanted[faulted - 2])));
                 res.retireLater(std::move(entry.set));
                 res.rayTexturesSet = nullptr;
                 return;
             }
-            std::copy(wanted, wanted + 5, entry.buffers);
+            std::copy(wanted, wanted + 6, entry.buffers);
             entry.usedPass = res.passes;
             res.rayTexturesSet = set;
             res.rayTexturesCache.push_back(std::move(entry));
@@ -2721,7 +2725,9 @@ namespace RT64 {
             // percent times 8 and the subsurface scattering strength in percent times 1024.
             mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayTracingHalf.load() ? 2.0f : 0.0f) + (rayScenesPbr.load() ? 4.0f : 0.0f) +
                 float(rayTracingBrdfPercent.load() * 8u + rayTracingSubsurfacePercent.load() * 1024u);
-            mapped[10] = 0.0f;
+            // 1 when the last traced scene had leaves or grass (Parallax materials 13 and 7) and the rays use Parallax's materials: only then can
+            // traced subsurface scattering find a surface to light without a Ray Tracing Material (RaySubsurfaceScene).
+            mapped[10] = (rayScenesSubsurface.load() && rayTracingParallax.load()) ? 1.0f : 0.0f;
             // How much the Parallax materials reflect (Graphics > Ray Tracing's sliders), in hundredths packed together: Metal,
             // then Tiles times 256, then Smooth times 65536.
             mapped[11] = !rayScenesShine.load() ? 0.0f : std::round(rayTracingMaterials[0].load() * 100.0f) + std::round(rayTracingMaterials[1].load() * 100.0f) * 256.0f +
@@ -2766,6 +2772,7 @@ namespace RT64 {
         bool sceneShine = false;
         bool sceneLevelCutouts = false;
         bool scenePbr = false;
+        bool sceneSubsurface = false;
         uint32_t *geometryTable = reinterpret_cast<uint32_t *>(rayGeometryBuffer->map());
         for (size_t i = 0; i < drawCount; i++) {
             const SceneRayDraw &draw = draws[i];
@@ -2782,6 +2789,7 @@ namespace RT64 {
             const uint32_t material = (draw.flags >> SceneRayDrawMaterialShift) & 0xFFu;
             scenePbr = scenePbr || ((draw.flags >> (SceneRayDrawMaterialShift + SceneRayMaterialIndexShift)) != 0u);
             sceneShine = sceneShine || (material == 12) || (material == 14) || (material == 16);
+            sceneSubsurface = sceneSubsurface || (material == 13) || (material == 7);
             sceneLevelCutouts = sceneLevelCutouts || ((draw.flags & (SceneRayDrawCutout | SceneRayDrawModel)) == SceneRayDrawCutout);
             uint32_t *entry = geometryTable + ((model ? MaxGeometries : 0) + meshes.size()) * 4;
             entry[0] = draw.indexStart;
@@ -2804,6 +2812,7 @@ namespace RT64 {
         }
         rayGeometryBuffer->unmap();
         rayScenesPbr.store(scenePbr);
+        rayScenesSubsurface.store(sceneSubsurface);
         rayScenesShine.store(sceneShine);
         rayScenesLevelCutouts.store(sceneLevelCutouts);
         if (levelMeshes.empty() && modelMeshes.empty()) {
@@ -2919,8 +2928,10 @@ namespace RT64 {
             commandList->barriers(RenderBarrierStage::COMPUTE, { RenderBufferBarrier(const_cast<RenderBuffer *>(instanceBuffers[i]), RenderBufferAccess::READ) });
         }
         commandList->buildTopLevelAS(res.bvhTlas.get(), RenderBufferReference(res.bvhScratchBuffer.get()), RenderBufferReference(res.bvhInstancesBuffer.get()), tlasInfo);
+        // (And the world positions, which the traced passes read for the face a ray met.)
         commandList->barriers(RenderBarrierStage::GRAPHICS | RenderBarrierStage::COMPUTE, {
-            RenderBufferBarrier(res.bvhTlasBuffer.get(), RenderBufferAccess::READ)
+            RenderBufferBarrier(res.bvhTlasBuffer.get(), RenderBufferAccess::READ),
+            RenderBufferBarrier(const_cast<RenderBuffer *>(worldPos), RenderBufferAccess::READ)
         });
         WorkloadGpuSections().end(buildSpan);
         GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::RayTracingBuild, true));
@@ -3778,13 +3789,16 @@ namespace RT64 {
         // The traced light beams are a soft haze: below Ray tracing resolution High they come from the indirect pass's
         // second band at half size too (a quarter of their rays), whatever the shadows do (SceneEffectsPS BeamsHalf).
         const bool tracedBeamsHalf = tracedIndirect && (tracedBeams[0] > 0.0f) && (rayTracingResolution.load() < 2u);
-        if ((((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) || tracedHalf || tracedBeamsHalf) {
+        const bool indirectBand = ((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi));
+        if (indirectBand || tracedHalf || tracedBeamsHalf) {
             commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(tr.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
             commandList->setFramebuffer(tr.indirectFramebuffer.get());
             GpuSectionScope timedIndirect(WorkloadGpuSections(), GpuSection::IndirectLight, commandList);
             const uint32_t drawnHeight = tracedHalf ? indirectHeight * 3 : (tracedBeamsHalf ? indirectHeight * 2 : indirectHeight);
+            // The viewport stays the whole of it (the shader tells the bands apart by the pixel's row); with neither GTAO nor
+            // SSGI on, the scissor leaves out the top band, whose pixels the pass then never reads.
             commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(drawnHeight)));
-            commandList->setScissors(RenderRect(0, 0, indirectWidth, drawnHeight));
+            commandList->setScissors(RenderRect(0, indirectBand ? 0 : int32_t(indirectHeight), indirectWidth, drawnHeight));
             // The traced form reads the rays' textures too (cut-outs let the sun through their holes), so it takes the
             // traced pass's layout and sets.
             commandList->setPipeline(tracedIndirect ? shaderLibrary->sceneIndirectTraced.pipeline.get() : shaderLibrary->sceneIndirect.pipeline.get());
