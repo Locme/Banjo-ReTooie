@@ -12,6 +12,7 @@
 #include <cfloat>
 #include <unordered_set>
 #include <atomic>
+#include <condition_variable>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -2589,9 +2590,41 @@ namespace RT64 {
         return solo;
     }
 
+    static std::mutex firstPresentMutex;
+    static std::condition_variable firstPresentCondition;
+    static bool firstPresentDone = false;
+
+    void ScenePresented() {
+        {
+            const std::scoped_lock lock(firstPresentMutex);
+            if (firstPresentDone) {
+                return;
+            }
+
+            firstPresentDone = true;
+        }
+
+        firstPresentCondition.notify_all();
+    }
+
+    void WaitForFirstPresent() {
+        std::unique_lock<std::mutex> lock(firstPresentMutex);
+        firstPresentCondition.wait_for(lock, std::chrono::seconds(4), []() { return firstPresentDone; });
+    }
+
+    static std::atomic<int> scenePipelinesPending{ 0 };
+
+    void SetScenePipelinesPending(int change) {
+        scenePipelinesPending.fetch_add(change, std::memory_order_acq_rel);
+    }
+
+    bool ScenePipelinesReady() {
+        return scenePipelinesPending.load(std::memory_order_acquire) == 0;
+    }
+
     bool SceneEffectsAnyOn() {
         const SceneEffectsSettings settings = GetSceneEffects();
-        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
+        return ScenePipelinesReady() && ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
             (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
             (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0) || VolumetricShadowsOn() || ScenePointLights() || (settings.view != 0)) && (settings.depthAddress != 0);
     }

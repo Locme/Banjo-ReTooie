@@ -3996,7 +3996,7 @@ index af97fc4..d57ecbb 100644
          }
  
 diff --git a/recompui/src/renderer/rt64_render_context.cpp b/recompui/src/renderer/rt64_render_context.cpp
-index a7954c7..8add9d9 100644
+index a7954c7..5856f29 100644
 --- a/recompui/src/renderer/rt64_render_context.cpp
 +++ b/recompui/src/renderer/rt64_render_context.cpp
 @@ -155,6 +155,27 @@ void set_application_user_config(RT64::Application* application, const ultramode
@@ -4027,3 +4027,15 @@ index a7954c7..8add9d9 100644
      }
  
      switch (config.hr_option) {
+@@ -351,7 +372,11 @@ void renderer::RT64Context::send_dummy_workload(uint32_t fb_address) {
+     // G_AC_NONE | G_ZS_PIXEL | G_RM_NOOP | G_RM_NOOP2
+     app->state->rdp->setOtherMode(0x382C30, 0);
+     app->state->rdp->fillRect(0, 0, 320 << 2, 240 << 2);
++    // Banjo-Tooie: the fill needs only the ubershader's first pipeline; fullSync waits for that one alone while the rest
++    // still compile (seconds with no pipeline cache), so the start menu shows at once.
++    app->state->dummyWorkload = true;
+     app->state->fullSync();
++    app->state->dummyWorkload = false;
+     app->state->listProcessEnd();
+ }
+ 

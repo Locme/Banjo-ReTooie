@@ -346,6 +346,16 @@ namespace RT64 {
     // Banjo-Tooie: the level's lights, count of them (up to SceneMaxLights), four floats each: world x, y, z, outer range.
     // The traced pass shadows what each one lights (its rays go from the surface to the light).
     void SetSceneLights(const float *xyzr, uint32_t count);
+    // Banjo-Tooie: how many of the scene effects' pipelines are still compiling (ShaderLibrary's background threads add
+    // and take away one each). The scene effects pass is left out until none are (SceneEffectsAnyOn), so the start menu
+    // doesn't wait for them.
+    void SetScenePipelinesPending(int change);
+    bool ScenePipelinesReady();
+    // Banjo-Tooie: the slow pipeline compiles at start (the scene effects' and the ubershader's) wait for the first picture
+    // on screen, at most a few seconds: run beside it, they took the driver's compile threads and the start menu stayed
+    // black for as long as they ran. ScenePresented is called once a picture has gone to the screen.
+    void ScenePresented();
+    void WaitForFirstPresent();
     // Banjo-Tooie: the lit lamps the renderer found this frame (draws with a lamp texture, SetSceneLampTextures), four
     // floats each like SetSceneLights; the traced lights add them after the level's own, so a lantern the game gives no
     // light of its own (Bottles' house) still lights the room and its bars cast shadows (L, 2026-10-21).

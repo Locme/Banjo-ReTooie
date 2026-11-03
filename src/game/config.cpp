@@ -465,11 +465,8 @@ void tooie::init_config() {
         "Save Backups To Keep",
         "How many of the newest save backups to keep.",
         1, 100, 1, 0, false, 10);
-    general.add_bool_option(
-        tooie::precompile_shaders_option,
-        "Compile All Shaders At Start",
-        "Compiles every shader the game uses while the game starts, with a percentage on screen, so no area stutters on its first visit. Off: only the shaders you have already met compile at start. The first start takes a while; later starts reuse what was built. Takes effect on the next start.",
-        true);
+    // Timer Save sits with the save options, before Compile All Shaders (whose place Discord Status is shown in, under
+    // Others), so it stays under Saves (L, 2026-11-03).
     general.add_enum_option(
         tooie::timer_save_option,
         "Timer Save",
@@ -483,6 +480,11 @@ void tooie::init_config() {
             {tooie::TimerSave::Minutes120, "120", "120 min"},
         },
         tooie::TimerSave::Off);
+    general.add_bool_option(
+        tooie::precompile_shaders_option,
+        "Compile All Shaders At Start",
+        "Compiles every shader the game uses while the game starts, with a percentage on screen, so no area stutters on its first visit. Off: only the shaders you have already met compile at start. The first start takes a while; later starts reuse what was built. Takes effect on the next start.",
+        true);
     tooie::boss_rush::add_option(general);
     tooie::mirror_mode::add_option(general);
     general.add_bool_option(
