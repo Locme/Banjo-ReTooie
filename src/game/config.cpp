@@ -878,11 +878,6 @@ void tooie::init_config() {
         "Transform Anywhere",
         "The Transform key (Controls tab, Movement; T on the keyboard, not bound on a controller) changes Banjo into the world's Humba Wumba form where he stands, and back, once you have changed in that world's Humba pool. Not in the air, swimming or in cutscenes. The submarine changes in water only.",
         true);
-    qol.add_bool_option(
-        tooie::transform_menu::option,
-        "Transform Anywhere Menu",
-        "The Transform key opens a menu of every form you have unlocked so far in this save (changed into at Humba's, played as Mumbo, Split Up learnt...). The d-pad or stick picks one, A changes into it (the area reloads), B goes back. While this is on, the Transform key opens the menu instead of Transform Anywhere's change.",
-        false);
     qol.add_enum_option(
         tooie::fine_aim::mode_option,
         "Fine Aim",
@@ -1012,6 +1007,13 @@ void tooie::init_config() {
         "Health honeycombs that enemies and breakables drop no longer vanish after 20 seconds. The game's limit of 10 on the ground at once stays, and the oldest goes when another drops. Leaving the area clears them. Work in progress.",
         false);
     recompui::config::set_option_page(tooie::honeycomb_cap::option, tooie::work_in_progress_tab_id);
+    graphics.add_bool_option(
+        tooie::transform_menu::option,
+        "Transform Anywhere Menu",
+        "The Transform key opens a menu of every form you have unlocked so far in this save. The d-pad or stick picks one, A changes into it, B goes back. While this is on, the Transform key opens the menu instead of Transform Anywhere's change. Work in progress.",
+        false);
+    recompui::config::set_option_page(tooie::transform_menu::option, tooie::work_in_progress_tab_id);
+    recompui::config::set_option_group(tooie::transform_menu::option, "Transform Anywhere Menu");
     recompui::config::set_option_group(tooie::honeycomb_cap::option, "Honeycombs Stay");
     {
         recompui::config::set_option_page(tooie::dive::option, tooie::work_in_progress_tab_id);

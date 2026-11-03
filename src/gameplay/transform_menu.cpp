@@ -1,37 +1,38 @@
-// Transform Anywhere Menu (L, 2026-11-03): QOL > Transform Anywhere Menu, off by default. A separate toggle from
+// Transform Anywhere Menu (L, 2026-11-03): WIP tab > Transform Anywhere Menu, off by default. A separate toggle from
 // Transform Anywhere (transform_anywhere.cpp), which keeps working as before while this one is off.
 //
-// While it is on, the Transform key (Controls tab, Movement; T, and LT + Y on a controller) opens a menu over the
-// game instead of changing into the world's Humba form. The game stands still behind it (the frame's delta time
-// is set to almost nothing, as the Pause Special Menu does), and the forms are laid out round the middle of the
-// screen with Banjo-Kazooie in the centre, after the picture L sent: the character pictures spread over the
-// scene and a bar along the bottom reading SELECT, TRANSFORM, BACK with the buttons beside each.
+// While it is on, the Transform key (Controls tab, Movement; T, and LT + Y on a controller) opens a menu instead of
+// changing into the world's Humba form. The game stands still (the frame's delta time is set to almost nothing,
+// as the Pause Special Menu does) and the forms Banjo has been stand round him as their real 3D models, in an arc
+// in front of him, after the picture L sent. The picked one is larger and spins; the others are faded back
+// (the actor's alpha, +0x9B), and a bar along the bottom reads SELECT, TRANSFORM, BACK.
 //
-// Only forms the save file has already unlocked are shown (L): locked ones are left out rather than shown greyed,
-// since the pictures are the game's own sprites, which the game always draws at full strength. What counts as
-// unlocked is the game's own flags, kept in the save file:
+// The models: each is a Golden Goliath statue (actor 0x163, a still model) spawned with the game's own
+// func_80108474 and given the form's model (its id struct +0x14), as the test room shows the transformations
+// (test_room_actors.inc). They are removed with func_800FFAB0 when the
+// menu closes (a map change removes them too). Banjo alone has no model of his own: the game draws him with the
+// pair's 0x062A, so his statue shows Banjo-Kazooie (L to judge).
+//
+// Only forms Banjo has been at least once are shown (L); locked ones are left out. The game's own flags, kept in
+// the save file:
 //   - Humba Wumba's forms: her "first time transformed" flags 0x345-0x34D (decomp gameflags.h
 //     FLAG_345_FTT_WUMBA_TRANSFORMED_T_REX_BIG .. FLAG_34D_FTT_WUMBA_TRANSFORMED_BEE), set the first time Banjo
 //     changes in each pool.
-//   - Mumbo: FLAG_429_FTT_MUMBO_USED, or FLAG_09A_FTT_MUMBO_PAD (first Mumbo pad).
-//   - Golden Goliath: FLAG_050_FTT_MT_GoldenGoliath, or its Jiggy FLAG_255.
-//   - Banjo and Kazooie alone: FLAG_109_ABILITY_SPLIT_UP, or FLAG_4F5_FTT_SPLIT_UP.
-//   - Clockwork Kazooie: FLAG_11B_ABILITY_EGGS_CLOCKWORK.
+//   - Banjo and Kazooie alone: FLAG_4F5_FTT_SPLIT_UP (split up once; learning the move is not enough).
 //   - Banjo-Kazooie: always.
+// Clockwork Kazooie, Mumbo and Golden Goliath are not offered (L).
 //
 // The change itself is the Cheats tab's Transformation row's (transform_picker.cpp): the form is stored where
 // the game reads it when an area loads, and the area reloads at the entrance Banjo came in by. That works for
-// every form in every world, where the in-place change Transform Anywhere uses only works for the world's own
-// Humba form. Some forms can break in areas the game never expects them in, as with the cheat.
+// every form in every world. Some forms can break in areas the game never expects them in, as with the cheat.
 //
-// Drawing: text with the pause menu's font through the game's own text routines (as the Totals checklist
-// prints), the pictures as the game's talking-head portraits (gczoomboxdata's table, as the achievement icons),
-// and the pause menu's own A and B button sprites. A form with no fitting portrait shows its name instead.
+// Text is printed with the pause menu's font through the game's own text routines (as the Totals checklist
+// prints), with the pause menu's own A and B button sprites.
 //
 // Headless: TOOIE_TRANSFORM_MENU=1 turns it on whatever the setting says, TOOIE_TRANSFORM_MENU_OPEN=<ms> opens it
 // that long after the game loop first runs, TOOIE_TRANSFORM_MENU_ALL=1 shows every form whether unlocked or not,
-// TOOIE_TRANSFORM_MENU_PORTRAITS=<hex form>=<hex portrait>,... tries other pictures, TOOIE_TRANSFORM_MENU_DPAD=<hex>
-// tries a sprite for the d-pad, TOOIE_TRANSFORM_MENU_LOG=1 logs [transform-menu] lines.
+// TOOIE_TRANSFORM_MENU_DPAD=<hex> tries a sprite for the d-pad, TOOIE_TRANSFORM_MENU_ALPHA=<0-255> sets the
+// faded models' alpha, TOOIE_TRANSFORM_MENU_LOG=1 logs [transform-menu] lines.
 
 #include <algorithm>
 #include <atomic>
@@ -95,47 +96,65 @@ namespace {
 
     // Where things go on the game's 320 x 240 2D screen.
     constexpr int centre_x = 160;
-    constexpr int centre_y = 102;
-    constexpr float ring_x = 112.0f;
-    constexpr float ring_y = 64.0f;
-    constexpr int portrait_size = 24;
-    constexpr int picked_portrait_size = 36;
+
+    // The 3D line-up: an arc in front of Banjo, this far from him, spanning this many degrees either side of
+    // where he faces, with at least this much room between models.
+    constexpr float arc_radius = 260.0f;
+    constexpr float arc_half_degrees = 100.0f;
+    constexpr float min_gap = 110.0f;
+    constexpr float picked_grow = 1.3f;
+    constexpr float spin_degrees_per_second = 120.0f;
+    constexpr uint8_t default_faded_alpha = 150;
+
+    constexpr uint16_t statue_actor = 0x163;          // the Golden Goliath statue: a still model
+    constexpr uint32_t object_array_pointer = 0x80136EE0;
+    constexpr uint32_t object_first = 0x04;
+    constexpr uint32_t object_last = 0x08;
+    constexpr uint32_t object_base = 0x10;
+    constexpr uint32_t object_size = 0x9C;
+    constexpr uint32_t object_pos = 0x04;
+    constexpr uint32_t object_scale = 0x38;
+    constexpr uint32_t object_yaw = 0x48;
+    constexpr uint32_t object_alpha = 0x9B;
+    constexpr uint32_t marker_model = 0x14;
+    constexpr int max_objects = 2048;
+    constexpr uint32_t player_pos_ptr = 0xE4;
+    constexpr uint32_t player_yaw_ptr = 0xF8;
     constexpr int name_y = 188;
     constexpr int bar_y = 212;
     constexpr float text_scale = 0.5f;
     constexpr float small_scale = 0.38f;
 
-    // A form, the game's id for it (as the player's +0xA0 block +0x29 holds it), its portrait (-1 for none) and
-    // the flags any of which unlocks it (none: always).
+    // A form: the game's id for it (as the player's +0xA0 block +0x29 holds it), its model, its size in the menu and the flags any of which unlocks it (none: always).
     struct Form {
         uint8_t id;
         const char* name;
-        int portrait;
+        uint16_t model;
+        float scale;
         int32_t flags[3];
     };
-    // Banjo-Kazooie first (the middle), then round the ring clockwise from the top.
+    // Left to right along the arc.
     const Form forms[] = {
-        { 0x01, "BANJO-KAZOOIE", 0x0C, { -1, -1, -1 } },
-        { 0x0A, "BANJO", 0x7A, { 0x109, 0x4F5, -1 } },
-        { 0x0B, "KAZOOIE", 0x0D, { 0x109, 0x4F5, -1 } },
-        { 0x0D, "MUMBO", 0x10, { 0x429, 0x09A, -1 } },
-        { 0x0E, "GOLDEN GOLIATH", -1, { 0x050, 0x255, -1 } },
-        { 0x08, "STONY", -1, { 0x346, -1, -1 } },
-        { 0x0F, "DETONATOR", -1, { 0x347, -1, -1 } },
-        { 0x10, "VAN", 0x3A, { 0x348, -1, -1 } },
-        { 0x0C, "SUBMARINE", -1, { 0x349, -1, -1 } },
-        { 0x12, "BABY T-REX", -1, { 0x34A, -1, -1 } },
-        { 0x13, "DADDY T-REX", -1, { 0x345, -1, -1 } },
-        { 0x07, "WASHING MACHINE", 0x04, { 0x34B, -1, -1 } },
-        { 0x02, "SNOWBALL", -1, { 0x34C, -1, -1 } },
-        { 0x06, "BEE", 0x9B, { 0x34D, -1, -1 } },
-        { 0x11, "CLOCKWORK KAZOOIE", -1, { 0x11B, -1, -1 } },
+        { 0x01, "BANJO-KAZOOIE", 0x61F, 1.0f, { -1, -1, -1 } },
+        { 0x0A, "BANJO", 0x62A, 1.0f, { 0x4F5, -1, -1 } },
+        { 0x0B, "KAZOOIE", 0x61C, 1.0f, { 0x4F5, -1, -1 } },
+        { 0x08, "STONY", 0x61D, 1.0f, { 0x346, -1, -1 } },
+        { 0x0F, "DETONATOR", 0x623, 1.0f, { 0x347, -1, -1 } },
+        { 0x10, "VAN", 0x624, 0.8f, { 0x348, -1, -1 } },
+        { 0x0C, "SUBMARINE", 0x626, 0.8f, { 0x349, -1, -1 } },
+        { 0x12, "BABY T-REX", 0x609, 1.0f, { 0x34A, -1, -1 } },
+        { 0x13, "DADDY T-REX", 0x60D, 0.3f, { 0x345, -1, -1 } },
+        { 0x07, "WASHING MACHINE", 0x60C, 1.0f, { 0x34B, -1, -1 } },
+        { 0x02, "SNOWBALL", 0x60B, 0.6f, { 0x34C, -1, -1 } },
+        { 0x06, "BEE", 0x613, 1.0f, { 0x34D, -1, -1 } },
     };
     constexpr size_t form_count = sizeof(forms) / sizeof(forms[0]);
 
     struct Entry {
-        size_t form;     // index into forms
-        int x, y;        // middle of its picture
+        size_t form;          // index into forms
+        float pos[3];         // where its statue stands
+        float yaw;            // facing Banjo
+        uint32_t marker = 0;  // the statue's id struct (object +0), 0 if it did not spawn
     };
 
     struct Menu {
@@ -163,27 +182,6 @@ namespace {
     int64_t ms_since_start() {
         static const Clock::time_point start = Clock::now();
         return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
-    }
-
-    int portrait_of(size_t form) {
-        static const std::unordered_map<int, int> overrides = [] {
-            std::unordered_map<int, int> map;
-            if (const char* v = std::getenv("TOOIE_TRANSFORM_MENU_PORTRAITS")) {
-                std::string list{v};
-                size_t pos = 0;
-                while (pos < list.size()) {
-                    size_t comma = list.find(',', pos);
-                    unsigned f = 0, p = 0;
-                    if (std::sscanf(list.substr(pos, comma - pos).c_str(), "%x=%x", &f, &p) == 2) {
-                        map[(int)f] = (int)p;
-                    }
-                    pos = comma == std::string::npos ? list.size() : comma + 1;
-                }
-            }
-            return map;
-        }();
-        auto found = overrides.find(forms[form].id);
-        return found != overrides.end() ? found->second : forms[form].portrait;
     }
 
     // Calls a game function with up to four integer arguments on a copy of the hook's registers, with the stack
@@ -238,21 +236,140 @@ namespace {
             !tooie::in_letterboxed_scene() && read_half(rdram, dialog_id_addr) == -1;
     }
 
+    uint8_t faded_alpha() {
+        static const uint8_t alpha = [] {
+            const char* v = std::getenv("TOOIE_TRANSFORM_MENU_ALPHA");
+            return v != nullptr ? (uint8_t)std::clamp(std::atoi(v), 0, 255) : default_faded_alpha;
+        }();
+        return alpha;
+    }
+
+    // Calls fn(object) for every live object (the array moves when objects come and go, so statues are found
+    // again each frame by their id struct).
+    template <typename F>
+    void for_each_object(uint8_t* rdram, F fn) {
+        const uint32_t array = read_word(rdram, object_array_pointer);
+        if (!tooie::rdram::valid_ptr(array)) {
+            return;
+        }
+        const uint32_t first = read_word(rdram, array + object_first);
+        const uint32_t last = read_word(rdram, array + object_last);
+        if (!tooie::rdram::valid_ptr(first) || !tooie::rdram::valid_ptr(last) || last < first) {
+            return;
+        }
+        const int count = (int)((last - first) / object_size) + 1;
+        if (count > max_objects) {
+            return;
+        }
+        for (int i = 0; i < count; i++) {
+            fn(array + object_base + (uint32_t)i * object_size);
+        }
+    }
+
+    uint32_t find_object(uint8_t* rdram, uint32_t marker) {
+        uint32_t found = 0;
+        if (marker == 0) {
+            return 0;
+        }
+        for_each_object(rdram, [&](uint32_t object) {
+            if (found == 0 && read_word(rdram, object) == marker) {
+                found = object;
+            }
+        });
+        return found;
+    }
+
+    // The game's spawn-by-id, func_80108474(id, f32 pos[3], yaw), on a copy of the registers with the position
+    // in scratch space below the stack.
+    uint32_t spawn(uint8_t* rdram, recomp_context* ctx, uint16_t id, const float pos[3], float yaw) {
+        recomp_context saved = *ctx;
+        const uint32_t vec = ((uint32_t)ctx->r29 - 0x100) & ~0xFu;
+        for (int k = 0; k < 3; k++) {
+            write_float(rdram, vec + 4 * k, pos[k]);
+        }
+        ctx->r29 = (int32_t)(vec - 0x40);
+        ctx->r4 = id;
+        ctx->r5 = (int32_t)vec;
+        ctx->r6 = (int32_t)yaw;
+        func_80108474(rdram, ctx);
+        const uint32_t object = (uint32_t)ctx->r2;
+        *ctx = saved;
+        return object;
+    }
+
+    void remove_statues(uint8_t* rdram, recomp_context* ctx) {
+        for (Entry& e : menu.entries) {
+            if (const uint32_t object = find_object(rdram, e.marker); object != 0) {
+                call(rdram, ctx, func_800FFAB0, object);
+            }
+            e.marker = 0;
+        }
+    }
+
+    // Each frame: the statues stay on their spots, the picked one larger and turning, the others faded back.
+    void pose_statues(uint8_t* rdram) {
+        const float t = (float)ms_since_start() / 1000.0f;
+        for (size_t i = 0; i < menu.entries.size(); i++) {
+            Entry& e = menu.entries[i];
+            const uint32_t object = find_object(rdram, e.marker);
+            if (object == 0) {
+                continue;
+            }
+            const bool picked = i == menu.picked;
+            for (int k = 0; k < 3; k++) {
+                write_float(rdram, object + object_pos + 4 * k, e.pos[k]);
+            }
+            const float yaw = picked ? std::fmod(e.yaw + t * spin_degrees_per_second, 360.0f) : e.yaw;
+            write_float(rdram, object + object_yaw, yaw);
+            write_float(rdram, object + object_scale, forms[e.form].scale * (picked ? picked_grow : 1.0f));
+            MEM_B(object_alpha, (gpr)(int32_t)object) = (int8_t)(picked ? 255 : faded_alpha());
+        }
+    }
+
     void open(uint8_t* rdram, recomp_context* ctx) {
         menu.entries.clear();
         menu.current = player_form(rdram);
-        std::vector<size_t> ring;
-        for (size_t i = 1; i < form_count; i++) {
+        const uint32_t player = read_word(rdram, player_table);
+        const uint32_t pos_ptr = read_word(rdram, player + player_pos_ptr);
+        const uint32_t yaw_ptr = read_word(rdram, player + player_yaw_ptr);
+        if (!tooie::rdram::valid_ptr(pos_ptr) || !tooie::rdram::valid_ptr(yaw_ptr)) {
+            return;
+        }
+        float banjo[3];
+        for (int k = 0; k < 3; k++) {
+            banjo[k] = tooie::rdram::read_float(rdram, pos_ptr + 4 * k);
+        }
+        const float facing = tooie::rdram::read_float(rdram, yaw_ptr);
+
+        std::vector<size_t> shown;
+        for (size_t i = 0; i < form_count; i++) {
             if (unlocked(rdram, ctx, forms[i])) {
-                ring.push_back(i);
+                shown.push_back(i);
             }
         }
-        menu.entries.push_back({ 0, centre_x, centre_y });
-        for (size_t i = 0; i < ring.size(); i++) {
-            // Clockwise from the top, spread evenly.
-            const float a = -1.5707963f + 6.2831853f * (float)i / (float)ring.size();
-            menu.entries.push_back({ ring[i], centre_x + (int)std::lround(std::cos(a) * ring_x),
-                                     centre_y + (int)std::lround(std::sin(a) * ring_y) });
+        // Spread along the arc, wider (further out) when there are many, so they keep min_gap apart.
+        const size_t n = shown.size();
+        const float span = 2.0f * arc_half_degrees * 3.14159265f / 180.0f;
+        const float radius = n > 1 ? std::max(arc_radius, min_gap * (float)(n - 1) / span) : arc_radius;
+        for (size_t i = 0; i < n; i++) {
+            const float offset = n > 1 ? arc_half_degrees * (2.0f * (float)i / (float)(n - 1) - 1.0f) : 0.0f;
+            // Left to right as seen from behind Banjo: the game's yaw turns anticlockwise seen from above.
+            const float a = (facing - offset) * 3.14159265f / 180.0f;
+            Entry e;
+            e.form = shown[i];
+            e.pos[0] = banjo[0] + std::sin(a) * radius;
+            e.pos[1] = banjo[1];
+            e.pos[2] = banjo[2] + std::cos(a) * radius;
+            // Facing back at Banjo (and the camera behind him).
+            e.yaw = std::fmod(std::atan2(banjo[0] - e.pos[0], banjo[2] - e.pos[2]) * 180.0f / 3.14159265f + 360.0f, 360.0f);
+            const uint32_t object = spawn(rdram, ctx, statue_actor, e.pos, e.yaw);
+            if (tooie::rdram::valid_ptr(object)) {
+                e.marker = read_word(rdram, object);
+                if (forms[e.form].model != 0 && tooie::rdram::valid_ptr(e.marker)) {
+                    tooie::rdram::write_half(rdram, e.marker + marker_model, forms[e.form].model);
+                }
+            }
+            menu.entries.push_back(e);
         }
         menu.picked = 0;
         for (size_t i = 0; i < menu.entries.size(); i++) {
@@ -267,19 +384,22 @@ namespace {
         menu.open = true;
         menu.opened_at = Clock::now();
         open_flag = true;
+        pose_statues(rdram);
         if (log_on()) {
-            std::fprintf(stderr, "[transform-menu] opened: form 0x%X, %zu forms unlocked:", menu.current, menu.entries.size());
+            std::fprintf(stderr, "[transform-menu] opened at %.0f %.0f %.0f facing %.0f: form 0x%X, %zu forms:", banjo[0],
+                banjo[1], banjo[2], facing, menu.current, menu.entries.size());
             for (const Entry& e : menu.entries) {
-                std::fprintf(stderr, " %s", forms[e.form].name);
+                std::fprintf(stderr, " %s(%s)", forms[e.form].name, e.marker != 0 ? "spawned" : "FAILED");
             }
             std::fprintf(stderr, "\n");
         }
     }
 
-    void close(const char* why) {
+    void close(uint8_t* rdram, recomp_context* ctx, const char* why) {
         if (!menu.open) {
             return;
         }
+        remove_statues(rdram, ctx);
         menu.open = false;
         open_flag = false;
         if (log_on()) {
@@ -287,35 +407,13 @@ namespace {
         }
     }
 
-    // Moves the pick to the nearest entry in the direction (dx, dy; y down), favouring ones straight that way.
+    // Moves the pick along the arc: right or down is the next form, left or up the one before. Stops at the ends.
     void move_pick(int dx, int dy) {
-        const Entry& from = menu.entries[menu.picked];
-        const float len = std::sqrt((float)(dx * dx + dy * dy));
-        const float ux = (float)dx / len;
-        const float uy = (float)dy / len;
-        float best = 1e9f;
-        size_t best_index = menu.picked;
-        for (size_t i = 0; i < menu.entries.size(); i++) {
-            if (i == menu.picked) {
-                continue;
-            }
-            const float vx = (float)(menu.entries[i].x - from.x);
-            const float vy = (float)(menu.entries[i].y - from.y);
-            const float dist = std::sqrt(vx * vx + vy * vy);
-            if (dist < 1.0f) {
-                continue;
-            }
-            const float along = (vx * ux + vy * uy) / dist;   // cos of the angle off the direction
-            if (along < 0.35f) {
-                continue;
-            }
-            const float score = dist / along / along;
-            if (score < best) {
-                best = score;
-                best_index = i;
-            }
+        const int step = dx != 0 ? dx : dy;
+        const int to = (int)menu.picked + step;
+        if (to >= 0 && to < (int)menu.entries.size()) {
+            menu.picked = (size_t)to;
         }
-        menu.picked = best_index;
     }
 
     std::atomic<int> env_state{0};   // 0 not read, 1 waiting, 2 done or none
@@ -329,11 +427,8 @@ namespace {
                 env_state = 1;
             }
         }
-        if (env_state.load() == 1 && ms_since_start() >= at) {
-            env_state = 2;
-            return true;
-        }
-        return false;
+        // Waits until the menu can open (headless the area can take minutes to load).
+        return env_state.load() == 1 && ms_since_start() >= at;
     }
 
     // --- drawing ---
@@ -418,23 +513,6 @@ namespace {
         call(rdram, ctx, func_800E30E0, gfx, image, frame % frames, coords_addr);
     }
 
-    // A talking-head portrait (gczoomboxdata's table), as the achievement icons draw them.
-    bool draw_portrait(uint8_t* rdram, recomp_context* ctx, uint32_t gfx, int portrait, int x, int y, int size) {
-        if (portrait < 0) {
-            return false;
-        }
-        static std::unordered_map<int, uint32_t> assets;
-        auto found = assets.find(portrait);
-        if (found == assets.end()) {
-            found = assets.emplace(portrait, call(rdram, ctx, _gczoomboxdata_entrypoint_1, (uint32_t)portrait) & 0xFFFF).first;
-        }
-        if (found->second == 0) {
-            return false;
-        }
-        // Portraits come out 12 pixels lower than asked at any size (measured for the achievement icons).
-        draw_sprite(rdram, ctx, gfx, found->second, x, y, size, 0, -12);
-        return true;
-    }
 }
 
 bool tooie::transform_menu::enabled() {
@@ -443,7 +521,7 @@ bool tooie::transform_menu::enabled() {
         return true;
     }
     try {
-        return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(option));
+        return std::get<bool>(recompui::config::get_graphics_config().get_option_value(option));
     } catch (...) {
         return false;
     }
@@ -460,25 +538,32 @@ void tooie::transform_menu::tick(uint8_t* rdram, recomp_context* ctx) {
     const bool env_pressed = env_open();
 
     if (!enabled()) {
-        close("option off");
+        close(rdram, ctx, "option off");
         return;
     }
     if (!menu.open) {
         if ((key_pressed || env_pressed) && can_open(rdram)) {
+            env_state = 2;
             open(rdram, ctx);
         }
         return;
     }
     if (!can_open(rdram)) {
-        close("the game moved on (pause, map change, cutscene or talk)");
+        if (tooie::debug::map_change_busy(rdram)) {
+            for (Entry& e : menu.entries) {
+                e.marker = 0;   // the map change removes them
+            }
+        }
+        close(rdram, ctx, "the game moved on (pause, map change, cutscene or talk)");
         return;
     }
     // The game stands still behind the menu.
     write_float(rdram, delta_time_addr, frozen_delta);
+    pose_statues(rdram);
 
     // The Transform key shuts it again, once it has been up a moment.
     if (key_pressed && Clock::now() - menu.opened_at > std::chrono::milliseconds(200)) {
-        close("Transform key");
+        close(rdram, ctx, "Transform key");
         return;
     }
     std::deque<int> list;
@@ -488,24 +573,25 @@ void tooie::transform_menu::tick(uint8_t* rdram, recomp_context* ctx) {
     }
     for (int e : list) {
         if (e == 'B' || e == 'S') {
-            close(e == 'B' ? "B" : "Start");
+            close(rdram, ctx, e == 'B' ? "B" : "Start");
             return;
         }
         if (e == 'A') {
             const Form& f = forms[menu.entries[menu.picked].form];
             if (f.id == player_form(rdram)) {
-                close("A on the form Banjo already has");
+                close(rdram, ctx, "A on the form Banjo already has");
                 return;
             }
             const bool asked = tooie::transform_picker::request_form(f.id);
             if (log_on()) {
                 std::fprintf(stderr, "[transform-menu] A: %s (0x%X) %s\n", f.name, f.id, asked ? "asked for" : "not taken");
             }
-            close("A");
+            close(rdram, ctx, "A");
             return;
         }
         if (e >= 0 && e <= 8 && e != 4) {
             move_pick(e % 3 - 1, e / 3 - 1);
+            pose_statues(rdram);
             if (log_on()) {
                 std::fprintf(stderr, "[transform-menu] picked %s\n", forms[menu.entries[menu.picked].form].name);
             }
@@ -520,21 +606,6 @@ void tooie::transform_menu::draw(uint8_t* rdram, recomp_context* ctx, uint32_t g
     const int64_t ms = ms_since_start();
     uint32_t offset = 0;
 
-    // The forms: the picked one larger, its name below the ring. A form with no portrait shows its name.
-    for (size_t i = 0; i < menu.entries.size(); i++) {
-        const Entry& e = menu.entries[i];
-        const bool picked = i == menu.picked;
-        const int size = picked ? picked_portrait_size : portrait_size;
-        if (!draw_portrait(rdram, ctx, gfx, portrait_of(e.form), e.x, e.y, size)) {
-            print(rdram, ctx, gfx, offset, picked ? colour_yellow : colour_white, picked ? text_scale : small_scale,
-                  e.x, e.y - 4, forms[e.form].name, 1);
-        }
-    }
-    // The pick marker: the A button turning just above the picked form.
-    {
-        const Entry& e = menu.entries[menu.picked];
-        draw_sprite(rdram, ctx, gfx, sprite_a_button, e.x, e.y - picked_portrait_size / 2 - 6, 10, (uint32_t)(ms / 150));
-    }
     const Form& f = forms[menu.entries[menu.picked].form];
     std::string name = f.name;
     if (f.id == menu.current) {
