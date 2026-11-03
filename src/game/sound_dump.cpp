@@ -33,6 +33,7 @@
 #include "recompui/config.h"
 
 #include "tooie_game.h"
+#include "tooie_path_text.h"
 #include "tooie_rdram.h"
 #include "tooie_sound_dump.h"
 #include "tooie_toast.h"
@@ -276,7 +277,7 @@ namespace {
             index << (s.folder + "/" + s.name) << "  rom 0x" << std::hex << s.rom << std::dec << "  bytes " << s.length
                   << (s.type ? "  raw16" : "  adpcm") << "\n";
         }
-        printf("[sound-dump] wrote %u sounds to %s\n", count, root.string().c_str());
+        printf("[sound-dump] wrote %u sounds to %s\n", count, tooie::path_text(root).c_str());
         fflush(stdout);
         if (count != 0) {
             tooie::toast::show("Sounds dumped: " + std::to_string(count) + " new files");

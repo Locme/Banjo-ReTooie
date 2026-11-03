@@ -23,6 +23,7 @@
 
 #include "tooie_console.h"
 #include "tooie_cheats.h"
+#include "tooie_path_text.h"
 #include "tooie_debug.h"
 #include "tooie_enemy_spawner.h"
 #include "tooie_player_cheats.h"
@@ -129,6 +130,12 @@ std::string trim(const std::string& s) {
     if (a == std::string::npos) return "";
     size_t b = s.find_last_not_of(" \t\r\n");
     return s.substr(a, b - a + 1);
+}
+
+// A path from typed or piped text, which is UTF-8. A path made from a plain std::string reads it in the Windows ANSI
+// code page, which garbles a name outside it.
+std::filesystem::path typed_path(const std::string& text) {
+    return std::filesystem::path(std::u8string(text.begin(), text.end()));
 }
 
 std::vector<std::string> split(const std::string& line) {
@@ -1161,12 +1168,12 @@ void cmd_tee(Ctx& c) {
         return;
     }
     if (c.w.size() < 2) { error("tee <file> | tee off"); return; }
-    std::filesystem::path path = rest_of(c.line, 1);
+    std::filesystem::path path = typed_path(rest_of(c.line, 1));
     if (path.is_relative()) path = recompui::file::get_app_folder_path() / path;
     if (g_tee != nullptr) std::fclose(g_tee);
-    g_tee = std::fopen(path.string().c_str(), "a");
-    if (g_tee == nullptr) { error("cannot write " + path.string()); return; }
-    print("copying the output to " + path.string());
+    g_tee = tooie::open_path(path, "a");
+    if (g_tee == nullptr) { error("cannot write " + tooie::path_text(path)); return; }
+    print("copying the output to " + tooie::path_text(path));
 }
 
 void cmd_dev(Ctx& c) {
@@ -1378,7 +1385,7 @@ void perf_tick() {
         g_current = "perf";
     }
     print(format("%zu updates, average %.2f ms (%.1f per second), 99th percentile %.2f ms, worst %.2f ms; saved to %s",
-        sorted.size(), avg, 1000.0 / avg, p99, sorted.back(), path.string().c_str()));
+        sorted.size(), avg, 1000.0 / avg, p99, sorted.back(), tooie::path_text(path).c_str()));
 }
 
 void cmd_sysinfo(Ctx&) {
@@ -1953,47 +1960,75 @@ void look_tick(uint8_t* rdram) {
     tooie::rdram::write_float(rdram, g_look.dynamic + kDynRot + 4, g_look.yaw);
 }
 
-// look <yaw> [pitch] | look at <x> <y> <z> | look off: turns the camera where it stands.
+constexpr float kHeadHeight = 60.0f;          // Banjo's feet to the point the free camera orbits (free_camera.cpp)
+constexpr double kLookDistance = 350.0;
+
+// look [here] <yaw> [pitch] [distance] | look [here] at <x> <y> <z> [distance] | look off. Without `here` the camera is
+// put `distance` back from Banjo's head along the view and looks at him, pulled in front of any wall between (the
+// free camera's line test); with it, the camera turns where it stands.
 void cmd_look(Ctx& c) {
-    const char* usage = "look <yaw deg> [pitch deg] | look at <x> <y> <z> | look off";
+    const char* usage = "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look off";
     if (c.w.size() < 2) { error(usage); return; }
-    std::string v = lower(c.w[1]);
-    if (v == "off") {
+    if (lower(c.w[1]) == "off") {
         if (!g_look.on) { print("the camera is the game's already"); return; }
         write_ram(c.rdram, g_look.dynamic + kDynFrozen, g_look.frozen_before, 1);
         g_look.on = false;
         print("the camera is the game's again");
         return;
     }
+    size_t i = 1;
+    bool here = lower(c.w[i]) == "here";
+    if (here) i++;
+    bool at = i < c.w.size() && lower(c.w[i]) == "at";
+    if (at) i++;
     uint32_t dynamic = g_look.on ? g_look.dynamic : gameplay_camera(c.rdram);
     if (dynamic == 0 || !tooie::debug::can_warp()) { error("the gameplay camera is not running (a scene, a fixed camera, or no file loaded)"); return; }
+    float feet[3];
+    if (!here && !tooie::player_cheats::position(c.rdram, feet)) { error("there is no player yet"); return; }
     float pos[3];
     for (int k = 0; k < 3; k++) pos[k] = g_look.on ? g_look.pos[k] : tooie::rdram::read_float(c.rdram, dynamic + kDynPos + 4 * k);
-    double yaw, pitch = 0;
-    if (v == "at") {
+    // Where the view comes from when the angles are worked out: the camera for `here`, Banjo's head otherwise.
+    float from[3] = { pos[0], pos[1], pos[2] };
+    if (!here) { from[0] = feet[0]; from[1] = feet[1] + kHeadHeight; from[2] = feet[2]; }
+    double yaw, pitch = 0, distance = kLookDistance;
+    size_t next;
+    if (at) {
         double t[3];
-        if (c.w.size() < 5 || !parse_double(c.w[2], &t[0]) || !parse_double(c.w[3], &t[1]) || !parse_double(c.w[4], &t[2])) { error(usage); return; }
-        double dx = t[0] - pos[0], dy = t[1] - pos[1], dz = t[2] - pos[2];
+        if (i + 2 >= c.w.size() || !parse_double(c.w[i], &t[0]) || !parse_double(c.w[i + 1], &t[1]) || !parse_double(c.w[i + 2], &t[2])) { error(usage); return; }
+        double dx = t[0] - from[0], dy = t[1] - from[1], dz = t[2] - from[2];
         double across = std::hypot(dx, dz);
-        if (across < 1.0 && std::fabs(dy) < 1.0) { error("the camera is on that point"); return; }
+        if (across < 1.0 && std::fabs(dy) < 1.0) { error(here ? "the camera is on that point" : "Banjo is on that point"); return; }
         yaw = std::atan2(-dx, -dz) * 180.0 / kPi;
         pitch = std::atan2(dy, across) * 180.0 / kPi;
-    } else if (!parse_double(c.w[1], &yaw) || (c.w.size() >= 3 && !parse_double(c.w[2], &pitch))) {
-        error(usage);
-        return;
+        next = i + 3;
+    } else {
+        if (i >= c.w.size() || !parse_double(c.w[i], &yaw) || (i + 1 < c.w.size() && !parse_double(c.w[i + 1], &pitch))) { error(usage); return; }
+        next = i + 2;
     }
+    if (next < c.w.size() && (here || !parse_double(c.w[next], &distance) || distance < 1 || distance > 5000)) { error(usage); return; }
     pitch = std::clamp(pitch, -89.0, 89.0);
+    bool pulled_in = false;
+    if (!here) {
+        // Back from his head against the view: yaw 0 looks along -z and grows turning left, so the view is
+        // (-sin yaw, sin pitch, -cos yaw) with the across part scaled by cos pitch.
+        double ry = yaw * kPi / 180.0, rp = pitch * kPi / 180.0;
+        double f[3] = { -std::sin(ry) * std::cos(rp), std::sin(rp), -std::cos(ry) * std::cos(rp) };
+        for (int k = 0; k < 3; k++) pos[k] = from[k] - (float)(f[k] * distance);
+        float normal[3];
+        if (c.ctx != nullptr) pulled_in = tooie::free_camera::sweep_line(c.rdram, c.ctx, from, pos, normal);
+    }
     if (!g_look.on) {
         g_look.dynamic = dynamic;
         g_look.map = tooie::debug::current_map(c.rdram);
         g_look.frozen_before = read_ram(c.rdram, dynamic + kDynFrozen, 1);
-        for (int k = 0; k < 3; k++) g_look.pos[k] = pos[k];
     }
+    for (int k = 0; k < 3; k++) g_look.pos[k] = pos[k];
     g_look.yaw = wrap_360(yaw);
     g_look.pitch = wrap_360(pitch); // the game keeps its angles from 0 to 360 (src/input/motion_aim.cpp)
     g_look.on = true;
     look_tick(c.rdram);
-    print(format("camera at %.0f %.0f %.0f looking yaw %.1f, pitch %.1f (look off gives it back)", pos[0], pos[1], pos[2], wrap_360(yaw), pitch));
+    print(format("camera at %.0f %.0f %.0f looking yaw %.1f, pitch %.1f%s (look off gives it back)", pos[0], pos[1], pos[2], wrap_360(yaw), pitch,
+        pulled_in ? ", pulled in front of a wall" : ""));
 }
 
 void cmd_peek(Ctx& c) {
@@ -2244,10 +2279,10 @@ void cmd_alias(Ctx& c) {
 
 void cmd_exec(Ctx& c) {
     if (c.w.size() < 2) { error("exec <file>"); return; }
-    std::filesystem::path path = rest_of(c.line, 1);
+    std::filesystem::path path = typed_path(rest_of(c.line, 1));
     if (path.is_relative() && !std::filesystem::exists(path)) path = recompui::file::get_app_folder_path() / path;
     std::ifstream in{ path };
-    if (!in.good()) { error("cannot open " + path.string()); return; }
+    if (!in.good()) { error("cannot open " + tooie::path_text(path)); return; }
     std::vector<std::string> lines;
     std::string line;
     while (std::getline(in, line)) {
@@ -2256,7 +2291,7 @@ void cmd_exec(Ctx& c) {
         lines.push_back(line);
     }
     for (auto it = lines.rbegin(); it != lines.rend(); ++it) enqueue_line(*it, c.depth + 1, true);
-    print(format("%zu lines from %s", lines.size(), path.string().c_str()));
+    print(format("%zu lines from %s", lines.size(), tooie::path_text(path).c_str()));
 }
 
 void cmd_echo(Ctx& c) {
@@ -2471,7 +2506,7 @@ void cmd_mod(Ctx& c) {
 void cmd_config(Ctx& c) {
     std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
     if ((what != "export" && what != "import") || c.w.size() < 3) { error("config export <folder> | config import <folder>"); return; }
-    std::filesystem::path other = rest_of(c.line, 2);
+    std::filesystem::path other = typed_path(rest_of(c.line, 2));
     if (other.is_relative()) other = recompui::file::get_app_folder_path() / other;
     std::filesystem::path config = recomp::get_config_path();
     std::filesystem::path from = what == "export" ? config : other;
@@ -2484,8 +2519,8 @@ void cmd_config(Ctx& c) {
         std::filesystem::copy_file(entry.path(), to / entry.path().filename(), std::filesystem::copy_options::overwrite_existing, ec);
         if (!ec) n++;
     }
-    if (n == 0) { error("no settings files found in " + from.string()); return; }
-    print(format("%d settings files copied to %s", n, to.string().c_str()) + (what == "import" ? "\nRestart the game to use them." : ""));
+    if (n == 0) { error("no settings files found in " + tooie::path_text(from)); return; }
+    print(format("%d settings files copied to %s", n, tooie::path_text(to).c_str()) + (what == "import" ? "\nRestart the game to use them." : ""));
 }
 
 // save backup | save list: copies of the save file in save_backups/ in the config folder (as Save backups makes).
@@ -2503,13 +2538,13 @@ void cmd_save(Ctx& c) {
         std::filesystem::create_directories(dir, ec);
         std::filesystem::copy_file(save, dir / save.filename(), std::filesystem::copy_options::overwrite_existing, ec);
         if (ec) { error("could not copy the save file: " + ec.message()); return; }
-        print("saved a copy to " + dir.string());
+        print("saved a copy to " + tooie::path_text(dir));
         return;
     }
     if (what == "list") {
         std::vector<std::string> names;
         for (const auto& entry : std::filesystem::directory_iterator(root, ec)) {
-            if (entry.is_directory()) names.push_back(entry.path().filename().string());
+            if (entry.is_directory()) names.push_back(tooie::path_text(entry.path().filename()));
         }
         std::sort(names.begin(), names.end());
         std::string out;
@@ -2527,7 +2562,7 @@ void cmd_profile(Ctx& c) {
     std::error_code ec;
     if (what == "list") {
         std::string out;
-        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) out += (out.empty() ? "" : "\n") + entry.path().stem().string();
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) out += (out.empty() ? "" : "\n") + tooie::path_text(entry.path().stem());
         print(out.empty() ? "no profiles" : out);
         return;
     }
@@ -2535,14 +2570,14 @@ void cmd_profile(Ctx& c) {
     std::filesystem::path file = dir / (squash(c.w[2]) + ".txt");
     if (what == "load") {
         Ctx d = c;
-        d.w = { "exec", file.string() };
-        d.line = "exec " + file.string();
+        d.w = { "exec", tooie::path_text(file) };
+        d.line = "exec " + tooie::path_text(file);
         cmd_exec(d);
         return;
     }
     std::filesystem::create_directories(dir, ec);
     std::ofstream out{ file };
-    if (!out.good()) { error("cannot write " + file.string()); return; }
+    if (!out.good()) { error("cannot write " + tooie::path_text(file)); return; }
     out << "# Console settings profile. profile load " << squash(c.w[2]) << " sets these.\n";
     int n = 0;
     for (const SettingRef& r : all_settings()) {
@@ -2552,7 +2587,7 @@ void cmd_profile(Ctx& c) {
         out << "set " << r.full_id() << " " << v << "\n";
         n++;
     }
-    print(format("%d settings saved to %s", n, file.string().c_str()));
+    print(format("%d settings saved to %s", n, tooie::path_text(file).c_str()));
 }
 
 // sweep start | sweep stop: the texture sweep (Texture dump > Sweep all maps), without the menu prompt.
@@ -2781,7 +2816,7 @@ void cmd_scenario(Ctx& c) {
     if (what == "list") {
         std::vector<std::string> names;
         for (const auto& e : std::filesystem::directory_iterator(scenario_dir(), ec)) {
-            if (e.path().extension() == ".txt") names.push_back(e.path().stem().string());
+            if (e.path().extension() == ".txt") names.push_back(tooie::path_text(e.path().stem()));
         }
         std::sort(names.begin(), names.end());
         std::string out;
@@ -2796,25 +2831,25 @@ void cmd_scenario(Ctx& c) {
         if (!tooie::player_cheats::position(c.rdram, pos)) { error("there is no player yet"); return; }
         uint16_t map = tooie::debug::current_map(c.rdram);
         std::filesystem::create_directories(scenario_dir(), ec);
-        std::filesystem::path path = scenario_dir() / (lower(c.w[2]) + ".txt");
+        std::filesystem::path path = scenario_dir() / typed_path(lower(c.w[2]) + ".txt");
         std::ofstream out{ path };
-        if (!out.good()) { error("cannot write " + path.string()); return; }
+        if (!out.good()) { error("cannot write " + tooie::path_text(path)); return; }
         out << "# Scenario " << lower(c.w[2]) << ": map 0x" << format("%X", map) << " (" << map_name(map) << "). Add any console commands.\n";
         out << format("wait save\nwarp id %X\nwait map %X\nwait 30\ngoto %.3f %.3f %.3f\n", map, map, pos[0], pos[1], pos[2]);
         for (const ItemName& in : kItemNames) {
             out << format("item %d %d\n", in.index, tooie::progress_cheats::get_item(c.rdram, c.ctx, 0x40 + in.index));
         }
-        print("wrote " + path.string());
+        print("wrote " + tooie::path_text(path));
         return;
     }
     if (what == "delete" || what == "del") {
-        if (c.w.size() < 3 || !std::filesystem::remove(scenario_dir() / (lower(c.w[2]) + ".txt"), ec)) { error("scenario delete <name> (scenario list)"); return; }
+        if (c.w.size() < 3 || !std::filesystem::remove(scenario_dir() / typed_path(lower(c.w[2]) + ".txt"), ec)) { error("scenario delete <name> (scenario list)"); return; }
         print("deleted " + lower(c.w[2]));
         return;
     }
-    std::filesystem::path path = scenario_dir() / (what + ".txt");
+    std::filesystem::path path = scenario_dir() / typed_path(what + ".txt");
     if (!std::filesystem::exists(path, ec)) { error("no scenario called \"" + what + "\" (scenario list)"); return; }
-    enqueue_line("exec " + path.string(), c.depth, true);
+    enqueue_line("exec " + tooie::path_text(path), c.depth, true);
 }
 
 // record <name> / record stop / play <name>: controller 1, one entry per game update, in inputs/<name>.txt.
@@ -2834,12 +2869,12 @@ std::filesystem::path input_dir() { return app_file("inputs"); }
 bool save_recording() {
     std::error_code ec;
     std::filesystem::create_directories(input_dir(), ec);
-    std::filesystem::path path = input_dir() / (g_rec_name + ".txt");
+    std::filesystem::path path = input_dir() / typed_path(g_rec_name + ".txt");
     std::ofstream out{ path };
-    if (!out.good()) { error("cannot write " + path.string()); return false; }
+    if (!out.good()) { error("cannot write " + tooie::path_text(path)); return false; }
     out << "# Controller 1, one line per game update: update, buttons (hex), stick x, stick y. Written by record.\n";
     for (const InputFrame& f : g_rec) out << format("%llu %04X %.4f %.4f\n", (unsigned long long)f.frame, f.buttons, f.got ? f.x : 0.0f, f.got ? f.y : 0.0f);
-    print(format("%zu updates kept in %s", g_rec.size(), path.string().c_str()));
+    print(format("%zu updates kept in %s", g_rec.size(), tooie::path_text(path).c_str()));
     return true;
 }
 
@@ -2856,7 +2891,7 @@ void cmd_record(Ctx& c) {
         std::error_code ec;
         std::string out;
         for (const auto& e : std::filesystem::directory_iterator(input_dir(), ec)) {
-            if (e.path().extension() == ".txt") out += (out.empty() ? "" : " ") + e.path().stem().string();
+            if (e.path().extension() == ".txt") out += (out.empty() ? "" : " ") + tooie::path_text(e.path().stem());
         }
         print(out.empty() ? "no recordings (record <name>, then record stop)" : out);
         return;
@@ -2878,7 +2913,7 @@ void cmd_play(Ctx& c) {
         return;
     }
     if (what.empty()) { error("play <name> | play stop (record list)"); return; }
-    std::ifstream in{ input_dir() / (what + ".txt") };
+    std::ifstream in{ input_dir() / typed_path(what + ".txt") };
     if (!in.good()) { error("no recording called \"" + what + "\" (record list)"); return; }
     std::vector<InputFrame> frames;
     std::string line;
@@ -2980,11 +3015,11 @@ void cmd_autoexec(Ctx& c) {
     std::error_code ec;
     bool there = std::filesystem::exists(path, ec);
     if (c.w.size() >= 2 && lower(c.w[1]) == "run") {
-        if (!there) { error(path.string() + " does not exist"); return; }
-        enqueue_line("exec " + path.string(), c.depth, true);
+        if (!there) { error(tooie::path_text(path) + " does not exist"); return; }
+        enqueue_line("exec " + tooie::path_text(path), c.depth, true);
         return;
     }
-    print(path.string() + (there ? " runs at every start (autoexec run runs it now)" : " does not exist; put commands in it and they run at every start"));
+    print(tooie::path_text(path) + (there ? " runs at every start (autoexec run runs it now)" : " does not exist; put commands in it and they run at every start"));
 }
 
 // grep <text>: the console's lines that hold some text.
@@ -3059,12 +3094,14 @@ void cmd_open(Ctx& c) {
     else { error("open config | game | mods | saves | backups | screenshots | scenarios | inputs"); return; }
     std::error_code ec;
     std::filesystem::create_directories(path, ec);
-    std::string url = "file://" + std::filesystem::absolute(path, ec).generic_string();
+    // SDL_OpenURL takes UTF-8.
+    const std::u8string generic = std::filesystem::absolute(path, ec).generic_u8string();
+    std::string url = "file://" + std::string(generic.begin(), generic.end());
 #ifdef _WIN32
     if (url.size() > 7 && url[7] != '/') url = "file:///" + url.substr(7);
 #endif
-    if (SDL_OpenURL(url.c_str()) != 0) { error("could not open " + path.string() + ": " + SDL_GetError()); return; }
-    print("opened " + path.string());
+    if (SDL_OpenURL(url.c_str()) != 0) { error("could not open " + tooie::path_text(path) + ": " + SDL_GetError()); return; }
+    print("opened " + tooie::path_text(path));
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -3140,15 +3177,15 @@ void cmd_trace(Ctx& c) {
     if (t.addr + t.bytes > kRamEnd || t.addr + t.bytes < t.addr) { error("the range runs past the end of RAM"); return; }
     if (t.quiet && file_name.empty()) { error("quiet needs file <name>"); return; }
     if (!file_name.empty()) {
-        std::filesystem::path path = file_name;
+        std::filesystem::path path = typed_path(file_name);
         if (path.extension().empty()) path += ".csv";
         if (path.is_relative()) path = recompui::file::get_app_folder_path() / "traces" / path;
         std::error_code ec;
         std::filesystem::create_directories(path.parent_path(), ec);
-        t.file = std::fopen(path.string().c_str(), "w");
-        if (t.file == nullptr) { error("cannot write " + path.string()); return; }
+        t.file = tooie::open_path(path, "w");
+        if (t.file == nullptr) { error("cannot write " + tooie::path_text(path)); return; }
         std::fprintf(t.file, "update,address,old,new\n");
-        print("logging to " + path.string());
+        print("logging to " + tooie::path_text(path));
     }
     for (uint32_t off = 0; off < t.bytes; off += t.size) t.last.push_back(read_ram(c.rdram, t.addr + off, t.size));
     for (Trace& old : g_traces) {
@@ -3363,7 +3400,7 @@ void finish_ramlog() {
     std::filesystem::path path = recompui::file::get_app_folder_path() / "traces" / (std::string("ramlog-") + stamp + ".csv");
     std::error_code ec;
     std::filesystem::create_directories(path.parent_path(), ec);
-    FILE* f = std::fopen(path.string().c_str(), "w");
+    FILE* f = tooie::open_path(path, "w");
     if (f != nullptr) {
         std::fprintf(f, "address,changes,of_updates,first,last\n");
         for (size_t i : order) {
@@ -3372,7 +3409,7 @@ void finish_ramlog() {
         std::fclose(f);
     }
     std::string out = format("ramlog: %zu words changed in %llu updates", order.size(), (unsigned long long)g_ramlog.updates);
-    out += f != nullptr ? ", all in " + path.string() : ", but " + path.string() + " could not be written";
+    out += f != nullptr ? ", all in " + tooie::path_text(path) : ", but " + tooie::path_text(path) + " could not be written";
     // The quietest words that changed are often the ones a single event touched; the busiest are timers and the like.
     auto line = [&](size_t i) {
         out += format("\n%08X changed %u times: %08X -> %08X", g_ramlog.from + (uint32_t)i * 4, g_ramlog.changes[i], g_ramlog.first[i], g_ramlog.last[i]);
@@ -3456,7 +3493,7 @@ const std::vector<Command>& commands() {
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
         { "face", {}, true, "face <x> <z>", "turn Banjo to face a point", cmd_face },
-        { "look", {}, true, "look <yaw deg> [pitch deg] | look at <x> <y> <z> | look off", "hold the gameplay camera at an angle where it stands, for screenshots (a map change ends it)", cmd_look },
+        { "look", {}, true, "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look off", "hold the gameplay camera looking at Banjo from a direction, 350 back (here: turn it where it stands), for screenshots; a map change ends it", cmd_look },
         { "transform", {}, true, "transform [form]", "the Cheats tab's Transformation row (turns the cheats on)", cmd_transform },
         { "repeat", {}, false, "repeat <n> <command>", "run a command n times", cmd_repeat },
         { "tee", {}, false, "tee <file> | tee off", "copy everything the console prints to a file", cmd_tee },
@@ -3927,7 +3964,7 @@ void tooie::console::start(int argc, char** argv) {
     load_history();
     {
         std::error_code ec;
-        if (std::filesystem::exists(app_file("autoexec.txt"), ec)) enqueue_line("exec " + app_file("autoexec.txt").string());
+        if (std::filesystem::exists(app_file("autoexec.txt"), ec)) enqueue_line("exec " + tooie::path_text(app_file("autoexec.txt")));
     }
     for (int i = 1; i + 1 < argc; i++) {
         if (std::strcmp(argv[i], "--exec") == 0) enqueue_line(std::string("exec ") + argv[i + 1]);

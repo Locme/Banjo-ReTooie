@@ -12,6 +12,7 @@
 
 #include "tooie_dev_files.h"
 #include "tooie_material_pick.h"
+#include "tooie_path_text.h"
 
 namespace {
     using tooie::material_pick::Material;
@@ -213,7 +214,7 @@ void tooie::material_pick::load() {
             materials[std::strtoull(hash_text.c_str(), nullptr, 16)] = material;
         }
         if (!materials.empty()) {
-            fprintf(stderr, "[material-pick] %zu materials from %s\n", materials.size(), file_path().string().c_str());
+            fprintf(stderr, "[material-pick] %zu materials from %s\n", materials.size(), tooie::path_text(file_path()).c_str());
         }
         saved_materials = materials;
         materials_version.fetch_add(1);

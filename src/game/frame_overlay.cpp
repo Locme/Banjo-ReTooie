@@ -58,6 +58,7 @@
 
 #include "tooie_cheats.h"
 #include "tooie_debug.h"
+#include "tooie_path_text.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_hotkeys.h"
 #include "tooie_model_tagging.h"
@@ -900,8 +901,8 @@ namespace {
         txt_path += ".txt";
         std::ofstream txt(txt_path);
         txt << summary_text(b, seconds);
-        std::string name = b.path.filename().string();
-        std::printf("[benchmark] saved %s.csv and .txt (%.1f s)\n", b.path.string().c_str(), seconds);
+        std::string name = tooie::path_text(b.path.filename());
+        std::printf("[benchmark] saved %s.csv and .txt (%.1f s)\n", tooie::path_text(b.path).c_str(), seconds);
         std::fflush(stdout);
         tooie::toast::show("Benchmark saved: benchmarks\\" + name + ".txt");
     }

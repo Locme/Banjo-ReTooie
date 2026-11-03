@@ -147,6 +147,24 @@ namespace RT64 {
         };
         constexpr Quality Qualities[3] = { { 512, 2, 256 }, { 1024, 2, 256 }, { 2048, 1, 512 } };
 
+        // The gathered light and the two sets that read the depth target, for one picture size (at the quality's scale) and
+        // depth target: one for each such target the worker draws into, so two framebuffers of different sizes drawn in turn
+        // don't re-make each other's every pass (the scene effects did, and the descriptor sets and layouts that piled up lost
+        // the device at high frame rates, 2026-11-03).
+        struct TargetResources {
+            uint32_t gatheredWidth = 0;
+            uint32_t gatheredHeight = 0;
+            const RenderTexture *depth = nullptr;
+            uint64_t usedPass = 0;
+            std::unique_ptr<RenderTexture> gathered;
+            std::unique_ptr<RenderFramebuffer> gatheredFramebuffer;
+            std::unique_ptr<VolShadowVolumeDescriptorSet> volumeSet;
+            std::unique_ptr<VolShadowCompositeDescriptorSet> compositeSet;
+            // The maps the sets were made with (the worker's own, made again when the quality changes).
+            const RenderTexture *setSunMap = nullptr;
+            const RenderTexture *setLampMap = nullptr;
+        };
+
         // Each worker that records the passes gets its own targets (as the scene effects' resources).
         struct Resources {
             RenderDevice *device = nullptr;
@@ -158,16 +176,9 @@ namespace RT64 {
             std::unique_ptr<RenderTextureView> lampMapView;
             std::unique_ptr<RenderFramebuffer> lampMapFramebuffer;
             uint32_t lampFaceSize = 0;
-            std::unique_ptr<RenderTexture> gathered;
-            std::unique_ptr<RenderFramebuffer> gatheredFramebuffer;
-            uint32_t gatheredWidth = 0;
-            uint32_t gatheredHeight = 0;
-            std::unique_ptr<VolShadowVolumeDescriptorSet> volumeSet;
-            std::unique_ptr<VolShadowCompositeDescriptorSet> compositeSet;
-            const RenderTexture *setDepth = nullptr;
-            const RenderTexture *setSunMap = nullptr;
-            const RenderTexture *setLampMap = nullptr;
-            const RenderTexture *setGathered = nullptr;
+            // At most MaxTargets, least recently used out first (to the retired queue, all at once).
+            static constexpr size_t MaxTargets = 4;
+            std::vector<std::unique_ptr<TargetResources>> targets;
 
             // Replaced objects, kept until the GPU can no longer be using them.
             struct Retired {
@@ -177,6 +188,9 @@ namespace RT64 {
             };
             std::deque<Retired> retired;
             uint64_t passes = 0;
+            // Past this many waiting, only the passes are waited for: the worker waits for each command list before recording
+            // the next, so 8 passes are enough, and at hundreds of frames a second half a second's worth was a long queue.
+            static constexpr size_t RetiredQueue = 64;
 
             template <typename T>
             void retireLater(std::unique_ptr<T> &&object) {
@@ -188,9 +202,46 @@ namespace RT64 {
             void freeRetired() {
                 passes++;
                 const auto now = std::chrono::steady_clock::now();
-                while (!retired.empty() && (retired.front().pass + 8 <= passes) && ((now - retired.front().time) >= std::chrono::milliseconds(500))) {
+                while (!retired.empty() && (retired.front().pass + 8 <= passes) &&
+                    (((now - retired.front().time) >= std::chrono::milliseconds(500)) || (retired.size() > RetiredQueue)))
+                {
                     retired.pop_front();
                 }
+            }
+
+            // The resources for this picture size and depth target, made (empty) when there are none yet.
+            TargetResources &targetFor(uint32_t gatheredWidth, uint32_t gatheredHeight, const RenderTexture *depth) {
+                // Ones not drawn into for a while go: the depth target their sets read may be gone, and a new one made at its
+                // address would find sets still pointing at the old one.
+                constexpr uint64_t TargetKeepPasses = 240;
+                for (size_t i = 0; i < targets.size();) {
+                    if (targets[i]->usedPass + TargetKeepPasses < passes) {
+                        retireLater(std::move(targets[i]));
+                        targets.erase(targets.begin() + i);
+                    }
+                    else {
+                        i++;
+                    }
+                }
+                for (const std::unique_ptr<TargetResources> &entry : targets) {
+                    if ((entry->gatheredWidth == gatheredWidth) && (entry->gatheredHeight == gatheredHeight) && (entry->depth == depth)) {
+                        entry->usedPass = passes;
+                        return *entry;
+                    }
+                }
+                if (targets.size() >= MaxTargets) {
+                    auto oldest = std::min_element(targets.begin(), targets.end(),
+                        [](const std::unique_ptr<TargetResources> &a, const std::unique_ptr<TargetResources> &b) { return a->usedPass < b->usedPass; });
+                    retireLater(std::move(*oldest));
+                    targets.erase(oldest);
+                }
+                std::unique_ptr<TargetResources> entry = std::make_unique<TargetResources>();
+                entry->gatheredWidth = gatheredWidth;
+                entry->gatheredHeight = gatheredHeight;
+                entry->depth = depth;
+                entry->usedPass = passes;
+                targets.push_back(std::move(entry));
+                return *targets.back();
             }
         };
         std::mutex resourcesMutex;
@@ -497,35 +548,28 @@ namespace RT64 {
         }
         const uint32_t gatheredWidth = std::max((colorTarget->width + quality.scale - 1) / quality.scale, 1U);
         const uint32_t gatheredHeight = std::max((colorTarget->height + quality.scale - 1) / quality.scale, 1U);
-        if ((res.gathered != nullptr) && ((res.gatheredWidth != gatheredWidth) || (res.gatheredHeight != gatheredHeight))) {
-            res.retireLater(std::move(res.gatheredFramebuffer));
-            res.retireLater(std::move(res.gathered));
+        // This target's gathered light and sets (kept for each size and depth target the worker draws into).
+        TargetResources &target = res.targetFor(gatheredWidth, gatheredHeight, depthTarget->texture.get());
+        if (target.gathered == nullptr) {
+            target.gathered = device->createTexture(RenderTextureDesc::ColorTarget(gatheredWidth, gatheredHeight, GatheredFormat));
+            target.gathered->setName("Volumetric Shadows Gathered Light");
+            const RenderTexture *texture = target.gathered.get();
+            target.gatheredFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
         }
-        if (res.gathered == nullptr) {
-            res.gathered = device->createTexture(RenderTextureDesc::ColorTarget(gatheredWidth, gatheredHeight, GatheredFormat));
-            res.gathered->setName("Volumetric Shadows Gathered Light");
-            const RenderTexture *texture = res.gathered.get();
-            res.gatheredFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
-            res.gatheredWidth = gatheredWidth;
-            res.gatheredHeight = gatheredHeight;
-        }
-        if ((res.volumeSet == nullptr) || (res.setDepth != depthTarget->texture.get()) || (res.setSunMap != res.sunMap.get()) ||
-            (res.setLampMap != res.lampMap.get()) || (res.setGathered != res.gathered.get()))
-        {
-            res.retireLater(std::move(res.volumeSet));
-            res.retireLater(std::move(res.compositeSet));
-            res.volumeSet = std::make_unique<VolShadowVolumeDescriptorSet>(device);
-            res.volumeSet->setTexture(res.volumeSet->gDepth, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
-            res.volumeSet->setTexture(res.volumeSet->gSunMap, res.sunMap.get(), RenderTextureLayout::SHADER_READ, res.sunMapView.get());
-            res.volumeSet->setTexture(res.volumeSet->gLampMap, res.lampMap.get(), RenderTextureLayout::SHADER_READ, res.lampMapView.get());
-            res.compositeSet = std::make_unique<VolShadowCompositeDescriptorSet>(device);
-            res.compositeSet->setTexture(res.compositeSet->gDepth, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
-            res.compositeSet->setTexture(res.compositeSet->gSunMap, res.sunMap.get(), RenderTextureLayout::SHADER_READ, res.sunMapView.get());
-            res.compositeSet->setTexture(res.compositeSet->gGathered, res.gathered.get(), RenderTextureLayout::SHADER_READ);
-            res.setDepth = depthTarget->texture.get();
-            res.setSunMap = res.sunMap.get();
-            res.setLampMap = res.lampMap.get();
-            res.setGathered = res.gathered.get();
+        // (The depth target and the gathered light are the entry's own; only the worker's maps can change under it.)
+        if ((target.volumeSet == nullptr) || (target.setSunMap != res.sunMap.get()) || (target.setLampMap != res.lampMap.get())) {
+            res.retireLater(std::move(target.volumeSet));
+            res.retireLater(std::move(target.compositeSet));
+            target.volumeSet = std::make_unique<VolShadowVolumeDescriptorSet>(device);
+            target.volumeSet->setTexture(target.volumeSet->gDepth, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
+            target.volumeSet->setTexture(target.volumeSet->gSunMap, res.sunMap.get(), RenderTextureLayout::SHADER_READ, res.sunMapView.get());
+            target.volumeSet->setTexture(target.volumeSet->gLampMap, res.lampMap.get(), RenderTextureLayout::SHADER_READ, res.lampMapView.get());
+            target.compositeSet = std::make_unique<VolShadowCompositeDescriptorSet>(device);
+            target.compositeSet->setTexture(target.compositeSet->gDepth, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
+            target.compositeSet->setTexture(target.compositeSet->gSunMap, res.sunMap.get(), RenderTextureLayout::SHADER_READ, res.sunMapView.get());
+            target.compositeSet->setTexture(target.compositeSet->gGathered, target.gathered.get(), RenderTextureLayout::SHADER_READ);
+            target.setSunMap = res.sunMap.get();
+            target.setLampMap = res.lampMap.get();
         }
 
         // The constants every pass shares.
@@ -614,10 +658,10 @@ namespace RT64 {
 
         // The volume pass: each lit air's mesh, added up.
         commandList->barriers(RenderBarrierStage::GRAPHICS, {
-            RenderTextureBarrier(res.gathered.get(), RenderTextureLayout::COLOR_WRITE),
+            RenderTextureBarrier(target.gathered.get(), RenderTextureLayout::COLOR_WRITE),
             RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::SHADER_READ)
         });
-        commandList->setFramebuffer(res.gatheredFramebuffer.get());
+        commandList->setFramebuffer(target.gatheredFramebuffer.get());
         commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
         if (sunOn || (lampCount > 0)) {
             commandList->setViewports(RenderViewport(0.0f, 0.0f, float(gatheredWidth), float(gatheredHeight)));
@@ -626,7 +670,7 @@ namespace RT64 {
                 std::min((area.bottom + int32_t(quality.scale) - 1) / int32_t(quality.scale), int32_t(gatheredHeight))));
             commandList->setPipeline(pipelines->volume.get());
             commandList->setGraphicsPipelineLayout(pipelines->volumeLayout.get());
-            commandList->setGraphicsDescriptorSet(res.volumeSet->get(), 0);
+            commandList->setGraphicsDescriptorSet(target.volumeSet->get(), 0);
             commandList->setVertexBuffers(0, nullptr, 0, nullptr);
             if (sunOn) {
                 commandList->setGraphicsPushConstants(0, &constants);
@@ -638,7 +682,7 @@ namespace RT64 {
                 commandList->drawInstanced(36 * lampCells * lampCells, 1, 0, 0);
             }
         }
-        commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.gathered.get(), RenderTextureLayout::SHADER_READ) });
+        commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(target.gathered.get(), RenderTextureLayout::SHADER_READ) });
 
         // The composite pass over the picture.
         colorTarget->setupColorFramebuffer(worker);
@@ -648,7 +692,7 @@ namespace RT64 {
         commandList->setScissors(area);
         commandList->setPipeline(pipelines->composite.get());
         commandList->setGraphicsPipelineLayout(pipelines->compositeLayout.get());
-        commandList->setGraphicsDescriptorSet(res.compositeSet->get(), 0);
+        commandList->setGraphicsDescriptorSet(target.compositeSet->get(), 0);
         // The composite reads the view in the pass's place.
         interop::VolShadowCB compositeConstants = constants;
         compositeConstants.medium.z = float(settings.view);

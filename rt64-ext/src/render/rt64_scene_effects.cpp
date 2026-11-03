@@ -113,6 +113,21 @@ namespace RT64 {
                 entries.push_back({ key, std::move(set), pass });
                 return entries.back().set.get();
             }
+
+            // Drops the sets not used for keepPasses passes: the textures their keys name may be gone by now, and a new texture
+            // made at a freed one's address would otherwise find a set still pointing at the old one.
+            template <typename Retire>
+            void expire(uint64_t pass, uint64_t keepPasses, Retire &&retire) {
+                for (size_t i = 0; i < entries.size();) {
+                    if (entries[i].usedPass + keepPasses < pass) {
+                        retire(std::move(entries[i].set));
+                        entries.erase(entries.begin() + i);
+                    }
+                    else {
+                        i++;
+                    }
+                }
+            }
         };
 
         // A texture as a cache key.
@@ -358,6 +373,18 @@ namespace RT64 {
             TargetResources &targetFor(const RenderTarget *colorTarget, const RenderTarget *depthTarget) {
                 const uint32_t samples = colorTarget->multisampling.sampleCount;
                 const RenderTexture *depth = (depthTarget != nullptr) ? depthTarget->texture.get() : nullptr;
+                // Targets not drawn into for a while go: their depth target may be gone, and a new one at its address would
+                // find the old one's framebuffers (the water mask attaches it).
+                constexpr uint64_t TargetKeepPasses = 240;
+                for (size_t i = 0; i < targets.size();) {
+                    if (targets[i]->usedPass + TargetKeepPasses < passes) {
+                        retireLater(std::move(targets[i]));
+                        targets.erase(targets.begin() + i);
+                    }
+                    else {
+                        i++;
+                    }
+                }
                 for (const std::unique_ptr<TargetResources> &entry : targets) {
                     if ((entry->width == colorTarget->width) && (entry->height == colorTarget->height) && (entry->samples == samples) &&
                         (entry->format == colorTarget->format) && (entry->depth == depth))
@@ -3098,6 +3125,14 @@ namespace RT64 {
         res.freeRetired();
         // This colour target's textures and sets (kept for each target the effects are drawn into).
         TargetResources &tr = res.targetFor(colorTarget, depthTarget);
+        {
+            // (Sets whose framebuffer hasn't been drawn lately go: two framebuffers drawn in turn use theirs every other pass.)
+            constexpr uint64_t SetKeepPasses = 60;
+            auto retire = [&](auto &&old) { res.retireLater(std::move(old)); };
+            tr.sourceSets.expire(res.passes, SetKeepPasses, retire);
+            tr.measureSets.expire(res.passes, SetKeepPasses, retire);
+            tr.sceneSets.expire(res.passes, SetKeepPasses, retire);
+        }
         const RenderFormat format = RenderTarget::colorBufferFormat(shaderLibrary->usesHDR);
         const uint32_t bloomWidth = std::max(colorTarget->width / 4, 1U);
         const uint32_t bloomHeight = std::max(colorTarget->height / 4, 1U);

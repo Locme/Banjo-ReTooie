@@ -466,8 +466,10 @@ screenshot
 look off
 ```
 
-Each `look` turns the camera where it stands, and the `wait 100ms` lets the game draw from the new angle before
-`screenshot` keeps the frame. Put real coordinates from `pos` in place of `0 0 0`.
+Each `look` puts the camera 350 back from Banjo's head, on the side the view comes from, and points it at him, so he
+is in the middle of all four pictures. A wall in the way pulls the camera in front of it. The `wait 100ms` lets the
+game draw from the new angle before `screenshot` keeps the frame. Put real coordinates from `pos` in place of `0 0 0`,
+and add a distance (`look 0 -20 600`) to take in more of the room.
 
 ### `mark`
 
@@ -1176,29 +1178,40 @@ him again. Needs a player in the game.
 
 ### `look`
 
-Usage: `look <yaw deg> [pitch deg] | look at <x> <y> <z> | look off`
+Usage: `look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look off`
 
-Holds the gameplay camera at an angle where it stands, for screenshots. `look <yaw> [pitch]` turns it to that yaw and
-pitch in degrees: yaw 0 looks along -z and grows turning left, and a positive pitch looks up. The pitch is 0 when not
-given and is kept between -89 and 89. `look at <x> <y> <z>` turns it to a point. Another `look` turns it again from the
-same place. It prints where the camera is and the angles. `look off` gives the camera back to the game.
+Holds the gameplay camera looking at Banjo, for screenshots. `look <yaw> [pitch] [distance]` puts the camera `distance`
+units back from Banjo's head (60 above his feet) against that view direction, so he is in the middle of the picture.
+Yaw 0 looks along -z and grows turning left, and a positive pitch looks up, so `look 0 -20` looks along -z and down
+at him from slightly above. The pitch is 0 and the distance 350 when not given. The pitch is kept between -89 and 89,
+and the distance between 1 and 5000. `look at <x> <y> <z> [distance]` takes the view direction from Banjo's head to the
+point, so the point is behind him in the picture. When a wall or floor is between Banjo's head and the place worked
+out, the camera is pulled in to just in front of it, with the line test the free camera uses, and the output says
+`pulled in front of a wall`.
+
+`look here <yaw> [pitch]` and `look here at <x> <y> <z>` turn the camera where it stands instead, with no distance and
+no wall test. It prints where the camera is and the angles. `look off` gives the camera back to the game.
 
 The camera stays held until `look off` or a map change. It is held by stopping the game's dynamic camera (its +0x72)
 and writing that camera's position and rotation every game update, which the game then draws from. The game keeps
-running: Banjo can still move, but the camera does not follow him.
+running. Banjo can still move, but the camera stays where `look` put it.
 
 ```
 look 0 -20
-look 90 -20
+look 90 -20 500
 look at 1200 150 -340
+look here 180 0
 look off
 ```
 
 Catch: it only works while the gameplay camera is running, and not in a scene, with a fixed camera, or with no file
 loaded. A scene that starts while it is held draws with its own camera. Photo mode, when on, places the camera over it.
 
+Catch: the wall test runs once, when `look` runs, from Banjo's head to the camera. The camera is not moved again if
+Banjo walks off. A camera pulled right up to a wall can still show a little of it.
+
 Catch: give the camera an update before a screenshot (`wait 100ms`), so the frame saved is drawn from the new angle.
-This has not been run yet. Needs the game running.
+The distance and wall forms have not been run yet. Needs the game running, and a player for the forms without `here`.
 
 ### `invincible`
 

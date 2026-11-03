@@ -33,6 +33,7 @@
 #include "tooie_hotkeys.h"
 #include "tooie_interp_tags.h"
 #include "tooie_material_pick.h"
+#include "tooie_path_text.h"
 #include "tooie_parallax_pick.h"
 #include "tooie_toast.h"
 #include "tooie_volumetric.h"
@@ -116,7 +117,7 @@ namespace {
             picks[std::strtoull(hash_text.c_str(), nullptr, 16)] = pick;
         }
         if (!picks.empty()) {
-            fprintf(stderr, "[parallax-pick] %zu picks from %s\n", picks.size(), file_path().string().c_str());
+            fprintf(stderr, "[parallax-pick] %zu picks from %s\n", picks.size(), tooie::path_text(file_path()).c_str());
         }
         saved_picks = picks;
         picks_version.fetch_add(1);
@@ -342,7 +343,7 @@ namespace {
             }
         }
         if (!effects.empty()) {
-            fprintf(stderr, "[effect-pick] %zu picks from %s\n", effects.size(), effects_path().string().c_str());
+            fprintf(stderr, "[effect-pick] %zu picks from %s\n", effects.size(), tooie::path_text(effects_path()).c_str());
         }
         saved_effects = effects;
         effects_version.fetch_add(1);

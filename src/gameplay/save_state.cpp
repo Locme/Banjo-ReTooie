@@ -45,6 +45,7 @@
 #include "tooie_mix_rate.h"
 #include "tooie_debug.h"
 #include "tooie_game.h"
+#include "tooie_path_text.h"
 #include "tooie_save_state.h"
 #include "tooie_toast.h"
 #include "tooie_hotkeys.h"
@@ -218,7 +219,7 @@ namespace {
         }
         std::ofstream out(path, std::ios::binary);
         out.write(reinterpret_cast<const char*>(words.data()), (std::streamsize)words.size());
-        fprintf(stderr, "[savestate] %s %s\n", out.good() ? "wrote" : "could not write", path.string().c_str());
+        fprintf(stderr, "[savestate] %s %s\n", out.good() ? "wrote" : "could not write", tooie::path_text(path).c_str());
     }
 
     // give_up: a load whose warp back to the snapshot's area didn't get there.

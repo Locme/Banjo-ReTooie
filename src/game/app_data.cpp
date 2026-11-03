@@ -13,6 +13,7 @@
 #endif
 
 #include "tooie_game.h"
+#include "tooie_path_text.h"
 #include "util/file.h"
 
 namespace fs = std::filesystem;
@@ -77,13 +78,13 @@ bool tooie::set_dev_file(bool create, std::string* path) {
                 break;
             }
         }
-        *path = file.string();
+        *path = tooie::path_text(file);
         if (!fs::exists(file, ec)) {
             return true; // nothing to remove
         }
         return fs::remove(file, ec);
     }
-    *path = file.string();
+    *path = tooie::path_text(file);
     if (fs::exists(file, ec)) {
         return true;
     }
@@ -119,11 +120,11 @@ fs::path tooie::resolve_app_folder() {
         fs::copy(legacy, exe_dir, fs::copy_options::recursive | fs::copy_options::skip_existing, ec);
         if (ec) {
             fprintf(stderr, "Could not copy %s to %s (%s); using the old folder.\n",
-                legacy.string().c_str(), exe_dir.string().c_str(), ec.message().c_str());
+                tooie::path_text(legacy).c_str(), tooie::path_text(exe_dir).c_str(), ec.message().c_str());
             return legacy;
         }
         std::ofstream out(marker);
-        out << "Copied from " << legacy.string() << " on first start of the portable build.\n"
+        out << "Copied from " << tooie::path_text(legacy) << " on first start of the portable build.\n"
             << "The old folder was left in place and can be deleted once you have checked your saves.\n";
     }
     return exe_dir;
