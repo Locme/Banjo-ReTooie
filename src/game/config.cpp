@@ -1079,6 +1079,20 @@ void tooie::init_config() {
         }
         recompui::config::set_option_group(vs::sun_option, "Volumetric Shadows");
     }
+    // The start menu's effects preset picker (Play < Vanilla >), WIP and off by default (L, 2026-11-03).
+    graphics.add_bool_option(
+        tooie::start_menu_presets_option,
+        "Start Menu Presets",
+        "Shows the effects preset picker on the start menu's Play row: left and right pick Vanilla, Enhanced, Retro or Custom, applied when Play is pressed (the same presets as Graphics > Effects Preset). Off, Play keeps the effects as they are set. Applies at once.",
+        false);
+    graphics.add_option_change_callback(tooie::start_menu_presets_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                recompui::config::get_graphics_config().save_config();
+            }
+        });
+    recompui::config::set_option_page(tooie::start_menu_presets_option, tooie::work_in_progress_tab_id);
+    recompui::config::set_option_group(tooie::start_menu_presets_option, "Start Menu");
     tooie::point_lights::add_options(graphics);
     {
         // Point Lights are WIP (L, 2026-11-03): the WIP tab, under their own heading, off by default.

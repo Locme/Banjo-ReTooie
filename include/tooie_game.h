@@ -105,6 +105,9 @@ namespace tooie {
     inline const std::string cheats_tab_option = "cheats_tab";
     // DEV > Additional Tabs > WIP Tab (L, 2026-10-24): shows the WIP tab (Graphics page), off by default.
     inline const std::string work_in_progress_tab_option = "work_in_progress_tab";
+    // WIP > Start Menu Presets (src/main/main.cpp; L, 2026-11-03): the effects preset picker on the start menu's Play
+    // row, off by default.
+    inline const std::string start_menu_presets_option = "start_menu_presets";
     // DEV > Hide Unnecessary Settings Entry (src/game/hide_vanilla_widescreen.cpp).
     inline const std::string hide_vanilla_widescreen_option = "hide_vanilla_widescreen";
     // DEV: leaves the Start menu's SETTINGS entry out (pause_settings.cpp; L, 2026-10-23, on by default).

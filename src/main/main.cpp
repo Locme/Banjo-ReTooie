@@ -667,6 +667,47 @@ void reorder_asset_mods(recomp::mods::ModContext& context) {
 // skipping the launcher.
 bool autostart_game = false;
 
+// WIP > Start Menu Presets: whether the Play row shows the effects preset picker, followed each frame so it applies at once.
+namespace {
+    struct LauncherPresets {
+        recompui::GameOption* play = nullptr;
+        bool shown = false;
+    } launcher_presets;
+
+    using tooie::picture_filters::Preset;
+    const Preset presets[] = { Preset::Original, Preset::Enhanced, Preset::Retro, Preset::Custom };
+    const std::vector<std::string> preset_names = { "Vanilla", "Enhanced", "Retro", "Custom" };
+
+    // The picker's place for the preset Graphics is set to (Custom when it is none of them).
+    size_t current_preset_choice() {
+        for (size_t i = 0; i < std::size(presets); i++) {
+            if (presets[i] == tooie::picture_filters::preset()) {
+                return i;
+            }
+        }
+        return std::size(presets) - 1;
+    }
+
+    bool start_menu_presets_on() {
+        try {
+            return std::get<bool>(recompui::config::get_graphics_config().get_option_value(tooie::start_menu_presets_option));
+        } catch (...) {
+            return false;
+        }
+    }
+
+    void update_launcher_presets() {
+        if (launcher_presets.play == nullptr) {
+            return;
+        }
+        const bool on = start_menu_presets_on();
+        if (on != launcher_presets.shown) {
+            launcher_presets.shown = on;
+            launcher_presets.play->set_choices(on ? preset_names : std::vector<std::string>{}, current_preset_choice(), nullptr);
+        }
+    }
+}
+
 void on_launcher_init(recompui::LauncherMenu *menu) {
     tooie::watchdog::startup_mark("start menu built");
     auto game_options_menu = menu->init_game_options_menu(
@@ -678,27 +719,23 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
     );
     tooie::launcher_background::init(menu);
 
-    // The launcher's options, with the start option named Play. Left and right on it pick the effects
-    // preset (Graphics > Effects preset), applied when Play is pressed (L, 2026-10-16).
+    // The launcher's options, with the start option named Play. With WIP > Start Menu Presets on, left and right
+    // on it pick the effects preset (Graphics > Effects preset), applied when Play is pressed (L, 2026-10-16; a WIP
+    // toggle, off by default, 2026-11-03).
     recompui::GameOption* play = game_options_menu->add_start_game_or_load_rom_option("Load ROM", "Play");
     game_options_menu->add_setup_controls_option();
     game_options_menu->add_settings_option();
     game_options_menu->add_mods_option();
     game_options_menu->add_exit_option();
 
-    using tooie::picture_filters::Preset;
-    static const Preset presets[] = { Preset::Original, Preset::Enhanced, Preset::Retro, Preset::Custom };
-    static const std::vector<std::string> preset_names = { "Vanilla", "Enhanced", "Retro", "Custom" };
-    size_t current = 3;
-    for (size_t i = 0; i < std::size(presets); i++) {
-        if (presets[i] == tooie::picture_filters::preset()) {
-            current = i;
-        }
-    }
-    play->set_choices(preset_names, current, nullptr);
+    launcher_presets.play = play;
+    launcher_presets.shown = start_menu_presets_on();
+    play->set_choices(launcher_presets.shown ? preset_names : std::vector<std::string>{}, current_preset_choice(), nullptr);
     game_options_menu->set_before_start_callback([play]() {
-        // Custom keeps the effects as they are set.
-        tooie::picture_filters::set_preset(presets[play->get_choice()]);
+        // Custom keeps the effects as they are set, and so does Play while the picker is off.
+        if (launcher_presets.shown) {
+            tooie::picture_filters::set_preset(presets[play->get_choice()]);
+        }
     });
 
     tooie::launcher_title::init(menu);
@@ -906,6 +943,7 @@ int main(int argc, char** argv) {
     recompui::register_launcher_update_callback([](recompui::LauncherMenu* menu) {
         tooie::launcher_background::update(menu);
         tooie::launcher_title::update(menu);
+        update_launcher_presets();
     });
 
     recomp::rsp::callbacks_t rsp_callbacks{
