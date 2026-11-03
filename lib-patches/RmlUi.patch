@@ -1,19 +1,14 @@
 diff --git a/Source/SVG/ElementSVG.cpp b/Source/SVG/ElementSVG.cpp
-index 0e8d834a..b3770aaf 100644
+index 0e8d834a..6289db57 100644
 --- a/Source/SVG/ElementSVG.cpp
 +++ b/Source/SVG/ElementSVG.cpp
-@@ -187,11 +187,10 @@ void ElementSVG::UpdateTexture()
- 		RMLUI_ASSERT(svg_document);
+@@ -188,6 +188,9 @@ void ElementSVG::UpdateTexture()
  		lunasvg::Bitmap bitmap = svg_document->renderToBitmap(render_dimensions.x, render_dimensions.y);
  
--		// Swap red and blue channels, assuming LunaSVG v2.3.2 or newer, to convert to RmlUi's expected RGBA-ordering.
-+		// LunaSVG renders premultiplied BGRA. The recompui renderer blends straight alpha (SRC_ALPHA), so convert to
-+		// straight RGBA; otherwise every antialiased edge is multiplied by its alpha twice and shows a seam line.
+ 		// Swap red and blue channels, assuming LunaSVG v2.3.2 or newer, to convert to RmlUi's expected RGBA-ordering.
++		// The pixels stay premultiplied, as RmlUi expects: the recompui renderer's compatibility adapter (RenderInterfaceCompatibility)
++		// turns them to straight alpha itself, so converting them here as well divided each edge pixel by its alpha twice, which drew
++		// a bright outline round every shape of the start menu's art (Banjo Re-Tooie, 2026-11-03).
  		const size_t bitmap_byte_size = bitmap.width() * bitmap.height() * 4;
--		uint8_t* bitmap_data = bitmap.data();
--		for (size_t i = 0; i < bitmap_byte_size; i += 4)
--			std::swap(bitmap_data[i], bitmap_data[i + 2]);
-+		bitmap.convertToRGBA();
- 
- 		if (!bitmap.valid() || !bitmap.data())
- 			return false;
+ 		uint8_t* bitmap_data = bitmap.data();
+ 		for (size_t i = 0; i < bitmap_byte_size; i += 4)

@@ -360,7 +360,11 @@ To change it: edit the files in `lib/rt64/src/contrib/plume`, then
 
 Applied in `lib/RecompFrontend/recompui/lib/RmlUi`.
 
-* **SVG alpha** (`Source/SVG/ElementSVG.cpp`): LunaSVG renders premultiplied pixels, but the
-  recompui renderer blends straight alpha, so every antialiased SVG edge was multiplied by its
-  alpha twice and showed as a thin seam (the start menu's layers, 2026-10-24). The bitmap is now
-  converted to straight RGBA (`Bitmap::convertToRGBA`) before it becomes a texture.
+* **SVG alpha** (`Source/SVG/ElementSVG.cpp`): a comment only. The SVG pixels stay premultiplied, as upstream
+  RmlUi hands them over: the recompui renderer goes through RmlUi's compatibility adapter
+  (`RenderInterfaceCompatibility`), which turns textures and vertex colours to straight alpha itself. The earlier
+  version of this patch (2026-10-24) converted the SVGs to straight alpha as well, so each antialiased edge pixel was
+  divided by its alpha twice and drawn too bright: a light outline round every shape of the start menu
+  (L, 2026-11-03). The seams it was meant to close come from the traced art's shapes meeting edge to edge, and
+  `tools/seal_launcher_svg.py` closes those in the SVGs. The patch is kept so CMake resets checkouts that still carry
+  the old one.

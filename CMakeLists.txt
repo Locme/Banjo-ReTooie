@@ -171,7 +171,7 @@ function(apply_nested_patch name dir)
     endif()
 endfunction()
 apply_nested_patch(plume lib/rt64/src/contrib/plume)
-# RmlUi (inside RecompFrontend): SVG textures are handed over as straight alpha, which the UI renderer blends.
+# RmlUi (inside RecompFrontend): a note that SVG textures stay premultiplied (lib-patches/README.md).
 apply_nested_patch(RmlUi lib/RecompFrontend/recompui/lib/RmlUi)
 # re-spirv (RT64's SPIR-V specialiser): its sort copes with loops, which the raster shaders now have.
 apply_nested_patch(re-spirv lib/rt64/src/contrib/re-spirv)
