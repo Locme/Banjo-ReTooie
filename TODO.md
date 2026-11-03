@@ -14,6 +14,10 @@ starts slower (seen 280-420 game updates/s on a first challenge, then about 80 f
 also runs the challenge in slow motion). One test run of this ended in `VK_ERROR_DEVICE_LOST`. Results varied between
 runs: one run was already at about 94 updates/s before any challenge.
 
+It may not be the game at all: while these runs were made, other recomp builds (unrelated to this test, compiling on
+the same PC) may have been running and taking the CPU and GPU, which would explain both the slowdowns and how much
+the numbers varied from run to run. Re-test on an idle PC before chasing it further.
+
 What is known:
 
 - It is not the game side: heap blocks stay flat, the display list is small (`gfx` 3-4 %), one controller read per
