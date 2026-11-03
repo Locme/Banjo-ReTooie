@@ -16,7 +16,8 @@ runs: one run was already at about 94 updates/s before any challenge.
 
 It may not be the game at all: while these runs were made, other recomp builds (unrelated to this test, compiling on
 the same PC) may have been running and taking the CPU and GPU, which would explain both the slowdowns and how much
-the numbers varied from run to run. Re-test on an idle PC before chasing it further.
+the numbers varied from run to run. Re-test on an idle PC before chasing it further. L (2026-11-03) saw normal frame rates in a challenge playing it
+themself, which fits this.
 
 What is known:
 
@@ -40,6 +41,15 @@ Repro with the console (`docs/console.md`): `fps Unlocked`, `goload 1 14F 0`, `g
 `goto 1891 199 20`, `wait control 30`, `press b 300ms`, then `repeat 12 press a 200ms; wait 1.2s`; wait about 30 s,
 `warp id 14F 0`, and start the challenge again the same way. Run with `TOOIE_DEMO_LOG=1` (updates/s and entries/s each
 second) and `TOOIE_FB_LOG=1`.
+
+## Jigsaw board: faint lines along the pieces (2026-11-03)
+
+Thin lines still follow the board's piece grid. They show at the native resolution (406x228) and at 2x native as
+well as upscaled, so they are in the game's own picture, not something the upscaling adds; the original game very
+likely has them too. The dotted cracks between pieces (background showing through) are fixed by the vertex snap. A
+try at sampling the board at the native pixel centres made it pixelated without removing the lines, so it was taken
+out. Hiding the lines would be an enhancement over the original (for example blending each piece's edge texels with
+its neighbour's).
 
 ## Smaller open items
 

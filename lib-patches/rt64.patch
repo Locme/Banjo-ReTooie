@@ -7930,7 +7930,7 @@ index e7895c3..41fe5ba 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +182,46 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -113,6 +182,26 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -7954,30 +7954,10 @@ index e7895c3..41fe5ba 100644
 +        vertexUV += parallax.xy;
 +        parallaxLight = parallax.z;
 +    }
-+    // Banjo-Tooie: a piece of a picture drawn into a framebuffer (RASTER_SNAP_VERTICES, Jiggywiggy's puzzle board): its texture
-+    // coordinates taken at the centre of the game pixel the screen pixel lies in, as the N64's rasterizer takes them. The
-+    // high-resolution pixels along a piece's edge otherwise land just past its tile and wrap to the block's far row: a thin line
-+    // straight across the picture. Where the game pixel's centre is in another block of the tile than this pixel (that pixel
-+    // belongs to the neighbouring piece on the N64), the coordinate in the tile's own block (0 to its period) is kept, so the
-+    // tabs, which reach into the next block, keep theirs.
-+    if ((gConstants.seeThrough & RASTER_SNAP_VERTICES) != 0) {
-+        float2 screenPixel = vertexPosition.xy;
-+        screenPixel.x += FbParams.horizontalMisalignment;
-+        const float2 offset = (floor(screenPixel / FbParams.resolutionScale) + 0.5f) * FbParams.resolutionScale - screenPixel;
-+        const float2 centreUV = vertexUV + ddxVertexUV * offset.x + ddyVertexUV * offset.y;
-+        const RDPTile snapTile = RDPTiles[instanceRenderIndices[gConstants.renderIndex].rdpTileIndex];
-+        const float2 shift = float2(snapTile.shifts, snapTile.shiftt);
-+        const float2 origin = float2(snapTile.uls, snapTile.ult) / 4.0f;
-+        const float2 period = max(float2(snapTile.masks, snapTile.maskt), 1.0f);
-+        const float2 ownBlock = floor((vertexUV * shift - origin) / period);
-+        const float2 centreBlock = floor((centreUV * shift - origin) / period);
-+        vertexUV.x = ((centreBlock.x == ownBlock.x) || (ownBlock.x != 0.0f)) ? centreUV.x : vertexUV.x;
-+        vertexUV.y = ((centreBlock.y == ownBlock.y) || (ownBlock.y != 0.0f)) ? centreUV.y : vertexUV.y;
-+    }
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -143,6 +232,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -143,6 +212,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
@@ -7987,7 +7967,7 @@ index e7895c3..41fe5ba 100644
          texVal0 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, false);
      }
      
-@@ -159,6 +251,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -159,6 +231,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
          const uint nativeSampler = renderFlagNativeSampler1(rp.flags);
@@ -7997,7 +7977,7 @@ index e7895c3..41fe5ba 100644
          texVal1 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, oneCycleHardwareBug);
      }
      
-@@ -182,6 +277,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +257,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -8036,7 +8016,7 @@ index e7895c3..41fe5ba 100644
      
  #if 0
      // Alpha dither.
-@@ -237,6 +364,12 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -237,6 +344,12 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultAlpha.a = resultColor.a;
      }
      
@@ -8049,7 +8029,7 @@ index e7895c3..41fe5ba 100644
      // Preserve the value in the destination.
      if (otherMode.cvgDst() == CVG_DST_SAVE) {
          resultColor.a = 0.0f;
-@@ -254,6 +387,126 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +367,126 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -8176,7 +8156,7 @@ index e7895c3..41fe5ba 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +514,29 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +494,29 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -8206,7 +8186,7 @@ index e7895c3..41fe5ba 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +563,7 @@ void PSMain(
+@@ -287,6 +543,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -8214,7 +8194,7 @@ index e7895c3..41fe5ba 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +580,7 @@ void PSMain(
+@@ -303,7 +560,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
