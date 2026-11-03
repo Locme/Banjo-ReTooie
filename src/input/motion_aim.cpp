@@ -146,10 +146,10 @@ void tooie::motion_aim::add_options(recomp::config::Config& qol) {
     qol.add_bool_option(invert_y_option, "Mouse And Gyro Aim: Invert Up/Down",
         "In first person, moving the mouse or tilting the controller up looks down instead. "
         "The strength of each is General > Mouse Sensitivity and Gyro Sensitivity.", false);
-    qol.add_bool_option(direct_option, "Direct Analog Aim",
+    qol.add_bool_option(direct_option, "Direct First Banjo Shooter Analog Aim",
         "In first person (C-up), the left stick turns the view directly, faster the further you tilt it, like a modern shooter, "
         "and the reticle stays at the centre of the screen. Off keeps the game's own aiming.", false);
-    qol.add_enum_option(direct_speed_option, "Direct Analog Aim Speed",
+    qol.add_enum_option(direct_speed_option, "Direct First Banjo Shooter Analog Aim Speed",
         "How fast the view turns at full tilt: 90, 150 or 240 degrees a second.",
         {
             {DirectSpeed::Slow, "Slow", "Slow"},

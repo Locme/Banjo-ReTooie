@@ -182,7 +182,7 @@ own tab, so they are saved in general.json and apply as soon as they change.
 
 - **Enemies do double damage**: every hit from an enemy or hazard takes twice the
   honeycombs. Falls hurt as they always do. Default: off.
-- **Direct analog aim** (default off) and **Direct analog aim speed**: in first
+- **Direct First Banjo Shooter Analog Aim** (default off) and its **Speed**: in first
   person (C-up) the left stick turns the view faster the further you tilt it
   (90, 150 or 240 degrees a second at full tilt), like a modern shooter, and the
   reticle stays at the centre. Off keeps the game's own aiming. Fine aim still
