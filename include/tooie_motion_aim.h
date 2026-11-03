@@ -15,8 +15,16 @@ namespace recomp::config {
 // Mouse Sensitivity and Gyro Sensitivity (0 turns each off).
 namespace tooie::motion_aim {
     inline const std::string invert_y_option = "motion_aim_invert_y";
+    // Direct analog aim: in first person the left stick's tilt sets how fast the view turns (the game's own
+    // turn is nearly the same at any tilt), like a modern shooter. The reticle stays at the centre.
+    inline const std::string direct_option = "direct_analog_aim";
+    inline const std::string direct_speed_option = "direct_analog_aim_speed";
+    enum class DirectSpeed : uint32_t { Slow, Medium, Fast };
 
     void add_options(recomp::config::Config& qol);
+
+    // The left stick the game is about to read (-1 to 1, right and up positive), from the end of each pad read.
+    void note_stick(float x, float y);
 
     // From each pad read for player 1: collects the mouse and gyro motion since the last read.
     void collect();

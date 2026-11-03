@@ -94,6 +94,45 @@ namespace {
         MEM_W(0, addr) = (int32_t)u;
     }
 
+    // Direct analog aim (see the header): options are read a few times a second, the stick on every pad read.
+    std::atomic<float> stick_x{0.0f};
+    std::atomic<float> stick_y{0.0f};
+    constexpr float direct_deadzone = 0.15f;
+    // Curve exponent: above 1 gives fine control near the centre.
+    constexpr float direct_curve = 1.6f;
+    bool direct_on = false;
+    float direct_degrees_per_second = 150.0f;
+    std::chrono::steady_clock::time_point direct_options_at{};
+    std::chrono::steady_clock::time_point last_tick_at{};
+
+    void read_direct_options(std::chrono::steady_clock::time_point now) {
+        if (direct_options_at != std::chrono::steady_clock::time_point{} && now - direct_options_at <= std::chrono::milliseconds(250)) {
+            return;
+        }
+        direct_options_at = now;
+        try {
+            auto& qol = recompui::config::get_config(tooie::qol_tab_id);
+            direct_on = std::get<bool>(qol.get_option_value(tooie::motion_aim::direct_option));
+            switch (static_cast<tooie::motion_aim::DirectSpeed>(std::get<uint32_t>(qol.get_option_value(tooie::motion_aim::direct_speed_option)))) {
+            case tooie::motion_aim::DirectSpeed::Slow: direct_degrees_per_second = 90.0f; break;
+            case tooie::motion_aim::DirectSpeed::Fast: direct_degrees_per_second = 240.0f; break;
+            default: direct_degrees_per_second = 150.0f; break;
+            }
+        } catch (...) {
+            direct_on = false;
+        }
+    }
+
+    // A stick axis after the dead zone and the curve, -1 to 1.
+    float direct_axis(float v) {
+        const float a = std::fabs(v);
+        if (a <= direct_deadzone) {
+            return 0.0f;
+        }
+        const float t = std::min((a - direct_deadzone) / (1.0f - direct_deadzone), 1.0f);
+        return std::copysign(std::pow(t, direct_curve), v);
+    }
+
     bool invert_y() {
         try {
             return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::motion_aim::invert_y_option));
@@ -107,6 +146,23 @@ void tooie::motion_aim::add_options(recomp::config::Config& qol) {
     qol.add_bool_option(invert_y_option, "Mouse And Gyro Aim: Invert Up/Down",
         "In first person, moving the mouse or tilting the controller up looks down instead. "
         "The strength of each is General > Mouse Sensitivity and Gyro Sensitivity.", false);
+    qol.add_bool_option(direct_option, "Direct Analog Aim",
+        "In first person (C-up), the left stick turns the view directly, faster the further you tilt it, like a modern shooter, "
+        "and the reticle stays at the centre of the screen. Off keeps the game's own aiming.", false);
+    qol.add_enum_option(direct_speed_option, "Direct Analog Aim Speed",
+        "How fast the view turns at full tilt: 90, 150 or 240 degrees a second.",
+        {
+            {DirectSpeed::Slow, "Slow", "Slow"},
+            {DirectSpeed::Medium, "Medium", "Medium"},
+            {DirectSpeed::Fast, "Fast", "Fast"},
+        },
+        DirectSpeed::Medium);
+    qol.add_option_hidden_dependency(direct_speed_option, direct_option, false);
+}
+
+void tooie::motion_aim::note_stick(float x, float y) {
+    stick_x = x;
+    stick_y = y;
 }
 
 void tooie::motion_aim::collect() {
@@ -166,10 +222,15 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
         pending_yaw = 0.0f;
         pending_pitch = 0.0f;
     }
+    const auto now = std::chrono::steady_clock::now();
+    const float dt = last_tick_at == std::chrono::steady_clock::time_point{} ? 0.0f :
+        std::min(std::chrono::duration<float>(now - last_tick_at).count(), 0.1f);
+    last_tick_at = now;
     if (!tooie::fine_aim::in_first_person()) {
         have_last = false;
         return;
     }
+    read_direct_options(now);
     if (invert_y()) {
         pitch_delta = -pitch_delta;
     }
@@ -192,9 +253,17 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
     // Fine aim: the game turned the view by (angle - last) with the stick since the last tick. Take
     // back the unwanted part of that turn. Scaling the stick instead barely slows the game's turning.
     const float fine = tooie::fine_aim::view_scale();
-    if (have_last && fine < 1.0f) {
-        yaw_delta += wrap_delta(yaw - last_yaw) * (fine - 1.0f);
-        pitch_delta += wrap_delta(pitch - last_pitch) * (fine - 1.0f);
+    // Direct analog aim takes back all of the game's own turn and adds one that follows the stick's tilt.
+    const float keep = direct_on ? 0.0f : fine;
+    if (have_last && keep < 1.0f) {
+        yaw_delta += wrap_delta(yaw - last_yaw) * (keep - 1.0f);
+        pitch_delta += wrap_delta(pitch - last_pitch) * (keep - 1.0f);
+    }
+    if (direct_on && have_last) {
+        const float rate = direct_degrees_per_second * fine * dt;
+        // Stick left turns the view left (positive yaw); stick up looks up.
+        yaw_delta += -direct_axis(stick_x.load()) * rate;
+        pitch_delta += direct_axis(stick_y.load()) * rate * (invert_y() ? -1.0f : 1.0f);
     }
     if (yaw_delta != 0.0f || pitch_delta != 0.0f) {
         yaw = std::fmod(yaw + yaw_delta, 360.0f);

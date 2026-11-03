@@ -328,6 +328,7 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
         tooie::texture_sweep::apply_input(buttons_out);
         tooie::totals_checklist::apply_input(buttons_out, x_out, y_out);
         tooie::menu_mouse::apply_input(buttons_out, x_out, y_out);
+        tooie::motion_aim::note_stick(*x_out, *y_out);
     }
     return ok;
 }

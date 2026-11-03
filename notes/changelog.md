@@ -6,6 +6,7 @@ regenerated code, CI, notes and tooling are left out.
 ## Since 2026-10-13 23:00 UTC
 
 ### Cheats and controls
+- **Direct analog aim** (QOL, off by default): in first person the left stick turns the view faster the further you tilt it, like a modern shooter, with a Slow, Medium or Fast top speed. Off keeps the game's own aiming.
 - **Openable settings**: an effect with settings of its own (Fog, 3D grass, Banjo fur, Sun shadows, Toon outlines and others) is one on/off switch with a down arrow in front of its name; press the arrow to open its sliders on a darker panel, press again to close. An effect that is only a slider (Bloom, SSGI) stays a slider.
 - **Jiggle** is now one switch, **off by default**, under Gameplay > Enhancements; the arrow opens Snout, Belly, Ear, Fur, Backpack, Kazooie and Mumbo jiggle (each on by default, each with its own arrow and sliders). Anyone who had jiggle on has to turn the Jiggle switch on once.
 - **Boss rush** is a button (Start boss rush / Stop boss rush) instead of a switch.
