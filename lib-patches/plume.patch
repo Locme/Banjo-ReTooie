@@ -191,7 +191,60 @@ diff --git a/plume_render_interface.h b/plume_render_interface.h
 index 2048557..92e71de 100644
 --- a/plume_render_interface.h
 +++ b/plume_render_interface.h
-@@ -59,6 +59,8 @@ namespace plume {
+@@ -10,38 +10,52 @@
+ #include <climits>
++#include <atomic>
+ 
+ #include "plume_render_interface_types.h"
+ 
+ namespace plume {
+     // Interfaces.
++
++    // Banjo-Tooie: a number for each texture, buffer and acceleration structure made, never given out twice (unlike their
++    // addresses, which a new object takes once the old one is freed), for caches that key on what they point at.
++    inline uint64_t RenderObjectUniqueId() {
++        static std::atomic<uint64_t> next{ 1 };
++        return next.fetch_add(1, std::memory_order_relaxed);
++    }
+ 
+     struct RenderBufferFormattedView {
+         virtual ~RenderBufferFormattedView() { }
+     };
+ 
+     struct RenderBuffer {
+         virtual ~RenderBuffer() { }
++        // Banjo-Tooie: this buffer's RenderObjectUniqueId.
++        uint64_t uniqueId = RenderObjectUniqueId();
+         virtual void *map(uint32_t subresource = 0, const RenderRange *readRange = nullptr) = 0;
+         virtual void unmap(uint32_t subresource = 0, const RenderRange *writtenRange = nullptr) = 0;
+         virtual std::unique_ptr<RenderBufferFormattedView> createBufferFormattedView(RenderFormat format) = 0;
+         virtual void setName(const std::string &name) = 0;
+         virtual uint64_t getDeviceAddress() const = 0;
+ 
+         // Concrete implementation shortcuts.
+         inline RenderBufferReference at(uint64_t offset) const {
+             return RenderBufferReference(this, offset);
+         }
+     };
+ 
+     struct RenderTextureView {
+         virtual ~RenderTextureView() { }
+     };
+ 
+     struct RenderTexture {
+         virtual ~RenderTexture() { }
++        // Banjo-Tooie: this texture's RenderObjectUniqueId.
++        uint64_t uniqueId = RenderObjectUniqueId();
+         virtual std::unique_ptr<RenderTextureView> createTextureView(const RenderTextureViewDesc &desc) const = 0;
+         virtual void setName(const std::string &name) = 0;
+     };
+ 
+     struct RenderAccelerationStructure {
+         virtual ~RenderAccelerationStructure() { }
++        // Banjo-Tooie: this structure's RenderObjectUniqueId.
++        uint64_t uniqueId = RenderObjectUniqueId();
+     };
+@@ -59,6 +73,8 @@ namespace plume {
          virtual ~RenderPipeline() { }
          virtual void setName(const std::string &name) = 0;
          virtual RenderPipelineProgram getProgram(const std::string &name) const = 0;
@@ -200,7 +253,7 @@ index 2048557..92e71de 100644
      };
  
      struct RenderPipelineLayout {
-@@ -93,6 +95,8 @@ namespace plume {
+@@ -93,6 +109,8 @@ namespace plume {
          virtual bool needsResize() const = 0;
          virtual void setVsyncEnabled(bool vsyncEnabled) = 0;
          virtual bool isVsyncEnabled() const = 0;
@@ -209,7 +262,7 @@ index 2048557..92e71de 100644
          virtual uint32_t getWidth() const = 0;
          virtual uint32_t getHeight() const = 0;
          virtual RenderTexture *getTexture(uint32_t textureIndex) = 0;
-@@ -120,6 +124,9 @@ namespace plume {
+@@ -120,6 +138,9 @@ namespace plume {
          virtual void traceRays(uint32_t width, uint32_t height, uint32_t depth, RenderBufferReference shaderBindingTable, const RenderShaderBindingGroupsInfo &shaderBindingGroupsInfo) = 0;
          virtual void drawInstanced(uint32_t vertexCountPerInstance, uint32_t instanceCount, uint32_t startVertexLocation, uint32_t startInstanceLocation) = 0;
          virtual void drawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, int32_t baseVertexLocation, uint32_t startInstanceLocation) = 0;
@@ -219,7 +272,7 @@ index 2048557..92e71de 100644
          virtual void setPipeline(const RenderPipeline *pipeline) = 0;
          virtual void setComputePipelineLayout(const RenderPipelineLayout *pipelineLayout) = 0;
          virtual void setComputePushConstants(uint32_t rangeIndex, const void *data, uint32_t offset = 0, uint32_t size = 0) = 0;
-@@ -150,6 +157,10 @@ namespace plume {
+@@ -150,6 +171,10 @@ namespace plume {
          virtual void discardTexture(const RenderTexture* texture) = 0; // D3D12 only.
          virtual void resetQueryPool(const RenderQueryPool *queryPool, uint32_t queryFirstIndex, uint32_t queryCount) = 0;
          virtual void writeTimestamp(const RenderQueryPool *queryPool, uint32_t queryIndex) = 0;

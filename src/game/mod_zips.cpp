@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 
 #include "miniz.h"
@@ -87,6 +88,37 @@ namespace {
         return found;
     }
 
+    // An entry may only land inside the folder it is unpacked into. A zip can name "/x", "C:x", "C:/x" or
+    // "a/../../x": on Windows "/x" and "C:x" are not absolute, yet target / "/x" goes to the root of the drive.
+    bool safe_relative(const fs::path& relative) {
+        if (relative.empty() || relative.is_absolute() || relative.has_root_name() || relative.has_root_directory()) {
+            return false;
+        }
+        for (const fs::path& part : relative) {
+            if (part == "..") {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // out, normalised, starts with every element of target.
+    bool inside(const fs::path& target, const fs::path& out) {
+        const fs::path base = target.lexically_normal();
+        const fs::path full = out.lexically_normal();
+        auto b = base.begin();
+        auto f = full.begin();
+        for (; b != base.end(); ++b, ++f) {
+            if (b->empty() && std::next(b) == base.end()) {
+                break; // a trailing separator
+            }
+            if (f == full.end() || *b != *f) {
+                return false;
+            }
+        }
+        return f != full.end();
+    }
+
     bool unpack(mz_zip_archive& zip, const std::string& root, const fs::path& target, const std::string& mod_name) {
         std::error_code ec;
         mz_uint count = mz_zip_reader_get_num_files(&zip);
@@ -103,11 +135,11 @@ namespace {
                 continue;
             }
             fs::path relative = fs::path(std::u8string((const char8_t*)entry.c_str() + root.size())).lexically_normal();
-            if (relative.empty() || relative.is_absolute() || *relative.begin() == "..") {
+            fs::path out = target / relative;
+            if (!safe_relative(relative) || !inside(target, out)) {
                 fprintf(stderr, "[mods] skipping unsafe zip entry %s\n", name);
                 continue;
             }
-            fs::path out = target / relative;
             fs::create_directories(out.parent_path(), ec);
             if (!mz_zip_reader_extract_to_file(&zip, i, (const char*)out.u8string().c_str(), 0)) {
                 fprintf(stderr, "[mods] failed to unpack %s\n", name);
@@ -124,7 +156,16 @@ namespace {
             return;
         }
         const std::string stamp = zip_stamp(zip_path);
-        if (fs::exists(target / marker_name, ec) && read_text(target / marker_name) == stamp) {
+        const bool ours = fs::exists(target / marker_name, ec);
+        if (ours && read_text(target / marker_name) == stamp) {
+            return;
+        }
+        // A folder of that name we didn't unpack (no marker) is the player's own, unpacked by hand and maybe
+        // edited: leave it and the zip alone rather than replace it.
+        if (!ours && fs::exists(target, ec)) {
+            fprintf(stderr, "[mods] %s not unpacked: the folder %s is already there and was not unpacked from it; "
+                "remove or rename that folder to unpack the zip\n",
+                (const char*)zip_path.filename().u8string().c_str(), (const char*)target.filename().u8string().c_str());
             return;
         }
 
@@ -167,7 +208,16 @@ namespace {
         }
         std::ofstream(temp / marker_name, std::ios::binary) << stamp;
 
-        fs::remove_all(target, ec);
+        // Only a folder with our marker is replaced (checked above; checked again in case it changed meanwhile).
+        if (fs::exists(target, ec)) {
+            if (!fs::exists(target / marker_name, ec)) {
+                fprintf(stderr, "[mods] %s appeared while unpacking and was not unpacked by us; left as it is\n",
+                    (const char*)target.filename().u8string().c_str());
+                fs::remove_all(temp, ec);
+                return;
+            }
+            fs::remove_all(target, ec);
+        }
         fs::rename(temp, target, ec);
         if (ec) {
             fprintf(stderr, "[mods] could not move the unpacked pack into place: %s\n", ec.message().c_str());

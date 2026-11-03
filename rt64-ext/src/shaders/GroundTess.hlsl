@@ -51,7 +51,9 @@ static const float GroundFloorShare = 0.7f;
 // world is drawn in several framebuffers a frame of different sizes, and one pass's terms put another's ground in the
 // wrong place.
 uint GroundCameraBase() {
-    return ((gConstants.nightLight & RASTER_PARALLAX_CAMERA) >> RASTER_PARALLAX_CAMERA_SHIFT) * 5;
+    // (Eight cameras: bits 0 and 1 in RASTER_PARALLAX_CAMERA, bit 2 in RASTER_PARALLAX_CAMERA_HIGH.)
+    const uint bits = gConstants.nightLight;
+    return (((bits & RASTER_PARALLAX_CAMERA) >> RASTER_PARALLAX_CAMERA_SHIFT) | (((bits & RASTER_PARALLAX_CAMERA_HIGH) != 0u) ? 4u : 0u)) * 5;
 }
 
 // Whether the draw's framebuffer has a ground camera: one SceneGroundCamera couldn't work out is all zeros, and its clip

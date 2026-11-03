@@ -154,15 +154,16 @@ namespace RT64 {
         struct TargetResources {
             uint32_t gatheredWidth = 0;
             uint32_t gatheredHeight = 0;
-            const RenderTexture *depth = nullptr;
+            // The depth target's texture, by its id (RenderObjectUniqueId: a freed texture's address can be a new one's).
+            uint64_t depth = 0;
             uint64_t usedPass = 0;
             std::unique_ptr<RenderTexture> gathered;
             std::unique_ptr<RenderFramebuffer> gatheredFramebuffer;
             std::unique_ptr<VolShadowVolumeDescriptorSet> volumeSet;
             std::unique_ptr<VolShadowCompositeDescriptorSet> compositeSet;
             // The maps the sets were made with (the worker's own, made again when the quality changes).
-            const RenderTexture *setSunMap = nullptr;
-            const RenderTexture *setLampMap = nullptr;
+            uint64_t setSunMap = 0;
+            uint64_t setLampMap = 0;
         };
 
         // Each worker that records the passes gets its own targets (as the scene effects' resources).
@@ -210,7 +211,7 @@ namespace RT64 {
             }
 
             // The resources for this picture size and depth target, made (empty) when there are none yet.
-            TargetResources &targetFor(uint32_t gatheredWidth, uint32_t gatheredHeight, const RenderTexture *depth) {
+            TargetResources &targetFor(uint32_t gatheredWidth, uint32_t gatheredHeight, uint64_t depth) {
                 // Ones not drawn into for a while go: the depth target their sets read may be gone, and a new one made at its
                 // address would find sets still pointing at the old one.
                 constexpr uint64_t TargetKeepPasses = 240;
@@ -549,7 +550,7 @@ namespace RT64 {
         const uint32_t gatheredWidth = std::max((colorTarget->width + quality.scale - 1) / quality.scale, 1U);
         const uint32_t gatheredHeight = std::max((colorTarget->height + quality.scale - 1) / quality.scale, 1U);
         // This target's gathered light and sets (kept for each size and depth target the worker draws into).
-        TargetResources &target = res.targetFor(gatheredWidth, gatheredHeight, depthTarget->texture.get());
+        TargetResources &target = res.targetFor(gatheredWidth, gatheredHeight, depthTarget->texture->uniqueId);
         if (target.gathered == nullptr) {
             target.gathered = device->createTexture(RenderTextureDesc::ColorTarget(gatheredWidth, gatheredHeight, GatheredFormat));
             target.gathered->setName("Volumetric Shadows Gathered Light");
@@ -557,7 +558,7 @@ namespace RT64 {
             target.gatheredFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
         }
         // (The depth target and the gathered light are the entry's own; only the worker's maps can change under it.)
-        if ((target.volumeSet == nullptr) || (target.setSunMap != res.sunMap.get()) || (target.setLampMap != res.lampMap.get())) {
+        if ((target.volumeSet == nullptr) || (target.setSunMap != res.sunMap->uniqueId) || (target.setLampMap != res.lampMap->uniqueId)) {
             res.retireLater(std::move(target.volumeSet));
             res.retireLater(std::move(target.compositeSet));
             target.volumeSet = std::make_unique<VolShadowVolumeDescriptorSet>(device);
@@ -568,8 +569,8 @@ namespace RT64 {
             target.compositeSet->setTexture(target.compositeSet->gDepth, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
             target.compositeSet->setTexture(target.compositeSet->gSunMap, res.sunMap.get(), RenderTextureLayout::SHADER_READ, res.sunMapView.get());
             target.compositeSet->setTexture(target.compositeSet->gGathered, target.gathered.get(), RenderTextureLayout::SHADER_READ);
-            target.setSunMap = res.sunMap.get();
-            target.setLampMap = res.lampMap.get();
+            target.setSunMap = res.sunMap->uniqueId;
+            target.setLampMap = res.lampMap->uniqueId;
         }
 
         // The constants every pass shares.

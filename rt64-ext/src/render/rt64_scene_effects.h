@@ -525,6 +525,9 @@ namespace RT64 {
     // and its framebuffer's viewport. False for a projection that isn't a perspective one.
     bool SceneParallaxCamera(const interop::float4x4 &projection, const interop::float3 &viewportScale, const interop::float3 &viewportTranslate,
         float viewportWidth, float viewportHeight, interop::float4 &depthTerms, interop::float4 &projectionTerms);
+    // A draw found all eight parallax cameras (FrameParams.parallaxCameras) taken by others and was drawn without parallax and
+    // displacement: counted, and said on the console (the first time, then with TOOIE_FX_LOG once a second).
+    void NoteSceneCamerasFull();
     // Displaced ground's camera terms for a draw's framebuffer (FrameParams.groundCameras): the world to clip space map's
     // four rows, then the camera's world position. False for a projection that isn't a perspective one.
     bool SceneGroundCamera(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,

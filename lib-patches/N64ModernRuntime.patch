@@ -1,8 +1,16 @@
 diff --git a/librecomp/include/librecomp/config.hpp b/librecomp/include/librecomp/config.hpp
-index a1086cf..b63c49b 100644
+index a1086cf..917be5c 100644
 --- a/librecomp/include/librecomp/config.hpp
 +++ b/librecomp/include/librecomp/config.hpp
-@@ -315,7 +315,28 @@ namespace recomp {
+@@ -8,6 +8,7 @@
+ #include <unordered_map>
+ #include <variant>
+ #include <functional>
++#include <mutex>
+ 
+ #include <json/json.hpp>
+ 
+@@ -315,7 +316,28 @@
  
              std::vector<ConfigOptionUpdateContext> get_config_option_updates() { return config_option_updates; }
              bool is_config_option_disabled(size_t option_index) const { return disabled_options.contains(option_index); }
@@ -32,7 +40,45 @@ index a1086cf..b63c49b 100644
              void clear_config_option_updates() {
                  config_option_updates.clear();
              }
-@@ -347,6 +368,14 @@ namespace recomp {
+@@ -327,10 +349,20 @@
+                 json_serialize_option_map[option_id] = callback;
+             }
+ 
+-            const ConfigStorage& get_config_storage() const;
++            // A copy, taken under the values lock.
++            ConfigStorage get_config_storage() const;
+             const ConfigSchema& get_config_schema() const;
+ 
+         private:
++            // A mutex that a copied or moved Config doesn't share: the copy gets a new one. Configs are copied
++            // while they are set up (the menu's list of tabs, mod configs), not while other threads use them.
++            struct OwnMutex {
++                mutable std::recursive_mutex mutex;
++                OwnMutex() = default;
++                OwnMutex(const OwnMutex&) {}
++                OwnMutex& operator=(const OwnMutex&) { return *this; }
++            };
++
+             bool loaded_config = false;
+             bool is_mod_config = false;
+ 
+@@ -338,6 +370,15 @@
+             std::string mod_version; // only used if mod
+ 
+             ConfigSchema schema;
++            // Threads (Banjo-Tooie): the menu sets values on the UI thread, the game and the developer console
++            // set and read them on the game and stdin threads, and the session log reads every tab from its
++            // own. values_lock guards storage, temp_storage and modified_options; save_lock guards writing the
++            // file. Rule: neither is held while an option change callback, the load or save callback or a JSON
++            // serializer runs. Those can read, set or save this config or another one, so holding a lock
++            // across them could deadlock two configs against each other. values_lock is recursive so the
++            // getters can be used while it is held.
++            OwnMutex values_lock;
++            OwnMutex save_lock;
+             ConfigStorage storage;
+             ConfigStorage temp_storage;
+ 
+@@ -347,6 +388,14 @@
              std::vector<ConfigOptionUpdateContext> config_option_updates = {};
              std::unordered_set<size_t> disabled_options = {};
              std::unordered_set<size_t> hidden_options = {};
@@ -112,10 +158,214 @@ index 35703bd..7095517 100644
          uint32_t get_section_ram_addr(uint16_t code_section_index);
          std::span<const RelocEntry> get_section_relocs(uint16_t code_section_index);
 diff --git a/librecomp/src/config.cpp b/librecomp/src/config.cpp
-index 6bc03fd..59cd5fb 100644
+index 6bc03fd..9e1fbf5 100644
 --- a/librecomp/src/config.cpp
 +++ b/librecomp/src/config.cpp
-@@ -623,7 +623,7 @@ void Config::update_option_hidden(size_t option_index, bool hidden) {
+@@ -84,7 +84,8 @@
+     this->mod_version = mod_version;
+ }
+ 
+-const ConfigStorage& Config::get_config_storage() const {
++ConfigStorage Config::get_config_storage() const {
++    std::lock_guard lock{ values_lock.mutex };
+     return storage;
+ }
+ 
+@@ -125,6 +126,7 @@
+             break;
+     }
+ 
++    std::lock_guard lock{ values_lock.mutex };
+     storage.value_map[option.id] = default_value;
+     if (requires_confirmation) {
+         temp_storage.value_map[option.id] = default_value;
+@@ -281,9 +283,12 @@
+ }
+ 
+ const ConfigValueVariant Config::get_option_value_from_storage(const std::string& option_id, const ConfigStorage& src) const {
+-    auto it = src.value_map.find(option_id);
+-    if (it != src.value_map.end()) {
+-        return it->second;
++    {
++        std::lock_guard lock{ values_lock.mutex };
++        auto it = src.value_map.find(option_id);
++        if (it != src.value_map.end()) {
++            return it->second;
++        }
+     }
+     return get_option_default_value(option_id);
+ }
+@@ -297,6 +302,7 @@
+ }
+ 
+ void Config::determine_changed_option(const std::string& option_id) {
++    std::lock_guard lock{ values_lock.mutex };
+     if (get_option_value(option_id) != get_temp_option_value(option_id)) {
+         modified_options.insert(schema.options_by_id[option_id]);
+     } else {
+@@ -315,22 +321,31 @@
+ }
+ 
+ void Config::set_option_value(const std::string& option_id, ConfigValueVariant value) {
+-    ConfigStorage &conf_storage = requires_confirmation ? temp_storage : storage;
+-
+-    auto it = conf_storage.value_map.find(option_id);
+-    if (it != conf_storage.value_map.end()) {
+-        ConfigValueVariant prev_value = it->second;
++    ConfigValueVariant prev_value;
++    {
++        std::lock_guard lock{ values_lock.mutex };
++        ConfigStorage &conf_storage = requires_confirmation ? temp_storage : storage;
++
++        auto it = conf_storage.value_map.find(option_id);
++        if (it == conf_storage.value_map.end()) {
++            return;
++        }
++        prev_value = it->second;
+         it->second = value;
+ 
+         if (requires_confirmation) {
+             determine_changed_option(option_id);
+-            try_call_option_change_callback(option_id, value, prev_value, OptionChangeContext::Temporary);
+-        } else {
+-            try_call_option_change_callback(option_id, value, prev_value, OptionChangeContext::Permanent);
+         }
++    }
+ 
+-        derive_option_dependencies(schema.options_by_id[option_id]);
++    // The callback runs without the lock (see values_lock).
++    if (requires_confirmation) {
++        try_call_option_change_callback(option_id, value, prev_value, OptionChangeContext::Temporary);
++    } else {
++        try_call_option_change_callback(option_id, value, prev_value, OptionChangeContext::Permanent);
+     }
++
++    derive_option_dependencies(schema.options_by_id[option_id]);
+ }
+ 
+ bool Config::get_enum_option_disabled(size_t option_index, uint32_t enum_index) const {
+@@ -360,9 +375,20 @@
+ }
+ 
+ nlohmann::json Config::get_storage_json() const {
++    // Every value at one moment, so a save never mixes values from before and after a change on another thread;
++    // the serializers then run without the lock.
++    std::vector<ConfigValueVariant> values;
++    values.reserve(schema.options.size());
++    {
++        std::lock_guard lock{ values_lock.mutex };
++        for (const auto& option : schema.options) {
++            values.push_back(get_option_value(option.id));
++        }
++    }
+     nlohmann::json json;
+-    for (const auto& option : schema.options) {
+-        const ConfigValueVariant value = get_option_value(option.id);
++    for (size_t option_index = 0; option_index < schema.options.size(); option_index++) {
++        const ConfigOption& option = schema.options[option_index];
++        const ConfigValueVariant& value = values[option_index];
+ 
+         if (json_serialize_option_map.contains(option.id)) {
+             auto cb = json_serialize_option_map.at(option.id);
+@@ -405,7 +431,12 @@
+ bool Config::save_config_json(nlohmann::json config_json) const {
+     std::filesystem::path file_path = get_path_to_config(is_mod_config) / config_file_name;
+ 
+-    bool result = save_json_with_backups(file_path, config_json);
++    bool result;
++    {
++        // Two threads saving at once would write the same file and its backups together.
++        std::lock_guard lock{ save_lock.mutex };
++        result = save_json_with_backups(file_path, config_json);
++    }
+     if (save_callback) {
+         save_callback();
+     }
+@@ -414,9 +445,14 @@
+ }
+ 
+ void Config::apply_option_value(const ConfigOption &option) {
+-    ConfigValueVariant prev_value = get_option_value(option.id);
+-    ConfigValueVariant cur_value = get_temp_option_value(option.id);
+-    storage.value_map[option.id] = cur_value;
++    ConfigValueVariant prev_value;
++    ConfigValueVariant cur_value;
++    {
++        std::lock_guard lock{ values_lock.mutex };
++        prev_value = get_option_value(option.id);
++        cur_value = get_temp_option_value(option.id);
++        storage.value_map[option.id] = cur_value;
++    }
+     try_call_option_change_callback(option.id, cur_value, prev_value, OptionChangeContext::Permanent);
+ }
+ 
+@@ -424,6 +460,7 @@
+     auto option_by_id_it = schema.options_by_id.find(option_id);
+     if (option_by_id_it != schema.options_by_id.end()) {
+         apply_option_value(schema.options[option_by_id_it->second]);
++        std::lock_guard lock{ values_lock.mutex };
+         modified_options.erase(option_by_id_it->second);
+     }
+ }
+@@ -434,6 +471,7 @@
+             apply_option_value(option);
+         }
+ 
++        std::lock_guard lock{ values_lock.mutex };
+         modified_options.clear();
+     }
+ 
+@@ -536,10 +574,13 @@
+         auto json_value = (*json_config_root)[option.id];
+ 
+         auto value = parse_config_option_json_value(json_value, option);
+-        storage.value_map[option.id] = value;
++        {
++            std::lock_guard lock{ values_lock.mutex };
++            storage.value_map[option.id] = value;
+ 
+-        if (requires_confirmation) {
+-            temp_storage.value_map[option.id] = value;
++            if (requires_confirmation) {
++                temp_storage.value_map[option.id] = value;
++            }
+         }
+         try_call_option_change_callback(option.id, value, value, OptionChangeContext::Load);
+     }
+@@ -559,12 +600,20 @@
+         return;
+     }
+ 
+-    modified_options.clear();
++    {
++        std::lock_guard lock{ values_lock.mutex };
++        modified_options.clear();
++    }
+ 
+     for (const auto& option : schema.options) {
+-        auto temp_value = get_temp_option_value(option.id);
+-        auto original_value = get_option_value(option.id);
+-        temp_storage.value_map[option.id] = original_value;
++        ConfigValueVariant temp_value;
++        ConfigValueVariant original_value;
++        {
++            std::lock_guard lock{ values_lock.mutex };
++            temp_value = get_temp_option_value(option.id);
++            original_value = get_option_value(option.id);
++            temp_storage.value_map[option.id] = original_value;
++        }
+         try_call_option_change_callback(option.id, original_value, temp_value, OptionChangeContext::Temporary);
+     }
+ 
+@@ -576,6 +625,7 @@
+ }
+ 
+ bool Config::is_dirty() const {
++    std::lock_guard lock{ values_lock.mutex };
+     return !modified_options.empty();
+ }
+ 
+@@ -623,7 +673,7 @@
          // unchangeable - always hidden
          return;
      }
@@ -124,7 +374,7 @@ index 6bc03fd..59cd5fb 100644
      if (was_hidden == hidden) {
          return;
      }
-@@ -692,8 +692,87 @@ std::string Config::get_enum_option_details(size_t option_index) const {
+@@ -692,8 +742,87 @@
      return enum_option_details.at(option_index);
  }
  

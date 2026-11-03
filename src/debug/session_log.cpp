@@ -61,10 +61,14 @@ namespace {
     }
 
     // Kept to plain option values: passing nlohmann::json across from librecomp fails to link on Windows.
+    // The values are copied in one go under the config's lock (this runs on its own thread while the menu, the game
+    // and the console change them), so one line never mixes values from before and after a change.
     std::string tab_line(const recomp::config::Config& config) {
         std::string out;
+        const recomp::config::ConfigStorage values = config.get_config_storage();
         for (const auto& option : config.get_config_schema().options) {
-            const recomp::config::ConfigValueVariant value = config.get_option_value(option.id);
+            auto found = values.value_map.find(option.id);
+            const recomp::config::ConfigValueVariant value = found != values.value_map.end() ? found->second : config.get_option_value(option.id);
             std::string text;
             if (const uint32_t* v = std::get_if<uint32_t>(&value)) {
                 text = std::to_string(*v);

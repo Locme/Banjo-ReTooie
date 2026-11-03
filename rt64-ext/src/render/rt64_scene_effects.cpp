@@ -34,6 +34,20 @@
 
 namespace RT64 {
     namespace {
+        // What the caches key on: an object's never-reused id (plume's RenderObjectUniqueId), 0 for none, so a new
+        // object made where a freed one was can't find the freed one's sets.
+        uint64_t IdOf(const RenderTexture *texture) {
+            return (texture != nullptr) ? texture->uniqueId : 0;
+        }
+
+        uint64_t IdOf(const RenderBuffer *buffer) {
+            return (buffer != nullptr) ? buffer->uniqueId : 0;
+        }
+
+        uint64_t IdOf(const RenderAccelerationStructure *structure) {
+            return (structure != nullptr) ? structure->uniqueId : 0;
+        }
+
         // Modern water's ripple grid round the player: cells across, and world units per cell.
         constexpr uint32_t RippleCells = 256;
         constexpr float RippleCellSize = 3.0f;
@@ -56,20 +70,20 @@ namespace RT64 {
 
         // What a scene set was made with; a set is reused only for the same.
         struct SceneSetKey {
-            const RenderTexture *depth = nullptr;
-            const RenderTexture *bloom = nullptr;
-            const RenderTexture *color = nullptr;
-            const RenderTexture *adapted = nullptr;
-            const RenderTexture *water = nullptr;
-            const RenderTexture *waterColor = nullptr;
-            const RenderTexture *ripples = nullptr;
-            const RenderTexture *sunMap = nullptr;
-            const RenderTexture *fireflies = nullptr;
-            const RenderTexture *half = nullptr;
-            const RenderTexture *indirect = nullptr;
-            const RenderAccelerationStructure *bvh = nullptr;
-            const RenderBuffer *dust = nullptr;
-            const RenderBuffer *lights = nullptr;
+            uint64_t depth = 0;
+            uint64_t bloom = 0;
+            uint64_t color = 0;
+            uint64_t adapted = 0;
+            uint64_t water = 0;
+            uint64_t waterColor = 0;
+            uint64_t ripples = 0;
+            uint64_t sunMap = 0;
+            uint64_t fireflies = 0;
+            uint64_t half = 0;
+            uint64_t indirect = 0;
+            uint64_t bvh = 0;
+            uint64_t dust = 0;
+            uint64_t lights = 0;
 
             bool operator==(const SceneSetKey &other) const {
                 return (depth == other.depth) && (bloom == other.bloom) && (color == other.color) && (adapted == other.adapted) && (water == other.water) &&
@@ -132,7 +146,7 @@ namespace RT64 {
 
         // A texture as a cache key.
         struct TextureKey {
-            const RenderTexture *texture = nullptr;
+            uint64_t texture = 0;
             bool operator==(const TextureKey &other) const { return texture == other.texture; }
         };
 
@@ -144,7 +158,8 @@ namespace RT64 {
             uint32_t height = 0;
             uint32_t samples = 0;
             RenderFormat format = RenderFormat::UNKNOWN;
-            const RenderTexture *depth = nullptr;
+            // The depth target's texture (its id).
+            uint64_t depth = 0;
             uint64_t usedPass = 0;
             // Bloom: the bright parts at a quarter of the size [0] (blurred through [1]), again at an eighth [2]
             // (blurred through [3]) for a wider glow, and both together [4], which the pass reads.
@@ -179,7 +194,7 @@ namespace RT64 {
             std::unique_ptr<RenderTexture> waterTexture;
             std::unique_ptr<RenderTextureView> waterTextureView;
             std::unique_ptr<RenderFramebuffer> waterFramebuffer;
-            const RenderTexture *waterFramebufferDepth = nullptr;
+            uint64_t waterFramebufferDepth = 0;
             uint32_t waterWidth = 0;
             uint32_t waterHeight = 0;
             uint32_t waterSamples = 0;
@@ -240,7 +255,7 @@ namespace RT64 {
             uint64_t bvhTlasSize = 0;
             uint64_t bvhScratchSize = 0;
             uint32_t bvhInstanceCount = 0;
-            const RenderBuffer *bvhInstanceBuffers[2] = {};
+            uint64_t bvhInstanceBuffers[2] = {};
             // The level's own draws (bvhBlas holds the models'): kept while their fingerprint (levelKey) is the same.
             std::unique_ptr<RenderBuffer> levelBlasBuffer;
             std::unique_ptr<RenderAccelerationStructure> levelBlas;
@@ -274,7 +289,7 @@ namespace RT64 {
             // buffers: the frame's four, then the geometry table's, then the world positions'.
             struct RayTexturesEntry {
                 std::unique_ptr<SceneRayTexturesDescriptorSet> set;
-                const RenderBuffer *buffers[6] = {};
+                uint64_t buffers[6] = {};
                 uint64_t usedPass = 0;
             };
             std::vector<RayTexturesEntry> rayTexturesCache;
@@ -372,7 +387,7 @@ namespace RT64 {
             // used go (to the retired queue, all at once) past MaxTargets. Also makes them this pass's (target).
             TargetResources &targetFor(const RenderTarget *colorTarget, const RenderTarget *depthTarget) {
                 const uint32_t samples = colorTarget->multisampling.sampleCount;
-                const RenderTexture *depth = (depthTarget != nullptr) ? depthTarget->texture.get() : nullptr;
+                const uint64_t depth = (depthTarget != nullptr) ? IdOf(depthTarget->texture.get()) : 0;
                 // Targets not drawn into for a while go: their depth target may be gone, and a new one at its address would
                 // find the old one's framebuffers (the water mask attaches it).
                 constexpr uint64_t TargetKeepPasses = 240;
@@ -432,7 +447,7 @@ namespace RT64 {
         void ensureWaterTarget(RenderWorker *worker, Resources &res, TargetResources &tr, RenderTarget *colorTarget, RenderTarget *depthTarget) {
             const uint32_t samples = colorTarget->multisampling.sampleCount;
             if ((tr.waterTexture != nullptr) && (tr.waterWidth == colorTarget->width) && (tr.waterHeight == colorTarget->height) &&
-                (tr.waterSamples == samples) && (tr.waterFormat == colorTarget->format) && (tr.waterFramebufferDepth == depthTarget->texture.get()))
+                (tr.waterSamples == samples) && (tr.waterFormat == colorTarget->format) && (tr.waterFramebufferDepth == IdOf(depthTarget->texture.get())))
             {
                 return;
             }
@@ -460,7 +475,7 @@ namespace RT64 {
             tr.waterHeight = colorTarget->height;
             tr.waterSamples = samples;
             tr.waterFormat = colorTarget->format;
-            tr.waterFramebufferDepth = depthTarget->texture.get();
+            tr.waterFramebufferDepth = IdOf(depthTarget->texture.get());
             res.waterDrawn = false;
         }
     }
@@ -1521,6 +1536,24 @@ namespace RT64 {
         const float a = 0.5f / depthScale;
         const float b = (0.5f - depthTranslate) / depthScale;
         return interop::float4{ t.x - b * t.z, t.y - b * t.w, a * t.z, a * t.w };
+    }
+
+    void NoteSceneCamerasFull() {
+        static std::mutex logMutex;
+        static uint64_t full = 0;
+        static bool said = false;
+        static auto lastLog = std::chrono::steady_clock::now();
+        static const bool fxLog = (getenv("TOOIE_FX_LOG") != nullptr);
+        const std::scoped_lock lock(logMutex);
+        full++;
+        const auto now = std::chrono::steady_clock::now();
+        if (!said || (fxLog && (now - lastLog > std::chrono::seconds(1)))) {
+            fprintf(stderr, "[parallax] all 8 camera slots taken: %llu draws drawn without parallax or displaced ground%s\n",
+                (unsigned long long)(full), said ? " in the last second" : " (said once; TOOIE_FX_LOG for a line a second)");
+            said = true;
+            full = 0;
+            lastLog = now;
+        }
     }
 
     bool SceneParallaxCamera(const interop::float4x4 &projection, const interop::float3 &viewportScale, const interop::float3 &viewportTranslate,
@@ -2638,8 +2671,13 @@ namespace RT64 {
             // The world positions the structure was built from, for the face a ray met (SceneEffectsPS.hlsl RayFaceNormal).
             haveTextureBuffers ? worldPos : res.rayDummyBuffer.get()
         };
-        // Sets not used for a while are dropped: the buffers they name may have been replaced since (a new buffer at an old one's
-        // address would match). Room for each group of buffers in every upload slot's geometry table.
+        // The sets are found by the buffers' ids (RenderObjectUniqueId): a new buffer at a freed one's address isn't the old one.
+        uint64_t wantedIds[6];
+        for (int i = 0; i < 6; i++) {
+            wantedIds[i] = IdOf(wanted[i]);
+        }
+        // Sets not used for a while are dropped (their buffers may be gone, so their sets would hold stale descriptors). Room for
+        // each group of buffers in every upload slot's geometry table.
         constexpr uint64_t RayCacheKeepPasses = 240;
         constexpr size_t RayCacheMax = 8 * Resources::UploadSlots;
         for (size_t i = 0; i < res.rayTexturesCache.size();) {
@@ -2653,7 +2691,7 @@ namespace RT64 {
         }
         res.rayTexturesSet = nullptr;
         for (Resources::RayTexturesEntry &entry : res.rayTexturesCache) {
-            if (std::equal(wanted, wanted + 6, entry.buffers)) {
+            if (std::equal(wantedIds, wantedIds + 6, entry.buffers)) {
                 entry.usedPass = res.passes;
                 res.rayTexturesSet = entry.set.get();
                 break;
@@ -2682,7 +2720,7 @@ namespace RT64 {
                 res.rayTexturesSet = nullptr;
                 return;
             }
-            std::copy(wanted, wanted + 6, entry.buffers);
+            std::copy(wantedIds, wantedIds + 6, entry.buffers);
             entry.usedPass = res.passes;
             res.rayTexturesSet = set;
             res.rayTexturesCache.push_back(std::move(entry));
@@ -2866,9 +2904,10 @@ namespace RT64 {
             instanceBuffers[instanceCount] = res.bvhBlasBuffer.get();
             instances[instanceCount++] = RenderTopLevelASInstance(RenderBufferReference(res.bvhBlasBuffer.get()), uint32_t(MaxGeometries), 0x04, 0, true, RenderAffineTransform());
         }
-        const bool instancesChanged = (instanceCount != res.bvhInstanceCount) || !std::equal(instanceBuffers, instanceBuffers + 2, res.bvhInstanceBuffers);
+        const uint64_t instanceBufferIds[2] = { IdOf(instanceBuffers[0]), IdOf(instanceBuffers[1]) };
+        const bool instancesChanged = (instanceCount != res.bvhInstanceCount) || !std::equal(instanceBufferIds, instanceBufferIds + 2, res.bvhInstanceBuffers);
         res.bvhInstanceCount = instanceCount;
-        std::copy(instanceBuffers, instanceBuffers + 2, res.bvhInstanceBuffers);
+        std::copy(instanceBufferIds, instanceBufferIds + 2, res.bvhInstanceBuffers);
         RenderTopLevelASBuildInfo tlasInfo;
         device->setTopLevelASBuildInfo(tlasInfo, instances, instanceCount, true, false);
         if ((res.bvhTlas == nullptr) || (res.bvhTlasSize < tlasInfo.accelerationStructureSize)) {
@@ -3226,14 +3265,14 @@ namespace RT64 {
             }
 
             // One set for each texture read (the game's framebuffers drawn in turn each have their own resolve).
-            sourceSet = tr.sourceSets.find(TextureKey{ source }, res.passes);
+            sourceSet = tr.sourceSets.find(TextureKey{ IdOf(source) }, res.passes);
             if (sourceSet == nullptr) {
                 std::unique_ptr<SmaaDescriptorSet> set = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
                     shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
                 set->setTexture(set->gTexture0, source, RenderTextureLayout::SHADER_READ, sourceView);
                 set->setTexture(set->gTexture1, source, RenderTextureLayout::SHADER_READ, sourceView);
                 set->setTexture(set->gTexture2, source, RenderTextureLayout::SHADER_READ, sourceView);
-                sourceSet = tr.sourceSets.add(TextureKey{ source }, std::move(set), res.passes,
+                sourceSet = tr.sourceSets.add(TextureKey{ IdOf(source) }, std::move(set), res.passes,
                     [&](std::unique_ptr<SmaaDescriptorSet> &&old) { res.retireLater(std::move(old)); });
             }
 
@@ -3267,7 +3306,7 @@ namespace RT64 {
         }
 
         if ((settings.eyeAdaptation > 0.0f) && (source != nullptr)) {
-            SmaaDescriptorSet *measureSet = tr.measureSets.find(TextureKey{ source }, res.passes);
+            SmaaDescriptorSet *measureSet = tr.measureSets.find(TextureKey{ IdOf(source) }, res.passes);
             if (measureSet == nullptr) {
                 std::unique_ptr<SmaaDescriptorSet> set = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
                     shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
@@ -3275,7 +3314,7 @@ namespace RT64 {
                 set->setTexture(set->gTexture0, source, RenderTextureLayout::SHADER_READ, view);
                 set->setTexture(set->gTexture1, source, RenderTextureLayout::SHADER_READ, view);
                 set->setTexture(set->gTexture2, source, RenderTextureLayout::SHADER_READ, view);
-                measureSet = tr.measureSets.add(TextureKey{ source }, std::move(set), res.passes,
+                measureSet = tr.measureSets.add(TextureKey{ IdOf(source) }, std::move(set), res.passes,
                     [&](std::unique_ptr<SmaaDescriptorSet> &&old) { res.retireLater(std::move(old)); });
             }
 
@@ -3696,20 +3735,20 @@ namespace RT64 {
         const RenderBuffer *slotLights = res.lightsBuffer[res.uploadSlot].get();
         const bool bindBvh = worker->device->getCapabilities().rayQuery && res.bvhReady && (slotLights != nullptr) && (res.radianceBuffer != nullptr);
         SceneSetKey sceneKey;
-        sceneKey.depth = depthTarget->texture.get();
-        sceneKey.bloom = tr.bloomTexture[4].get();
-        sceneKey.color = color;
-        sceneKey.adapted = adapted;
-        sceneKey.water = water;
-        sceneKey.waterColor = waterColor;
-        sceneKey.ripples = res.rippleTexture[0].get();
-        sceneKey.sunMap = res.sunMapTexture.get();
-        sceneKey.fireflies = res.fireflyTexture.get();
-        sceneKey.half = tr.halfTexture.get();
-        sceneKey.indirect = tr.indirectTexture.get();
-        sceneKey.bvh = bindBvh ? res.bvhTlas.get() : nullptr;
-        sceneKey.dust = dustBuffer.get();
-        sceneKey.lights = bindBvh ? slotLights : nullptr;
+        sceneKey.depth = IdOf(depthTarget->texture.get());
+        sceneKey.bloom = IdOf(tr.bloomTexture[4].get());
+        sceneKey.color = IdOf(color);
+        sceneKey.adapted = IdOf(adapted);
+        sceneKey.water = IdOf(water);
+        sceneKey.waterColor = IdOf(waterColor);
+        sceneKey.ripples = IdOf(res.rippleTexture[0].get());
+        sceneKey.sunMap = IdOf(res.sunMapTexture.get());
+        sceneKey.fireflies = IdOf(res.fireflyTexture.get());
+        sceneKey.half = IdOf(tr.halfTexture.get());
+        sceneKey.indirect = IdOf(tr.indirectTexture.get());
+        sceneKey.bvh = IdOf(bindBvh ? res.bvhTlas.get() : nullptr);
+        sceneKey.dust = IdOf(dustBuffer.get());
+        sceneKey.lights = IdOf(bindBvh ? slotLights : nullptr);
         // A set for each key seen lately (the framebuffers drawn in turn and the upload slots each have theirs), made once.
         SceneEffectsDescriptorSet *sceneSet = tr.sceneSets.find(sceneKey, res.passes);
         if (sceneSet == nullptr) {
@@ -3737,7 +3776,7 @@ namespace RT64 {
                 [&](std::unique_ptr<SceneEffectsDescriptorSet> &&old) { res.retireLater(std::move(old)); });
         }
         // The structure bound in this pass's set (null: none, the depth march).
-        const RenderAccelerationStructure *sceneSetBvh = sceneKey.bvh;
+        const RenderAccelerationStructure *sceneSetBvh = bindBvh ? res.bvhTlas.get() : nullptr;
         GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::SceneEffects, false));
         const int effectsSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
 

@@ -22,7 +22,8 @@
 // ScenePixelWorldPosition finds it before it goes to world space.
 // With the camera of the draw's own framebuffer (RASTER_PARALLAX_CAMERA, FrameParams.parallaxCameras).
 float3 ParallaxViewPosition(float4 pixelPosition, uint bits) {
-    const uint camera = (bits & RASTER_PARALLAX_CAMERA) >> RASTER_PARALLAX_CAMERA_SHIFT;
+    // (Eight cameras: bits 0 and 1 in RASTER_PARALLAX_CAMERA, bit 2 in RASTER_PARALLAX_CAMERA_HIGH.)
+    const uint camera = ((bits & RASTER_PARALLAX_CAMERA) >> RASTER_PARALLAX_CAMERA_SHIFT) | (((bits & RASTER_PARALLAX_CAMERA_HIGH) != 0u) ? 4u : 0u);
     const float4 t = FrParams.parallaxCameras[camera * 2];
     const float ndcZ = pixelPosition.z * 2.0f - 1.0f;
     const float z = (t.y - ndcZ * t.w) / (ndcZ * t.z - t.x);

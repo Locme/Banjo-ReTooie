@@ -211,7 +211,11 @@ namespace RT64 {
         // One per color target (the game double buffers, so at least two): see UpscalerWorldSnapshot. At most
         // MaxSnapshots: render targets come and go (resizes, other framebuffers), and each kept a full-size copy for good.
         constexpr size_t MaxSnapshots = 6;
-        std::unordered_map<const RenderTarget *, WorldSnapshot> snapshots;
+        // By the color target's texture's id (RenderObjectUniqueId), not the target's address, which a new target can take.
+        std::unordered_map<uint64_t, WorldSnapshot> snapshots;
+        uint64_t SnapshotKey(const RenderTarget *colorTarget) {
+            return ((colorTarget != nullptr) && (colorTarget->texture != nullptr)) ? colorTarget->texture->uniqueId : 0;
+        }
         uint64_t snapshotTakes = 0;
     }
 
@@ -236,13 +240,14 @@ namespace RT64 {
         GpuSectionScope timed(WorkloadGpuSections(), GpuSection::UpscalerSnapshot, worker->commandList.get());
         const std::scoped_lock lock(snapshotMutex);
         snapshotTakes++;
-        if ((snapshots.find(colorTarget) == snapshots.end()) && (snapshots.size() >= MaxSnapshots)) {
+        const uint64_t key = SnapshotKey(colorTarget);
+        if ((snapshots.find(key) == snapshots.end()) && (snapshots.size() >= MaxSnapshots)) {
             // The one taken longest ago goes (many takes ago, so no frame still being drawn uses it).
             auto oldest = std::min_element(snapshots.begin(), snapshots.end(),
                 [](const auto &a, const auto &b) { return a.second.usedTake < b.second.usedTake; });
             snapshots.erase(oldest);
         }
-        WorldSnapshot &snapshot = snapshots[colorTarget];
+        WorldSnapshot &snapshot = snapshots[key];
         snapshot.usedTake = snapshotTakes;
         if ((snapshot.texture == nullptr) || (snapshot.width != colorTarget->width) || (snapshot.height != colorTarget->height) || (snapshot.format != colorTarget->format)) {
             snapshot.texture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format));
@@ -262,7 +267,7 @@ namespace RT64 {
 
     RenderTexture *UpscalerWorldSnapshot(const RenderTarget *colorTarget, uint32_t width, uint32_t height) {
         const std::scoped_lock lock(snapshotMutex);
-        auto it = snapshots.find(colorTarget);
+        auto it = snapshots.find(SnapshotKey(colorTarget));
         if (it == snapshots.end()) {
             return nullptr;
         }

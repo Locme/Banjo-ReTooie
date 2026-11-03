@@ -3893,7 +3893,7 @@ index 9fae0d4..fc10a85 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +3143,1328 @@ namespace RT64 {
+@@ -1747,24 +3143,1329 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4371,8 +4371,9 @@ index 9fae0d4..fc10a85 100644
 +                            while ((slot < parallaxCameraCount) && !sameCamera(slot)) {
 +                                slot++;
 +                            }
-+                            if (slot == 4) {
++                            if (slot == 8) {
 +                                parallax = 0;
++                                NoteSceneCamerasFull();
 +                            }
 +                            else if (slot == parallaxCameraCount) {
 +                                parallaxCameraCount++;
@@ -4594,8 +4595,8 @@ index 9fae0d4..fc10a85 100644
 +                    }
 +                }
 +                instanceNightLightVector.resize(instanceIndex, 0);
-+                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8) | ((parallax >> 22) & RASTER_PARALLAX_SHAPE_HIGH) |
-+                    (((parallax >> 25) << RASTER_PARALLAX_FINE_DEPTH_SHIFT) & RASTER_PARALLAX_FINE_DEPTH) | (parallaxCamera << RASTER_PARALLAX_CAMERA_SHIFT)) : 0));
++                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | ((parallax << 8) & ~(RASTER_PARALLAX_CAMERA | RASTER_PARALLAX_CAMERA_HIGH)) | ((parallax >> 22) & RASTER_PARALLAX_SHAPE_HIGH) |
++                    (((parallax >> 25) << RASTER_PARALLAX_FINE_DEPTH_SHIFT) & RASTER_PARALLAX_FINE_DEPTH) | ((parallaxCamera & 3u) << RASTER_PARALLAX_CAMERA_SHIFT) | (((parallaxCamera & 4u) != 0u) ? RASTER_PARALLAX_CAMERA_HIGH : 0u)) : 0));
 +                // Banjo-Tooie: a see-through (alpha blended) draw of the 3D world that writes depth, with picture effects on:
 +                // its nearly clear pixels leave no depth (RASTER_SEE_THROUGH_DEPTH), or the effects see a wall in a clear quad.
 +                {
@@ -8666,15 +8667,15 @@ index 2e62aaf..9546627 100644
 +        // vector in units at the fur's full length (the shells move by the square of their height), 0 when off.
 +        float4 furSway;
 +        // Banjo-Tooie: parallax mapping's camera for each part of the frame that draws the 3D world (Parallax.hlsli), up to
-+        // four, picked per draw by RASTER_PARALLAX_CAMERA: the depth terms (as grassWorldZ), then the projection's x and
++        // eight, picked per draw by RASTER_PARALLAX_CAMERA: the depth terms (as grassWorldZ), then the projection's x and
 +        // y scale and the framebuffer's width and height (as grassProjection). The world can be drawn in several
 +        // framebuffers a frame (after an HD shadow, or in two passes) of different sizes, and one set of terms for all of
 +        // them put the pixels of the others in the wrong place: their parallax flattened out and came back (L).
-+        float4 parallaxCameras[8];
++        float4 parallaxCameras[16];
 +        // Banjo-Tooie: displaced ground's camera (GroundTess.hlsl) for each of parallaxCameras' framebuffers, picked the same
 +        // way (RASTER_PARALLAX_CAMERA): the map from world space to clip space as RasterVS places the vertices (four rows),
 +        // then the camera's world x, y and z. Each framebuffer's own, as parallax's (its size changes the map).
-+        float4 groundCameras[20];
++        float4 groundCameras[40];
 +        // Banjo-Tooie: deep snow's and tessellated sand's camera, from the frame's first 3D world (where the snow was
 +        // worked out): its world position, and its projection's y scale (as grassProjection.y). The grass terms it came
 +        // from are worked out again for a later world (after an HD shadow), and the snow's reach and cuts must not follow.
@@ -8726,7 +8727,7 @@ diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
 index 0a5c332..828fa2d 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,93 @@
+@@ -9,11 +9,95 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -8770,9 +8771,11 @@ index 0a5c332..828fa2d 100644
 +// Banjo-Tooie: a texture's depth in 10% steps (1 to 31), when not 0.
 +#define RASTER_PARALLAX_FINE_DEPTH 0xF8u
 +#define RASTER_PARALLAX_FINE_DEPTH_SHIFT 3
-+// Banjo-Tooie: which of FrameParams.parallaxCameras the draw's framebuffer has (0 to 3).
++// Banjo-Tooie: which of FrameParams.parallaxCameras the draw's framebuffer has (0 to 7): its bits 0 and 1 in 29 and 30, its bit 2 in
++// RASTER_PARALLAX_CAMERA_HIGH (bit 24, where the CPU's parallax value has RASTER_PARALLAX_HEIGHT_MAP, which no shader reads).
 +#define RASTER_PARALLAX_CAMERA 0x60000000u
 +#define RASTER_PARALLAX_CAMERA_SHIFT 29
++#define RASTER_PARALLAX_CAMERA_HIGH 0x1000000u
 +    // Banjo-Tooie: no piece beside the draw on that side (RasterParams.seamTiles).
 +#define RASTER_SEAM_NONE 0xFFFFFFFFu
 +    // Banjo-Tooie: RasterParams.seeThrough: the draw's pixels that are nearly clear (blend factor under 0.2) leave no
