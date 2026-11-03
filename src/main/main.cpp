@@ -82,7 +82,7 @@
 #ifdef TOOIE_VERSION
 const std::string version_string = TOOIE_VERSION;
 #else
-const std::string version_string = "0.1.0";
+const std::string version_string = "0.9.0";
 #endif
 
 template<typename... Ts>
