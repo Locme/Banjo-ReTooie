@@ -4635,6 +4635,7 @@ L_800A6E94:
     // 0x800A6ED4: lw          $ra, 0x1C($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X1C);
 L_800A6ED8:
+    if (tooie_circle_shadow_draw(rdram, ctx)) goto L_800A6EE4;
     // 0x800A6ED8: jal         0x800A6B24
     // 0x800A6EDC: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;

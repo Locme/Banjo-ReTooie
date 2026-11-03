@@ -56,7 +56,6 @@
 #include "tooie_hooks.h"
 #include "tooie_original_honeycomb.h"
 #include "tooie_window_beams.h"
-#include "tooie_circle_shadow.h"
 #include "tooie_toast.h"
 
 extern "C" void heap_alloc(uint8_t* rdram, recomp_context* ctx);
@@ -392,9 +391,6 @@ extern "C" int tooie_asset_replace(uint8_t* rdram, recomp_context* ctx) {
             std::span<const uint8_t> rom = recomp::get_rom();
             return rom_asset(rom, read_table(rom), asset);
         });
-        if (built.empty()) {
-            built = tooie::circle_shadow::model_for(id);   // Demake > Simple Circle Shadow's disc
-        }
         bytes.assign(built.begin(), built.end());
     }
     if (bytes.empty()) {

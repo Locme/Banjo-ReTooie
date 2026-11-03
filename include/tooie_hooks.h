@@ -91,8 +91,8 @@ void tooie_banjo_detail(uint8_t* rdram, recomp_context* ctx);
 // HD shadows (src/gameplay/hd_shadows.cpp): func_800A6250 has the shadow model at $sp+0x1C8 and the on-screen model at $sp+0x1C4.
 void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx);
 void tooie_player_shadow_done(uint8_t* rdram, recomp_context* ctx);
-// Circle shadow (src/gameplay/circle_shadow.cpp): func_800A6250 has the form's shadow model id in $v0 before it fetches the model.
-void tooie_circle_shadow_id(uint8_t* rdram, recomp_context* ctx);
+// Circle shadow (src/gameplay/circle_shadow.cpp): in func_800A6DAC, before it draws the player's shadow model; true if the game's blob was drawn instead.
+int tooie_circle_shadow_draw(uint8_t* rdram, recomp_context* ctx);
 // Same file: func_80101808's entry ($a1 is the draw callback) and just after it draws the actor ($s0) model.
 void tooie_actor_draw_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx);

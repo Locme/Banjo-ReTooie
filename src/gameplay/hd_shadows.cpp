@@ -36,7 +36,6 @@
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_hd_shadows.h"
-#include "tooie_circle_shadow.h"
 #include "tooie_gfx_budget.h"
 #include "tooie_day_night.h"
 #include "tooie_picture_filters.h"
@@ -114,9 +113,7 @@ extern "C" void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx) {
         }
     }
     // "HD Shadows: Banjo" Off leaves the game's shadow model and light for the player.
-    // Demake > Simple Circle Shadow wins: the shadow model is its disc (tooie_circle_shadow_id), not a model to replace.
-    if (hd_shadows_on() && direction(tooie::hd_shadows::banjo_direction_option) != tooie::hd_shadows::Direction::Off
-        && !tooie::circle_shadow::enabled()) {
+    if (hd_shadows_on() && direction(tooie::hd_shadows::banjo_direction_option) != tooie::hd_shadows::Direction::Off) {
         MEM_W(0x1C8, ctx->r29) = MEM_W(0x1C4, ctx->r29);
         player_shadow_draw = true;
         // $s0 is the light direction, a vector its callers (func_800A69F0 via func_800A6B24) build on
@@ -800,8 +797,7 @@ void tooie::hd_shadows::fix_shadow_pose(uint8_t* rdram, uint32_t start, uint32_t
     static const bool off = std::getenv("TOOIE_SHADOW_OLD_POSE") != nullptr;
     // TOOIE_SHADOW_POSE_LOG=1: how many of each shadow's bones were posed with this frame's.
     static const bool log = std::getenv("TOOIE_SHADOW_POSE_LOG") != nullptr;
-    // The circle shadow's disc has no bones to pose.
-    if (off || start >= end || end > 0x800000 || tooie::circle_shadow::enabled()) {
+    if (off || start >= end || end > 0x800000) {
         return;
     }
     auto word = [&](uint32_t phys) { return (uint32_t)MEM_W(0, (gpr)(int32_t)(phys | 0x80000000)); };
