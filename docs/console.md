@@ -821,6 +821,26 @@ Lets go of what `press` is holding.
 release
 ```
 
+### `mouse`
+
+Usage: `mouse move <dx> <dy> [n ms|n s]`, `mouse stop`
+
+Moves the mouse by `dx`, `dy` pixels (right and down are positive). The motion goes where the window's own mouse
+motion goes, so General > Mouse Sensitivity scales it, and it turns the first-person view (mouse aim) and the free
+camera as a real mouse would. With a time (`500ms`, `2s`) it is spread over that time on the clock, a share each game
+update; with none it all arrives at once. A new `mouse move` replaces one still under way, and `mouse stop` drops what
+is left. The command returns at once, so use `wait` while the motion runs.
+
+```
+mouse move 200 0
+mouse move 0 -150 1s
+wait 1s
+mouse stop
+```
+
+Catch: needs the game running. The window's own checks come before this point, so it still moves the camera while
+the cursor is shown (Tab) or a pick mode is on, which the real mouse does not. A sensitivity of 0 turns it off.
+
 ## Memory
 
 Addresses and values are written as described under Syntax. The commands below read or write RAM in game updates.

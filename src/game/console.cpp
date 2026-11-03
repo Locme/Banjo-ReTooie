@@ -45,6 +45,7 @@
 #include "librecomp/mods.hpp"
 #include "recomp.h"
 #include "recompui/recompui.h"
+#include "recompinput/input_state.h"
 #include "recompui/config.h"
 #include "librecomp/config.hpp"
 #include "librecomp/game.hpp"
@@ -1536,6 +1537,60 @@ void cmd_press(Ctx& c) {
 void cmd_release(Ctx&) {
     hold(0, false, 0, 0, 0);
     print("released");
+}
+
+// mouse move: motion handed to recompinput::add_mouse_deltas, where the window's own mouse motion goes (RecompFrontend
+// input_events.cpp), so Mouse Sensitivity, mouse aim (src/input/motion_aim.cpp) and the free camera see it as real
+// motion. Spread over its length in step with the clock, a share each game update (mouse_tick); with no length, all at once.
+struct MouseMove {
+    bool on = false;
+    double dx = 0, dy = 0;          // still to come, in pixels
+    Clock::time_point last{}, until{};
+};
+MouseMove g_mouse;
+std::mutex g_mouse_mutex;
+
+void mouse_tick() {
+    std::lock_guard lock{ g_mouse_mutex };
+    if (!g_mouse.on) return;
+    Clock::time_point now = Clock::now();
+    double share = 1.0;
+    if (now < g_mouse.until) {
+        double left = std::chrono::duration<double>(g_mouse.until - now).count();
+        double step = std::chrono::duration<double>(now - g_mouse.last).count();
+        share = std::clamp(step / (left + step), 0.0, 1.0);
+    }
+    g_mouse.last = now;
+    double x = g_mouse.dx * share, y = g_mouse.dy * share;
+    g_mouse.dx -= x;
+    g_mouse.dy -= y;
+    recompinput::add_mouse_deltas((float)x, (float)y);
+    if (share >= 1.0) g_mouse.on = false;
+}
+
+void cmd_mouse(Ctx& c) {
+    const char* usage = "mouse move <dx> <dy> [n ms|n s] | mouse stop";
+    if (c.w.size() >= 2 && lower(c.w[1]) == "stop") {
+        std::lock_guard lock{ g_mouse_mutex };
+        g_mouse = MouseMove{};
+        print("mouse stopped");
+        return;
+    }
+    double dx = 0, dy = 0;
+    if (c.w.size() < 4 || lower(c.w[1]) != "move" || !parse_double(c.w[2], &dx) || !parse_double(c.w[3], &dy)) { error(usage); return; }
+    int frames = -1;
+    double seconds = 0;
+    if (c.w.size() >= 5 && (!parse_length(c.w[4], &frames, &seconds) || seconds <= 0)) { error("mouse move <dx> <dy> [n ms|n s]: the length is a time"); return; }
+    {
+        std::lock_guard lock{ g_mouse_mutex };
+        g_mouse.on = true;
+        g_mouse.dx = dx;
+        g_mouse.dy = dy;
+        g_mouse.last = Clock::now();
+        g_mouse.until = seconds > 0 ? g_mouse.last + std::chrono::microseconds((int64_t)(seconds * 1e6)) : g_mouse.last;
+    }
+    if (seconds <= 0) mouse_tick();
+    print(seconds > 0 ? format("moving the mouse %.0f, %.0f over %.0f ms", dx, dy, seconds * 1000.0) : format("moved the mouse %.0f, %.0f", dx, dy));
 }
 
 bool in_control(uint8_t* rdram); // below
@@ -3536,6 +3591,7 @@ const std::vector<Command>& commands() {
         { "costcheck", { "cost" }, true, "costcheck", "start or stop the Effect Cost Check (GPU time of each effect that is on)", cmd_costcheck },
         { "press", {}, true, "press <buttons> [stick <x> <y>] [frames|n ms|n s]", "hold controller 1's buttons (a+b) and stick (-80..80), for n game updates, a time, or until release", cmd_press },
         { "release", {}, false, "release", "let go of what press holds", cmd_release },
+        { "mouse", {}, true, "mouse move <dx> <dy> [n ms|n s] | mouse stop", "move the mouse by dx, dy pixels (right and down positive), at once or spread over a time, as the window's own mouse motion", cmd_mouse },
         { "wait", {}, false, "wait <frames|n ms|n s|save|control|map <hex>|until <addr> <value>>", "hold the next commands (frames are game updates; save, control, map and until wait for a state)", cmd_wait },
         { "peek", {}, true, "peek <address> [bytes]", "read RAM (hex address)", cmd_peek },
         { "poke", {}, true, "poke <address> <value> [8|16|32]", "write RAM", cmd_poke },
@@ -4015,6 +4071,7 @@ void tooie::console::frame(uint8_t* rdram, recomp_context* ctx) {
     drive_tick(rdram);
     pump(rdram, ctx);
     look_tick(rdram);
+    mouse_tick();
     time_tick(rdram);
     timer_tick(rdram);
     trace_tick(rdram);

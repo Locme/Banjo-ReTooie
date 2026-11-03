@@ -43,6 +43,7 @@
 #include "recompui/config.h"
 #include "recompinput/input_state.h"
 #include "tooie_debug.h"
+#include "tooie_fine_aim.h"
 #include "tooie_free_camera.h"
 #include "tooie_photo_mode.h"
 #include "tooie_game.h"
@@ -419,9 +420,12 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
 
     const bool on = tooie::free_camera::enabled();
     const bool gameplay = updating && mode == mode_dynamic && valid_ptr(camera) && valid_ptr(transform) && valid_ptr(dynamic);
-    // First person and the like: leave the camera alone but keep the held yaw for afterwards.
+    // First person and the like: leave the camera alone but keep the held yaw for afterwards. So too while
+    // the game has Banjo (tooie::fine_aim::game_has_player: a scripted walk, Jiggywiggy's jigsaw puzzle, talking,
+    // a cutscene): its camera is the game's then, mouse and stick alike.
     const bool paused = gameplay &&
-        (read_byte(rdram, dynamic + dynamic_override) != 0 || read_byte(rdram, dynamic + dynamic_frozen) != 0);
+        (read_byte(rdram, dynamic + dynamic_override) != 0 || read_byte(rdram, dynamic + dynamic_frozen) != 0 ||
+         tooie::fine_aim::game_has_player());
     // While the free camera is on and the game's own camera is running, the right stick
     // is the free camera's, not C buttons.
     recompinput::set_right_analog_suppressed(on && gameplay && !paused);
@@ -695,6 +699,8 @@ extern "C" int tooie_free_camera_player_alpha(int alpha) {
 }
 
 void tooie::free_camera::apply_input(uint16_t* buttons) {
+    // The C-up that starts first person (fine aim and mouse aim tell it from the game's scripted state 152 by it).
+    tooie::fine_aim::note_buttons(*buttons);
     static bool down = false;
     static bool holding = false;
     static std::chrono::steady_clock::time_point pulse_until{};
