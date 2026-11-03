@@ -368,3 +368,7 @@ Applied in `lib/RecompFrontend/recompui/lib/RmlUi`.
   (L, 2026-11-03). The seams it was meant to close come from the traced art's shapes meeting edge to edge, and
   `tools/seal_launcher_svg.py` closes those in the SVGs. The patch is kept so CMake resets checkouts that still carry
   the old one.
+* **Clear pixels keep their neighbour's colour** (`Source/Core/RenderInterfaceCompatibility.cpp`): the adapter turns
+  a generated texture's clear pixels white when it converts it to straight alpha, and the renderer's linear filter
+  blended that white into the edge beside it: a white outline round the start menu's art whenever a layer moved by
+  part of a pixel (L, 2026-11-03). Clear pixels now take the colour of a neighbour that isn't clear, two pixels out.
