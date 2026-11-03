@@ -22,7 +22,7 @@
 
 namespace RT64 {
     // Lamps lit at once, the nearest the camera.
-    constexpr uint32_t ScenePointLightMax = 8;
+    constexpr uint32_t ScenePointLightMax = 16;
 
     struct ScenePointLamp {
         float x, y, z;
@@ -33,9 +33,11 @@ namespace RT64 {
     // The switch and the strength (1 = as set in the lamp list), from the port. Off by default.
     void SetScenePointLights(bool enabled, float strength);
     bool ScenePointLights();
-    // The level's own list (world space) and where the camera is, from the port once a game frame.
-    void SetScenePointLamps(const ScenePointLamp *lamps, uint32_t count, const float camera[3]);
-    // The lit lamps the renderer found by their textures (four floats each: x, y, z, reach), once a frame.
+    // The level's own list (world space), where the camera is and the map, from the port once a game frame (a new map
+    // forgets the lamps found by their textures).
+    void SetScenePointLamps(const ScenePointLamp *lamps, uint32_t count, const float camera[3], uint32_t map);
+    // The lit lamps the renderer found by their textures this frame (four floats each: x, y, z, reach): kept for the rest
+    // of the map, so a lamp gone off screen still lights what is on screen.
     void SetScenePointTextureLamps(const float *xyzr, uint32_t count);
     // The scene effects pass: the lamps for this frame, nearest the camera first; returns how many (0 to ScenePointLightMax).
     uint32_t ScenePointLampsForFrame(ScenePointLamp *out);

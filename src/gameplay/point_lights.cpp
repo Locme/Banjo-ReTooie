@@ -33,7 +33,7 @@ namespace RT64 {
         float r, g, b;
     };
     void SetScenePointLights(bool enabled, float strength);
-    void SetScenePointLamps(const ScenePointLamp* lamps, uint32_t count, const float camera[3]);
+    void SetScenePointLamps(const ScenePointLamp* lamps, uint32_t count, const float camera[3], uint32_t map);
 }
 
 namespace {
@@ -177,7 +177,7 @@ void tooie::point_lights::tick(uint8_t* rdram) {
             }
         }
     }
-    RT64::SetScenePointLamps(here.data(), uint32_t(here.size()), camera);
+    RT64::SetScenePointLamps(here.data(), uint32_t(here.size()), camera, map);
 }
 
 std::string tooie::point_lights::console(uint8_t* rdram, const std::vector<std::string>& args) {

@@ -909,7 +909,7 @@ float3 ViewToWorldDirection(float3 view) {
     return float3(dot(view, gConstants.worldX.xyz), dot(view, gConstants.worldY.xyz), dot(view, gConstants.worldZ.xyz));
 }
 
-// Banjo-Tooie: Point Lights (Graphics > WIP, rt64_scene_lights.h): the lamps near the camera, in the dust buffer after
+// Banjo-Tooie: Point Lights (Graphics > WIP, rt64_scene_lights.h): the lamps nearest the camera (up to 16), in the dust buffer after
 // its first 16 bytes: the count, then each lamp's world x, y, z and radius, and its colour (times the strength).
 uint PointLampCount() {
     return uint(asfloat(gDust.Load(16u)) + 0.5f);
@@ -922,7 +922,7 @@ float3 PointLampsAt(float3 center, float3 normal) {
     const float3 world = ViewToWorldPoint(center);
     const float3 worldNormal = ViewToWorldDirection(normal);
     float3 light = 0.0f;
-    const uint count = min(PointLampCount(), 8u);
+    const uint count = min(PointLampCount(), 16u);
     for (uint i = 0u; i < count; i++) {
         const float4 lamp = asfloat(gDust.Load4(32u + i * 32u));
         const float3 colour = asfloat(gDust.Load3(48u + i * 32u));

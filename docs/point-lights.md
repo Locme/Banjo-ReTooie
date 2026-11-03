@@ -30,16 +30,19 @@ The lamps light the finished picture, per pixel, in the scene effects pass (`rt6
 
 The sky and the HUD are never lit.
 
-The lamps (`rt64-ext/src/render/rt64_scene_lights.h`) are the 8 nearest the camera from:
+The lamps (`rt64-ext/src/render/rt64_scene_lights.h`) are the 16 nearest the camera, however far away, from:
 
 - **the lit lamps RT64 finds by their textures**: the same list the traced lights use (`SetSceneLampTextures`). They
-  are lit warm white out to 600 units, a frame behind, from where they were drawn;
+  are lit warm white out to 600 units, a frame behind, from where they were drawn. A lamp found by a lamp texture is
+  kept for the rest of the map, so it still lights what is on screen when the lamp itself is off screen; a Light Source
+  pick, which can be a thing that moves, lights only the frames it is drawn in. (Before 2026-11-03 lamps past 4000
+  units from the camera were left out and a lamp lit only while it was drawn, so lamps came on only close by.)
 - **this map's lamps from `Dev Files/point_lights.txt`**, placed with the console (below). The file is read again
   about once a second when it changes.
 
 The game's own lights (Glowbos, torches) are left out. The game already lights the vertices around them itself.
 
-Cost: a loop over up to 8 lamps per pixel in a pass that is already drawn whenever any scene effect is on. Point
+Cost: a loop over up to 16 lamps per pixel in a pass that is already drawn whenever any scene effect is on. Point
 Lights turns the pass on by itself when no other effect is on. Frame rate and window shape don't change it.
 
 ## Placing lamps
