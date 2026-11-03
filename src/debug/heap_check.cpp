@@ -13,7 +13,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <unordered_set>
+#include <algorithm>
+#include <vector>
 #include <variant>
 
 #include "recomp.h"
@@ -74,6 +75,7 @@ void tooie::debug::apply_heap_check() {
 
 void tooie::debug::heap_check(uint8_t* rdram, const char* where) {
     static const bool off_for_run = env_off();
+    static const bool log_ok = std::getenv("TOOIE_HEAP_CHECK") != nullptr;
     static bool reported = false;
     static unsigned checks = 0;
     if (off_for_run || !option_on.load(std::memory_order_relaxed) || reported) {
@@ -87,7 +89,10 @@ void tooie::debug::heap_check(uint8_t* rdram, const char* where) {
         return;
     }
     uint32_t last = end - 0x20;
-    std::unordered_set<uint32_t> free_blocks;
+    // The free blocks, in address order (the walk goes up through the heap), kept between checks so a check
+    // makes no allocations.
+    static std::vector<uint32_t> free_blocks;
+    free_blocks.clear();
     uint32_t block = heap_start;
     unsigned n = 0;
     const char* problem = nullptr;
@@ -98,7 +103,7 @@ void tooie::debug::heap_check(uint8_t* rdram, const char* where) {
         if (next != end && word(rdram, next) != block) { problem = "next block's prev link does not point back"; bad = next; before = block; break; }
         uint32_t s = state(rdram, block);
         if (s == 3) { problem = "block state is 3"; bad = block; break; }
-        if (s == 0) free_blocks.insert(block);
+        if (s == 0) free_blocks.push_back(block);
         before = block;
         block = next;
         if (++n > 2000000) { problem = "block list does not end"; break; }
@@ -108,7 +113,7 @@ void tooie::debug::heap_check(uint8_t* rdram, const char* where) {
         uint32_t prev = heap_start;
         n = 0;
         while (f != last) {
-            if (!free_blocks.count(f)) { problem = "free list entry is not a free block"; bad = f; before = prev; break; }
+            if (!std::binary_search(free_blocks.begin(), free_blocks.end(), f)) { problem = "free list entry is not a free block"; bad = f; before = prev; break; }
             if (word(rdram, f + 0x10) != prev) { problem = "free list prev link does not point back"; bad = f; before = prev; break; }
             prev = f;
             f = word(rdram, f + 0x14);
@@ -123,7 +128,7 @@ void tooie::debug::heap_check(uint8_t* rdram, const char* where) {
         dump(rdram, "bad", bad);
         if (before) dump(rdram, "before", before);
         std::fflush(stderr);
-    } else if (std::getenv("TOOIE_HEAP_CHECK") != nullptr && (checks % 600) == 0) {
+    } else if (log_ok && (checks % 600) == 0) {
         fprintf(stderr, "[heap] ok after %u checks (%zu free blocks)\n", checks, free_blocks.size());
         std::fflush(stderr);
     }
