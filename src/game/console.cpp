@@ -84,6 +84,7 @@
 #include <vector>
 
 extern SDL_Window* window; // src/main/main.cpp
+extern "C" void func_800D035C(uint8_t* rdram, recomp_context* ctx); // RecompiledFuncs: a collectible's count (1 Jiggies)
 
 namespace {
 using recomp::config::Config;
@@ -1748,6 +1749,13 @@ void load_tick(uint8_t* rdram) {
         int open = (int8_t)read_ram(rdram, kSaveSlot, 1);
         std::string then = g_drive.then;
         drive_end();
+        // After a Jiggywiggy challenge (a replay) the byte reads -1 with the file still being played, so -1
+        // with a save loaded counts as the file asked for.
+        if (open < 0) {
+            drive_say(format("a save file is loaded (which one isn't known after a challenge), map 0x%X (%s)", map, map_name(map)), false);
+            if (!then.empty()) enqueue_line(then, 1, true);
+            return;
+        }
         if (open != g_drive.slot) {
             drive_say(format("file %d is loaded, not file %d (map 0x%X); go back to the file select first", open + 1, g_drive.slot + 1, map), true);
             return;
@@ -2792,6 +2800,81 @@ void cmd_invincible(Ctx& c) {
     print(std::string("invincible ") + (on ? "on" : "off") + " (flag 0x53C; saving keeps it)");
 }
 
+// Jiggies and Jiggywiggy's challenges. Whether the next challenge can start is sujiggy_entrypoint_17: the challenges
+// done (flags 0x35C, 4 bits, sujiggy_entrypoint_0) against func_800D035C(1), the Jiggies collected, which the game
+// counts from the collected flags each time (nothing is spent), and the challenge's price.
+constexpr int32_t kJiggyFirst = 0x250;        // FLAG_250 .. FLAG_2A9, the 90 Jiggies (src/gameplay/totals_rules.inc)
+constexpr int32_t kJiggyLast = 0x2A9;
+// Left out when Jiggies are added: the bosses' (in case a fight reads its own), and King Jingaling's from the intro.
+constexpr int32_t kJiggyKept[] = { 0x250, 0x25A, 0x266, 0x274, 0x27B, 0x283, 0x28C, 0x296, 0x2A9 };
+constexpr int32_t kChallengeFlag = 0x35C;     // Jiggywiggy's challenges done, 11 all (src/gameplay/progress_cheats.cpp)
+constexpr int kChallengeBits = 4;
+constexpr int kChallengeCount = 11;           // sujiggy_entrypoint_1
+// Jiggies the first nine challenges ask for, one per world (src/gameplay/totals_checklist.cpp's world_cost).
+constexpr int kChallengeCost[9] = { 1, 4, 8, 14, 20, 28, 36, 45, 55 };
+
+// func_800D035C(1): the Jiggies the game counts.
+int32_t game_jiggies(uint8_t* rdram, recomp_context* ctx) {
+    recomp_context saved = *ctx;
+    ctx->r4 = 1;
+    func_800D035C(rdram, ctx);
+    int32_t n = (int32_t)ctx->r2;
+    *ctx = saved;
+    return n;
+}
+
+// The challenges done, lowest bit first as func_800DA564 reads a number kept in flags.
+int challenges_done(uint8_t* rdram, recomp_context* ctx) {
+    int n = 0;
+    for (int b = 0; b < kChallengeBits; b++) {
+        if (tooie::progress_cheats::get_flag(rdram, ctx, kChallengeFlag + b)) n |= 1 << b;
+    }
+    return n;
+}
+
+std::string challenge_text(uint8_t* rdram, recomp_context* ctx) {
+    int done = challenges_done(rdram, ctx);
+    if (done >= kChallengeCount) return format("Jiggywiggy's challenges done: %d (all)", done);
+    if (done < 9) return format("Jiggywiggy's challenges done: %d, the next asks for %d Jiggies", done, kChallengeCost[done]);
+    return format("Jiggywiggy's challenges done: %d", done);
+}
+
+// jiggies [n]: the Jiggies the game counts, or at least n of them by setting Jiggy flags.
+void cmd_jiggies(Ctx& c) {
+    if (c.ctx == nullptr) { error("no game update is running"); return; }
+    if (!tooie::debug::can_warp()) { error("a save file has to be loaded first"); return; }
+    int have = game_jiggies(c.rdram, c.ctx);
+    if (c.w.size() < 2) {
+        print(format("%d Jiggies\n", have) + challenge_text(c.rdram, c.ctx));
+        return;
+    }
+    int want;
+    if (!parse_int(c.w[1], &want) || want < 0 || want > 90) { error("jiggies [0 to 90]"); return; }
+    if (have >= want) { print(format("%d Jiggies already (nothing taken away)", have)); return; }
+    int added = 0;
+    for (int32_t f = kJiggyFirst; f <= kJiggyLast && have + added < want; f++) {
+        if (std::find(std::begin(kJiggyKept), std::end(kJiggyKept), f) != std::end(kJiggyKept)) continue;
+        if (tooie::progress_cheats::get_flag(c.rdram, c.ctx, f)) continue;
+        tooie::progress_cheats::set_flag(c.rdram, c.ctx, f, true);
+        added++;
+    }
+    int now = game_jiggies(c.rdram, c.ctx);
+    if (now < want) { error(format("set %d Jiggy flags, but the game counts %d, not %d", added, now, want)); return; }
+    print(format("%d -> %d Jiggies (%d flags set; saving keeps them)\n", have, now, added) + challenge_text(c.rdram, c.ctx));
+}
+
+// challenge [n]: Jiggywiggy's challenges done, so challenge n + 1 is the next.
+void cmd_challenge(Ctx& c) {
+    if (c.ctx == nullptr) { error("no game update is running"); return; }
+    if (!tooie::debug::can_warp()) { error("a save file has to be loaded first"); return; }
+    if (c.w.size() < 2) { print(challenge_text(c.rdram, c.ctx)); return; }
+    int n;
+    if (!parse_int(c.w[1], &n) || n < 0 || n > kChallengeCount) { error("challenge [challenges done, 0 to 11]"); return; }
+    int before = challenges_done(c.rdram, c.ctx);
+    for (int b = 0; b < kChallengeBits; b++) tooie::progress_cheats::set_flag(c.rdram, c.ctx, kChallengeFlag + b, ((n >> b) & 1) != 0);
+    print(format("challenges done %d -> %d (saving keeps it)\n", before, n) + challenge_text(c.rdram, c.ctx));
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Quick testing: marks, scenarios, input recording, the split timer, autoexec, history, grep, input.
 
@@ -3577,6 +3660,8 @@ const std::vector<Command>& commands() {
         { "item", { "give", "items" }, true, "item [list] | item <name|n> [value|+n|-n]", "read or set an item counter (eggs, feathers, Glowbos...) through the game's own functions", cmd_item },
         { "sfx", {}, true, "sfx <hex id> [volume]", "play a sound effect on Banjo (the game's func_8009DE38)", cmd_sfx },
         { "invincible", { "god" }, true, "invincible [on|off]", "the game's own no-damage flag (0x53C; saving keeps it)", cmd_invincible },
+        { "jiggies", { "jiggy" }, true, "jiggies [n]", "the Jiggies the game counts for Jiggywiggy, or set Jiggy flags until it counts at least n (saving keeps them)", cmd_jiggies },
+        { "challenge", {}, true, "challenge [n]", "Jiggywiggy's challenges done (0 to 11), so challenge n + 1 is next (flags 0x35C; saving keeps it)", cmd_challenge },
         { "version", {}, false, "version", "the build's version", cmd_version },
         { "vram", {}, false, "vram", "the VRAM figures the VRAM log keeps", cmd_vram },
         { "gfx", { "gfxbudget" }, true, "gfx", "how full the last display list was", cmd_gfx },

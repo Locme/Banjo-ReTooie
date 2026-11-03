@@ -40,6 +40,11 @@ namespace RT64 {
     // the pieces and points of a framebuffer's draws, then calls this. TOOIE_SEAM_LOG=1 prints the joins now and then.
     void FindTextureSeams(const std::vector<SeamPiece> &seamPieces, const std::vector<SeamPoint> &seamPoints, size_t instanceCount,
         std::vector<interop::uint4> &instanceSeamVector);
+
+    // Banjo-Tooie: a draw looked at for RASTER_SNAP_VERTICES (FramebufferRenderer::addFramebuffer): whether its texture comes from a
+    // framebuffer (a tile copy, or a load RT64 syncs from one), whether it wraps with a period of exactly its tile, and whether it
+    // was snapped. Counted for TOOIE_SEAM_LOG, printed with FindTextureSeams' line.
+    void NoteSnapDraw(bool fromFramebuffer, bool wrapsOnePeriod, bool snapped);
 }
 
 #endif

@@ -988,10 +988,21 @@ text = "tooie_audio_list_queued(rdram, ctx);"
 # with it): attract demos, the game select screen and the intro story cutscenes.
 # They run a fixed number of frames, so while one plays the game keeps its own
 # frame pacing, or at 60 FPS it would run twice as fast.
+# A Jiggywiggy challenge above 30 FPS is sub-stepped instead (src/game/game_frame_rate.cpp):
+# tooie_demo_frame keeps the entry and returns 1, and the frame keeps the chosen
+# rate's step (func_800D8FA0 is skipped).
 [[patches.hook]]
 func = "func_8001608C"
 before_vram = 0x80016110
-text = "tooie_demo_frame(rdram, ctx);"
+text = "if (tooie_demo_frame(rdram, ctx)) goto L_80016118;"
+
+# Before glrecord_entrypoint_0 takes the next recorded entry: a sub-stepped
+# challenge frame that repeats the current entry skips the call, the step and the
+# end check.
+[[patches.hook]]
+func = "func_8001608C"
+before_vram = 0x800160F0
+text = "if (tooie_replay_substep(rdram, ctx)) goto L_80016118;"
 
 # --- HUD at the screen edges (src/game/hud_edges.cpp) -----------------------
 # scinfobar_entrypoint_24 draws one HUD element. Mark where its display list

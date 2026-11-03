@@ -1551,16 +1551,17 @@ diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
 index 2970e71..39c2fec 100644
 --- a/src/hle/rt64_state.cpp
 +++ b/src/hle/rt64_state.cpp
-@@ -4,6 +4,8 @@
+@@ -4,6 +4,9 @@
  
  #include "rt64_state.h"
  
 +#include "render/rt64_scene_effects.h"
++#include "hle/rt64_fb_log.h"
 +
  #include <cassert>
  #include <cinttypes>
  
-@@ -364,6 +366,7 @@ namespace RT64 {
+@@ -364,6 +367,7 @@ namespace RT64 {
  
                      if (gpuCopiesEnabled && checkResult.valid()) {
                          dstCallTile.tileCopyUsed = true;
@@ -1568,7 +1569,7 @@ index 2970e71..39c2fec 100644
                          dstCallTile.tmemHashOrID = checkResult.tileId;
                          dstCallTile.tileCopyWidth = checkResult.tileWidth;
                          dstCallTile.tileCopyHeight = checkResult.tileHeight;
-@@ -380,6 +383,7 @@ namespace RT64 {
+@@ -380,6 +384,7 @@ namespace RT64 {
                      }
                      else {
                          dstCallTile.tileCopyUsed = false;
@@ -1576,7 +1577,7 @@ index 2970e71..39c2fec 100644
                          dstCallTile.tmemHashOrID = rdp->tileReplacementHashes[tileIndex];
  
                          if (checkResult.syncRequired) {
-@@ -455,6 +459,16 @@ namespace RT64 {
+@@ -455,6 +460,16 @@ namespace RT64 {
              drawCall.extendedFlags = rdp->extended.drawExtendedFlags;
          }
  
@@ -1593,7 +1594,23 @@ index 2970e71..39c2fec 100644
          drawStatus.clearChanges();
      }
  
-@@ -818,9 +832,9 @@ namespace RT64 {
+@@ -790,12 +805,15 @@ namespace RT64 {
+     }
+ 
+     void State::fullSync() {
++        // Banjo-Tooie: TOOIE_FB_LOG (rt64-ext src/hle/rt64_fb_log.h): this full sync's time, and once a second the totals.
++        FbLogFullSync fbLogScope(framebufferManager.framebuffers.size(), framebufferManager.tileCopies.size(), ext.textureCache->textureMap.hashMap.size());
+         flush();
+         submitFramebufferPair(FramebufferPair::FlushReason::ProcessDisplayListsEnd);
+ 
+         // Append any framebuffer operations to the end of the last framebuffer pair.
+         int workloadCursor = ext.workloadQueue->writeCursor;
+         Workload &workload = ext.workloadQueue->workloads[workloadCursor];
++        FbLogPairs(workload.fbPairCount);
+         if (hasFramebufferOperationsPending()) {
+             // If no framebuffer pair is present to do this, we make a placeholder one with the current images.
+             if (workload.fbPairCount == 0) {
+@@ -818,9 +836,9 @@ namespace RT64 {
  
          // Validate all tile copies to be used during the rendering.
          const bool extendedRenderToRAMSet = (extended.renderToRAM < UINT8_MAX);
@@ -1605,7 +1622,7 @@ index 2970e71..39c2fec 100644
          const size_t callTileCount = workload.drawData.callTiles.size();
          for (size_t t = 0; t < callTileCount; t++) {
              DrawCallTile &callTile = workload.drawData.callTiles[t];
-@@ -914,6 +928,7 @@ namespace RT64 {
+@@ -914,6 +932,7 @@ namespace RT64 {
                  const bool insufficientHeight = (maxTexcoord.y > callTile.tileCopyHeight);
                  if (insufficientWidth || insufficientHeight) {
                      callTile.tileCopyUsed = false;
@@ -1613,7 +1630,7 @@ index 2970e71..39c2fec 100644
                  }
                  else {
                      callTile.rawTMEM = false;
-@@ -976,6 +991,7 @@ namespace RT64 {
+@@ -976,6 +995,7 @@ namespace RT64 {
                      shaderDesc.colorCombiner = callDesc.colorCombiner;
                      shaderDesc.otherMode = callDesc.otherMode;
                      shaderDesc.flags = {};
@@ -1621,7 +1638,7 @@ index 2970e71..39c2fec 100644
  
                      // Check if the blender uses a standard fog cycle. We override it and indicate it on
                      // the material for the RT path to use its own fog handling.
-@@ -1113,6 +1129,8 @@ namespace RT64 {
+@@ -1113,6 +1133,8 @@ namespace RT64 {
                      renderParams.omL = shaderDesc.otherMode.L;
                      renderParams.omH = shaderDesc.otherMode.H;
                      renderParams.flags = shaderDesc.flags;
@@ -1630,7 +1647,21 @@ index 2970e71..39c2fec 100644
  
                      workload.drawData.rdpParams.emplace_back(gameCall.callDesc.rdpParams);
                      workload.drawData.renderParams.emplace_back(renderParams);
-@@ -1822,6 +1840,9 @@ namespace RT64 {
+@@ -1471,10 +1493,13 @@ namespace RT64 {
+                 ext.framebufferGraphicsWorker->commandList->end();
++                // Banjo-Tooie: TOOIE_FB_LOG: a GPU wait on the game's RDP thread (with the read-backs after it).
++                FbLogGpuWait fbLogWait;
+                 framebufferRenderer->waitForUploaders();
+                 ext.framebufferGraphicsWorker->execute();
+                 ext.framebufferGraphicsWorker->wait();
+ 
+                 pairCursor = framebufferPairCursor;
+                 while (pairCursor < maxFramebufferPair) {
+                     if (getFramebufferPairs(pairCursor)) {
+                         colorFb->copyNativeToRAM(&RDRAM[colorFb->addressStart], colorWriteWidth, colorRowStart, std::min(colorRowEnd, colorFb->height));
++                        FbLogReadback(uint64_t(colorFb->imageRowBytes(colorWriteWidth)) * uint64_t(std::min(colorRowEnd, colorFb->height) - std::min(colorRowStart, std::min(colorRowEnd, colorFb->height))));
+ 
+@@ -1822,6 +1847,9 @@ namespace RT64 {
          // Reset the next workload.
          workloadCursor = ext.workloadQueue->writeCursor;
          Workload &nextWorkload = ext.workloadQueue->workloads[workloadCursor];
@@ -1640,7 +1671,7 @@ index 2970e71..39c2fec 100644
          nextWorkload.begin(workloadCounter++);
  
          // Indicate on the framebuffer manager that all tile copies are free to be used again.
-@@ -2666,6 +2687,7 @@ namespace RT64 {
+@@ -2666,6 +2694,7 @@ namespace RT64 {
          present.presentId = ++presentId;
          present.workloadId = workloadId;
          present.paused = paused;
@@ -3893,7 +3924,7 @@ index 9fae0d4..fc10a85 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +3143,1329 @@ namespace RT64 {
+@@ -1747,24 +3143,1366 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4486,7 +4517,7 @@ index 9fae0d4..fc10a85 100644
 +                    const uint32_t start = call.meshDesc.faceIndicesStart;
 +                    const uint32_t indexCount = call.callDesc.triangleCount * 3;
 +                    if ((sm.textFilt() != G_TF_POINT) && (sm.cycleType() != G_CYC_COPY) && (sm.cycleType() != G_CYC_FILL) &&
-+                        ((st.cms & G_TX_CLAMP) || (st.cmt & G_TX_CLAMP)) && ((start + indexCount) <= drawData.faceIndices.size()))
++                        ((st.cms & G_TX_CLAMP) || (st.cmt & G_TX_CLAMP) || (st.masks > 0) || (st.maskt > 0)) && ((start + indexCount) <= drawData.faceIndices.size()))
 +                    {
 +                        auto shiftScale = [](uint32_t shift) {
 +                            return (shift == 0) ? 1.0f : ((shift <= 10) ? (1.0f / float(1u << shift)) : float(1u << (16 - shift)));
@@ -4494,7 +4525,7 @@ index 9fae0d4..fc10a85 100644
 +                        const float ss = shiftScale(st.shifts), ts = shiftScale(st.shiftt);
 +                        const uint32_t width = uint32_t((st.lrs >> 2) - (st.uls >> 2)) + 1;
 +                        const uint32_t height = uint32_t((st.lrt >> 2) - (st.ult >> 2)) + 1;
-+                        bool fits = (width > 1) && (height > 1) && (width <= 256) && (height <= 256);
++                        bool fits = (width > 1) && (height > 1) && (width <= 256) && (height <= 256) && ((st.cms & G_TX_CLAMP) || (st.cmt & G_TX_CLAMP) || (!(st.cms & G_TX_MIRROR) && (st.masks > 0) && ((1u << st.masks) == width)) || (!(st.cmt & G_TX_MIRROR) && (st.maskt > 0) && ((1u << st.maskt) == height)));
 +                        float uMin = 1e9f, uMax = -1e9f, tMin = 1e9f, tMax = -1e9f;
 +                        for (uint32_t k = 0; fits && (k < indexCount); k++) {
 +                            const uint32_t v = drawData.faceIndices[start + k];
@@ -4604,8 +4635,24 @@ index 9fae0d4..fc10a85 100644
 +                    const bool seeThrough = sceneEffectsEnabled && (proj.type == Projection::Type::Perspective) && worldOpen && fbPair.depthWrite &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && tm.zCmp() && tm.zUpd() && (tm.zMode() != ZMODE_DEC) &&
 +                        (tm.cycleType() != G_CYC_COPY) && (tm.cycleType() != G_CYC_FILL) && interop::Blender::usesAlphaBlend(tm) && SceneEffectsAnyOn();
++                    // A piece of a picture the game drew into a framebuffer: its texture from one (a tile copy, or a load RT64 syncs from a
++                    // framebuffer: syncRequired), wrapping along s and t with a period of exactly its tile (Jiggywiggy's puzzle board, each
++                    // piece a 32 x 32 block of the live picture). Its corners are snapped as the N64 snaps them (RASTER_SNAP_VERTICES, RasterVS.hlsl): each piece is
++                    // placed through its own matrix, and at high resolution the float corners left a crack between pieces.
++                    uint32_t snapVertices = 0;
++                    if ((instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.tileCount > 0)) {
++                        const DrawCallTile &snapTile = drawData.callTiles[call.callDesc.tileIndex];
++                        const auto &lt = snapTile.loadTile;
++                        const uint32_t snapWidth = uint32_t((lt.lrs >> 2) - (lt.uls >> 2)) + 1;
++                        const uint32_t snapHeight = uint32_t((lt.lrt >> 2) - (lt.ult >> 2)) + 1;
++                        const bool wrapS = !(lt.cms & (G_TX_CLAMP | G_TX_MIRROR)) && (lt.masks > 0) && ((1u << lt.masks) == snapWidth);
++                        const bool wrapT = !(lt.cmt & (G_TX_CLAMP | G_TX_MIRROR)) && (lt.maskt > 0) && ((1u << lt.maskt) == snapHeight);
++                        const bool fromFramebuffer = snapTile.tileCopyUsed || snapTile.syncRequired;
++                        snapVertices = (fromFramebuffer && wrapS && wrapT) ? RASTER_SNAP_VERTICES : 0u;
++                        NoteSnapDraw(fromFramebuffer, wrapS && wrapT, snapVertices != 0u);
++                    }
 +                    instanceSeeThroughVector.resize(instanceIndex, 0);
-+                    instanceSeeThroughVector.push_back((seeThrough ? RASTER_SEE_THROUGH_DEPTH : 0) | (((instanceIndex < instanceCharVector.size()) && instanceCharVector[instanceIndex]) ? RASTER_CHAR_SURFACE : 0));
++                    instanceSeeThroughVector.push_back((seeThrough ? RASTER_SEE_THROUGH_DEPTH : 0) | (((instanceIndex < instanceCharVector.size()) && instanceCharVector[instanceIndex]) ? RASTER_CHAR_SURFACE : 0) | snapVertices);
 +                }
 +                // Banjo-Tooie: level ground whose parallax texture has a floor-like shape is drawn as a tessellated surface,
 +                // its darkest parts pushed down (GroundTess.hlsl), in place of its own draw. Not the sand or the snow
@@ -4686,9 +4733,30 @@ index 9fae0d4..fc10a85 100644
 +        // Banjo-Tooie: some frames draw the sky with its own projection, then a small draw to another buffer,
 +        // then the world, on the same picture (the Spiral Mountain pool). The effects go once, after the last
 +        // part, with the water of every part in their mask; they ran after each part, so the sky got them twice.
++        // Not past a part that cleared only some of the depth (a fill of a rectangle of the depth buffer): Jiggywiggy's
++        // puzzle clears a square of it under the hand so the hand draws over the board, and the effects carried past it
++        // read that square as sky (a hazy square round the hand). They stay with the part before, and this one has none.
++        bool depthCut = false;
++        for (uint32_t k = p.fbPairIndex; k > 0; k--) {
++            const FramebufferPair &before = p.curWorkload->fbPairs[k - 1];
++            if (before.colorImage.address == fbPair.colorImage.address) {
++                break;
++            }
++            if ((fbPair.depthImage.address != 0) && (before.colorImage.address == fbPair.depthImage.address) && before.fillRectOnly &&
++                !before.drawColorRect.isNull() && (before.drawColorRect.width(false, false) < (int32_t(before.colorImage.width) - 2)))
++            {
++                depthCut = true;
++            }
++        }
 +        if (worldEnd > 0) {
 +            for (uint32_t i = 0; (i + 1) < framebufferCount; i++) {
 +                RenderTargetDrawCall &earlier = framebufferVector[i].renderTargetDrawCall;
++                if ((earlier.sceneEffectsAfter > 0) && (earlier.sceneEffectsDrawData == targetDrawCall.sceneEffectsDrawData) &&
++                    (earlier.fbStorage->colorTarget == targetDrawCall.fbStorage->colorTarget) && depthCut)
++                {
++                    targetDrawCall.sceneEffectsAfter = -1;
++                    continue;
++                }
 +                if ((earlier.sceneEffectsAfter > 0) && (earlier.sceneEffectsDrawData == targetDrawCall.sceneEffectsDrawData) &&
 +                    (earlier.fbStorage->colorTarget == targetDrawCall.fbStorage->colorTarget))
 +                {
@@ -7862,7 +7930,7 @@ index e7895c3..41fe5ba 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +182,26 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -113,6 +182,46 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -7885,6 +7953,26 @@ index e7895c3..41fe5ba 100644
 +        const float3 parallax = ParallaxOffset(otherMode, rp.flags, vertexPosition, vertexUV, ddxVertexUV, ddyVertexUV, rdpTile, GPUTiles[globalTileIndex], range, gConstants.nightLight);
 +        vertexUV += parallax.xy;
 +        parallaxLight = parallax.z;
++    }
++    // Banjo-Tooie: a piece of a picture drawn into a framebuffer (RASTER_SNAP_VERTICES, Jiggywiggy's puzzle board): its texture
++    // coordinates taken at the centre of the game pixel the screen pixel lies in, as the N64's rasterizer takes them. The
++    // high-resolution pixels along a piece's edge otherwise land just past its tile and wrap to the block's far row: a thin line
++    // straight across the picture. Where the game pixel's centre is in another block of the tile than this pixel (that pixel
++    // belongs to the neighbouring piece on the N64), the coordinate in the tile's own block (0 to its period) is kept, so the
++    // tabs, which reach into the next block, keep theirs.
++    if ((gConstants.seeThrough & RASTER_SNAP_VERTICES) != 0) {
++        float2 screenPixel = vertexPosition.xy;
++        screenPixel.x += FbParams.horizontalMisalignment;
++        const float2 offset = (floor(screenPixel / FbParams.resolutionScale) + 0.5f) * FbParams.resolutionScale - screenPixel;
++        const float2 centreUV = vertexUV + ddxVertexUV * offset.x + ddyVertexUV * offset.y;
++        const RDPTile snapTile = RDPTiles[instanceRenderIndices[gConstants.renderIndex].rdpTileIndex];
++        const float2 shift = float2(snapTile.shifts, snapTile.shiftt);
++        const float2 origin = float2(snapTile.uls, snapTile.ult) / 4.0f;
++        const float2 period = max(float2(snapTile.masks, snapTile.maskt), 1.0f);
++        const float2 ownBlock = floor((vertexUV * shift - origin) / period);
++        const float2 centreBlock = floor((centreUV * shift - origin) / period);
++        vertexUV.x = ((centreBlock.x == ownBlock.x) || (ownBlock.x != 0.0f)) ? centreUV.x : vertexUV.x;
++        vertexUV.y = ((centreBlock.y == ownBlock.y) || (ownBlock.y != 0.0f)) ? centreUV.y : vertexUV.y;
 +    }
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
@@ -8229,7 +8317,7 @@ index 74b1fa0..1177116 100644
      // Apply screen scale and offset.
      ndcPos.xy = (ndcPos.xy * gConstants.screenScale) + gConstants.screenOffset * ndcPos.w;
      
-@@ -33,6 +105,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+@@ -33,6 +105,22 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
      }
  
@@ -8238,6 +8326,15 @@ index 74b1fa0..1177116 100644
 +    // Shiny surfaces (waterMask 5) and characters (6) the same way.
 +    if ((gConstants.waterMask == 4) || (gConstants.waterMask == 5) || (gConstants.waterMask == 6)) {
 +        ndcPos.z -= 1e-6f * ndcPos.w;
++    }
++
++    // Banjo-Tooie: a piece of a picture the game drew into a framebuffer (RASTER_SNAP_VERTICES: Jiggywiggy's puzzle board): its
++    // corners on the screen snapped to a quarter of a game pixel, as the N64's rasterizer takes them, so neighbouring pieces placed
++    // through different matrices share their edges exactly instead of leaving a dotted crack between them at high resolution.
++    if (((gConstants.seeThrough & RASTER_SNAP_VERTICES) != 0) && (ndcPos.w > 0.0f)) {
++        const float2 grid = FbParams.resolution * 2.0f;
++        const float2 snapped = round((ndcPos.xy / ndcPos.w) * grid) / grid;
++        ndcPos.xy = snapped * ndcPos.w;
 +    }
 +
      oPosition = ndcPos;
@@ -8331,12 +8428,12 @@ index 1ceb2ce..e1ba872 100644
 +    // steps to the next piece: a line at high resolutions, where the N64's own is a fraction of a pixel. Past the edge the
 +    // filter takes the texels of the piece drawn beside it (gSeamTiles), so the two blend as one picture. Edges with no
 +    // piece beside them stay as they are. Only on textures without mipmaps (sampleTexture).
-+    if (seams && filtering && (mipLevel == 0) && (FrParams.textureSeams.x > 0.5f) && ((rdpTile.cms | rdpTile.cmt) & G_TX_CLAMP)) {
++    if (seams && filtering && (mipLevel == 0) && (FrParams.textureSeams.x > 0.5f) && ((((rdpTile.cms | rdpTile.cmt) & G_TX_CLAMP) != 0) || (rdpTile.masks > 0) || (rdpTile.maskt > 0))) {
 +        const int2 edge = seamEdge(rdpTile, tcScale);
 +        // (Loops, not unrolled: the texel fetch decodes TMEM for palette textures, which is a lot of code to repeat.)
 +        [loop]
 +        for (int axis = 0; axis < 2; axis++) {
-+            const bool clamped = (((axis == 0) ? rdpTile.cms : rdpTile.cmt) & G_TX_CLAMP) != 0;
++            const bool clamped = ((((axis == 0) ? rdpTile.cms : rdpTile.cmt) & G_TX_CLAMP) != 0) || (((((axis == 0) ? rdpTile.cms : rdpTile.cmt) & G_TX_MIRROR) == 0) && (int(round(((axis == 0) ? rdpTile.masks : rdpTile.maskt) * tcScale[axis])) == edge[axis] + 1));
 +            const int base = texelBaseInt[axis];
 +            const bool high = clamped && (edge[axis] > 0) && (base == edge[axis]);
 +            const bool low = clamped && (edge[axis] > 0) && (base == -1);
@@ -8727,7 +8824,7 @@ diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
 index 0a5c332..828fa2d 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,95 @@
+@@ -9,11 +9,99 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -8791,6 +8888,10 @@ index 0a5c332..828fa2d 100644
 +    // snow, dirt: CharSurface.hlsli) from its fur anchor's w, the vertex mark with how far up the surface faces in its
 +    // fraction.
 +#define RASTER_CHAR_SURFACE 0x8u
++    // Banjo-Tooie: also in RasterParams.seeThrough: a piece of a picture the game drew into a framebuffer (its texture a copy of one,
++    // wrapping with a period of exactly its tile: Jiggywiggy's puzzle board), whose screen corners RasterVS snaps to a quarter of a
++    // game pixel as the N64 does, so pieces placed through different matrices meet without cracks between them.
++#define RASTER_SNAP_VERTICES 0x10u
 +
      struct RasterParams {
          uint renderIndex;

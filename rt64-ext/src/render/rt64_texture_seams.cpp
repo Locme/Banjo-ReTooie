@@ -7,6 +7,7 @@
 #include "rt64_texture_seams.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -15,9 +16,38 @@
 #include "shared/rt64_raster_params.h"
 
 namespace RT64 {
+    namespace {
+        // NoteSnapDraw's counts since the last TOOIE_SEAM_LOG line (draws, framebuffer textures, wrapping one period, snapped).
+        std::atomic<uint32_t> snapDraws{ 0 };
+        std::atomic<uint32_t> snapFromFramebuffer{ 0 };
+        std::atomic<uint32_t> snapWrapping{ 0 };
+        std::atomic<uint32_t> snapSnapped{ 0 };
+    }
+
+    void NoteSnapDraw(bool fromFramebuffer, bool wrapsOnePeriod, bool snapped) {
+        static const bool seamLog = (getenv("TOOIE_SEAM_LOG") != nullptr);
+        if (!seamLog) {
+            return;
+        }
+        snapDraws++;
+        snapFromFramebuffer += fromFramebuffer ? 1u : 0u;
+        snapWrapping += wrapsOnePeriod ? 1u : 0u;
+        snapSnapped += snapped ? 1u : 0u;
+    }
+
     void FindTextureSeams(const std::vector<SeamPiece> &seamPieces, const std::vector<SeamPoint> &seamPoints, size_t instanceCount,
         std::vector<interop::uint4> &instanceSeamVector)
     {
+        // TOOIE_SEAM_LOG: the vertex snapping's counts (NoteSnapDraw), every 120 framebuffers: 0 snapped outside Jiggywiggy's puzzle.
+        {
+            static const bool snapLog = (getenv("TOOIE_SEAM_LOG") != nullptr);
+            static uint32_t snapLogFramebuffers = 0;
+            if (snapLog && ((++snapLogFramebuffers % 120) == 0)) {
+                fprintf(stdout, "[seam] %u draws: %u sample a framebuffer, %u wrap with a period of exactly their tile, %u snapped to the N64's quarter-pixel grid and sampled at the game pixel's centre\n",
+                    snapDraws.exchange(0), snapFromFramebuffer.exchange(0), snapWrapping.exchange(0), snapSnapped.exchange(0));
+                fflush(stdout);
+            }
+        }
         // Banjo-Tooie: Blend texture seams: a piece's neighbour along an edge has at least two points of its opposite edge in
         // the same places as this one's (on the screen and at the same depth), at the same texels along the edge.
         if (seamPieces.size() > 1) {

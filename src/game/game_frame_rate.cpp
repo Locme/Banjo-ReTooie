@@ -179,6 +179,11 @@ namespace {
         return bool_option_on(tooie::game_frame_rate::force_demo_interpolation_option, "TOOIE_FORCE_DEMO_INTERP");
     }
 
+    // The game's replay mode (0x80127760, the byte func_800A9CD0 returns): 1 while a Jiggywiggy challenge plays,
+    // 2 for the attract demos (func_800A9998). See tooie_replay_substep below.
+    constexpr gpr replay_mode_addr = (int32_t)0x80127760;
+    constexpr uint8_t replay_jiggy_challenge = 1;
+
     void update_scene_forced(uint8_t* rdram) {
         constexpr int opening_cutscene_map = 0x18B;
         int map = MEM_HU(0, (gpr)(int32_t)0x80132DC2);
@@ -734,19 +739,188 @@ extern "C" void tooie_vi_hang_limit(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
+// Jiggywiggy challenges above 30 FPS (L, 2026-11-03: "run uncapped at uncapped frames").
+//
+// A challenge's board shows a live render of a recorded run through a level. While the replay mode byte
+// (replay_mode_addr) is 1, func_8001608C (the controller read, once per game frame after func_800A7D30 has set
+// the frame's time step) takes the next entry of the recording with glrecord_entrypoint_0 (0x800160F0: 6 bytes
+// per entry, stick x and y and buttons into controller 1 at 0x80079B40 and the entry's step in VIs at
+// 0x50($sp), 2 = 1/30 s) and steps the whole game by it with func_800D8FA0 (0x80016110). One entry per game
+// frame held the challenge at 30 updates a second whatever the Game Frame Rate.
+//
+// Above 30 FPS the recording is sub-stepped instead: each game frame keeps the time step the chosen rate gives it
+// (1/60 s, 1/120 s, the real time of the last frame for Uncapped), and an entry is taken only when the game time
+// since the last one has reached that entry's step; the frames in between get the same stick and buttons again.
+// So the recording plays at its recorded speed (30 entries a second), and so does everything with it. The
+// challenge's countdown counts real time (osGetCount in func_80802030_chjiggygamenew) either way. The game's
+// physics take more, smaller steps than when the run was recorded, so the run in the picture can drift a little
+// from the recording. Attract demos (mode 2), Original and 30 FPS keep the recorded pacing (tooie_demo_frame).
+// TOOIE_DEMO_LOG=1 prints, once a second, the entries taken and the game updates in that second.
+namespace {
+    constexpr gpr controller_addr = (int32_t)0x80079B40;   // controller 1, as func_8001608C's $s0
+    constexpr gpr record_state_addr = (int32_t)0x8012D5B0; // glrecord_entrypoint_0's state (0x80130000 - 0x2A50)
+
+    struct ReplaySubstep {
+        bool active = false;      // this call of func_8001608C sub-steps (set by tooie_replay_substep)
+        bool have_entry = false;
+        uint16_t buttons = 0;
+        int8_t stick_x = 0;
+        int8_t stick_y = 0;
+        double entry_seconds = 2.0 / 60.0;
+        double into_entry = 0.0;  // game time from the start of the current entry to the start of this frame
+        uint32_t frame = UINT32_MAX;   // the game frame (game_frames_stepped) last seen
+        // The recording being played (glrecord's state), to start fresh on a new one.
+        uint32_t record_buffer = 0;
+        int32_t record_index = 0;
+        int32_t record_count = -1;
+        // TOOIE_DEMO_LOG
+        uint32_t entries = 0;
+        uint32_t updates = 0;
+        uint32_t calls = 0;       // calls of func_8001608C while sub-stepping (1 per update expected)
+        std::chrono::steady_clock::time_point log_start = std::chrono::steady_clock::now();
+    };
+    ReplaySubstep substep;
+
+    bool substep_wanted(uint8_t* rdram) {
+        const Mode m = mode();
+        return m != Mode::Original && m != Mode::Fps30 && MEM_BU(0, replay_mode_addr) == replay_jiggy_challenge;
+    }
+
+    void substep_log(uint8_t* rdram) {
+        static const bool log_on = std::getenv("TOOIE_DEMO_LOG") != nullptr;
+        if (!log_on) {
+            return;
+        }
+        const auto now = std::chrono::steady_clock::now();
+        const double seconds = std::chrono::duration<double>(now - substep.log_start).count();
+        if (seconds < 1.0) {
+            return;
+        }
+        // The N64 clock (osGetCount, ultramodern's game clock) against real time: x1.00 unless the speed-up
+        // key or Fast Forward Cutscenes has sped the clock up (ultramodern::set_speed_multiplier).
+        static double clock_before = -1.0;
+        const double clock_now = game_seconds_now();
+        const double clock_rate = clock_before >= 0.0 ? (clock_now - clock_before) / seconds : 1.0;
+        clock_before = clock_now;
+        // The game heap's block count: the heap guard and DEV > Heap check walk the whole list on every
+        // allocation and every game update, so a heap that keeps growing slows each update down.
+        uint32_t heap_blocks = 0;
+        {
+            const uint32_t heap_start = (uint32_t)MEM_W(0, (gpr)(int32_t)0x8007E990);
+            const uint32_t heap_end = heap_start + (uint32_t)MEM_W(0, (gpr)(int32_t)0x8007BF00);
+            uint32_t block = heap_start;
+            while (heap_blocks < 200000 && block >= heap_start && block < heap_end && heap_start >= 0x80000000u && heap_end <= 0x81000000u) {
+                heap_blocks++;
+                const uint32_t next = (uint32_t)MEM_W(4, (gpr)(int32_t)block);
+                if (next <= block) {
+                    break;
+                }
+                block = next;
+            }
+        }
+        // glrecord's state: the entry the recording is at, of how many.
+        std::printf("[demo] challenge sub-stepped: %.1f entries/s (recorded pace 30), %.1f game updates/s, %.1f ms into the current entry, "
+            "N64 clock x%.2f (speed multiplier %u), %.2f controller reads per update, recording entry %d of %d, heap %u blocks, replay bytes %02X %02X %02X %02X %02X\n",
+            substep.entries / seconds, substep.updates / seconds, substep.into_entry * 1000.0, clock_rate,
+            (unsigned)ultramodern::get_speed_multiplier(), substep.updates > 0 ? (double)substep.calls / substep.updates : 0.0,
+            (int)MEM_W(0x8, record_state_addr), (int)MEM_W(0xC, record_state_addr),
+            heap_blocks, MEM_BU(0, replay_mode_addr), MEM_BU(1, replay_mode_addr), MEM_BU(2, replay_mode_addr),
+            MEM_BU(3, replay_mode_addr), MEM_BU(4, replay_mode_addr));
+        std::fflush(stdout);
+        substep.entries = 0;
+        substep.updates = 0;
+        substep.calls = 0;
+        substep.log_start = now;
+    }
+}
+
+// func_8001608C before it calls glrecord_entrypoint_0 (0x800160F0), only reached while a replay plays. Returns 1
+// when this frame repeats the current entry: the hook then skips the call, the step and the end check
+// (goto L_80016118). Returns 0 to let the game take the next entry.
+extern "C" int tooie_replay_substep(uint8_t* rdram, recomp_context* ctx) {
+    (void)ctx;
+    substep.active = substep_wanted(rdram);
+    if (!substep.active) {
+        substep.have_entry = false;
+        substep.into_entry = 0.0;
+        substep.frame = UINT32_MAX;
+        return 0;
+    }
+    substep.calls++;
+    // A new recording (another challenge, or one started again after the last was left by a warp) starts fresh:
+    // glrecord's state at 0x8012D5B0 is the buffer, +8 the next entry and +0xC the entry count.
+    const uint32_t record_buffer = (uint32_t)MEM_W(0x0, record_state_addr);
+    const int32_t record_index = (int32_t)MEM_W(0x8, record_state_addr);
+    const int32_t record_count = (int32_t)MEM_W(0xC, record_state_addr);
+    if (record_buffer != substep.record_buffer || record_count != substep.record_count || record_index < substep.record_index) {
+        substep.have_entry = false;
+        substep.into_entry = 0.0;
+        substep.frame = UINT32_MAX;
+        substep.record_buffer = record_buffer;
+        substep.record_count = record_count;
+    }
+    substep.record_index = record_index;
+    const uint32_t frame = game_frames_stepped.load();
+    const bool new_frame = frame != substep.frame;
+    bool repeat;
+    if (!substep.have_entry) {
+        repeat = false;
+        substep.into_entry = 0.0;
+    } else if (!new_frame) {
+        // func_8001608C again in the same game frame: the same input as its first call.
+        repeat = true;
+    } else if (substep.into_entry + 1e-6 < substep.entry_seconds) {
+        repeat = true;
+    } else {
+        // The next entry starts. A frame that came late (more than an entry behind) doesn't run the recording
+        // ahead several entries at once: the debt is capped at one entry.
+        repeat = false;
+        substep.into_entry = std::clamp(substep.into_entry - substep.entry_seconds, 0.0, substep.entry_seconds);
+    }
+    if (new_frame) {
+        substep.frame = frame;
+        substep.updates++;
+        // This frame's step, set by func_800A7D30 (and the paced modes' hooks) before func_8001608C runs.
+        const float delta = read_float(rdram, delta_time_addr);
+        substep.into_entry += (delta > 0.0f && delta < 0.5f) ? delta : 1.0 / 60.0;
+    }
+    if (repeat) {
+        MEM_H(0x0, controller_addr) = (int16_t)substep.buttons;
+        MEM_B(0x2, controller_addr) = substep.stick_x;
+        MEM_B(0x3, controller_addr) = substep.stick_y;
+        substep_log(rdram);
+        return 1;
+    }
+    return 0;
+}
+
 // func_8001608C, as the game replays a frame's recorded time step: attract
 // demos, the game select screen and the intro story cutscenes (seen headless).
 // These run a fixed number of frames, so the game keeps its own pacing while
 // one plays (at 60 FPS it would otherwise run twice as fast).
 // $a0 is loaded in the delay slot, so the step is still at 0x50($sp).
-extern "C" void tooie_demo_frame(uint8_t* rdram, recomp_context* ctx) {
-    demo_frames = 2;
-    demo_step = (int32_t)MEM_W(0x50, ctx->r29);
+// A Jiggywiggy challenge sub-stepped above 30 FPS (tooie_replay_substep) keeps the entry taken for the frames
+// after it and returns 1: the hook then skips func_800D8FA0, so the frame keeps the chosen rate's step.
+extern "C" int tooie_demo_frame(uint8_t* rdram, recomp_context* ctx) {
     static const bool log_steps = std::getenv("TOOIE_DEMO_LOG") != nullptr;
+    const int32_t step = (int32_t)MEM_W(0x50, ctx->r29);
+    if (substep.active) {
+        substep.have_entry = true;
+        substep.buttons = (uint16_t)MEM_HU(0x0, controller_addr);
+        substep.stick_x = (int8_t)MEM_B(0x2, controller_addr);
+        substep.stick_y = (int8_t)MEM_B(0x3, controller_addr);
+        substep.entry_seconds = std::clamp(step, (int32_t)1, (int32_t)15) / 60.0;
+        substep.entries++;
+        substep_log(rdram);
+        return 1;
+    }
+    demo_frames = 2;
+    demo_step = step;
     if (log_steps) {
         std::printf("[demo] step %d\n", (int)demo_step.load());
         std::fflush(stdout);
     }
+    return 0;
 }
 
 // Some animations step once per game frame instead of by the delta time, so

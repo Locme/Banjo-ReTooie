@@ -1000,6 +1000,7 @@ RECOMP_FUNC void func_8001608C(uint8_t* rdram, recomp_context* ctx) {
     }
     // 0x800160EC: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
+    if (tooie_replay_substep(rdram, ctx)) goto L_80016118;
     // 0x800160F0: jal         0x80088698
     // 0x800160F4: addiu       $a1, $sp, 0x50
     ctx->r5 = ADD32(ctx->r29, 0X50);
@@ -1031,7 +1032,7 @@ RECOMP_FUNC void func_8001608C(uint8_t* rdram, recomp_context* ctx) {
     // 0x8001610C: nop
 
 L_80016110:
-    tooie_demo_frame(rdram, ctx);
+    if (tooie_demo_frame(rdram, ctx)) goto L_80016118;
     // 0x80016110: jal         0x800D8FA0
     // 0x80016114: lw          $a0, 0x50($sp)
     ctx->r4 = MEM_W(ctx->r29, 0X50);

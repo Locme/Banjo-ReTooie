@@ -60,7 +60,7 @@ last <the last output line>
   value up to 255 is one byte, up to 65535 is two, and larger is four. A negative value is four bytes.
 * Some commands need the game running. These are `warp`, `status`, `savestate`, `spawn`, `diff`, `perf`,
   `screenshot`, `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto`, `walkto`, `face`, `look`, `transform`, `pause`,
-  `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo`, `invincible`, `recall`, `play` and `input`. Until the game
+  `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo`, `invincible`, `jiggies`, `challenge`, `recall`, `play` and `input`. Until the game
   is running they wait at the front
   of the queue, so `start; warp place 1` works on one line. If the game never starts, they never run. The frame,
   control, map and until forms of `wait` report an error instead of waiting. `load` and `goload` work in the launcher too, and start the
@@ -128,6 +128,9 @@ goload 2 1A 1
 
 Catch: when the load fails, the warp and its waits do not run, so a script does not sit through their timeouts. When the
 file is already in that map, the warp does nothing and the `wait map` ends at once.
+
+Catch: after a Jiggywiggy challenge the game no longer says which file is open, so `load` and `goload` take the save
+that is loaded as the one asked for and say so, rather than stopping.
 
 ### `quit`
 
@@ -1246,6 +1249,45 @@ god off
 ```
 
 Catch: needs the game running, because the flag is read and set during a game update.
+
+### `jiggies`
+
+Usage: `jiggies [n]` (also `jiggy`)
+
+With no number, prints the Jiggies the game counts and how many of Jiggywiggy's challenges are done, with the Jiggies
+the next one asks for (for the first nine). The count is the one Jiggywiggy checks: the game counts the collected
+Jiggy flags each time (func_800D035C), and Jiggies are not spent on challenges. With a number up to 90, it sets
+Jiggy-collected flags (0x250 to 0x2A9) through the game's flag setter until the game counts at least that many, then
+counts again and prints the new total. It never takes Jiggies away. The bosses' Jiggies and King Jingaling's are left
+out of the ones it adds.
+
+```
+jiggies
+jiggies 20
+```
+
+Catch: it changes the save once the game saves. The Jiggies it marks are the first ones not yet collected in flag
+order, so they disappear from their worlds as if collected. If the game counts fewer than asked after the flags are
+set, it reports `ERR`. Needs the game running and a save file loaded.
+
+### `challenge`
+
+Usage: `challenge [n]`
+
+With no number, prints how many of Jiggywiggy's challenges are done. With a number from 0 to 11, sets that count, so
+challenge n + 1 is the next one Jiggywiggy offers. The count is kept in 4 flags from 0x35C, which `challenge` writes
+through the game's flag setter. 11 is all of them, which opens the Hag 1 battle.
+
+```
+challenge
+challenge 1
+jiggies 4; challenge 1
+```
+
+Catch: it changes the save once the game saves. It only sets the count. Whether a world whose challenge it skips
+over opens from the count or from flags of its own has not been checked, and lowering the count lets a challenge be
+played again. Use it on a test save. It has not been
+run yet. Needs the game running and a save file loaded.
 
 ### `ach`
 
