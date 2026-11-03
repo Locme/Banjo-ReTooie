@@ -42,14 +42,22 @@ Repro with the console (`docs/console.md`): `fps Unlocked`, `goload 1 14F 0`, `g
 `warp id 14F 0`, and start the challenge again the same way. Run with `TOOIE_DEMO_LOG=1` (updates/s and entries/s each
 second) and `TOOIE_FB_LOG=1`.
 
-## Jigsaw board: faint lines along the pieces (2026-11-03)
+## Jigsaw board: faint lines along the pieces (2026-11-03, left as the game draws it)
 
-Thin lines still follow the board's piece grid. They show at the native resolution (406x228) and at 2x native as
-well as upscaled, so they are in the game's own picture, not something the upscaling adds; the original game very
-likely has them too. The dotted cracks between pieces (background showing through) are fixed by the vertex snap. A
-try at sampling the board at the native pixel centres made it pixelated without removing the lines, so it was taken
-out. Hiding the lines would be an enhancement over the original (for example blending each piece's edge texels with
-its neighbour's).
+Thin lines follow the board's piece grid at every resolution (native 406x228 too), so they are the game's own. The
+dotted cracks between pieces are fixed (vertex snap). Each piece samples only its own 32x32 block of the 160x128 live
+picture, with the tile wrapping every 32 texels, and its shape reaches a little past that block: those edge pixels
+read the block's far side. Tried and dropped: sampling at the native pixel centre (pixelated, lines stayed), holding
+the edge texel (thicker line), holding one texel in (thicker still), leaving the edge pixels out (shows the board's
+gold slot outlines beneath).
+
+A real fix has to sample the whole picture, not the per-piece block:
+- A: sample RT64's GPU render target of the picture (0x80382080, 160x128) with the block offset and no wrap: high
+  resolution and true neighbour pixels, but wrong wherever the game's CPU writes into the picture.
+- B: upload the synced picture from RDRAM as one texture and sample that: always right, stays native resolution,
+  needs a new RDRAM-layout upload path in RT64.
+- C: A, falling back to the game's sampling on frames the CPU changed the picture.
+Needs changes in RT64's tile setup and tile copies (rt64_state.cpp, rt64_framebuffer_manager.cpp).
 
 ## Smaller open items
 
