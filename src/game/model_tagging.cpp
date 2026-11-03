@@ -2184,8 +2184,19 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             float pos[3];
             uint32_t slot;
         };
-        static std::unordered_map<uint32_t, std::vector<Drawing>> last_drawings;
-        std::unordered_map<uint32_t, std::vector<std::pair<size_t, Drawing>>> now;
+        // Kept between frames and reused, so a frame makes no allocations here once they have grown: this frame's
+        // drawings and last frame's, each sorted by key (drawings of one key in draw order).
+        struct Entry {
+            uint32_t key;
+            size_t index;
+            Drawing d;
+        };
+        static std::vector<std::pair<uint32_t, Drawing>> last_drawings, drawings;
+        static std::vector<Entry> now;
+        static std::vector<std::pair<size_t, Drawing>> list;
+        static std::vector<Drawing> last;
+        static std::vector<bool> slot_used, done;
+        now.clear();
         for (size_t index = 0; index < commands.size(); index++) {
             const Command& c = commands[index];
             int b = c.block;
@@ -2196,21 +2207,30 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             uint32_t key = make_id(blocks[b].model, blocks[b].instance, bone_id[index]);
             Drawing d{};
             read_translation(rdram, c.w1 & 0x1FFFFFFF, d.pos);
-            now[key].push_back({index, d});
+            now.push_back({key, index, d});
         }
-        std::unordered_map<uint32_t, std::vector<Drawing>> drawings;
-        for (auto& [key, list] : now) {
-            auto found = last_drawings.find(key);
-            std::vector<Drawing> empty;
-            const std::vector<Drawing>& last = found != last_drawings.end() ? found->second : empty;
-            std::vector<bool> slot_used;
+        std::stable_sort(now.begin(), now.end(), [](const Entry& x, const Entry& y) { return x.key < y.key; });
+        drawings.clear();
+        for (size_t first = 0, group_end = 0; first < now.size(); first = group_end) {
+            const uint32_t key = now[first].key;
+            list.clear();
+            for (group_end = first; group_end < now.size() && now[group_end].key == key; group_end++) {
+                list.push_back({now[group_end].index, now[group_end].d});
+            }
+            last.clear();
+            auto found = std::lower_bound(last_drawings.begin(), last_drawings.end(), key,
+                [](const std::pair<uint32_t, Drawing>& x, uint32_t k) { return x.first < k; });
+            for (; found != last_drawings.end() && found->first == key; ++found) {
+                last.push_back(found->second);
+            }
+            slot_used.clear();
             auto use = [&](uint32_t slot) {
                 if (slot >= slot_used.size()) {
                     slot_used.resize(slot + 1, false);
                 }
                 slot_used[slot] = true;
             };
-            std::vector<bool> done(list.size(), false);
+            done.assign(list.size(), false);
             if (list.size() == 1 && last.size() == 1) {
                 list[0].second.slot = last[0].slot;
                 use(last[0].slot);
@@ -2252,12 +2272,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                     use(next);
                 }
                 repeat_slot[list[i].first] = list[i].second.slot;
-                drawings[key].push_back(list[i].second);
+                drawings.push_back({key, list[i].second});
             }
         }
-        last_drawings = std::move(drawings);
+        last_drawings.swap(drawings);
     }
-
     // A bone is named by the list it draws next, but some bones swap their
     // list from frame to frame (Banjo's face: eyes open, half shut, shut).
     // Such a bone's name changes, so RT64 found nothing to blend it with and
