@@ -21,6 +21,7 @@
 // The warps go through the Warp tab's own code (src/game/level_warp.cpp) and src/debug/warp.cpp, and the settings
 // through the same config calls as the settings menu, so nothing here is a second copy of a feature.
 
+#include "tooie_transform_menu.h"
 #include "tooie_console.h"
 #include "tooie_cheats.h"
 #include "tooie_path_text.h"
@@ -1167,6 +1168,21 @@ void cmd_transform(Ctx& c) {
     if (!tooie::debug::can_warp()) { error("a save file has to be loaded first"); return; }
     if (!cheats_master_on()) return;
     set_setting("cheats.cheat_transform", join(c.w, 1));
+}
+
+// transformmenu [open|close]: the Transform Anywhere Menu (src/gameplay/transform_menu.cpp), as the Transform key opens
+// and shuts it. With no word, says whether it is up.
+void cmd_transformmenu(Ctx& c) {
+    const std::string what = c.w.size() >= 2 ? c.w[1] : "";
+    if (what.empty()) {
+        print(std::string("Transform Anywhere Menu ") + (tooie::transform_menu::enabled() ? "on" : "off") + ", " + (tooie::transform_menu::is_open() ? "open" : "shut"));
+        return;
+    }
+    if (what != "open" && what != "close") { error("transformmenu [open|close]"); return; }
+    if (!tooie::transform_menu::enabled()) { error("the menu is off: set transform_menu on"); return; }
+    if (!tooie::debug::can_warp()) { error("a save file has to be loaded first"); return; }
+    tooie::transform_menu::request(what == "open");
+    print(what == "open" ? "opening the menu on the next game frame (it waits until Banjo can transform)" : "closing the menu on the next game frame");
 }
 
 // repeat <n> <command>: the command n times (up to 1000).
@@ -3697,6 +3713,7 @@ const std::vector<Command>& commands() {
         { "face", {}, true, "face <x> <z>", "turn Banjo to face a point", cmd_face },
         { "look", {}, true, "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look off", "hold the gameplay camera looking at Banjo from a direction, 350 back (here: turn it where it stands), for screenshots; a map change ends it", cmd_look },
         { "transform", {}, true, "transform [form]", "the Cheats tab's Transformation row (turns the cheats on)", cmd_transform },
+        { "transformmenu", {}, true, "transformmenu [open|close]", "open or shut the Transform Anywhere Menu (WIP tab), as the Transform key does", cmd_transformmenu },
         { "repeat", {}, false, "repeat <n> <command>", "run a command n times", cmd_repeat },
         { "tee", {}, false, "tee <file> | tee off", "copy everything the console prints to a file", cmd_tee },
         { "pause", {}, true, "pause", "stop the game's movement (its delta time), without the pause menu", cmd_pause },

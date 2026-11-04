@@ -715,6 +715,28 @@ unlock moves
 unlock everything
 ```
 
+### `transformmenu`
+
+Usage: `transformmenu [open|close]`
+
+Opens or shuts the Transform Anywhere Menu (Graphics > WIP), as the Transform key does. An open waits until Banjo can
+transform (no pause, scene, talk or map change under way), so it can be given right after a warp. With no word, it says
+whether the menu is on and whether it is up. While it is up, `press` moves the pick (the stick or the d-pad), `a`
+changes form and `b` goes back.
+
+```
+set transform_menu on
+transformmenu open
+wait 1s
+screenshot
+transformmenu close
+```
+
+Catch: the menu shows only the forms the save file has been at least once, by the game's own "first time" flags, so
+`unlock everything` adds none. `flag 345 on` to `flag 34D on` (Humba's forms) and `flag 4F5 on` (Banjo and Kazooie)
+show them all; turn them off again after, or the save keeps them when the game saves. Needs the menu turned on and a
+save file loaded.
+
 ### `savestate`
 
 Usage: `savestate save | savestate load` (also `ss`)

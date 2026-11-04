@@ -417,6 +417,8 @@ namespace {
     }
 
     std::atomic<int> env_state{0};   // 0 not read, 1 waiting, 2 done or none
+    // The console's transformmenu: 1 open, 2 close, taken on the next tick.
+    std::atomic<int> console_request{0};
 
     bool env_open() {
         static int64_t at = -1;
@@ -531,19 +533,29 @@ bool tooie::transform_menu::is_open() {
     return open_flag.load();
 }
 
+void tooie::transform_menu::request(bool open_it) {
+    console_request = open_it ? 1 : 2;
+}
+
 void tooie::transform_menu::tick(uint8_t* rdram, recomp_context* ctx) {
     const bool held = tooie::hotkeys::down(recompinput::GameInput::TRANSFORM);
     const bool key_pressed = held && !menu.key_was_held;
     menu.key_was_held = held;
-    const bool env_pressed = env_open();
+    // A console open waits until the menu can open; a close, or an open while it is up, is done at once.
+    const int asked = console_request.load();
+    const bool env_pressed = env_open() || asked == 1;
 
     if (!enabled()) {
         close(rdram, ctx, "option off");
         return;
     }
     if (!menu.open) {
+        if (asked == 2) {
+            console_request = 0;
+        }
         if ((key_pressed || env_pressed) && can_open(rdram)) {
             env_state = 2;
+            console_request = 0;
             open(rdram, ctx);
         }
         return;
@@ -556,6 +568,13 @@ void tooie::transform_menu::tick(uint8_t* rdram, recomp_context* ctx) {
         }
         close(rdram, ctx, "the game moved on (pause, map change, cutscene or talk)");
         return;
+    }
+    if (asked != 0) {
+        console_request = 0;
+        if (asked == 2) {
+            close(rdram, ctx, "console");
+            return;
+        }
     }
     // The game stands still behind the menu.
     write_float(rdram, delta_time_addr, frozen_delta);

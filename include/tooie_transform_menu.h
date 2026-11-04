@@ -19,6 +19,10 @@ namespace tooie::transform_menu {
     // Whether the menu is up now.
     bool is_open();
 
+    // The console's transformmenu command (src/game/console.cpp): opens (true) or closes (false) the menu on the next
+    // game frame, as the Transform key would.
+    void request(bool open);
+
     // Call once per frame from the game thread (tooie_warp_tick), after the frame's delta time is written.
     void tick(uint8_t* rdram, recomp_context* ctx);
 
