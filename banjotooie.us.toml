@@ -1124,11 +1124,12 @@ before_vram = 0x800EC7D4
 text = "if (tooie_others_hidden()) { return; }"
 
 # Hide HUD also hides the area name shown on arrival (the chintrotext actor's draw), which is drawn
-# with the 3D scene rather than with the 2D (src/game/hide_hud.cpp).
+# with the 3D scene rather than with the 2D (src/game/hide_hud.cpp). So does the Transform Anywhere Menu while it is
+# up: the frozen game held the name half faded over it.
 [[patches.hook]]
 func = "func_808003EC_chintrotext"
 before_vram = 0x808003EC
-text = "if (tooie_hud_hidden()) { return; }"
+text = "if (tooie_area_name_hidden()) { return; }"
 
 [[patches.hook]]
 func = "func_800A73F4"

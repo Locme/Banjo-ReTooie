@@ -172,8 +172,9 @@ int tooie_pause_settings_select(uint8_t* rdram, recomp_context* ctx);
 int tooie_pause_settings_page_counts(uint8_t* rdram, recomp_context* ctx);
 int tooie_pause_settings_text(uint8_t* rdram, recomp_context* ctx);
 void tooie_pause_settings_log_text(uint8_t* rdram, recomp_context* ctx);
-// Whether Hide HUD (or photo mode) has the HUD hidden (src/game/hide_hud.cpp).
-int tooie_hud_hidden(void);
+// Whether the area name is hidden: Hide HUD (or photo mode) has the HUD hidden, or the Transform Anywhere Menu is up
+// (src/game/hide_hud.cpp).
+int tooie_area_name_hidden(void);
 // Whether photo mode has the players hidden (src/gameplay/photo_mode.cpp).
 int tooie_players_hidden(void);
 // A player's draw alpha, faded while the free camera is pulled in close (src/gameplay/free_camera.cpp).

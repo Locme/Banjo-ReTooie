@@ -122,7 +122,7 @@ L_808008D4:
 RECOMP_FUNC void func_808003EC_chintrotext(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
-    if (tooie_hud_hidden()) { return; }
+    if (tooie_area_name_hidden()) { return; }
     // 0x808003EC: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x808003F0: sw          $s5, 0x38($sp)

@@ -52,6 +52,9 @@ namespace {
     constexpr uint32_t state_shooter_210 = 210;
     // Firing (Z) there (2026-11-04).
     constexpr uint32_t state_shooter_fire = 216;
+    // Also seen in the other shooter sections (2026-11-04): 208 Inside Targitzan's Temple, and 200, 206 and 207 in
+    // Inside Chompa's Belly (Clinker's Cavern uses 202, 209 and 216 as the lobby does).
+    constexpr uint32_t shooter_more[] = { 200, 206, 207, 208 };
     // C-up held this long before state 152 began makes it first person.
     constexpr auto c_up_window = 1000ms;
     constexpr uint16_t button_c_up = 0x0008;
@@ -140,7 +143,15 @@ bool tooie::fine_aim::in_first_person() {
 
 bool tooie::fine_aim::in_shooter() {
     const uint32_t s = player_state.load();
-    return s == state_shooter_walk || s == state_shooter_209 || s == state_shooter_210 || s == state_shooter_fire;
+    if (s == state_shooter_walk || s == state_shooter_209 || s == state_shooter_210 || s == state_shooter_fire) {
+        return true;
+    }
+    for (uint32_t m : shooter_more) {
+        if (s == m) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool tooie::fine_aim::game_has_player() {

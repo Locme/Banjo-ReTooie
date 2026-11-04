@@ -7,6 +7,8 @@ regenerated code, CI, notes and tooling are left out.
 
 - Gameplay > Difficulty > Enemy Respawn (Original by default) and Minjos Stay Dead (off by default): with Never, an enemy you have killed stays gone when you come back to its area; Minjos Stay Dead does the same for Minjos alone. Remembered until the game is closed. The game has no respawn timer to scale: it spawns a map's enemies every time the map loads.
 - Console: `kill [radius] [model]` removes the nearest object as a beaten enemy is removed (for testing).
+- Transform Anywhere Menu: the area name shown on arrival no longer stays frozen over the menu.
+- First-person shooter sections: the mouse and gyro also turn Banjo in Inside Targitzan's Temple and Inside Chompa's Belly (more of the shooter's states counted).
 - Console: `objects [radius]` lists the objects near Banjo with their model and actor entry.
 - Console: `transformmenu open|close` opens and shuts the Transform Anywhere Menu.
 - Console: `warp` works as the very first command: from the launcher or the title it loads save file 1, then warps.

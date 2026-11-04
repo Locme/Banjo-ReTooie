@@ -100,8 +100,10 @@ extern "C" void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index
     marks[index] = (uint32_t)MEM_W(0, gfx_ctx);
 }
 
-extern "C" int tooie_hud_hidden(void) {
-    return hidden.load(std::memory_order_relaxed) ? 1 : 0;
+// The area name's draw: not while the HUD is hidden, nor while the Transform Anywhere Menu is up (the game stands
+// still behind it, so the name would stay there half faded).
+extern "C" int tooie_area_name_hidden(void) {
+    return hidden.load(std::memory_order_relaxed) || tooie::transform_menu::is_open() ? 1 : 0;
 }
 
 void tooie::hide_hud::set_hidden(bool hide) {
