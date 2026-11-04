@@ -12,6 +12,7 @@ regenerated code, CI, notes and tooling are left out.
 - First-person shooter sections: moving the mouse (or the gyro) up and down tilts the view up and down, within the game's own limits, and the view stays where you leave it.
 - Console: `cam` prints the camera's position and angles.
 - Console: `menu open|close` opens and shuts the Esc menu, `menupos <x> <y>` moves it at once (`menupos reset` puts it back), and `screenshot ui` saves the whole window with the menus on it.
+- Console: `uimove` moves single tabs, rows and buttons of the Esc menu (`uimove list`, `uimove <entry> <x> <y>`), and `uimove save` writes `assets/ui_layout.json`, which is read at start as the menu's layout.
 - Console: `objects [radius]` lists the objects near Banjo with their model and actor entry.
 - Console: `transformmenu open|close` opens and shuts the Transform Anywhere Menu.
 - Console: `warp` works as the very first command: from the launcher or the title it loads save file 1, then warps.

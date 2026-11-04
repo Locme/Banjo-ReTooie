@@ -1560,7 +1560,7 @@ index 277a421..cabadda 100644
      ui_state->unload();
      ui_state.reset();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..fcad6e9 100644
+index 6c84c05..9982a62 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
 @@ -1,7 +1,14 @@
@@ -1793,7 +1793,27 @@ index 6c84c05..fcad6e9 100644
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
                  if (tab.id == id) {
-@@ -177,6 +377,14 @@ namespace recompui {
+@@ -152,9 +352,11 @@ namespace recompui {
+                 config_modal->set_tab_visible(tab.id, false);
+             }
+         }
++        config_modal->name_layout("menu");
+         config_modal->set_selected_tab(0);
+         auto header_right = config_modal->get_header()->get_right();
+         auto quit_button = config_modal->modal_root_context.create_element<IconButton>(header_right, "icons/Quit.svg", ButtonStyle::Basic);
++        quit_button->set_layout_name("button.quit");
+         quit_button->add_pressed_callback([]() {
+             if (ultramodern::is_game_started()) {
+                 recompui::open_quit_game_prompt();
+@@ -163,6 +365,7 @@ namespace recompui {
+             }
+         });
+         auto close_button = config_modal->modal_root_context.create_element<IconButton>(header_right, "icons/X.svg", ButtonStyle::Basic);
++        close_button->set_layout_name("button.close");
+         close_button->add_pressed_callback([]() {
+             config::close();
+         });
+@@ -177,6 +380,14 @@ namespace recompui {
          return config_modal->modal_root_context;
      }
  
@@ -1808,7 +1828,7 @@ index 6c84c05..fcad6e9 100644
      void config::set_tab(const std::string &id) {
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
-@@ -185,6 +393,16 @@ namespace recompui {
+@@ -185,6 +396,16 @@ namespace recompui {
          config_modal->set_selected_tab(id);
      }
  
@@ -1826,7 +1846,7 @@ index 6c84c05..fcad6e9 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("Config modal has not been initialized.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..7247e22 100644
+index 86428c9..67bb4e9 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
 @@ -1,4 +1,7 @@
@@ -1837,7 +1857,15 @@ index 86428c9..7247e22 100644
  
  namespace recompui {
  
-@@ -35,6 +38,30 @@ ConfigOptionElement::ConfigOptionElement(
+@@ -19,6 +22,7 @@ ConfigOptionElement::ConfigOptionElement(
+     set_option_value(set_option_value),
+     on_hover(on_hover)
+ {
++    set_layout_name("row." + this->option_id);
+     set_display(Display::Flex);
+     set_position(Position::Relative);
+     set_flex_direction(FlexDirection::Column);
+@@ -35,6 +39,30 @@ ConfigOptionElement::ConfigOptionElement(
      const recomp::config::ConfigOption &option = config->get_option(option_index);
  
      ContextId context = recompui::get_current_context();
@@ -1868,7 +1896,7 @@ index 86428c9..7247e22 100644
      auto name_text = option.name;
      if (!name_text.empty()) {
          name_label = context.create_element<Label>(this, name_text, theme::Typography::LabelMD);
-@@ -59,7 +86,11 @@ bool ConfigOptionElement::get_disabled() {
+@@ -59,7 +87,11 @@ bool ConfigOptionElement::get_disabled() {
  }
  
  bool ConfigOptionElement::get_hidden() {
@@ -1881,7 +1909,7 @@ index 86428c9..7247e22 100644
  }
  
  void ConfigOptionElement::process_event(const Event &e) {
-@@ -76,6 +107,9 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -76,6 +108,9 @@ void ConfigOptionElement::process_event(const Event &e) {
          if (active) {
              on_hover(option_id);
              scroll_into_view();
@@ -1891,7 +1919,7 @@ index 86428c9..7247e22 100644
          }
          break;
      }
-@@ -87,14 +121,72 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -87,14 +122,72 @@ void ConfigOptionElement::process_event(const Event &e) {
      }
  }
  
@@ -1965,7 +1993,7 @@ index 86428c9..7247e22 100644
  }
  
  // ConfigOptionEnum
-@@ -110,6 +202,7 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -110,6 +203,7 @@ ConfigOptionEnum::ConfigOptionEnum(
  {
      ContextId context = recompui::get_current_context();
      Element *wrapper = context.create_element<Element>(this, 0, "div", false);
@@ -1973,7 +2001,7 @@ index 86428c9..7247e22 100644
      wrapper->set_display(Display::Flex);
      wrapper->set_flex_direction(FlexDirection::Row);
      wrapper->set_align_items(AlignItems::Center);
-@@ -120,25 +213,48 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -120,25 +214,48 @@ ConfigOptionEnum::ConfigOptionEnum(
      // Negates the extra padding that radio tabs automatically add.
      name_label->set_margin_bottom(4.0f);
  
@@ -2039,7 +2067,7 @@ index 86428c9..7247e22 100644
      }
  
      update_value();
-@@ -153,12 +269,18 @@ void ConfigOptionEnum::update_value() {
+@@ -153,12 +270,18 @@ void ConfigOptionEnum::update_value() {
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(this->option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          if (enum_opt.options[i].value == option_value) {
@@ -2060,7 +2088,7 @@ index 86428c9..7247e22 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -177,6 +299,14 @@ void ConfigOptionEnum::update_enum_details() {
+@@ -177,6 +300,14 @@ void ConfigOptionEnum::update_enum_details() {
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
@@ -2075,7 +2103,7 @@ index 86428c9..7247e22 100644
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
          auto opt_element = radio->get_option_element(i);
-@@ -199,6 +329,7 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -199,6 +330,7 @@ ConfigOptionNumber::ConfigOptionNumber(
      auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
  
      slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
@@ -2083,7 +2111,7 @@ index 86428c9..7247e22 100644
      slider->set_width(100.0f, Unit::Percent);
      slider->set_max_width(512.0f, Unit::Dp);
  
-@@ -214,14 +345,29 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -214,14 +346,29 @@ ConfigOptionNumber::ConfigOptionNumber(
              this->on_hover(this->option_id);
          }
      });
@@ -2113,7 +2141,7 @@ index 86428c9..7247e22 100644
  };
  
  void ConfigOptionNumber::update_disabled() {
-@@ -229,6 +375,15 @@ void ConfigOptionNumber::update_disabled() {
+@@ -229,6 +376,15 @@ void ConfigOptionNumber::update_disabled() {
      set_enabled(!disabled);
  };
  
@@ -2129,7 +2157,7 @@ index 86428c9..7247e22 100644
  // ConfigOptionString
  ConfigOptionString::ConfigOptionString(
      ResourceId rid,
-@@ -245,6 +400,7 @@ ConfigOptionString::ConfigOptionString(
+@@ -245,6 +401,7 @@ ConfigOptionString::ConfigOptionString(
  
      ContextId context = recompui::get_current_context();
      text_input = context.create_element<TextInput>(this);
@@ -2137,7 +2165,7 @@ index 86428c9..7247e22 100644
      text_input->set_width(100.0f, Unit::Percent);
      text_input->set_max_width(100.0f, Unit::Percent);
      update_value();
-@@ -284,16 +440,41 @@ ConfigOptionBool::ConfigOptionBool(
+@@ -284,16 +441,41 @@ ConfigOptionBool::ConfigOptionBool(
  
      ContextId context = recompui::get_current_context();
      toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
@@ -3061,10 +3089,59 @@ index a60c585..cae83dd 100644
              if (next_top_element == nullptr) {
                  return false;
 diff --git a/recompui/src/elements/ui_element.cpp b/recompui/src/elements/ui_element.cpp
-index 4517152..7228035 100644
+index 4517152..3bae9b1 100644
 --- a/recompui/src/elements/ui_element.cpp
 +++ b/recompui/src/elements/ui_element.cpp
-@@ -306,7 +306,7 @@ void Element::ProcessEvent(Rml::Event &event) {
+@@ -5,10 +5,30 @@
+ #include "ui_element.h"
+ #include "../core/ui_context.h"
+ 
++#include <algorithm>
+ #include <cassert>
++#include <mutex>
+ 
+ namespace recompui {
+ 
++namespace {
++    // Elements by layout name, and the offsets kept by name; the console thread and the UI thread both reach them.
++    std::mutex layout_mutex;
++    std::map<std::string, std::vector<Element *>> layout_live;
++    std::map<std::string, std::pair<float, float>> layout_kept;
++
++    void apply_layout_offset(Element *element, const std::pair<float, float> *offset) {
++        if (offset != nullptr) {
++            element->set_position(Position::Relative);
++            element->set_left(offset->first);
++            element->set_top(offset->second);
++        } else {
++            element->unset_left();
++            element->unset_top();
++        }
++    }
++}
++
+ Element::Element(ResourceId rid, Rml::Element *base) : Style(rid) {
+     assert(resource_id != ResourceId::null());
+     assert(base != nullptr);
+@@ -39,6 +59,17 @@ Element::Element(ResourceId rid, Element* parent, uint32_t events_enabled, Rml::
+ }
+ 
+ Element::~Element() {
++    if (!layout_name.empty()) {
++        std::lock_guard<std::mutex> lock(layout_mutex);
++        auto it = layout_live.find(layout_name);
++        if (it != layout_live.end()) {
++            auto &list = it->second;
++            list.erase(std::remove(list.begin(), list.end(), this), list.end());
++            if (list.empty()) {
++                layout_live.erase(it);
++            }
++        }
++    }
+     if (!shim) {
+         clear_children();
+         if (!base_owning) {
+@@ -306,7 +337,7 @@ void Element::ProcessEvent(Rml::Event &event) {
              if (events_enabled & Events(EventType::Text)) {
                  Rml::Variant *value_variant = base->GetAttribute("value");
                  if (value_variant != nullptr) {
@@ -3073,7 +3150,7 @@ index 4517152..7228035 100644
                  }
              }
  
-@@ -520,6 +520,10 @@ float Element::get_scroll_top() {
+@@ -520,6 +551,10 @@ float Element::get_scroll_top() {
      return base->GetScrollTop();
  }
  
@@ -3084,7 +3161,7 @@ index 4517152..7228035 100644
  float Element::get_client_left() {
      return base->GetClientLeft();
  }
-@@ -682,6 +686,44 @@ void Element::set_nav_wrapping(bool wrapping) {
+@@ -682,6 +717,44 @@ void Element::set_nav_wrapping(bool wrapping) {
      is_nav_wrapping = wrapping;
  }
  
@@ -3129,11 +3206,116 @@ index 4517152..7228035 100644
  void Element::set_as_primary_focus(bool is_primary_focus) {
      this->is_primary_focus = is_primary_focus;
  }
+@@ -762,4 +835,83 @@ void Element::build_navigation(Element *nav_parent, Element *cur_focus_element)
+     }
+ }
+ 
++void Element::set_layout_name(const std::string &name) {
++    std::lock_guard<std::mutex> lock(layout_mutex);
++    layout_name = name;
++    layout_live[name].push_back(this);
++    auto kept = layout_kept.find(name);
++    if (kept != layout_kept.end()) {
++        apply_layout_offset(this, &kept->second);
++    }
++}
++
++namespace layout_offsets {
++
++std::vector<Entry> list() {
++    std::lock_guard<std::mutex> lock(layout_mutex);
++    std::map<std::string, Entry> all;
++    for (const auto &live : layout_live) {
++        all[live.first].live = true;
++    }
++    for (const auto &kept : layout_kept) {
++        Entry &entry = all[kept.first];
++        entry.has_offset = true;
++        entry.x = kept.second.first;
++        entry.y = kept.second.second;
++    }
++    std::vector<Entry> out;
++    for (auto &item : all) {
++        item.second.name = item.first;
++        out.push_back(item.second);
++    }
++    return out;
++}
++
++bool set(const std::string &name, float x, float y) {
++    std::lock_guard<std::mutex> lock(layout_mutex);
++    layout_kept[name] = { x, y };
++    auto it = layout_live.find(name);
++    if (it == layout_live.end()) {
++        return false;
++    }
++    for (Element *element : it->second) {
++        apply_layout_offset(element, &layout_kept[name]);
++    }
++    return true;
++}
++
++bool reset(const std::string &name) {
++    std::lock_guard<std::mutex> lock(layout_mutex);
++    bool had = layout_kept.erase(name) > 0;
++    auto it = layout_live.find(name);
++    if (it != layout_live.end()) {
++        for (Element *element : it->second) {
++            apply_layout_offset(element, nullptr);
++        }
++    }
++    return had;
++}
++
++void reset_all() {
++    std::lock_guard<std::mutex> lock(layout_mutex);
++    layout_kept.clear();
++    for (auto &live : layout_live) {
++        for (Element *element : live.second) {
++            apply_layout_offset(element, nullptr);
++        }
++    }
++}
++
++bool is_live(const std::string &name) {
++    std::lock_guard<std::mutex> lock(layout_mutex);
++    return layout_live.count(name) > 0;
++}
++
++std::map<std::string, std::pair<float, float>> offsets() {
++    std::lock_guard<std::mutex> lock(layout_mutex);
++    return layout_kept;
++}
++
++} // namespace layout_offsets
++
+ } // namespace recompui
 diff --git a/recompui/src/elements/ui_element.h b/recompui/src/elements/ui_element.h
-index 34eec3f..cedce38 100644
+index 34eec3f..e12460f 100644
 --- a/recompui/src/elements/ui_element.h
 +++ b/recompui/src/elements/ui_element.h
-@@ -75,6 +75,8 @@ private:
+@@ -6,8 +6,11 @@
+ #include "recomp.h"
+ #include <ultramodern/ultra64.h>
+ 
++#include <map>
++#include <string>
+ #include <unordered_set>
+ #include <variant>
++#include <vector>
+ 
+ namespace recompui {
+ class Document;
+@@ -65,6 +68,8 @@ private:
+     std::vector<Element *> children;
+     std::string id;
+     std::string debug_id = "";
++    // The name this element answers to in the layout offsets below, empty when it has none.
++    std::string layout_name;
+     bool shim = false;
+     bool enabled = true;
+     bool disabled_attribute = false;
+@@ -75,6 +80,8 @@ private:
      bool is_nav_wrapping = false;
      NavigationType nav_type = NavigationType::Auto;
      bool is_primary_focus = false;
@@ -3142,7 +3324,17 @@ index 34eec3f..cedce38 100644
  
      std::vector<Element *> nav_children;
  
-@@ -141,6 +143,7 @@ public:
+@@ -129,6 +136,9 @@ public:
+     std::string get_input_text();
+     void set_input_text(std::string_view text);
+     void set_src(std::string_view src);
++    // Names this element for the uimove console command: any offset kept under the name is applied now and to each
++    // element made later under the same name.
++    void set_layout_name(const std::string &name);
+     void set_style_enabled(std::string_view style_name, bool enabled);
+     bool is_style_enabled(std::string_view style_name);
+     void apply_styles();
+@@ -141,6 +151,7 @@ public:
      float get_offset_top();
      float get_scroll_left();
      float get_scroll_top();
@@ -3150,7 +3342,7 @@ index 34eec3f..cedce38 100644
      float get_client_left();
      float get_client_top();
      float get_client_width();
-@@ -175,6 +178,16 @@ public:
+@@ -175,6 +186,16 @@ public:
      // This is more used to decide which element to focus on when any element could be picked,
      // like vertically navigating to the selected tab in a tab list.
      void set_as_primary_focus(bool is_primary_focus = true);
@@ -3167,21 +3359,49 @@ index 34eec3f..cedce38 100644
  
      Element *select_add_option(std::string_view text, std::string_view value);
      void select_set_selection(std::string_view option_value);
+@@ -187,4 +208,26 @@ public:
+ 
+ void queue_ui_callback(recompui::ResourceId resource, const Event& e, const UICallback& callback);
+ 
++// Offsets for named elements (the Esc menu's tabs, rows and buttons), in dp from where layout puts them, right and
++// down positive. Kept by name so they stay when a page is rebuilt. Call these inside the element's context.
++namespace layout_offsets {
++    struct Entry {
++        std::string name;
++        bool live = false;       // An element answers to the name now.
++        bool has_offset = false;
++        float x = 0.0f;
++        float y = 0.0f;
++    };
++
++    // Every name that is live or has an offset, sorted.
++    std::vector<Entry> list();
++    // Stores the offset and applies it to the live elements under the name; false when none is live.
++    bool set(const std::string &name, float x, float y);
++    // Forgets the offset of one name (reset) or of all of them.
++    bool reset(const std::string &name);
++    void reset_all();
++    bool is_live(const std::string &name);
++    std::map<std::string, std::pair<float, float>> offsets();
++}
++
+ } // namespace recompui
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..c821dfc 100644
+index b057f46..310deb0 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
-@@ -3,6 +3,9 @@
+@@ -3,6 +3,10 @@
  #include "ui_document.h"
  #include "recompinput/recompinput.h"
  #include "recompinput/profiles.h"
 +#include "recompui/config.h"
 +#include "ui_sidebar_style.h"
 +#include <RmlUi/Core/Input.h>
++#include <cctype>
  
  namespace recompui {
  
-@@ -123,12 +126,21 @@ void Modal::open() {
+@@ -123,12 +127,21 @@ void Modal::open() {
  }
  
  void TabbedModal::open() {
@@ -3203,7 +3423,7 @@ index b057f46..c821dfc 100644
  }
  
  bool Modal::close() {
-@@ -155,6 +167,9 @@ bool TabbedModal::close() {
+@@ -155,6 +168,9 @@ bool TabbedModal::close() {
          }
      }
  
@@ -3213,7 +3433,21 @@ index b057f46..c821dfc 100644
      return Modal::close();
  }
  
-@@ -299,6 +314,18 @@ void Modal::render_menu_actions() {
+@@ -283,6 +299,13 @@ void Modal::render_menu_actions() {
+         }
+ 
+         auto action_wrapper = context.create_element<Element>(menu_actions_wrapper, 0, "span", false);
++        {
++            std::string action_name = "action.";
++            for (char ch : action_info.description) {
++                action_name += (ch == ' ') ? '_' : static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
++            }
++            action_wrapper->set_layout_name(action_name);
++        }
+         action_wrapper->set_display(Display::Flex);
+         action_wrapper->set_flex_direction(FlexDirection::Row);
+         action_wrapper->set_align_items(AlignItems::Center);
+@@ -299,6 +322,24 @@ void Modal::render_menu_actions() {
      }
  }
  
@@ -3229,10 +3463,16 @@ index b057f46..c821dfc 100644
 +    }
 +}
 +
++void Modal::name_layout(const std::string &name) {
++    if (modal_element != nullptr) {
++        modal_element->set_layout_name(name);
++    }
++}
++
  void Modal::set_on_close_callback(std::function<void()> callback) {
      on_close_callback = callback;
  }
-@@ -311,6 +338,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
+@@ -311,6 +352,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
      return modal;
  }
  
@@ -3321,7 +3561,7 @@ index b057f46..c821dfc 100644
  TabbedModal::TabbedModal(
      ResourceId rid,
      Document *parent,
-@@ -319,6 +428,12 @@ TabbedModal::TabbedModal(
+@@ -319,6 +442,12 @@ TabbedModal::TabbedModal(
  ) : Modal(rid, parent, modal_root_context, modal_type)
  {
      set_menu_action_callback(MenuAction::Back, [this]() {
@@ -3334,7 +3574,7 @@ index b057f46..c821dfc 100644
          if (this->tabs != nullptr) {
              this->tabs->focus_on_active_tab();
          }
-@@ -331,9 +446,124 @@ TabbedModal::TabbedModal(
+@@ -331,9 +460,124 @@ TabbedModal::TabbedModal(
      }, "Next Tab");
  }
  
@@ -3459,7 +3699,7 @@ index b057f46..c821dfc 100644
              if (previous_tab_index != current_tab_index) {
                  body->clear_children();
                  if (current_tab_index >= 0 && current_tab_index < tab_contexts.size()) {
-@@ -341,6 +571,9 @@ void TabbedModal::process_event(const Event &e) {
+@@ -341,6 +585,9 @@ void TabbedModal::process_event(const Event &e) {
                  }
                  previous_tab_index = current_tab_index;
              }
@@ -3469,7 +3709,7 @@ index b057f46..c821dfc 100644
              queue_update();
              break;
          }
-@@ -362,7 +595,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
+@@ -362,7 +609,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
          return;
      }
      int next_index = tabs->get_next_tab_in_direction(tabs->get_active_tab(), direction);
@@ -3490,7 +3730,7 @@ index b057f46..c821dfc 100644
      // Only focus if the tab changed to the intended tab, otherwise the tab change was cancelled.
      if (current_tab_index == next_index) {
          tabs->focus_on_active_tab();
-@@ -404,6 +650,12 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+@@ -404,12 +664,21 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
      ContextId context = get_current_context();
      if (tabs == nullptr) {
          header->set_padding_left(0.0f); // tabs hug to left side
@@ -3503,22 +3743,34 @@ index b057f46..c821dfc 100644
          tabs = context.create_element<TabSet>(header->get_left());
          tabs->set_change_tab_callback([this](int tab_index) {
              this->on_tab_change(tab_index);
+         });
+     }
+-    tabs->add_tab(tab_context.name);
++    int tab_index = tabs->add_tab(tab_context.name);
++    if (Tab *tab = tabs->get_tab(tab_index)) {
++        tab->set_layout_name("tab." + tab_context.id);
++    }
+ }
+ 
+ void TabbedModal::add_tab(TabContext &&tab_context) {
 diff --git a/recompui/src/elements/ui_modal.h b/recompui/src/elements/ui_modal.h
-index d065a14..1b81311 100644
+index d065a14..1b4e7fc 100644
 --- a/recompui/src/elements/ui_modal.h
 +++ b/recompui/src/elements/ui_modal.h
-@@ -87,6 +87,10 @@ namespace recompui {
+@@ -87,6 +87,12 @@ namespace recompui {
          bool is_open_now() const { return is_open; }
  
          ConfigHeaderFooter *get_header() { return header; }
 +        // Moves the modal's box from where it is laid out (centred) by x, y in dp, right and down positive.
 +        void set_offset(float x, float y);
++        // Names the box for the layout offsets (uimove), as ui_element.h says.
++        void name_layout(const std::string &name);
 +        // Where the modal's box is laid out now, from the window's top left.
 +        void get_box_position(float *x, float *y);
          Element *get_body() { return body; }
  
          void set_on_close_callback(std::function<void()> callback);
-@@ -102,6 +106,16 @@ namespace recompui {
+@@ -102,6 +108,16 @@ namespace recompui {
          TabSet *tabs = nullptr;
          int previous_tab_index = -1;
          int current_tab_index = -1;
@@ -3856,7 +4108,7 @@ index 2c5dc52..396c645 100644
      if (tab_index < 0 || tab_index >= static_cast<int>(tabs.size())) {
          return;
 diff --git a/recompui/src/elements/ui_tab_set.h b/recompui/src/elements/ui_tab_set.h
-index b8d3783..366fcd5 100644
+index b8d3783..0da0ca7 100644
 --- a/recompui/src/elements/ui_tab_set.h
 +++ b/recompui/src/elements/ui_tab_set.h
 @@ -18,6 +18,8 @@ namespace recompui {
@@ -3879,7 +4131,12 @@ index b8d3783..366fcd5 100644
      };
  
      class TabSet : public Element {
-@@ -51,6 +57,15 @@ namespace recompui {
+@@ -47,10 +53,20 @@ namespace recompui {
+         int add_tab(std::string_view text);
+         void set_active_tab(int tab_index, bool report_change = true);
+         void focus_on_active_tab();
++        Tab *get_tab(int tab_index) const { return tab_index >= 0 && tab_index < static_cast<int>(tabs.size()) ? tabs[tab_index] : nullptr; }
+         Element *get_active_tab_element() const { return active_tab >= 0 && active_tab < static_cast<int>(tabs.size()) ? tabs[active_tab] : nullptr; };
          int get_active_tab() const { return active_tab; }
          void set_tab_visible(int tab_index, bool is_visible);
          int get_next_tab_in_direction(int index, int direction);

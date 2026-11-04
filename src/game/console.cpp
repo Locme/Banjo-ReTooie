@@ -56,6 +56,8 @@
 #include "util/file.h"
 #include "elements/ui_label.h"
 #include "elements/ui_modal.h"
+#include "elements/ui_element.h"
+#include <json/json.hpp>
 #include "elements/ui_text_input.h"
 
 #ifdef _WIN32
@@ -2077,8 +2079,94 @@ void cmd_menupos(Ctx& c) {
     }
     g_menu_offset[0] = (float)x;
     g_menu_offset[1] = (float)y;
-    with_context(recompui::config::get_config_context_id(), [&] { modal->set_offset((float)x, (float)y); });
+    with_context(recompui::config::get_config_context_id(), [&] {
+        modal->set_offset((float)x, (float)y);
+        recompui::layout_offsets::set("menu", (float)x, (float)y);
+    });
     print(format("Esc menu moved by %.0f %.0f from the middle", x, y));
+}
+
+// The layout file: the committed default is assets/ui_layout.json in the repo, which the build copies next to the exe.
+// { "menu": [x, y], "entries": { "row.foo": [x, y], ... } }
+std::filesystem::path ui_layout_path() { return recompui::file::get_asset_path("ui_layout.json"); }
+
+// uimove list | <entry> <x> <y> | <entry> reset | reset | save: moves single tabs, rows and buttons of the Esc menu by
+// x, y (dp from where layout puts them), at once; save writes the layout file (L, 2026-11-04: to place the menu's
+// entries by eye and push the result as the default).
+void cmd_uimove(Ctx& c) {
+    const char* usage = "uimove list | uimove <entry> <x> <y> | uimove <entry> reset | uimove reset | uimove save";
+    if (c.w.size() < 2) { error(usage); return; }
+    const std::string what = c.w[1];
+    auto lifetime = recompui::lock_context_lifetime();
+    if (!recompui::contexts_alive()) { error("the menus are not up"); return; }
+    try {
+        recompui::config::get_config_modal();
+    } catch (...) {
+        error("the Esc menu is not made yet");
+        return;
+    }
+    const recompui::ContextId menu_context = recompui::config::get_config_context_id();
+    const std::string sub = lower(what);
+
+    if (sub == "list" && c.w.size() == 2) {
+        int shown = 0;
+        for (const auto& e : recompui::layout_offsets::list()) {
+            std::string text = e.name + (e.live ? "" : "  (not shown now)");
+            if (e.has_offset) text += format("  offset %.0f %.0f", e.x, e.y);
+            print(text);
+            shown++;
+        }
+        print(format("%d entries (rows are listed for the tab that is open; open the others with menu open)", shown));
+        return;
+    }
+    if (sub == "reset" && c.w.size() == 2) {
+        with_context(menu_context, [&] { recompui::layout_offsets::reset_all(); });
+        g_menu_offset[0] = g_menu_offset[1] = 0;
+        with_context(menu_context, [&] { recompui::config::get_config_modal()->set_offset(0, 0); });
+        print("every entry back where layout puts it");
+        return;
+    }
+    if (sub == "save" && c.w.size() == 2) {
+        nlohmann::json json = nlohmann::json::object();
+        auto offsets = recompui::layout_offsets::offsets();
+        auto menu = offsets.find("menu");
+        json["menu"] = menu != offsets.end() ? nlohmann::json::array({ menu->second.first, menu->second.second }) : nlohmann::json::array({ 0, 0 });
+        nlohmann::json entries = nlohmann::json::object();
+        for (const auto& item : offsets) {
+            if (item.first != "menu") entries[item.first] = nlohmann::json::array({ item.second.first, item.second.second });
+        }
+        json["entries"] = entries;
+        std::filesystem::path path = ui_layout_path();
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        if (!file) { error("could not write " + path.string()); return; }
+        file << json.dump(2) << "\n";
+        file.close();
+        print(format("saved %d entries and the menu's place to %s", (int)entries.size(), path.string().c_str()));
+        print("this is the build's copy: copy it to assets/ui_layout.json in the repo to commit it as the default");
+        return;
+    }
+
+    if (c.w.size() == 3 && lower(c.w[2]) == "reset") {
+        bool had = false;
+        with_context(menu_context, [&] { had = recompui::layout_offsets::reset(what); });
+        if (what == "menu") {
+            g_menu_offset[0] = g_menu_offset[1] = 0;
+            with_context(menu_context, [&] { recompui::config::get_config_modal()->set_offset(0, 0); });
+        }
+        print(had ? what + " back where layout puts it" : what + " had no offset");
+        return;
+    }
+    double x = 0, y = 0;
+    if (c.w.size() != 4 || !parse_double(c.w[2], &x) || !parse_double(c.w[3], &y) || std::fabs(x) > 4000 || std::fabs(y) > 4000) {
+        error(usage);
+        return;
+    }
+    if (!recompui::layout_offsets::is_live(what)) { error("no entry '" + what + "' is shown now (uimove list)"); return; }
+    with_context(menu_context, [&] { recompui::layout_offsets::set(what, (float)x, (float)y); });
+    if (what == "menu") { g_menu_offset[0] = (float)x; g_menu_offset[1] = (float)y; }
+    print(format("%s moved by %.0f %.0f", what.c_str(), x, y));
 }
 
 // menu open|close: opens or shuts the Esc menu, as the Esc key does.
@@ -3886,6 +3974,7 @@ const std::vector<Command>& commands() {
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
         { "menu", {}, false, "menu open | menu close", "open or shut the Esc menu", cmd_menu },
         { "menupos", {}, false, "menupos [<x> <y> | reset]", "move the Esc menu from the middle by x, y (dp), at once", cmd_menupos },
+        { "uimove", {}, false, "uimove list | <entry> <x> <y> | <entry> reset | reset | save", "move single tabs, rows and buttons of the Esc menu by x, y (dp), at once; save writes assets/ui_layout.json", cmd_uimove },
         { "cam", {}, true, "cam", "the camera's position and angles as drawn, and its mode", cmd_cam },
         { "kill", {}, true, "kill [radius] [model hex]", "remove the nearest object (or the nearest with that model) as a beaten enemy is removed", cmd_kill },
         { "anim", {}, true, "anim", "the animation Banjo plays now, with his form and state", cmd_anim },
@@ -4359,10 +4448,51 @@ void pregame_thread() {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 }
+// Reads assets/ui_layout.json into the menu's offsets; they are applied as the menu's entries are made. A missing or
+// bad file leaves everything where layout puts it.
+void load_ui_layout() {
+    try {
+        std::ifstream file(ui_layout_path(), std::ios::binary);
+        if (!file) {
+            std::printf("[uimove] no %s, the Esc menu keeps its layout\n", ui_layout_path().string().c_str());
+            return;
+        }
+        nlohmann::json json = nlohmann::json::parse(file, nullptr, false);
+        if (!json.is_object()) {
+            std::printf("[uimove] %s is not a JSON object, ignored\n", ui_layout_path().string().c_str());
+            return;
+        }
+        auto pair_of = [](const nlohmann::json& v, float* x, float* y) {
+            if (!v.is_array() || v.size() != 2 || !v[0].is_number() || !v[1].is_number()) return false;
+            *x = v[0].get<float>();
+            *y = v[1].get<float>();
+            return std::fabs(*x) <= 4000 && std::fabs(*y) <= 4000;
+        };
+        int count = 0;
+        float x = 0, y = 0;
+        if (json.contains("menu") && pair_of(json["menu"], &x, &y)) {
+            g_menu_offset[0] = x;
+            g_menu_offset[1] = y;
+            recompui::layout_offsets::set("menu", x, y);
+        }
+        if (json.contains("entries") && json["entries"].is_object()) {
+            for (auto it = json["entries"].begin(); it != json["entries"].end(); ++it) {
+                if (pair_of(it.value(), &x, &y)) {
+                    recompui::layout_offsets::set(it.key(), x, y);
+                    count++;
+                }
+            }
+        }
+        std::printf("[uimove] loaded %d entries from %s\n", count, ui_layout_path().string().c_str());
+    } catch (...) {
+        std::printf("[uimove] could not read the layout file, ignored\n");
+    }
+}
 } // namespace
 
 // Program start (src/main/main.cpp): the binds and aliases, TOOIE_CONSOLE, --exec, and the stdin reader.
 void tooie::console::start(int argc, char** argv) {
+    load_ui_layout();
     load_state();
     load_history();
     {

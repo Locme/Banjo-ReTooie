@@ -1201,6 +1201,31 @@ menupos reset
 
 Catch: a large move can put part of the menu off the screen. Works from the launcher on.
 
+### `uimove`
+
+Usage: `uimove list | uimove <entry> <x> <y> | uimove <entry> reset | uimove reset | uimove save`
+
+Moves single parts of the Esc menu, not the whole box, by x and y in dp from where layout puts them (right and down are
+positive), at once. The rest of the layout does not move. `uimove list` prints the entries and any offset they have:
+`menu` (the box, as `menupos`), `tab.<id>` (the tabs), `row.<option id>` (the option rows of the tab that is open),
+`button.quit` and `button.close` (the top right), and `action.<name>` (the hints along the bottom, once a controller
+or keyboard has been used). `uimove <entry> reset` and `uimove reset` put one or all back.
+
+`uimove save` writes the offsets, and the menu's place, to `assets/ui_layout.json` next to the exe and prints the full
+path. That file is read at start, so the offsets come back. To make them the default, copy it over `assets/ui_layout.json`
+in the repo and commit it. The file is `{ "menu": [x, y], "entries": { "row.foo": [x, y] } }` and can be edited by hand.
+
+```
+menu open
+uimove list
+uimove tab.qol 0 -20
+uimove row.some_option 30 0
+uimove save
+```
+
+Catch: rows exist only for the tab that is open (and the search page), so open a tab before moving its rows; offsets
+are kept when it is closed and come back when it is opened again. A move of more than 4000 is refused.
+
 ### `cam`
 
 Usage: `cam`
