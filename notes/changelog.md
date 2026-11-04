@@ -8,6 +8,7 @@ regenerated code, CI, notes and tooling are left out.
 - Direct First Banjo Shooter Analog Aim: the view no longer moves by itself. The game is given a centred stick in first person, so it stops turning Banjo and the view from it, and only the direct aim turns the view. Stick up looks up.
 - First person (C-up) with the game's own aiming: at Unlocked the view turns at its 30 FPS speed again (yesterday's change had it crawling).
 - First-person shooter sections: the mouse (and gyro) turn Banjo left and right, also while firing.
+- Mirror Mode: the mouse and gyro now turn the first-person view (and Banjo in the shooter sections) the way the picture shows, as the stick already did.
 
 ## 2026-11-03
 

@@ -31,6 +31,7 @@
 #include "tooie_fine_aim.h"
 #include "tooie_free_camera.h"
 #include "tooie_game.h"
+#include "tooie_mirror_mode.h"
 #include "tooie_motion_aim.h"
 #include "tooie_rdram.h"
 
@@ -142,8 +143,8 @@ namespace {
     constexpr uint32_t player_table = 0x80135490;
     constexpr uint32_t player_yaw = 0xF8;
 
-    // Turns Banjo by this many degrees, read through the pointers each time. His facing grows turning right (full
-    // stick right took it from 0 to 31 headless), the other way from the view's yaw.
+    // Turns Banjo by this many degrees, read through the pointers each time. His facing grows turning left, as the
+    // view's yaw does (the game's stick left took it from 0 to 31 headless).
     void turn_facing(uint8_t* rdram, float degrees) {
         if (degrees == 0.0f) {
             return;
@@ -255,6 +256,11 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
         pending_yaw = 0.0f;
         pending_pitch = 0.0f;
     }
+    // Mirror Mode flips the picture, and the stick with it (src/debug/pad_script.cpp), so the mouse and the gyro
+    // turn the other way too: right on the mouse turns towards the screen's right.
+    if (tooie::mirror_mode::active()) {
+        yaw_delta = -yaw_delta;
+    }
     const auto now = std::chrono::steady_clock::now();
     const float dt = last_tick_at == std::chrono::steady_clock::time_point{} ? 0.0f :
         std::min(std::chrono::duration<float>(now - last_tick_at).count(), 0.1f);
@@ -266,7 +272,7 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
     if (tooie::fine_aim::in_shooter()) {
         direct_has_stick = false;
         have_last = false;
-        turn_facing(rdram, -yaw_delta);
+        turn_facing(rdram, yaw_delta);
         return;
     }
     if (!tooie::fine_aim::in_first_person()) {
