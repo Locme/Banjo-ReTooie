@@ -292,6 +292,8 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/debug/pad_script.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/trace.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/warp.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/spawn_log.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/minjo_stay_dead.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/distance_probe.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/watchdog.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/vram_log.cpp

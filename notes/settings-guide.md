@@ -200,6 +200,10 @@ own tab, so they are saved in general.json and apply as soon as they change.
   they close in and sidestep your roll. Default: off.
 - **Lower Enemy Attack Cooldown**: the same enemies wait half as long between
   attacks. Default: off.
+- **Minjos Stay Dead**: a Minjo you have killed does not come back. The game
+  itself leaves a killed Minjo out while you stay in that world and brings it
+  back after you visit another world; with this on it stays out. Remembered
+  until the game is closed, not in the save file. Default: off.
 - **Canary Mary races** (was in QOL > Balancing until 2026-10-23): Fair, Easy or Original. In the original she speeds up
   past her normal pace whenever you lead; Fair removes that catch-up, Easy is
   Fair with her pace at 85%. She still slows down when you fall behind.

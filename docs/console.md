@@ -1146,6 +1146,23 @@ pos
 
 Catch: needs a player in the game. Until there is one, it reports an error.
 
+### `objects`
+
+Usage: `objects [radius]`
+
+Lists the live objects within the radius of Banjo (1500 when not given), nearest first. Each line gives the object's
+address, its marker (the word at +0), the marker's model id (+0x14), its actor entry (+0x10: the same for every object
+of one actor id, `80086968` for a Minjo), where it is and how far away. The last line counts them.
+
+```
+objects
+objects 400
+objects 99999
+```
+
+Catch: the object array moves as objects come and go, so an address is good for that game update only; the marker is
+what stays the same while the object lives. Needs a player in the game.
+
 ### `goto`
 
 Usage: `goto <x> <y> <z>` (also `tp`)

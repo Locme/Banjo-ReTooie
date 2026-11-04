@@ -673,6 +673,11 @@ void tooie::init_config() {
         "Lower Enemy Attack Cooldown",
         "The curated list of enemies (Billy Bob, Boltoid, Diggit, Flatso, Globble, Gruntydactyl, Guvnor, Hothead, Jippo Jim, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba) wait half as long between attacks.",
         false);
+    general.add_bool_option(
+        tooie::damage::minjos_stay_dead_option,
+        "Minjos Stay Dead",
+        "A Minjo you have killed does not come back when you return to its area. Remembered until the game is closed, not in the save file.",
+        false);
     // Moved from QOL > Balancing to Gameplay > Difficulty (L, 2026-10-23); move_saved_canary_mary carries the
     // value saved in qol.json.
     general.add_enum_option(
@@ -928,14 +933,14 @@ void tooie::init_config() {
     recompui::config::create_page_tab("Gameplay", tooie::gameplay_tab_id, recompui::config::general::id);
     for (const std::string* id : { &tooie::damage::double_damage_option, &tooie::damage::aim_option,
             &tooie::damage::aim_chance_option, &tooie::damage::homing_option, &tooie::damage::strafe_option,
-            &tooie::damage::faster_attacks_option, &tooie::canary_mary::mode_option }) {
+            &tooie::damage::faster_attacks_option, &tooie::damage::minjos_stay_dead_option, &tooie::canary_mary::mode_option }) {
         recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
     }
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Difficulty");
     // Difficulty goes to the top of the Gameplay tab, ahead of Boss Rush (L, 2026-10-23).
     for (const std::string* id : { &tooie::damage::double_damage_option, &tooie::damage::aim_option,
             &tooie::damage::aim_chance_option, &tooie::damage::homing_option, &tooie::damage::strafe_option,
-            &tooie::damage::faster_attacks_option, &tooie::canary_mary::mode_option }) {
+            &tooie::damage::faster_attacks_option, &tooie::damage::minjos_stay_dead_option, &tooie::canary_mary::mode_option }) {
         recompui::config::set_option_display_before(*id, tooie::boss_rush::option);
     }
     // Features and Back-Ports from General (L, 2026-10-23), with their headings. Saves, shaders, Discord and the

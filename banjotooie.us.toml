@@ -2797,3 +2797,23 @@ text = "if (tooie_dust_spawn_foot(rdram, ctx)) { ctx->r31 = MEM_W(0X2C, ctx->r29
 func = "func_80800EB0_chhoney"
 before_vram = 0x80800EB0
 text = "if (tooie_honeycomb_no_expire(rdram, ctx)) { ctx->r2 = 0; return; }"
+
+# TOOIE_SPAWN_LOG (src/debug/spawn_log.cpp): logs the objects spawned by id (func_80108DC0, which the map's placed
+# objects come through) and removed (func_800FFAB0).
+[[patches.hook]]
+func = "func_80108DC0"
+before_vram = 0x80108DC0
+text = "tooie_spawn_log_spawn(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800FFAB0"
+before_vram = 0x800FFAB0
+text = "tooie_spawn_log_remove(rdram, ctx); tooie_minjo_removed(rdram, ctx);"
+
+# Minjos stay dead (src/gameplay/minjo_stay_dead.cpp): func_80800358_chbadjinjo, a Minjo's set-up, removes it when
+# func_800D395C returns nonzero ($v0, just before the branch on it). The hook makes that answer nonzero for a Minjo
+# killed before. The removal hook above notes the kills.
+[[patches.hook]]
+func = "func_80800358_chbadjinjo"
+before_vram = 0x80800378
+text = "tooie_minjo_spawn(rdram, ctx);"

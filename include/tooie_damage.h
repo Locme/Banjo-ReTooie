@@ -17,6 +17,8 @@ namespace tooie::damage {
     inline const std::string homing_option = "enemy_aim_homing";
     inline const std::string strafe_option = "enemy_strafe";
     inline const std::string faster_attacks_option = "enemy_faster_attacks";
+    // Minjos stay dead (src/gameplay/minjo_stay_dead.cpp): a killed Minjo does not come back.
+    inline const std::string minjos_stay_dead_option = "minjos_stay_dead";
     // Once per frame (tooie_warp_tick): measures the player's movement for Enemy aim.
     void aim_tick(uint8_t* rdram);
 

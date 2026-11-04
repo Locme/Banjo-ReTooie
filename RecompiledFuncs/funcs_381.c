@@ -556,6 +556,7 @@ RECOMP_FUNC void func_80800358_chbadjinjo(uint8_t* rdram, recomp_context* ctx) {
     // 0x80800374: sw          $v0, 0x24($sp)
     MEM_W(0X24, ctx->r29) = ctx->r2;
     after_1:
+    tooie_minjo_spawn(rdram, ctx);
     // 0x80800378: beq         $v0, $zero, L_80800390
     if (ctx->r2 == 0) {
         // 0x8080037C: or          $a0, $s0, $zero

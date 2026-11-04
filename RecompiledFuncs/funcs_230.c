@@ -1937,6 +1937,7 @@ L_80800184:
 RECOMP_FUNC void func_800FFAB0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_spawn_log_remove(rdram, ctx); tooie_minjo_removed(rdram, ctx);
     // 0x800FFAB0: addiu       $sp, $sp, -0x18
     ctx->r29 = ADD32(ctx->r29, -0X18);
     // 0x800FFAB4: sw          $ra, 0x14($sp)

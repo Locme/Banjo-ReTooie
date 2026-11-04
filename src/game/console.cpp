@@ -1953,6 +1953,45 @@ void cmd_walkto(Ctx& c) {
     print(format("walking to %.2f %.2f, %.0f away (to within %.0f, up to %.0f s)", x, z, std::hypot(x - p[0], z - p[2]), radius, timeout));
 }
 
+// objects [radius]: the live objects within radius of Banjo (default 1500), nearest first: the object's address, its
+// marker (+0), the marker's model (+0x14), its actor entry (+0x10, what _gemarkersDll_entrypoint_0 gives for its
+// actor id), where it is and how far. The object array moves as objects come and go, so an address is good for
+// this update only.
+void cmd_objects(Ctx& c) {
+    double radius = 1500.0;
+    if (c.w.size() >= 2 && (!parse_double(c.w[1], &radius) || radius <= 0)) { error("objects [radius]"); return; }
+    float p[3];
+    if (!tooie::player_cheats::position(c.rdram, p)) { error("there is no player yet"); return; }
+    const uint32_t array = read_ram(c.rdram, 0x80136EE0, 4);
+    if (!tooie::rdram::valid_ptr(array)) { error("no object array"); return; }
+    const uint32_t first = read_ram(c.rdram, array + 0x04, 4);
+    const uint32_t last = read_ram(c.rdram, array + 0x08, 4);
+    if (!tooie::rdram::valid_ptr(first) || !tooie::rdram::valid_ptr(last) || last < first || (last - first) / 0x9C >= 2048) { error("no objects"); return; }
+    struct Row { double dist; std::string text; };
+    std::vector<Row> rows;
+    const uint32_t count = (last - first) / 0x9C + 1;
+    for (uint32_t i = 0; i < count; i++) {
+        const uint32_t object = array + 0x10 + i * 0x9C;
+        const uint32_t marker = read_ram(c.rdram, object, 4);
+        float at[3];
+        for (int a = 0; a < 3; a++) {
+            at[a] = tooie::rdram::read_float(c.rdram, object + 4 + 4 * a);
+        }
+        const double dist = std::sqrt(double(at[0] - p[0]) * (at[0] - p[0]) + double(at[1] - p[1]) * (at[1] - p[1]) + double(at[2] - p[2]) * (at[2] - p[2]));
+        if (dist > radius) {
+            continue;
+        }
+        const uint32_t model = tooie::rdram::valid_ptr(marker) ? (read_ram(c.rdram, marker + 0x14, 4) >> 16) : 0;
+        rows.push_back({ dist, format("%08X marker %08X model %03X entry %08X at %.0f %.0f %.0f, %.0f away", object, marker, model,
+            read_ram(c.rdram, object + 0x10, 4), at[0], at[1], at[2], dist) });
+    }
+    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.dist < b.dist; });
+    for (const Row& r : rows) {
+        print(r.text);
+    }
+    print(format("%d of %u objects within %.0f", int(rows.size()), count, radius));
+}
+
 // face <x> <z>: turns Banjo to a point at once.
 void cmd_face(Ctx& c) {
     double x, z;
@@ -3654,6 +3693,7 @@ const std::vector<Command>& commands() {
         { "lights", {}, true, "lights [add [r g b [radius [height]]] | undo | clear | list]", "Point Lights's lamps for this map: add one above Banjo (warm, radius 500, 80 up), remove the last, all, or list them (saved to Dev Files/point_lights.txt)", cmd_lights },
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
+        { "objects", {}, true, "objects [radius]", "the live objects near Banjo, nearest first (address, marker, model, actor entry, position)", cmd_objects },
         { "face", {}, true, "face <x> <z>", "turn Banjo to face a point", cmd_face },
         { "look", {}, true, "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look off", "hold the gameplay camera looking at Banjo from a direction, 350 back (here: turn it where it stands), for screenshots; a map change ends it", cmd_look },
         { "transform", {}, true, "transform [form]", "the Cheats tab's Transformation row (turns the cheats on)", cmd_transform },
