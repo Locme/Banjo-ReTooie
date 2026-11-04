@@ -64,6 +64,8 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 ## RecompFrontend.patch
 
 * **Option display order** (`recompui/include/recompui/config.h`, `ui_config.cpp`, `ui_config_page_options_menu.cpp`): `set_option_display_before(id, before_id)` shows an option above another in its tab without changing the config schema (used to show MS Anti-Aliasing under Anti-aliasing and scaling).
+* **Moving the Esc menu** (`recompui/src/elements/ui_modal.h/.cpp`): `Modal::set_offset(x, y)` moves a modal's box from its
+  centred place, and `get_box_position` reads where it is laid out (the console's `menupos`).
 * **Settings search** (`recompui/src/config/ui_config.cpp`, `create_search_tab()`): a Search tab with a hidden row for every option of every other tab; typing in its box shows the matching rows.
 * **Focus scrolls into view** (`recompui/src/elements/ui_button.cpp`): a button that gets focus scrolls itself into view, so moving down a long list with a controller keeps the selection visible.
 * **1440p resolution** (`ui_config_tab_graphics.cpp`, `rt64_render_context.cpp`, and `ultramodern/include/ultramodern/config.hpp` in N64ModernRuntime.patch): `R1440p` is 6x the game's 240 lines. The Resolution row names are 3x/4.5x/6x/9x with the pixel height in brackets (the saved keys stay 720p, 1080p, 2160p).
@@ -339,6 +341,9 @@ Applied in `lib/rt64/src/contrib/plume` (a submodule of rt64).
   driver's budget (VK_EXT_memory_budget is enabled when the driver has it), for the `[vram]` lines
   from `src/debug/vram_log.cpp`. Failed presents and image acquires (other than out of date) are
   logged; they were silent, so a lost GPU left no trace in console.log.
+
+* **Swap chain copies** (`plume_vulkan.cpp`): Vulkan swap chain images are made with `VK_IMAGE_USAGE_TRANSFER_SRC_BIT`
+  as well, so the console's `screenshot ui` can copy the presented window (D3D12's could be copied already).
 
 * **Ray queries and multi-mesh builds**: Vulkan enables `VK_KHR_ray_query` and its feature when the device has it
   (`capabilities.rayQuery`; D3D12 leaves it false), and `buildBottomLevelAS` gives each geometry its own build

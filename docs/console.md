@@ -59,7 +59,7 @@ last <the last output line>
   the value typed. Hex digits decide it: up to two digits is one byte, up to four is two bytes, more is four. A decimal
   value up to 255 is one byte, up to 65535 is two, and larger is four. A negative value is four bytes.
 * Some commands need the game running. These are `status`, `savestate`, `spawn`, `diff`, `perf`,
-  `screenshot`, `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto`, `walkto`, `face`, `look`, `transform`, `pause`,
+  `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto`, `walkto`, `face`, `look`, `transform`, `pause`,
   `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo`, `invincible`, `jiggies`, `challenge`, `lights`, `recall`, `play` and `input`. Until the game
   is running they wait at the front
   of the queue, so `start; status` works on one line. If the game never starts, they never run. The frame,
@@ -1172,6 +1172,35 @@ pos
 
 Catch: needs a player in the game. Until there is one, it reports an error.
 
+### `menu`
+
+Usage: `menu open | menu close`
+
+Opens or shuts the Esc menu, as the Esc key does.
+
+```
+menu open
+menupos 150 0
+menu close
+```
+
+### `menupos`
+
+Usage: `menupos [<x> <y> | reset]`
+
+Moves the Esc menu's box from its usual centred place by x and y, in dp (right and down are positive), at once, whether
+the menu is open or not. `menupos reset` puts it back. With no words, it prints how far it is moved and where the box
+is laid out now (from the window's top left, in the menu's own pixels). The place is kept
+until the game is closed, not saved.
+
+```
+menupos 200 -40
+menupos
+menupos reset
+```
+
+Catch: a large move can put part of the menu off the screen. Works from the launcher on.
+
 ### `cam`
 
 Usage: `cam`
@@ -1617,15 +1646,21 @@ log list
 
 ### `screenshot`
 
-Usage: `screenshot` (also `shot`)
+Usage: `screenshot [ui]` (also `shot`)
 
-Saves the next frame as a PNG in the screenshots folder of the app-data folder, the same as F12.
+Saves the next frame as a PNG in the screenshots folder of the app-data folder, the same as F12: the game's picture
+alone, without the Esc menu, the console or notices. `screenshot ui` saves the whole window as it is shown instead,
+everything drawn over the picture included (the Esc menu, the start menu, the console, notices), at the window's size,
+as `<time>-ui.png` in the same folder.
 
 ```
 screenshot
+menu open
+screenshot ui
 ```
 
-Catch: needs the game running.
+Catch: the plain form needs the game running; `ui` works from the launcher on. A `ui` shot of the console shows the
+console with the screenshot command in it.
 
 ### `burst`
 

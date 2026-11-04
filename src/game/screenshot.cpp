@@ -3,6 +3,8 @@
 // F12 asks RT64 for the next frame's game image (lib-patches/rt64.patch adds
 // RT64::RequestScreenshot to its present queue). RT64 copies the image before
 // it draws the menus and notices over it, so neither is ever in a screenshot.
+// The console's screenshot ui asks for the whole window instead (RequestWindowScreenshot): the swap chain image once
+// everything is drawn, menus included, saved as <stamp>-ui.png.
 // The image has the picture's shape: wide in Fill, 4:3 in 4:3. It is saved as
 // screenshots/<date>_<time>.png in the app-data folder, on a thread of its own
 // so the present thread is not held up by the PNG encoder.
@@ -56,6 +58,8 @@ namespace RT64 {
     // lib/rt64/src/hle/rt64_present_queue.h (from lib-patches/rt64.patch).
     typedef std::function<void(uint32_t width, uint32_t height, std::vector<uint8_t> &&rgba)> ScreenshotCallback;
     void RequestScreenshot(ScreenshotCallback callback);
+    // The whole window as presented, menus included (rt64-ext rt64_present_queue_ext.h).
+    void RequestWindowScreenshot(ScreenshotCallback callback);
 }
 
 namespace {
@@ -71,7 +75,7 @@ namespace {
     }
 
     // A file name from the local time, with a counter if two land in one second.
-    fs::path next_path(const fs::path& folder) {
+    fs::path next_path(const fs::path& folder, const std::string& suffix = "") {
         std::time_t now = std::time(nullptr);
         std::tm local{};
 #ifdef _WIN32
@@ -81,18 +85,18 @@ namespace {
 #endif
         char stamp[32];
         std::strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H-%M-%S", &local);
-        fs::path path = folder / (std::string(stamp) + ".png");
+        fs::path path = folder / (std::string(stamp) + suffix + ".png");
         for (int i = 2; fs::exists(path); i++) {
-            path = folder / (std::string(stamp) + "_" + std::to_string(i) + ".png");
+            path = folder / (std::string(stamp) + suffix + "_" + std::to_string(i) + ".png");
         }
         return path;
     }
 
-    void save(uint32_t width, uint32_t height, std::vector<uint8_t> rgba) {
+    void save_named(uint32_t width, uint32_t height, std::vector<uint8_t> rgba, std::string suffix) {
         fs::path folder = recomp::get_config_path() / "screenshots";
         std::error_code ec;
         fs::create_directories(folder, ec);
-        fs::path path = next_path(folder);
+        fs::path path = next_path(folder, suffix);
 
         // stbi_write_png takes a narrow path; write to memory and save it ourselves so
         // non-ASCII folder names work on Windows too.
@@ -125,6 +129,10 @@ namespace {
             std::fprintf(stderr, "[screenshot] could not save %s\n", (const char*)path.u8string().c_str());
             tooie::toast::show("Screenshot not saved");
         }
+    }
+
+    void save(uint32_t width, uint32_t height, std::vector<uint8_t> rgba) {
+        save_named(width, height, std::move(rgba), "");
     }
 
     // Burst (F12 held): the last frames, shrunk, oldest first.
@@ -357,6 +365,14 @@ void tooie::screenshot::take() {
             return;
         }
         std::thread(save, width, height, std::move(rgba)).detach();
+    });
+}
+
+void tooie::screenshot::take_window() {
+    // The swap chain image is copied after everything is drawn on it, so the menus, the console and notices are in it,
+    // at the window's size. Saved as <stamp>-ui.png beside the others.
+    RT64::RequestWindowScreenshot([](uint32_t width, uint32_t height, std::vector<uint8_t>&& rgba) {
+        std::thread(save_named, width, height, std::move(rgba), std::string("-ui")).detach();
     });
 }
 

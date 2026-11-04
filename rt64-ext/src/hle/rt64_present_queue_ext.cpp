@@ -69,6 +69,32 @@ namespace RT64 {
             return (format == RenderFormat::R8G8B8A8_UNORM) || (format == RenderFormat::B8G8R8A8_UNORM) || (format == RenderFormat::R16G16B16A16_UNORM);
         }
 
+        std::mutex windowShotMutex;
+        ScreenshotCallback windowShotCallback;
+
+        void copyWindowScreenshot(RenderDevice *device, RenderCommandList *commandList, RenderTexture *swapChainTexture,
+            uint32_t width, uint32_t height, ScreenshotReadback &out) {
+            {
+                const std::scoped_lock lock(windowShotMutex);
+                if (!windowShotCallback || (swapChainTexture == nullptr) || (width == 0) || (height == 0)) {
+                    return;
+                }
+                out.callback = std::move(windowShotCallback);
+                windowShotCallback = nullptr;
+            }
+            // The swap chain is B8G8R8A8 (rt64_application.cpp). Rows padded to 256 bytes, as D3D12 requires.
+            out.format = RenderFormat::B8G8R8A8_UNORM;
+            out.width = width;
+            out.height = height;
+            const uint32_t rowBytes = ((width * 4) + 255) & ~255U;
+            out.rowWidth = rowBytes / 4;
+            out.buffer = device->createBuffer(RenderBufferDesc::ReadbackBuffer(uint64_t(rowBytes) * height));
+            commandList->barriers(RenderBarrierStage::COPY, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::COPY_SOURCE));
+            commandList->copyTextureRegion(
+                RenderTextureCopyLocation::PlacedFootprint(out.buffer.get(), out.format, width, height, 1, out.rowWidth),
+                RenderTextureCopyLocation::Subresource(swapChainTexture));
+        }
+
         // Converts the read-back rows to packed RGBA8 and calls the callback.
         void finishScreenshot(ScreenshotReadback &readback) {
             const uint32_t texelSize = RenderFormatSize(readback.format);
@@ -193,6 +219,11 @@ namespace RT64 {
     void RequestScreenshot(ScreenshotCallback callback) {
         const std::scoped_lock lock(screenshotMutex);
         screenshotCallback = std::move(callback);
+    }
+
+    void RequestWindowScreenshot(ScreenshotCallback callback) {
+        const std::scoped_lock lock(windowShotMutex);
+        windowShotCallback = std::move(callback);
     }
 
     void PresentQueue::threadRepaint(bool &swapChainValid) {

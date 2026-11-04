@@ -55,6 +55,7 @@
 #include "ultramodern/ultramodern.hpp"
 #include "util/file.h"
 #include "elements/ui_label.h"
+#include "elements/ui_modal.h"
 #include "elements/ui_text_input.h"
 
 #ifdef _WIN32
@@ -1230,7 +1231,15 @@ void cmd_dev(Ctx& c) {
     print((on ? "dev.txt is in place: " : "dev.txt is gone: ") + path + "\nRestart the game for the tabs to " + (on ? "show." : "go back to their switches."));
 }
 
-void cmd_screenshot(Ctx&) {
+// screenshot [ui]: the next frame's game picture (as F12), or with ui the whole window as shown, menus included.
+void cmd_screenshot(Ctx& c) {
+    if (c.w.size() >= 2 && lower(c.w[1]) == "ui") {
+        tooie::screenshot::take_window();
+        print("screenshot of the whole window with its menus, saved as <time>-ui.png in the screenshots folder");
+        return;
+    }
+    if (c.w.size() >= 2) { error("screenshot [ui]"); return; }
+    if (g_rdram == nullptr) { error("the game is not running (screenshot ui takes the menus at any time)"); return; }
     tooie::screenshot::take();
     print("screenshot of the next frame, saved to the screenshots folder of the app-data folder (as F12)");
 }
@@ -2026,6 +2035,78 @@ void cmd_kill(Ctx& c) {
     call.r4 = (int32_t)best;
     func_800FFAB0(c.rdram, &call);
     print(format("removed object %08X, model %03X, %.0f away", best, best_model, best_dist));
+}
+
+// menupos [x y | reset]: moves the Esc menu's box from its centred place by x, y (dp, right and down positive), at
+// once, open or not; with no words, prints where it is. Kept until the game is closed (L, 2026-11-04: to place it
+// with a command while looking at it).
+float g_menu_offset[2] = { 0.0f, 0.0f };
+
+void cmd_menupos(Ctx& c) {
+    if (c.w.size() == 1) {
+        float left = 0, top = 0;
+        {
+            auto lifetime = recompui::lock_context_lifetime();
+            if (recompui::contexts_alive()) {
+                try {
+                    recompui::TabbedModal* modal = recompui::config::get_config_modal();
+                    with_context(recompui::config::get_config_context_id(), [&] { modal->get_box_position(&left, &top); });
+                } catch (...) {
+                }
+            }
+        }
+        print(format("Esc menu moved by %.0f %.0f from the middle; its box is laid out at %.0f %.0f (menupos <x> <y>, menupos reset)",
+            g_menu_offset[0], g_menu_offset[1], left, top));
+        return;
+    }
+    double x = 0, y = 0;
+    if (c.w.size() == 2 && lower(c.w[1]) == "reset") {
+        x = y = 0;
+    } else if (c.w.size() != 3 || !parse_double(c.w[1], &x) || !parse_double(c.w[2], &y) || std::fabs(x) > 4000 || std::fabs(y) > 4000) {
+        error("menupos <x> <y> | menupos reset (dp from the middle, right and down positive)");
+        return;
+    }
+    auto lifetime = recompui::lock_context_lifetime();
+    if (!recompui::contexts_alive()) { error("the menus are not up"); return; }
+    recompui::TabbedModal* modal = nullptr;
+    try {
+        modal = recompui::config::get_config_modal();
+    } catch (...) {
+        error("the Esc menu is not made yet");
+        return;
+    }
+    g_menu_offset[0] = (float)x;
+    g_menu_offset[1] = (float)y;
+    with_context(recompui::config::get_config_context_id(), [&] { modal->set_offset((float)x, (float)y); });
+    print(format("Esc menu moved by %.0f %.0f from the middle", x, y));
+}
+
+// menu open|close: opens or shuts the Esc menu, as the Esc key does.
+void cmd_menu(Ctx& c) {
+    const std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
+    if (what != "open" && what != "close") { error("menu open | menu close"); return; }
+    // As src/ui/brightness_panel.cpp opens it: with the UI's contexts kept alive and the menu's context open.
+    auto lifetime = recompui::lock_context_lifetime();
+    if (!recompui::contexts_alive()) { error("the menus are not up"); return; }
+    std::string said;
+    try {
+        if (what == "open" && recompui::config::get_config_modal()->is_open_now()) {
+            said = "the Esc menu is open already";
+        } else {
+            with_context(recompui::config::get_config_context_id(), [&] {
+                if (what == "open") {
+                    recompui::config::open();
+                    said = "Esc menu opened";
+                } else {
+                    said = recompui::config::close() ? "Esc menu shut" : "the Esc menu stays open (a page asked to keep it)";
+                }
+            });
+        }
+    } catch (...) {
+        error("the Esc menu is not made yet");
+        return;
+    }
+    print(said);
 }
 
 // cam: the viewport camera as drawn this frame (camera controller +0x00: position at +0x00, pitch, yaw and roll in
@@ -3803,6 +3884,8 @@ const std::vector<Command>& commands() {
         { "lights", {}, true, "lights [add [r g b [radius [height]]] | undo | clear | list]", "Point Lights's lamps for this map: add one above Banjo (warm, radius 500, 80 up), remove the last, all, or list them (saved to Dev Files/point_lights.txt)", cmd_lights },
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
+        { "menu", {}, false, "menu open | menu close", "open or shut the Esc menu", cmd_menu },
+        { "menupos", {}, false, "menupos [<x> <y> | reset]", "move the Esc menu from the middle by x, y (dp), at once", cmd_menupos },
         { "cam", {}, true, "cam", "the camera's position and angles as drawn, and its mode", cmd_cam },
         { "kill", {}, true, "kill [radius] [model hex]", "remove the nearest object (or the nearest with that model) as a beaten enemy is removed", cmd_kill },
         { "anim", {}, true, "anim", "the animation Banjo plays now, with his form and state", cmd_anim },
@@ -3843,7 +3926,7 @@ const std::vector<Command>& commands() {
         { "perf", {}, true, "perf <seconds>", "time the game updates and write perf-<time>.csv", cmd_perf },
         { "sysinfo", {}, false, "sysinfo", "platform, CPUs, RAM, video driver and window size (for bug reports)", cmd_sysinfo },
         { "dev", {}, false, "dev [on|off]", "make dev.txt next to the exe (shows every hidden tab after a restart); off removes it", cmd_dev },
-        { "screenshot", { "shot" }, true, "screenshot", "save the next frame as a PNG, as F12 does", cmd_screenshot },
+        { "screenshot", { "shot" }, false, "screenshot [ui]", "save the next frame as a PNG, as F12 does; with ui, the whole window with its menus", cmd_screenshot },
         { "burst", {}, true, "burst start | burst stop", "keep every frame from start to stop and save them, as F12 held does", cmd_burst },
         { "costcheck", { "cost" }, true, "costcheck", "start or stop the Effect Cost Check (GPU time of each effect that is on)", cmd_costcheck },
         { "press", {}, true, "press <buttons> [stick <x> <y>] [frames|n ms|n s]", "hold controller 1's buttons (a+b) and stick (-80..80), for n game updates, a time, or until release", cmd_press },

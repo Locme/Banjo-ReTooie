@@ -666,7 +666,7 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..8307fce 100644
+index 3227ab1..215bce6 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,12 +4,30 @@
@@ -865,7 +865,7 @@ index 3227ab1..8307fce 100644
                  
                  VIRenderer::RenderParams renderParams;
                  if (colorTarget != nullptr) {
-@@ -339,17 +421,176 @@ namespace RT64 {
+@@ -339,17 +421,179 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -1036,15 +1036,20 @@ index 3227ab1..8307fce 100644
                      viRenderer->render(renderParams);
                  }
  
++                // Banjo-Tooie: a window screenshot (rt64_present_queue_ext.cpp), copied once everything is drawn.
++                ScreenshotReadback windowShot;
++
                  RenderHookDraw *drawHook = GetRenderHookDraw();
                  if (drawHook != nullptr) {
 +                    GpuSectionScope timed(presentSections, GpuSection::Interface, commandList);
                      drawHook(commandList, swapChainFramebuffer);
                  }
  
-@@ -360,12 +601,18 @@ namespace RT64 {
+@@ -359,13 +603,24 @@ namespace RT64 {
+                         inspector->draw(commandList);
                      }
                      
++                    copyWindowScreenshot(ext.device, commandList, swapChainTexture, ext.swapChain->getWidth(), ext.swapChain->getHeight(), windowShot);
                      commandList->barriers(RenderBarrierStage::NONE, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::PRESENT));
 +                    presentSections.finish();
                      commandList->end();
@@ -1058,10 +1063,14 @@ index 3227ab1..8307fce 100644
 +
 +                if (screenshot.callback) {
 +                    finishScreenshot(screenshot);
++                }
++
++                if (windowShot.callback) {
++                    finishScreenshot(windowShot);
                  }
              }
  
-@@ -384,14 +631,16 @@ namespace RT64 {
+@@ -384,14 +639,16 @@ namespace RT64 {
              }
  
              // As soon as we're done with the first render target, we notify the workload queue it can proceed.
@@ -1079,7 +1088,7 @@ index 3227ab1..8307fce 100644
                  }
  
                  if (presentWaitEnabled) {
-@@ -400,8 +649,49 @@ namespace RT64 {
+@@ -400,8 +657,49 @@ namespace RT64 {
  
                  RenderCommandSemaphore *waitSemaphore = drawSemaphores[swapChainIndex].get();
                  presentTimestamp = Timer::current();
@@ -1130,7 +1139,7 @@ index 3227ab1..8307fce 100644
              }
          }
      }
-@@ -428,6 +718,7 @@ namespace RT64 {
+@@ -428,6 +726,7 @@ namespace RT64 {
      void PresentQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % presents.size();
@@ -1138,7 +1147,7 @@ index 3227ab1..8307fce 100644
      }
  
      void PresentQueue::threadLoop() {
-@@ -449,22 +740,61 @@ namespace RT64 {
+@@ -449,22 +748,61 @@ namespace RT64 {
          uint32_t displayTimingRate = UINT32_MAX;
          const bool displayTiming = ext.device->getCapabilities().displayTiming;
          bool swapChainValid = !ext.swapChain->needsResize();
@@ -1204,7 +1213,7 @@ index 3227ab1..8307fce 100644
                  const bool needsResize = ext.swapChain->needsResize() || !swapChainValid;
                  if (needsResize) {
                      ext.presentGraphicsWorker->commandList->begin();
-@@ -504,13 +834,16 @@ namespace RT64 {
+@@ -504,13 +842,16 @@ namespace RT64 {
                  skipPresent = skipPresent || ext.swapChain->isEmpty();
  
                  Present &present = presents[processCursor];
@@ -1221,7 +1230,7 @@ index 3227ab1..8307fce 100644
                      skipInterpolation();
                      notifyPresentId(present);
                  }
-@@ -518,6 +851,15 @@ namespace RT64 {
+@@ -518,6 +859,15 @@ namespace RT64 {
                      threadPresent(present, swapChainValid);
                  }
  
@@ -1237,7 +1246,7 @@ index 3227ab1..8307fce 100644
                  if (!present.paused) {
                      if (!present.fbOperations.empty()) {
                          const std::scoped_lock lock(screenFbChangePoolMutex);
-@@ -528,6 +870,7 @@ namespace RT64 {
+@@ -528,6 +878,7 @@ namespace RT64 {
                      threadAdvanceBarrier();
                  }
  

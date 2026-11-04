@@ -11,6 +11,7 @@ regenerated code, CI, notes and tooling are left out.
 - First-person shooter sections: the mouse and gyro also turn Banjo in Inside Targitzan's Temple and Inside Chompa's Belly (more of the shooter's states counted).
 - First-person shooter sections: moving the mouse (or the gyro) up and down tilts the view up and down, within the game's own limits, and the view stays where you leave it.
 - Console: `cam` prints the camera's position and angles.
+- Console: `menu open|close` opens and shuts the Esc menu, `menupos <x> <y>` moves it at once (`menupos reset` puts it back), and `screenshot ui` saves the whole window with the menus on it.
 - Console: `objects [radius]` lists the objects near Banjo with their model and actor entry.
 - Console: `transformmenu open|close` opens and shuts the Transform Anywhere Menu.
 - Console: `warp` works as the very first command: from the launcher or the title it loads save file 1, then warps.

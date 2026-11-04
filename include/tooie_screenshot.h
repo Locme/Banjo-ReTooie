@@ -11,6 +11,9 @@ namespace tooie::screenshot {
 
     // Takes a screenshot of the next frame. Safe to call from any thread.
     void take();
+    // The whole window as it is shown, the Esc menu, the console and notices included, at the window's size, saved as
+    // <stamp>-ui.png (the console's screenshot ui). Safe to call from any thread.
+    void take_window();
 
     // A burst as F12 held: start keeps every presented frame (the last 150, shrunk 4x), stop writes them to
     // screenshots/burst-<stamp>/. For the console; stop does nothing while no burst is on.

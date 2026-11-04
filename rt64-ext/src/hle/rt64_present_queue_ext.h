@@ -33,6 +33,9 @@ namespace RT64 {
     // present thread. Only one request is kept; a newer one replaces it.
     typedef std::function<void(uint32_t width, uint32_t height, std::vector<uint8_t> &&rgba)> ScreenshotCallback;
     void RequestScreenshot(ScreenshotCallback callback);
+    // The same for the whole window as it is presented: the picture with the menus, the console and notices drawn over
+    // it, at the window's size (the console's screenshot ui).
+    void RequestWindowScreenshot(ScreenshotCallback callback);
 
     // Present counts and time since the last call (then reset): presents shown and skipped, time asleep to hold the
     // target rate, in vkQueuePresent, and waiting for the renderer to finish a frame.
@@ -123,6 +126,10 @@ namespace RT64 {
         };
         bool screenshotFormatSupported(RenderFormat format);
         void finishScreenshot(ScreenshotReadback &readback);
+        // A pending window screenshot: its callback taken and the swap chain image (everything drawn, in the copy
+        // source layout afterwards) copied into out's read-back buffer. Nothing when none is pending.
+        void copyWindowScreenshot(RenderDevice *device, RenderCommandList *commandList, RenderTexture *swapChainTexture,
+            uint32_t width, uint32_t height, ScreenshotReadback &out);
 
         extern std::mutex frameStatsMutex;
         extern FrameStats frameStats;

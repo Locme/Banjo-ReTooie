@@ -3168,7 +3168,7 @@ index 34eec3f..cedce38 100644
      Element *select_add_option(std::string_view text, std::string_view value);
      void select_set_selection(std::string_view option_value);
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..377b86a 100644
+index b057f46..c821dfc 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
 @@ -3,6 +3,9 @@
@@ -3213,7 +3213,26 @@ index b057f46..377b86a 100644
      return Modal::close();
  }
  
-@@ -311,6 +326,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
+@@ -299,6 +314,18 @@ void Modal::render_menu_actions() {
+     }
+ }
+ 
++void Modal::get_box_position(float *x, float *y) {
++    *x = modal_element != nullptr ? modal_element->get_absolute_left() : 0.0f;
++    *y = modal_element != nullptr ? modal_element->get_absolute_top() : 0.0f;
++}
++
++void Modal::set_offset(float x, float y) {
++    if (modal_element != nullptr) {
++        modal_element->set_left(x);
++        modal_element->set_top(y);
++    }
++}
++
+ void Modal::set_on_close_callback(std::function<void()> callback) {
+     on_close_callback = callback;
+ }
+@@ -311,6 +338,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
      return modal;
  }
  
@@ -3302,7 +3321,7 @@ index b057f46..377b86a 100644
  TabbedModal::TabbedModal(
      ResourceId rid,
      Document *parent,
-@@ -319,6 +416,12 @@ TabbedModal::TabbedModal(
+@@ -319,6 +428,12 @@ TabbedModal::TabbedModal(
  ) : Modal(rid, parent, modal_root_context, modal_type)
  {
      set_menu_action_callback(MenuAction::Back, [this]() {
@@ -3315,7 +3334,7 @@ index b057f46..377b86a 100644
          if (this->tabs != nullptr) {
              this->tabs->focus_on_active_tab();
          }
-@@ -331,9 +434,124 @@ TabbedModal::TabbedModal(
+@@ -331,9 +446,124 @@ TabbedModal::TabbedModal(
      }, "Next Tab");
  }
  
@@ -3440,7 +3459,7 @@ index b057f46..377b86a 100644
              if (previous_tab_index != current_tab_index) {
                  body->clear_children();
                  if (current_tab_index >= 0 && current_tab_index < tab_contexts.size()) {
-@@ -341,6 +559,9 @@ void TabbedModal::process_event(const Event &e) {
+@@ -341,6 +571,9 @@ void TabbedModal::process_event(const Event &e) {
                  }
                  previous_tab_index = current_tab_index;
              }
@@ -3450,7 +3469,7 @@ index b057f46..377b86a 100644
              queue_update();
              break;
          }
-@@ -362,7 +583,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
+@@ -362,7 +595,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
          return;
      }
      int next_index = tabs->get_next_tab_in_direction(tabs->get_active_tab(), direction);
@@ -3471,7 +3490,7 @@ index b057f46..377b86a 100644
      // Only focus if the tab changed to the intended tab, otherwise the tab change was cancelled.
      if (current_tab_index == next_index) {
          tabs->focus_on_active_tab();
-@@ -404,6 +638,12 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+@@ -404,6 +650,12 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
      ContextId context = get_current_context();
      if (tabs == nullptr) {
          header->set_padding_left(0.0f); // tabs hug to left side
@@ -3485,10 +3504,21 @@ index b057f46..377b86a 100644
          tabs->set_change_tab_callback([this](int tab_index) {
              this->on_tab_change(tab_index);
 diff --git a/recompui/src/elements/ui_modal.h b/recompui/src/elements/ui_modal.h
-index d065a14..047bc18 100644
+index d065a14..1b81311 100644
 --- a/recompui/src/elements/ui_modal.h
 +++ b/recompui/src/elements/ui_modal.h
-@@ -102,6 +102,16 @@ namespace recompui {
+@@ -87,6 +87,10 @@ namespace recompui {
+         bool is_open_now() const { return is_open; }
+ 
+         ConfigHeaderFooter *get_header() { return header; }
++        // Moves the modal's box from where it is laid out (centred) by x, y in dp, right and down positive.
++        void set_offset(float x, float y);
++        // Where the modal's box is laid out now, from the window's top left.
++        void get_box_position(float *x, float *y);
+         Element *get_body() { return body; }
+ 
+         void set_on_close_callback(std::function<void()> callback);
+@@ -102,6 +106,16 @@ namespace recompui {
          TabSet *tabs = nullptr;
          int previous_tab_index = -1;
          int current_tab_index = -1;

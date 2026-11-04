@@ -188,10 +188,12 @@ index 4827452..2e99945 100644
          D3D12Device(D3D12Interface *renderInterface, const std::string &preferredDeviceName);
          ~D3D12Device() override;
 diff --git a/plume_render_interface.h b/plume_render_interface.h
-index 2048557..92e71de 100644
+index 2048557..b7f78fc 100644
 --- a/plume_render_interface.h
 +++ b/plume_render_interface.h
-@@ -10,38 +10,52 @@
+@@ -8,18 +8,28 @@
+ #pragma once
+ 
  #include <climits>
 +#include <atomic>
  
@@ -199,14 +201,14 @@ index 2048557..92e71de 100644
  
  namespace plume {
      // Interfaces.
-+
+ 
 +    // Banjo-Tooie: a number for each texture, buffer and acceleration structure made, never given out twice (unlike their
 +    // addresses, which a new object takes once the old one is freed), for caches that key on what they point at.
 +    inline uint64_t RenderObjectUniqueId() {
 +        static std::atomic<uint64_t> next{ 1 };
 +        return next.fetch_add(1, std::memory_order_relaxed);
 +    }
- 
++
      struct RenderBufferFormattedView {
          virtual ~RenderBufferFormattedView() { }
      };
@@ -218,18 +220,7 @@ index 2048557..92e71de 100644
          virtual void *map(uint32_t subresource = 0, const RenderRange *readRange = nullptr) = 0;
          virtual void unmap(uint32_t subresource = 0, const RenderRange *writtenRange = nullptr) = 0;
          virtual std::unique_ptr<RenderBufferFormattedView> createBufferFormattedView(RenderFormat format) = 0;
-         virtual void setName(const std::string &name) = 0;
-         virtual uint64_t getDeviceAddress() const = 0;
- 
-         // Concrete implementation shortcuts.
-         inline RenderBufferReference at(uint64_t offset) const {
-             return RenderBufferReference(this, offset);
-         }
-     };
- 
-     struct RenderTextureView {
-         virtual ~RenderTextureView() { }
-     };
+@@ -38,12 +48,16 @@ namespace plume {
  
      struct RenderTexture {
          virtual ~RenderTexture() { }
@@ -244,6 +235,8 @@ index 2048557..92e71de 100644
 +        // Banjo-Tooie: this structure's RenderObjectUniqueId.
 +        uint64_t uniqueId = RenderObjectUniqueId();
      };
+ 
+     struct RenderShader {
 @@ -59,6 +73,8 @@ namespace plume {
          virtual ~RenderPipeline() { }
          virtual void setName(const std::string &name) = 0;
@@ -363,7 +356,7 @@ index 9dcfedf..642572b 100644
          bool sampleLocations = false;
  
 diff --git a/plume_vulkan.cpp b/plume_vulkan.cpp
-index f1dd503..694126e 100644
+index f1dd503..cb2fd69 100644
 --- a/plume_vulkan.cpp
 +++ b/plume_vulkan.cpp
 @@ -11,8 +11,14 @@
@@ -1174,7 +1167,7 @@ index f1dd503..694126e 100644
          if (currentPresentId >= desc.maxFrameLatency) {
              constexpr uint64_t waitTimeout = 100000000;
              vkWaitForPresentKHR(commandQueue->device->vk, vk, currentPresentId - (desc.maxFrameLatency - 1), waitTimeout);
-@@ -2332,7 +2813,12 @@ namespace plume {
+@@ -2332,13 +2813,18 @@ namespace plume {
  
          createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
          createInfo.surface = surface;
@@ -1187,6 +1180,13 @@ index f1dd503..694126e 100644
          createInfo.imageFormat = pickedSurfaceFormat.format;
          createInfo.imageColorSpace = pickedSurfaceFormat.colorSpace;
          createInfo.imageExtent.width = width;
+         createInfo.imageExtent.height = height;
+         createInfo.imageArrayLayers = 1;
+-        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
++        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+         createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+         createInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+         createInfo.compositeAlpha = pickedAlphaFlag;
 @@ -2407,11 +2893,25 @@ namespace plume {
      }
  
