@@ -9,6 +9,8 @@ regenerated code, CI, notes and tooling are left out.
 - Console: `kill [radius] [model]` removes the nearest object as a beaten enemy is removed (for testing).
 - Transform Anywhere Menu: the area name shown on arrival no longer stays frozen over the menu.
 - First-person shooter sections: the mouse and gyro also turn Banjo in Inside Targitzan's Temple and Inside Chompa's Belly (more of the shooter's states counted).
+- First-person shooter sections: moving the mouse (or the gyro) up and down tilts the view up and down, within the game's own limits, and the view stays where you leave it.
+- Console: `cam` prints the camera's position and angles.
 - Console: `objects [radius]` lists the objects near Banjo with their model and actor entry.
 - Console: `transformmenu open|close` opens and shuts the Transform Anywhere Menu.
 - Console: `warp` works as the very first command: from the launcher or the title it loads save file 1, then warps.

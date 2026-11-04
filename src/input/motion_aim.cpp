@@ -160,6 +160,15 @@ namespace {
         }
     }
 
+    // The shooter's tilt: func_8080682C_bsfirstp moves the view's tilt (its block, PlayerState +0x188, at +0x20C, in
+    // degrees, positive up) each frame by a change from the look input while R is held (func_80806928_bsfirstp) or one
+    // that eases it back otherwise (func_808068E8_bsfirstp), then keeps it between +0x1EC plus +0x25C and +0x1E8. The
+    // mouse and the gyro keep a tilt of their own: the hook as the function starts takes the share added last frame
+    // back off, so the game works on its own value, and the hook as it ends adds the mouse's tilt on again within those
+    // limits, so the view holds where the mouse left it (L, 2026-11-04: up and down did not work, then down did not).
+    std::atomic<float> shooter_tilt{0.0f};
+    float shooter_tilt_applied = 0.0f;
+
     bool invert_y() {
         try {
             return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::motion_aim::invert_y_option));
@@ -266,15 +275,17 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
         std::min(std::chrono::duration<float>(now - last_tick_at).count(), 0.1f);
     last_tick_at = now;
     // The first-person shooter sections (Targitzan's Temple): their view is not the dynamic camera's angles below
-    // but Banjo's facing, which the stick turns while it also walks him. There is no up and down look to turn
-    // (the stick's up and down walk, R and the C buttons too, measured headless 2026-11-04), so the mouse and the
-    // gyro turn him left and right only.
+    // but Banjo's facing, which the stick turns while it also walks him, and a tilt of their own
+    // (the stick's up and down walk; R with the stick tilts the view), so the mouse and the gyro turn him left and right
+    // and tilt that view up and down (tooie_shooter_tilt_begin and _end).
     if (tooie::fine_aim::in_shooter()) {
         direct_has_stick = false;
         have_last = false;
         turn_facing(rdram, yaw_delta);
+        shooter_tilt = std::clamp(shooter_tilt.load() + (invert_y() ? -pitch_delta : pitch_delta), -180.0f, 180.0f);
         return;
     }
+    shooter_tilt = 0.0f;
     if (!tooie::fine_aim::in_first_person()) {
         direct_has_stick = false;
         have_last = false;
@@ -340,4 +351,35 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
     if (log) {
         fprintf(stderr, "[aim] pitch %.1f yaw %.1f (+%.2f, +%.2f)\n", pitch, yaw, pitch_delta, yaw_delta);
     }
+}
+
+// func_8080682C_bsfirstp as it starts ($a0 the player): the mouse's share of the tilt from last frame taken off.
+extern "C" void tooie_shooter_tilt_begin(uint8_t* rdram, recomp_context* ctx) {
+    const uint32_t block = tooie::rdram::valid_ptr((uint32_t)ctx->r4) ? tooie::rdram::read_word(rdram, (uint32_t)ctx->r4 + 0x188) : 0;
+    if (!tooie::rdram::valid_ptr(block) || shooter_tilt_applied == 0.0f) {
+        shooter_tilt_applied = 0.0f;
+        return;
+    }
+    tooie::rdram::write_float(rdram, block + 0x20C, tooie::rdram::read_float(rdram, block + 0x20C) - shooter_tilt_applied);
+    shooter_tilt_applied = 0.0f;
+}
+
+// func_8080682C_bsfirstp as it ends ($s0 the shooter's block): the mouse's tilt added on within the game's limits. The
+// mouse's tilt is cut to what fits, so moving the other way turns the view at once.
+extern "C" void tooie_shooter_tilt_end(uint8_t* rdram, recomp_context* ctx) {
+    const uint32_t block = (uint32_t)ctx->r16;
+    const float want = shooter_tilt.load();
+    if (!tooie::rdram::valid_ptr(block) || want == 0.0f) {
+        return;
+    }
+    const float game = tooie::rdram::read_float(rdram, block + 0x20C);
+    const float low = tooie::rdram::read_float(rdram, block + 0x1EC) + tooie::rdram::read_float(rdram, block + 0x25C);
+    const float high = tooie::rdram::read_float(rdram, block + 0x1E8);
+    if (!(low < high)) {
+        return;
+    }
+    const float tilt = std::clamp(game + want, low, high);
+    shooter_tilt_applied = tilt - game;
+    shooter_tilt = shooter_tilt_applied;
+    tooie::rdram::write_float(rdram, block + 0x20C, tilt);
 }

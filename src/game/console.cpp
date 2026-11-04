@@ -2028,6 +2028,17 @@ void cmd_kill(Ctx& c) {
     print(format("removed object %08X, model %03X, %.0f away", best, best_model, best_dist));
 }
 
+// cam: the viewport camera as drawn this frame (camera controller +0x00: position at +0x00, pitch, yaw and roll in
+// degrees at +0x18, src/gameplay/free_camera.cpp), and the controller's mode (+0x16, 2 the dynamic camera).
+void cmd_cam(Ctx& c) {
+    const uint32_t ctl = tooie::free_camera::last_controller();
+    const uint32_t camera = tooie::rdram::valid_ptr(ctl) ? read_ram(c.rdram, ctl, 4) : 0;
+    if (!tooie::rdram::valid_ptr(camera)) { error("no camera yet"); return; }
+    auto f = [&](uint32_t off) { return tooie::rdram::read_float(c.rdram, camera + off); };
+    print(format("camera at %.1f %.1f %.1f, pitch %.2f yaw %.2f roll %.2f, mode %d", f(0), f(4), f(8), f(0x18), f(0x1C), f(0x20),
+        (int)(int16_t)read_ram(c.rdram, ctl + 0x16, 2)));
+}
+
 // anim: the animation Banjo's animation controller plays now (its asset id, as anctrl_getIndex gives it), with the
 // form and the player state, to find a form's idle animation.
 void cmd_anim(Ctx& c) {
@@ -3792,6 +3803,7 @@ const std::vector<Command>& commands() {
         { "lights", {}, true, "lights [add [r g b [radius [height]]] | undo | clear | list]", "Point Lights's lamps for this map: add one above Banjo (warm, radius 500, 80 up), remove the last, all, or list them (saved to Dev Files/point_lights.txt)", cmd_lights },
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
+        { "cam", {}, true, "cam", "the camera's position and angles as drawn, and its mode", cmd_cam },
         { "kill", {}, true, "kill [radius] [model hex]", "remove the nearest object (or the nearest with that model) as a beaten enemy is removed", cmd_kill },
         { "anim", {}, true, "anim", "the animation Banjo plays now, with his form and state", cmd_anim },
         { "objects", {}, true, "objects [radius]", "the live objects near Banjo, nearest first (address, marker, model, actor entry, position)", cmd_objects },

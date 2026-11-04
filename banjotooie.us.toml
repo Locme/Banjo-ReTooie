@@ -2823,3 +2823,16 @@ text = "if (tooie_respawn_skip(rdram, ctx)) { ctx->r2 = 0; goto L_80800278; }"
 func = "gspropsDll_entrypoint_1"
 before_vram = 0x80800234
 text = "tooie_respawn_spawned(rdram, ctx);"
+
+# Mouse and gyro tilt in the first-person shooter (src/input/motion_aim.cpp): func_8080682C_bsfirstp moves and limits
+# the view's tilt (+0x20C of the shooter's block); as it starts the mouse's share is taken off, and as it ends (both
+# paths meet at 0x808068D8, $s0 still the block) put on again.
+[[patches.hook]]
+func = "func_8080682C_bsfirstp"
+before_vram = 0x8080682C
+text = "tooie_shooter_tilt_begin(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_8080682C_bsfirstp"
+before_vram = 0x808068D8
+text = "tooie_shooter_tilt_end(rdram, ctx);"

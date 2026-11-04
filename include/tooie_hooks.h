@@ -175,6 +175,9 @@ void tooie_pause_settings_log_text(uint8_t* rdram, recomp_context* ctx);
 // Whether the area name is hidden: Hide HUD (or photo mode) has the HUD hidden, or the Transform Anywhere Menu is up
 // (src/game/hide_hud.cpp).
 int tooie_area_name_hidden(void);
+// The mouse and gyro tilt in the first-person shooter (src/input/motion_aim.cpp).
+void tooie_shooter_tilt_begin(uint8_t* rdram, recomp_context* ctx);
+void tooie_shooter_tilt_end(uint8_t* rdram, recomp_context* ctx);
 // Whether photo mode has the players hidden (src/gameplay/photo_mode.cpp).
 int tooie_players_hidden(void);
 // A player's draw alpha, faded while the free camera is pulled in close (src/gameplay/free_camera.cpp).

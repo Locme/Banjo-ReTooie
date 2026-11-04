@@ -6049,6 +6049,7 @@ RECOMP_FUNC void _bashoes_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8080682C_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_shooter_tilt_begin(rdram, ctx);
     // 0x8080682C: addiu       $sp, $sp, -0x28
     ctx->r29 = ADD32(ctx->r29, -0X28);
     // 0x80806830: sw          $ra, 0x1C($sp)
@@ -6201,6 +6202,7 @@ L_808068C4:
     // 0x808068D4: lw          $ra, 0x1C($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X1C);
 L_808068D8:
+    tooie_shooter_tilt_end(rdram, ctx);
     // 0x808068D8: lw          $s0, 0x18($sp)
     ctx->r16 = MEM_W(ctx->r29, 0X18);
     // 0x808068DC: addiu       $sp, $sp, 0x28

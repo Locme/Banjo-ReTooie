@@ -1172,6 +1172,19 @@ pos
 
 Catch: needs a player in the game. Until there is one, it reports an error.
 
+### `cam`
+
+Usage: `cam`
+
+Prints the camera as the frame is drawn from it: its position, its pitch, yaw and roll in degrees (a positive pitch
+looks up, yaw 0 looks along -z), and the camera controller's mode (2 is the gameplay camera).
+
+```
+cam
+```
+
+Catch: needs the game running.
+
 ### `kill`
 
 Usage: `kill [radius] [model hex]`
