@@ -19,6 +19,10 @@ namespace tooie::transform_menu {
     // Whether the menu is up now.
     bool is_open();
 
+    // From the viewport camera's step (free_camera.cpp), after the camera's own update: while the menu is up, puts the
+    // camera high over Banjo and returns true.
+    bool place_camera(uint8_t* rdram, uint32_t camera);
+
     // The console's transformmenu command (src/game/console.cpp): opens (true) or closes (false) the menu on the next
     // game frame, as the Transform key would.
     void request(bool open);

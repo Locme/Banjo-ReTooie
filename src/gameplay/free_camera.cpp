@@ -51,6 +51,7 @@
 #include "tooie_motion_aim.h"
 #include "tooie_hooks.h"
 #include "tooie_mirror_mode.h"
+#include "tooie_transform_menu.h"
 #include "tooie_rdram.h"
 
 namespace {
@@ -325,6 +326,10 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     }
     last_ctl = ctl;
     const uint32_t camera = read_word(rdram, ctl + ctl_camera);
+    if (valid_ptr(camera) && tooie::transform_menu::place_camera(rdram, camera)) {
+        state.active = false;
+        return;
+    }
     if (valid_ptr(camera) && tooie::photo_mode::place_camera(rdram, ctx, camera)) {
         state.active = false;
         player_fade = 1.0f;

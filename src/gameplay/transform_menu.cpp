@@ -4,11 +4,13 @@
 // While it is on, the Transform key (Controls tab, Movement; T, and LT + Y on a controller) opens a menu instead of
 // changing into the world's Humba form. The game stands still (the frame's delta time is set to almost nothing,
 // as the Pause Special Menu does) and the forms Banjo has been stand round him as their real 3D models, small, in a
-// ring, seen from above, after the picture L sent (2026-11-04): the camera is held high behind Banjo looking down at
-// him (the dynamic camera's +0x72 hold, as the console's look does), the scene darkens towards the edges of the
+// ring in the middle of the screen, after the picture L sent (2026-11-04): they stand a short way in front of the
+// camera, square to the view, and the camera is kept where it was (free_camera.cpp's hook after the camera's update
+// calls place_camera, as for photo mode), so the ring does not depend on where Banjo is. The scene darkens towards the edges of the
 // screen in a soft round fade, and a bar along the bottom reads [d-pad] SELECT, [A] TRANSFORM, [B] BACK with plain
 // grey buttons. The stick or the d-pad points at a form to pick it (up is the one ahead of Banjo); the picked one is
-// larger and spins slowly. Each model stands in its form's idle pose, leaning back a little to face the camera.
+// larger and spins slowly. Each model stands in its form's idle pose (the animation moved on by the clock, as the
+// game stands still), facing the camera and leaning back as far as the camera looks down.
 //
 // The models: each is a Golden Goliath statue (actor 0x163, a still model) spawned with the game's own
 // func_80108474 and given the form's model (its id struct +0x14), as the test room shows the transformations
@@ -118,25 +120,22 @@ namespace {
     // Where things go on the game's 320 x 240 2D screen.
     constexpr int centre_x = 160;
 
-    // The 3D line-up: a ring round Banjo, this far from him, the models at this share of their size.
-    constexpr float ring_radius = 280.0f;
-    constexpr float model_scale = 0.55f;
+    // The 3D line-up: a ring this far in front of the camera, square to the view so it sits in the middle of the
+    // screen, of this radius, the models at this share of their size (L, 2026-11-04: in the middle of the screen
+    // always, not round Banjo, and using the screen's height).
+    constexpr float ring_depth = 320.0f;
+    constexpr float ring_radius = 78.0f;
+    constexpr float model_scale = 0.17f;
+    // The ring's middle sits this far up the screen from its middle, to leave room for the bar along the bottom.
+    constexpr float ring_raise = 8.0f;
     constexpr float picked_grow = 1.4f;
     constexpr float spin_degrees_per_second = 40.0f;
     constexpr uint8_t default_faded_alpha = 255;
-    // The camera while it is up: this far from Banjo's middle (this high above his feet), looking down this steeply.
-    constexpr float camera_distance = 1500.0f;
-    constexpr float camera_pitch = -55.0f;
-    constexpr float camera_target_height = 40.0f;
-    // The picture comes out looking that much past the point the position aims at (Banjo sat a fifth of the screen
-    // below the middle, 2026-11-04), so the camera tilts this much further down than its position is worked out for.
-    constexpr float camera_tilt_extra = -9.0f;
-    // The dynamic camera (camera controller +0x04): held still while +0x72 is set, its position at +0x74 and its
-    // pitch and yaw in degrees at +0x80 (src/game/console.cpp, look).
-    constexpr uint32_t ctl_dynamic = 0x04;
-    constexpr uint32_t dyn_frozen = 0x72;
-    constexpr uint32_t dyn_pos = 0x74;
-    constexpr uint32_t dyn_rot = 0x80;
+    // The viewport camera (camera controller +0x00, src/gameplay/free_camera.cpp): its position at +0x00 and pitch, yaw
+    // and roll in degrees at +0x18. The menu keeps it where it was when the menu opened (written back after the
+    // camera's own update each frame), whatever kind of camera the map runs.
+    constexpr uint32_t cam_pos = 0x00;
+    constexpr uint32_t cam_rot = 0x18;
 
     constexpr uint16_t statue_actor = 0x163;          // the Golden Goliath statue: a still model
     constexpr uint32_t object_array_pointer = 0x80136EE0;
@@ -148,8 +147,6 @@ namespace {
     constexpr uint32_t object_scale = 0x38;
     constexpr uint32_t object_pitch = 0x44;
     constexpr uint32_t object_yaw = 0x48;
-    // The models lean back this far, so with the camera above they face it rather than show it their heads.
-    constexpr float model_lean = 35.0f;
     constexpr uint32_t object_alpha = 0x9B;
     constexpr uint32_t marker_model = 0x14;
     constexpr int max_objects = 2048;
@@ -203,10 +200,11 @@ namespace {
         bool key_was_held = false;
         Clock::time_point opened_at{};
         // The camera held over Banjo.
-        uint32_t camera = 0;
-        uint8_t camera_frozen_before = 0;
+        bool has_view = false;
         float camera_pos[3] = {};
-        float camera_yaw = 0.0f;
+        float camera_rot[3] = {};
+        // How far the models lean back to face the camera (its pitch down).
+        float lean = 0.0f;
     } menu;
 
     // Shared with the input thread.
@@ -356,7 +354,7 @@ namespace {
     }
 
     // Each frame: the statues stay on their spots, the picked one larger and turning, the others faded back.
-    void pose_statues(uint8_t* rdram) {
+    void pose_statues(uint8_t* rdram, recomp_context* ctx) {
         const float t = (float)ms_since_start() / 1000.0f;
         for (size_t i = 0; i < menu.entries.size(); i++) {
             Entry& e = menu.entries[i];
@@ -370,9 +368,15 @@ namespace {
             }
             const float yaw = picked ? std::fmod(e.yaw + t * spin_degrees_per_second, 360.0f) : e.yaw;
             write_float(rdram, object + object_yaw, yaw);
-            write_float(rdram, object + object_pitch, model_lean);
+            write_float(rdram, object + object_pitch, menu.lean);
             write_float(rdram, object + object_scale, forms[e.form].scale * model_scale * (picked ? picked_grow : 1.0f));
             MEM_B(object_alpha, (gpr)(int32_t)object) = (int8_t)(picked ? 255 : faded_alpha());
+            // The game stands still behind the menu, so its animations do not move on: the idle animation's place
+            // (anctrl +0x1C +0x10, 0 to 1, as anctrl_getAnimTimer reads it) is set from the clock instead.
+            const uint32_t ctrl = call(rdram, ctx, func_80104248, object);
+            if (tooie::rdram::valid_ptr(ctrl) && forms[e.form].idle_seconds > 0.0f) {
+                write_float(rdram, ctrl + 0x2C, std::fmod(t / forms[e.form].idle_seconds, 1.0f));
+            }
         }
     }
 
@@ -399,36 +403,6 @@ namespace {
         call(rdram, ctx, func_8008B188, ctrl, 1);
         // And starts it, as func_80101FDC does after the state change.
         call(rdram, ctx, anctrl_start, ctrl);
-    }
-
-    // The gameplay camera, 0 while another kind is running (a scene, a fixed camera).
-    uint32_t gameplay_camera(uint8_t* rdram) {
-        const uint32_t ctl = tooie::free_camera::last_controller();
-        if (!tooie::rdram::valid_ptr(ctl) || read_half(rdram, ctl + 0x16) != 2) {
-            return 0;
-        }
-        const uint32_t dynamic = read_word(rdram, ctl + ctl_dynamic);
-        return tooie::rdram::valid_ptr(dynamic) ? dynamic : 0;
-    }
-
-    // Each frame while the menu is up: the camera stays over Banjo.
-    void hold_camera(uint8_t* rdram) {
-        if (menu.camera == 0) {
-            return;
-        }
-        MEM_B(dyn_frozen, (gpr)(int32_t)menu.camera) = 1;
-        for (int k = 0; k < 3; k++) {
-            write_float(rdram, menu.camera + dyn_pos + 4 * k, menu.camera_pos[k]);
-        }
-        write_float(rdram, menu.camera + dyn_rot, camera_pitch + camera_tilt_extra);
-        write_float(rdram, menu.camera + dyn_rot + 4, menu.camera_yaw);
-    }
-
-    void release_camera(uint8_t* rdram, bool camera_still_there) {
-        if (menu.camera != 0 && camera_still_there) {
-            MEM_B(dyn_frozen, (gpr)(int32_t)menu.camera) = (int8_t)menu.camera_frozen_before;
-        }
-        menu.camera = 0;
     }
 
     // The fade (dark towards the screen's edges, as a round vignette) and the two button shapes, as I8 textures.
@@ -483,22 +457,50 @@ namespace {
                 shown.push_back(i);
             }
         }
-        // Evenly round a ring, the first straight ahead of Banjo (the top of the screen) and on clockwise as the screen
-        // shows it. The game's yaw grows turning left, so a form that much clockwise on screen is that much less in yaw;
-        // with Mirror Mode the picture is flipped, so the other way.
-        const size_t n = shown.size();
+        // The camera as it is now, kept there while the menu is up.
+        const uint32_t ctl = tooie::free_camera::last_controller();
+        const uint32_t camera = tooie::rdram::valid_ptr(ctl) ? read_word(rdram, ctl) : 0;
+        if (!tooie::rdram::valid_ptr(camera)) {
+            return;
+        }
+        for (int k = 0; k < 3; k++) {
+            menu.camera_pos[k] = tooie::rdram::read_float(rdram, camera + cam_pos + 4 * k);
+            menu.camera_rot[k] = tooie::rdram::read_float(rdram, camera + cam_rot + 4 * k);
+        }
+        menu.has_view = true;
+        // The view's axes: yaw 0 looks along -z and grows turning left, a positive pitch looks up.
+        const float pitch = (menu.camera_rot[0] > 180.0f ? menu.camera_rot[0] - 360.0f : menu.camera_rot[0]) * 3.14159265f / 180.0f;
+        const float yaw = menu.camera_rot[1] * 3.14159265f / 180.0f;
+        const float forward[3] = { -std::sin(yaw) * std::cos(pitch), std::sin(pitch), -std::cos(yaw) * std::cos(pitch) };
         const bool mirrored = tooie::mirror_mode::active();
+        // Right on screen (left in the world with Mirror Mode, which flips the picture) and up on screen.
+        const float side = mirrored ? -1.0f : 1.0f;
+        const float right[3] = { std::cos(yaw) * side, 0.0f, -std::sin(yaw) * side };
+        const float up[3] = { std::sin(yaw) * std::sin(pitch), std::cos(pitch), std::cos(yaw) * std::sin(pitch) };
+        float centre[3];
+        for (int k = 0; k < 3; k++) {
+            centre[k] = menu.camera_pos[k] + forward[k] * ring_depth;
+        }
+        for (int k = 0; k < 3; k++) {
+            centre[k] += up[k] * ring_raise;
+        }
+        // The object's pitch tips a model forward when positive (a camera looking down saw more of their tops with
+        // it), so they lean back with a negative one.
+        menu.lean = -std::clamp(-pitch * 180.0f / 3.14159265f, 0.0f, 80.0f);
+
+        // Evenly round the ring, the first at the top of the screen and on clockwise.
+        const size_t n = shown.size();
         for (size_t i = 0; i < n; i++) {
             const float screen_angle = 360.0f * (float)i / (float)std::max<size_t>(n, 1);
-            const float a = (facing + (mirrored ? screen_angle : -screen_angle)) * 3.14159265f / 180.0f;
+            const float a = screen_angle * 3.14159265f / 180.0f;
             Entry e;
             e.form = shown[i];
             e.screen_angle = screen_angle;
-            e.pos[0] = banjo[0] + std::sin(a) * ring_radius;
-            e.pos[1] = banjo[1];
-            e.pos[2] = banjo[2] + std::cos(a) * ring_radius;
-            // All face the camera, which is behind Banjo.
-            e.yaw = std::fmod(facing + 180.0f, 360.0f);
+            for (int k = 0; k < 3; k++) {
+                e.pos[k] = centre[k] + (up[k] * std::cos(a) + right[k] * std::sin(a)) * ring_radius;
+            }
+            // Facing the camera (a model's yaw faces the way the camera's yaw comes from).
+            e.yaw = menu.camera_rot[1];
             const uint32_t object = spawn(rdram, ctx, statue_actor, e.pos, e.yaw);
             if (tooie::rdram::valid_ptr(object)) {
                 e.marker = read_word(rdram, object);
@@ -519,25 +521,11 @@ namespace {
             std::lock_guard lock{ events.mutex };
             events.list.clear();
         }
-        // The camera: behind Banjo and high, looking down at him along the way he faces. The camera's yaw 0 looks along
-        // -z and grows turning left, so it is his facing plus 180.
-        menu.camera = gameplay_camera(rdram);
-        if (menu.camera != 0) {
-            menu.camera_frozen_before = MEM_BU(dyn_frozen, (gpr)(int32_t)menu.camera);
-            const float f = facing * 3.14159265f / 180.0f;
-            const float p = -camera_pitch * 3.14159265f / 180.0f;
-            const float back = camera_distance * std::cos(p);
-            menu.camera_pos[0] = banjo[0] - std::sin(f) * back;
-            menu.camera_pos[1] = banjo[1] + camera_target_height + camera_distance * std::sin(p);
-            menu.camera_pos[2] = banjo[2] - std::cos(f) * back;
-            menu.camera_yaw = std::fmod(facing + 180.0f, 360.0f);
-        }
         make_textures(rdram);
         menu.open = true;
         menu.opened_at = Clock::now();
         open_flag = true;
-        hold_camera(rdram);
-        pose_statues(rdram);
+        pose_statues(rdram, ctx);
         if (log_on()) {
             std::fprintf(stderr, "[transform-menu] opened at %.0f %.0f %.0f facing %.0f: form 0x%X, %zu forms:", banjo[0],
                 banjo[1], banjo[2], facing, menu.current, menu.entries.size());
@@ -553,8 +541,7 @@ namespace {
             return;
         }
         remove_statues(rdram, ctx);
-        // A map change makes the camera again, so the old one is not written to.
-        release_camera(rdram, !tooie::debug::map_change_busy(rdram) && gameplay_camera(rdram) == menu.camera);
+        menu.has_view = false;
         menu.open = false;
         open_flag = false;
         if (log_on()) {
@@ -717,6 +704,19 @@ bool tooie::transform_menu::is_open() {
     return open_flag.load();
 }
 
+bool tooie::transform_menu::place_camera(uint8_t* rdram, uint32_t camera) {
+    if (!open_flag.load() || !menu.has_view || !tooie::rdram::valid_ptr(camera)) {
+        return false;
+    }
+    for (int k = 0; k < 3; k++) {
+        write_float(rdram, camera + cam_pos + 4 * k, menu.camera_pos[k]);
+    }
+    for (int k = 0; k < 3; k++) {
+        write_float(rdram, camera + cam_rot + 4 * k, menu.camera_rot[k]);
+    }
+    return true;
+}
+
 void tooie::transform_menu::request(bool open_it) {
     console_request = open_it ? 1 : 2;
 }
@@ -762,8 +762,7 @@ void tooie::transform_menu::tick(uint8_t* rdram, recomp_context* ctx) {
     }
     // The game stands still behind the menu.
     write_float(rdram, delta_time_addr, frozen_delta);
-    hold_camera(rdram);
-    pose_statues(rdram);
+    pose_statues(rdram, ctx);
 
     // The Transform key shuts it again, once it has been up a moment.
     if (key_pressed && Clock::now() - menu.opened_at > std::chrono::milliseconds(200)) {
@@ -795,7 +794,7 @@ void tooie::transform_menu::tick(uint8_t* rdram, recomp_context* ctx) {
         }
         if (e >= 0 && e <= 8 && e != 4) {
             move_pick(e % 3 - 1, e / 3 - 1);
-            pose_statues(rdram);
+            pose_statues(rdram, ctx);
             if (log_on()) {
                 std::fprintf(stderr, "[transform-menu] picked %s\n", forms[menu.entries[menu.picked].form].name);
             }
