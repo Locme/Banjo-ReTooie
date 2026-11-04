@@ -50,6 +50,8 @@ namespace {
     constexpr uint32_t state_shooter_walk = 202;
     constexpr uint32_t state_shooter_209 = 209;
     constexpr uint32_t state_shooter_210 = 210;
+    // Firing (Z) there (2026-11-04).
+    constexpr uint32_t state_shooter_fire = 216;
     // C-up held this long before state 152 began makes it first person.
     constexpr auto c_up_window = 1000ms;
     constexpr uint16_t button_c_up = 0x0008;
@@ -138,7 +140,7 @@ bool tooie::fine_aim::in_first_person() {
 
 bool tooie::fine_aim::in_shooter() {
     const uint32_t s = player_state.load();
-    return s == state_shooter_walk || s == state_shooter_209 || s == state_shooter_210;
+    return s == state_shooter_walk || s == state_shooter_209 || s == state_shooter_210 || s == state_shooter_fire;
 }
 
 bool tooie::fine_aim::game_has_player() {

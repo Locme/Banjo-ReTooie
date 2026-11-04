@@ -185,8 +185,12 @@ own tab, so they are saved in general.json and apply as soon as they change.
 - **Direct First Banjo Shooter Analog Aim** (default off) and its **Speed**: in first
   person (C-up) the left stick turns the view faster the further you tilt it
   (90, 150 or 240 degrees a second at full tilt), like a modern shooter, and the
-  reticle stays at the centre. Off keeps the game's own aiming. Fine aim still
-  slows it, and mouse and gyro aim still add to it.
+  view stays where you leave it: the game is given a centred stick then, so it
+  no longer turns Banjo and the view on its own. Stick up looks up (the game's
+  own aiming looks down); Mouse And Gyro Aim: Invert Up/Down flips it. Off keeps
+  the game's own aiming. Fine aim still slows it, and mouse and gyro aim still
+  add to it. In the first-person shooter sections (Targitzan's Temple) the stick
+  walks as before; there the mouse and gyro turn Banjo left and right.
 - **Enemy aim**: Original, Better or Sharp. Enemies and shots that aim ahead of
   you aim half a second (Better) or a full second (Sharp) of your running ahead.
   **Enemy aim: aimed shots** (percent of shots aimed ahead, default 75) and

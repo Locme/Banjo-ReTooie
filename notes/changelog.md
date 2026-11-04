@@ -3,6 +3,12 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-04
+
+- Direct First Banjo Shooter Analog Aim: the view no longer moves by itself. The game is given a centred stick in first person, so it stops turning Banjo and the view from it, and only the direct aim turns the view. Stick up looks up.
+- First person (C-up) with the game's own aiming: at Unlocked the view turns at its 30 FPS speed again (yesterday's change had it crawling).
+- First-person shooter sections: the mouse (and gyro) turn Banjo left and right, also while firing.
+
 ## 2026-11-03
 
 - First-person shooter (e.g. Targitzan's Temple lobby): above 30 FPS the view no longer turns faster than at 30 FPS, and the view bob while walking runs at its 30 FPS pace instead of shaking (at Unlocked it ran about 20 times too fast).

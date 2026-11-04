@@ -11,7 +11,8 @@ namespace recomp::config {
 }
 
 // Mouse and gyro aiming (handoff 4.58 and 4.59, src/input/motion_aim.cpp): in first person the mouse
-// and a controller's gyro turn the view directly, on top of the stick. Strengths are the General tab's
+// and a controller's gyro turn the view directly, on top of the stick; in the first-person shooter sections they
+// turn Banjo left and right. Strengths are the General tab's
 // Mouse Sensitivity and Gyro Sensitivity (0 turns each off).
 namespace tooie::motion_aim {
     inline const std::string invert_y_option = "motion_aim_invert_y";
@@ -24,7 +25,9 @@ namespace tooie::motion_aim {
     void add_options(recomp::config::Config& qol);
 
     // The left stick the game is about to read (-1 to 1, right and up positive), from the end of each pad read.
-    void note_stick(float x, float y);
+    // With direct analog aim on in first person it centres the stick the game is given (the view is turned from
+    // the one kept here).
+    void note_stick(float* x, float* y);
 
     // From each pad read for player 1: collects the mouse and gyro motion since the last read.
     void collect();

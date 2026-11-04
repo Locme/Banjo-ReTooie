@@ -40,8 +40,6 @@ namespace {
     constexpr uint32_t dynamic_offset = 0x04;
     constexpr uint32_t fp_pitch = 0xBC;
     constexpr uint32_t fp_yaw = 0xC0;
-    // The game's delta time for the frame, in seconds.
-    constexpr uint32_t game_delta_time = 0x8012C760;
     // The steepest the game's own stick aim goes (measured headless).
     constexpr float pitch_down_limit = -68.0f;
     constexpr float pitch_up_limit = 70.0f;
@@ -100,6 +98,9 @@ namespace {
     // Direct analog aim (see the header): options are read a few times a second, the stick on every pad read.
     std::atomic<float> stick_x{0.0f};
     std::atomic<float> stick_y{0.0f};
+    // Whether direct analog aim has the stick this tick (game thread writes, pad thread reads): the game is then
+    // given a centred stick in first person, so its own turn and Banjo's facing cannot feed back into the view.
+    std::atomic<bool> direct_has_stick{false};
     constexpr float direct_deadzone = 0.15f;
     // Curve exponent: above 1 gives fine control near the centre.
     constexpr float direct_curve = 1.6f;
@@ -136,6 +137,28 @@ namespace {
         return std::copysign(std::pow(t, direct_curve), v);
     }
 
+    // Player 0's PlayerState (src/gameplay/player_cheats.cpp) +0xF8 points at Banjo's yaw in degrees, and the yaw
+    // he turns to at +4 (the console's face command writes both, or the game turns him back).
+    constexpr uint32_t player_table = 0x80135490;
+    constexpr uint32_t player_yaw = 0xF8;
+
+    // Turns Banjo by this many degrees, read through the pointers each time. His facing grows turning right (full
+    // stick right took it from 0 to 31 headless), the other way from the view's yaw.
+    void turn_facing(uint8_t* rdram, float degrees) {
+        if (degrees == 0.0f) {
+            return;
+        }
+        const uint32_t player = tooie::rdram::read_word(rdram, player_table);
+        const uint32_t yaw = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + player_yaw) : 0;
+        if (!tooie::rdram::valid_ptr(yaw)) {
+            return;
+        }
+        for (uint32_t at : { yaw, yaw + 4 }) {
+            float v = std::fmod(tooie::rdram::read_float(rdram, at) + degrees, 360.0f);
+            tooie::rdram::write_float(rdram, at, v < 0.0f ? v + 360.0f : v);
+        }
+    }
+
     bool invert_y() {
         try {
             return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::motion_aim::invert_y_option));
@@ -151,7 +174,8 @@ void tooie::motion_aim::add_options(recomp::config::Config& qol) {
         "The strength of each is General > Mouse Sensitivity and Gyro Sensitivity.", false);
     qol.add_bool_option(direct_option, "Direct First Banjo Shooter Analog Aim",
         "In first person (C-up), the left stick turns the view directly, faster the further you tilt it, like a modern shooter, "
-        "and the reticle stays at the centre of the screen. Off keeps the game's own aiming.", false);
+        "and the view stays where you leave it. Stick up looks up (the game's own aiming looks down); "
+        "Mouse And Gyro Aim: Invert Up/Down flips it. Off keeps the game's own aiming.", false);
     qol.add_enum_option(direct_speed_option, "Direct First Banjo Shooter Analog Aim Speed",
         "How fast the view turns at full tilt: 90, 150 or 240 degrees a second.",
         {
@@ -163,9 +187,15 @@ void tooie::motion_aim::add_options(recomp::config::Config& qol) {
     qol.add_option_hidden_dependency(direct_speed_option, direct_option, false);
 }
 
-void tooie::motion_aim::note_stick(float x, float y) {
-    stick_x = x;
-    stick_y = y;
+void tooie::motion_aim::note_stick(float* x, float* y) {
+    stick_x = *x;
+    stick_y = *y;
+    // In state 152 the game turns Banjo from the stick and the view from Banjo, so with direct aim the two fed each
+    // other and the view kept moving by itself (L, 2026-11-03). The game sees no stick then; tick turns the view.
+    if (direct_has_stick.load()) {
+        *x = 0.0f;
+        *y = 0.0f;
+    }
 }
 
 void tooie::motion_aim::collect() {
@@ -229,32 +259,36 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
     const float dt = last_tick_at == std::chrono::steady_clock::time_point{} ? 0.0f :
         std::min(std::chrono::duration<float>(now - last_tick_at).count(), 0.1f);
     last_tick_at = now;
-    // The game's own time step this update, in seconds (its delta time at 0x8012C760, src/game/game_frame_rate.cpp),
-    // for the frame shares below. Not above a 30th: at 30 and below nothing changes.
-    const float game_dt = std::clamp(tooie::rdram::read_float(rdram, game_delta_time), 0.0f, 1.0f / 30.0f);
-    // The first-person shooter sections (Targitzan's Temple) are left alone here: their view is not the dynamic
-    // camera's angles below (L, 2026-11-03; still being looked into).
+    // The first-person shooter sections (Targitzan's Temple): their view is not the dynamic camera's angles below
+    // but Banjo's facing, which the stick turns while it also walks him. There is no up and down look to turn
+    // (the stick's up and down walk, R and the C buttons too, measured headless 2026-11-04), so the mouse and the
+    // gyro turn him left and right only.
     if (tooie::fine_aim::in_shooter()) {
+        direct_has_stick = false;
         have_last = false;
+        turn_facing(rdram, -yaw_delta);
         return;
     }
-    const bool shooter = false;
     if (!tooie::fine_aim::in_first_person()) {
+        direct_has_stick = false;
         have_last = false;
         return;
     }
     read_direct_options(now);
+    direct_has_stick = direct_on;
     if (invert_y()) {
         pitch_delta = -pitch_delta;
     }
 
     const gpr ctl = (gpr)(int32_t)tooie::free_camera::last_controller();
     if (!valid_ptr(ctl)) {
+        direct_has_stick = false;
         have_last = false;
         return;
     }
     const gpr dynamic = (gpr)(int32_t)MEM_W(dynamic_offset, ctl);
     if (!valid_ptr(dynamic)) {
+        direct_has_stick = false;
         have_last = false;
         return;
     }
@@ -266,14 +300,13 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
     // Fine aim: the game turned the view by (angle - last) with the stick since the last tick. Take
     // back the unwanted part of that turn. Scaling the stick instead barely slows the game's turning.
     const float fine = tooie::fine_aim::view_scale();
-    // The game turns the view a fixed step every update, made for 30 updates a second, so above 30 it turned faster the
-    // more updates there were (about ten times at Unlocked, L 2026-11-03): only this update's share of a 30th of a
-    // second of it is kept.
-    const float frame_share = std::clamp(game_dt * 30.0f, 0.0f, 1.0f);
-    // Direct analog aim takes back all of the game's own turn and adds one that follows the stick's tilt.
-    // In the shooter sections the stick also walks, so only the frame share applies there (no fine or direct aim).
-    const bool direct = direct_on && !shooter;
-    const float keep = direct ? 0.0f : (shooter ? 1.0f : fine) * frame_share;
+    // The game's own turn here already goes by its delta time (full stick about 60 degrees in a second at 30 FPS,
+    // headless 2026-11-04), so it is kept whole at any frame rate. Taking only a 30th's share of it each update, as
+    // the shooter sections need (src/game/game_frame_rate.cpp), left it crawling at Unlocked.
+    // Direct analog aim takes back all of the game's own turn (with no stick it can still level the view) and adds
+    // one that follows the stick's tilt.
+    const bool direct = direct_on;
+    const float keep = direct ? 0.0f : fine;
     if (have_last && keep < 1.0f) {
         yaw_delta += wrap_delta(yaw - last_yaw) * (keep - 1.0f);
         pitch_delta += wrap_delta(pitch - last_pitch) * (keep - 1.0f);
