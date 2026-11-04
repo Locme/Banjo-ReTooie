@@ -3,9 +3,12 @@
 //
 // While it is on, the Transform key (Controls tab, Movement; T, and LT + Y on a controller) opens a menu instead of
 // changing into the world's Humba form. The game stands still (the frame's delta time is set to almost nothing,
-// as the Pause Special Menu does) and the forms Banjo has been stand round him as their real 3D models, in an arc
-// in front of him, after the picture L sent. The picked one is larger and spins; the others are faded back
-// (the actor's alpha, +0x9B), and a bar along the bottom reads SELECT, TRANSFORM, BACK.
+// as the Pause Special Menu does) and the forms Banjo has been stand round him as their real 3D models, small, in a
+// ring, seen from above, after the picture L sent (2026-11-04): the camera is held high behind Banjo looking down at
+// him (the dynamic camera's +0x72 hold, as the console's look does), the scene darkens towards the edges of the
+// screen in a soft round fade, and a bar along the bottom reads [d-pad] SELECT, [A] TRANSFORM, [B] BACK with plain
+// grey buttons. The stick or the d-pad points at a form to pick it (up is the one ahead of Banjo); the picked one is
+// larger and spins slowly. Each model stands in its form's idle pose, leaning back a little to face the camera.
 //
 // The models: each is a Golden Goliath statue (actor 0x163, a still model) spawned with the game's own
 // func_80108474 and given the form's model (its id struct +0x14), as the test room shows the transformations
@@ -27,12 +30,16 @@
 // every form in every world. Some forms can break in areas the game never expects them in, as with the cheat.
 //
 // Text is printed with the pause menu's font through the game's own text routines (as the Totals checklist
-// prints), with the pause menu's own A and B button sprites.
+// prints). The fade and the buttons are small textures this file makes in spare RDRAM, drawn as texture rectangles
+// straight into the display list (as hd_shadows.cpp writes its commands).
 //
 // Headless: TOOIE_TRANSFORM_MENU=1 turns it on whatever the setting says, TOOIE_TRANSFORM_MENU_OPEN=<ms> opens it
 // that long after the game loop first runs, TOOIE_TRANSFORM_MENU_ALL=1 shows every form whether unlocked or not,
-// TOOIE_TRANSFORM_MENU_DPAD=<hex> tries a sprite for the d-pad, TOOIE_TRANSFORM_MENU_ALPHA=<0-255> sets the
-// faded models' alpha, TOOIE_TRANSFORM_MENU_LOG=1 logs [transform-menu] lines.
+// TOOIE_TRANSFORM_MENU_ALPHA=<0-255> sets the other models' alpha (255, not faded, by default),
+// TOOIE_TRANSFORM_MENU_DRAW=fade|icons|probe draws only the fade, only the bar, or three dots at the screen's
+// corner and middle (to measure where rectangles land), TOOIE_TRANSFORM_MENU_LOG=1 logs
+// [transform-menu] lines. It does not open while a wipe is still drawing (tooie::wipe_showing), which the frozen game
+// would hold over the screen.
 
 #include <algorithm>
 #include <atomic>
@@ -55,7 +62,9 @@
 #include "recompui/config.h"
 #include "tooie_debug.h"
 #include "tooie_game.h"
+#include "tooie_free_camera.h"
 #include "tooie_hotkeys.h"
+#include "tooie_mirror_mode.h"
 #include "tooie_rdram.h"
 #include "tooie_transform_menu.h"
 #include "tooie_transform_picker.h"
@@ -82,7 +91,6 @@ namespace {
     constexpr int menu_font = 1;                       // the pause menu's font (capitals)
     constexpr int colour_white = 0;
     constexpr int colour_yellow = 2;
-    constexpr int colour_blue = 4;
 
     // Strings and sprite coordinates go in extended RDRAM no one else uses: the pause menu's SETTINGS rows end
     // before 0x80EF1400 and Snout jiggle's copies start at 0x80EF8000.
@@ -90,21 +98,45 @@ namespace {
     constexpr uint32_t string_area_size = 0x800;
     constexpr uint32_t coords_addr = string_area + string_area_size - 8;   // Coords2D, in quarter pixels
 
-    // The pause menu's own button sprites: 0xB58 the A button (four frames of it turning), 0xB59 the B button.
-    constexpr uint32_t sprite_a_button = 0xB58;
-    constexpr uint32_t sprite_b_button = 0xB59;
+    // The textures this file draws (I8, the intensity also its alpha): the fade (64 x 64, stretched over the screen),
+    // then a filled circle and a d-pad cross (16 x 16 each), after the strings.
+    constexpr uint32_t fade_texture = 0x80EF5000;
+    constexpr int fade_size = 64;
+    constexpr uint32_t circle_texture = fade_texture + fade_size * fade_size;
+    constexpr uint32_t dpad_texture = circle_texture + 16 * 16;
+    constexpr int icon_size = 16;
+    // The fade: clear within this many pixels of the middle of the 320 x 240 screen, darkest from this far out.
+    constexpr float fade_clear = 60.0f;
+    constexpr float fade_full = 175.0f;
+    constexpr uint8_t fade_alpha = 215;
+    constexpr uint32_t button_grey = 0xB4B4B4FFu;
+    // Texture rectangles come out this much lower than the 320 x 240 screen the text is placed on, measured from its top
+    // (dots drawn at y 0 and 112 landed at 0 and 119.6, 2026-11-04, and the buttons sat 11 below their labels at the
+    // bar), so their y is divided by it. Across they land where the text does.
+    constexpr float rect_scale = 1.0475f;
 
     // Where things go on the game's 320 x 240 2D screen.
     constexpr int centre_x = 160;
 
-    // The 3D line-up: an arc in front of Banjo, this far from him, spanning this many degrees either side of
-    // where he faces, with at least this much room between models.
-    constexpr float arc_radius = 260.0f;
-    constexpr float arc_half_degrees = 100.0f;
-    constexpr float min_gap = 110.0f;
-    constexpr float picked_grow = 1.3f;
-    constexpr float spin_degrees_per_second = 120.0f;
-    constexpr uint8_t default_faded_alpha = 150;
+    // The 3D line-up: a ring round Banjo, this far from him, the models at this share of their size.
+    constexpr float ring_radius = 280.0f;
+    constexpr float model_scale = 0.55f;
+    constexpr float picked_grow = 1.4f;
+    constexpr float spin_degrees_per_second = 40.0f;
+    constexpr uint8_t default_faded_alpha = 255;
+    // The camera while it is up: this far from Banjo's middle (this high above his feet), looking down this steeply.
+    constexpr float camera_distance = 1500.0f;
+    constexpr float camera_pitch = -55.0f;
+    constexpr float camera_target_height = 40.0f;
+    // The picture comes out looking that much past the point the position aims at (Banjo sat a fifth of the screen
+    // below the middle, 2026-11-04), so the camera tilts this much further down than its position is worked out for.
+    constexpr float camera_tilt_extra = -9.0f;
+    // The dynamic camera (camera controller +0x04): held still while +0x72 is set, its position at +0x74 and its
+    // pitch and yaw in degrees at +0x80 (src/game/console.cpp, look).
+    constexpr uint32_t ctl_dynamic = 0x04;
+    constexpr uint32_t dyn_frozen = 0x72;
+    constexpr uint32_t dyn_pos = 0x74;
+    constexpr uint32_t dyn_rot = 0x80;
 
     constexpr uint16_t statue_actor = 0x163;          // the Golden Goliath statue: a still model
     constexpr uint32_t object_array_pointer = 0x80136EE0;
@@ -114,46 +146,52 @@ namespace {
     constexpr uint32_t object_size = 0x9C;
     constexpr uint32_t object_pos = 0x04;
     constexpr uint32_t object_scale = 0x38;
+    constexpr uint32_t object_pitch = 0x44;
     constexpr uint32_t object_yaw = 0x48;
+    // The models lean back this far, so with the camera above they face it rather than show it their heads.
+    constexpr float model_lean = 35.0f;
     constexpr uint32_t object_alpha = 0x9B;
     constexpr uint32_t marker_model = 0x14;
     constexpr int max_objects = 2048;
     constexpr uint32_t player_pos_ptr = 0xE4;
     constexpr uint32_t player_yaw_ptr = 0xF8;
-    constexpr int name_y = 188;
-    constexpr int bar_y = 212;
+    constexpr int bar_y = 214;
     constexpr float text_scale = 0.5f;
-    constexpr float small_scale = 0.38f;
 
-    // A form: the game's id for it (as the player's +0xA0 block +0x29 holds it), its model, its size in the menu and the flags any of which unlocks it (none: always).
+    // A form: the game's id for it (as the player's +0xA0 block +0x29 holds it), its model, its size in the menu, the
+    // flags any of which unlocks it (none: always), and its idle animation and that animation's length (what the
+    // console's anim command reads with Banjo standing still in the form, 2026-11-04).
     struct Form {
         uint8_t id;
         const char* name;
         uint16_t model;
         float scale;
         int32_t flags[3];
+        uint16_t idle;
+        float idle_seconds;
     };
     // Left to right along the arc.
     const Form forms[] = {
-        { 0x01, "BANJO-KAZOOIE", 0x61F, 1.0f, { -1, -1, -1 } },
-        { 0x0A, "BANJO", 0x62A, 1.0f, { 0x4F5, -1, -1 } },
-        { 0x0B, "KAZOOIE", 0x61C, 1.0f, { 0x4F5, -1, -1 } },
-        { 0x08, "STONY", 0x61D, 1.0f, { 0x346, -1, -1 } },
-        { 0x0F, "DETONATOR", 0x623, 1.0f, { 0x347, -1, -1 } },
-        { 0x10, "VAN", 0x624, 0.8f, { 0x348, -1, -1 } },
-        { 0x0C, "SUBMARINE", 0x626, 0.8f, { 0x349, -1, -1 } },
-        { 0x12, "BABY T-REX", 0x609, 1.0f, { 0x34A, -1, -1 } },
-        { 0x13, "DADDY T-REX", 0x60D, 0.3f, { 0x345, -1, -1 } },
-        { 0x07, "WASHING MACHINE", 0x60C, 1.0f, { 0x34B, -1, -1 } },
-        { 0x02, "SNOWBALL", 0x60B, 0.6f, { 0x34C, -1, -1 } },
-        { 0x06, "BEE", 0x613, 1.0f, { 0x34D, -1, -1 } },
+        { 0x01, "BANJO-KAZOOIE", 0x61F, 1.0f, { -1, -1, -1 }, 0x6F, 5.5f },
+        { 0x0A, "BANJO", 0x62A, 1.0f, { 0x4F5, -1, -1 }, 0x6F, 5.5f },
+        { 0x0B, "KAZOOIE", 0x61C, 1.0f, { 0x4F5, -1, -1 }, 0xA4, 6.5f },
+        { 0x08, "STONY", 0x61D, 1.0f, { 0x346, -1, -1 }, 0x63, 6.1f },
+        { 0x0F, "DETONATOR", 0x623, 1.0f, { 0x347, -1, -1 }, 0xE5, 6.5f },
+        { 0x10, "VAN", 0x624, 0.8f, { 0x348, -1, -1 }, 0xEE, 1.0f },
+        { 0x0C, "SUBMARINE", 0x626, 0.8f, { 0x349, -1, -1 }, 0x12E, 6.0f },
+        { 0x12, "BABY T-REX", 0x609, 1.0f, { 0x34A, -1, -1 }, 0x1D2, 8.5f },
+        { 0x13, "DADDY T-REX", 0x60D, 0.3f, { 0x345, -1, -1 }, 0x1D2, 8.5f },
+        { 0x07, "WASHING MACHINE", 0x60C, 1.0f, { 0x34B, -1, -1 }, 0x356, 3.9f },
+        { 0x02, "SNOWBALL", 0x60B, 0.6f, { 0x34C, -1, -1 }, 0x5E, 1.2f },
+        { 0x06, "BEE", 0x613, 1.0f, { 0x34D, -1, -1 }, 0x1DE, 3.0f },
     };
     constexpr size_t form_count = sizeof(forms) / sizeof(forms[0]);
 
     struct Entry {
         size_t form;          // index into forms
         float pos[3];         // where its statue stands
-        float yaw;            // facing Banjo
+        float yaw;            // facing the camera
+        float screen_angle;   // where it is round Banjo on screen, degrees clockwise from straight up
         uint32_t marker = 0;  // the statue's id struct (object +0), 0 if it did not spawn
     };
 
@@ -164,6 +202,11 @@ namespace {
         uint8_t current = 0;      // the player's form when it opened
         bool key_was_held = false;
         Clock::time_point opened_at{};
+        // The camera held over Banjo.
+        uint32_t camera = 0;
+        uint8_t camera_frozen_before = 0;
+        float camera_pos[3] = {};
+        float camera_yaw = 0.0f;
     } menu;
 
     // Shared with the input thread.
@@ -234,6 +277,12 @@ namespace {
         return tooie::debug::can_warp() && tooie::rdram::valid_ptr(read_word(rdram, player_table)) &&
             read_word(rdram, pause_menu_addr) == 0 && !tooie::debug::map_change_busy(rdram) &&
             !tooie::in_letterboxed_scene() && read_half(rdram, dialog_id_addr) == -1;
+    }
+
+    // Whether it may open now: as can_open, and no wipe still drawing (the frozen game would hold a map change's
+    // jigsaw wipe half over the screen, 2026-11-04).
+    bool can_open_now(uint8_t* rdram) {
+        return can_open(rdram) && !tooie::wipe_showing();
     }
 
     uint8_t faded_alpha() {
@@ -321,8 +370,95 @@ namespace {
             }
             const float yaw = picked ? std::fmod(e.yaw + t * spin_degrees_per_second, 360.0f) : e.yaw;
             write_float(rdram, object + object_yaw, yaw);
-            write_float(rdram, object + object_scale, forms[e.form].scale * (picked ? picked_grow : 1.0f));
+            write_float(rdram, object + object_pitch, model_lean);
+            write_float(rdram, object + object_scale, forms[e.form].scale * model_scale * (picked ? picked_grow : 1.0f));
             MEM_B(object_alpha, (gpr)(int32_t)object) = (int8_t)(picked ? 255 : faded_alpha());
+        }
+    }
+
+    // Puts a statue in its form's idle pose, straight on its animation controller, as func_80101BE0 does when an
+    // actor changes state: the controller (func_80104248, made by func_801042B8 if it has none), the animation
+    // (anctrl_setIndex), its length (anctrl_setDuration), func_8008B188 and anctrl_start. The statue's own state is left alone:
+    // setting it through func_80101FDC made the statue run Mumbo's transformation effects, which crashed (2026-11-04).
+    void pose_idle(uint8_t* rdram, recomp_context* ctx, uint32_t object, const Form& f) {
+        uint32_t ctrl = call(rdram, ctx, func_80104248, object);
+        if (!tooie::rdram::valid_ptr(ctrl)) {
+            ctrl = call(rdram, ctx, func_801042B8, object);
+            if (!tooie::rdram::valid_ptr(ctrl)) {
+                return;
+            }
+            call(rdram, ctx, anctrl_reset, ctrl);
+        }
+        if (call(rdram, ctx, anctrl_getPlaybackType, ctrl) == 3) {
+            call(rdram, ctx, anctrl_setPlaybackType, ctrl, 2);
+        }
+        uint32_t seconds;
+        std::memcpy(&seconds, &f.idle_seconds, sizeof(seconds));
+        call(rdram, ctx, anctrl_setIndex, ctrl, f.idle);
+        call(rdram, ctx, anctrl_setDuration, ctrl, seconds);
+        call(rdram, ctx, func_8008B188, ctrl, 1);
+        // And starts it, as func_80101FDC does after the state change.
+        call(rdram, ctx, anctrl_start, ctrl);
+    }
+
+    // The gameplay camera, 0 while another kind is running (a scene, a fixed camera).
+    uint32_t gameplay_camera(uint8_t* rdram) {
+        const uint32_t ctl = tooie::free_camera::last_controller();
+        if (!tooie::rdram::valid_ptr(ctl) || read_half(rdram, ctl + 0x16) != 2) {
+            return 0;
+        }
+        const uint32_t dynamic = read_word(rdram, ctl + ctl_dynamic);
+        return tooie::rdram::valid_ptr(dynamic) ? dynamic : 0;
+    }
+
+    // Each frame while the menu is up: the camera stays over Banjo.
+    void hold_camera(uint8_t* rdram) {
+        if (menu.camera == 0) {
+            return;
+        }
+        MEM_B(dyn_frozen, (gpr)(int32_t)menu.camera) = 1;
+        for (int k = 0; k < 3; k++) {
+            write_float(rdram, menu.camera + dyn_pos + 4 * k, menu.camera_pos[k]);
+        }
+        write_float(rdram, menu.camera + dyn_rot, camera_pitch + camera_tilt_extra);
+        write_float(rdram, menu.camera + dyn_rot + 4, menu.camera_yaw);
+    }
+
+    void release_camera(uint8_t* rdram, bool camera_still_there) {
+        if (menu.camera != 0 && camera_still_there) {
+            MEM_B(dyn_frozen, (gpr)(int32_t)menu.camera) = (int8_t)menu.camera_frozen_before;
+        }
+        menu.camera = 0;
+    }
+
+    // The fade (dark towards the screen's edges, as a round vignette) and the two button shapes, as I8 textures.
+    void make_textures(uint8_t* rdram) {
+        static bool made = false;
+        if (made) {
+            return;
+        }
+        made = true;
+        for (int v = 0; v < fade_size; v++) {
+            for (int u = 0; u < fade_size; u++) {
+                // In screen pixels from the middle: the texture is stretched over 320 x 240.
+                const float dx = ((float)u + 0.5f - fade_size / 2.0f) * (320.0f / fade_size);
+                const float dy = ((float)v + 0.5f - fade_size / 2.0f) * (240.0f / fade_size);
+                const float t = std::clamp((std::sqrt(dx * dx + dy * dy) - fade_clear) / (fade_full - fade_clear), 0.0f, 1.0f);
+                const float smooth = t * t * (3.0f - 2.0f * t);
+                MEM_B(v * fade_size + u, (gpr)(int32_t)fade_texture) = (int8_t)(uint8_t)std::lround(smooth * 255.0f);
+            }
+        }
+        for (int v = 0; v < icon_size; v++) {
+            for (int u = 0; u < icon_size; u++) {
+                const float dx = (float)u + 0.5f - icon_size / 2.0f;
+                const float dy = (float)v + 0.5f - icon_size / 2.0f;
+                // A filled circle, its edge softened over a pixel.
+                const float edge = std::clamp(7.5f - std::sqrt(dx * dx + dy * dy), 0.0f, 1.0f);
+                MEM_B(v * icon_size + u, (gpr)(int32_t)circle_texture) = (int8_t)(uint8_t)std::lround(edge * 255.0f);
+                // A plus with arms five pixels wide.
+                const bool arm = (std::fabs(dx) < 2.6f && std::fabs(dy) < 7.6f) || (std::fabs(dy) < 2.6f && std::fabs(dx) < 7.6f);
+                MEM_B(v * icon_size + u, (gpr)(int32_t)dpad_texture) = (int8_t)(arm ? 255 : 0);
+            }
         }
     }
 
@@ -347,27 +483,29 @@ namespace {
                 shown.push_back(i);
             }
         }
-        // Spread along the arc, wider (further out) when there are many, so they keep min_gap apart.
+        // Evenly round a ring, the first straight ahead of Banjo (the top of the screen) and on clockwise as the screen
+        // shows it. The game's yaw grows turning left, so a form that much clockwise on screen is that much less in yaw;
+        // with Mirror Mode the picture is flipped, so the other way.
         const size_t n = shown.size();
-        const float span = 2.0f * arc_half_degrees * 3.14159265f / 180.0f;
-        const float radius = n > 1 ? std::max(arc_radius, min_gap * (float)(n - 1) / span) : arc_radius;
+        const bool mirrored = tooie::mirror_mode::active();
         for (size_t i = 0; i < n; i++) {
-            const float offset = n > 1 ? arc_half_degrees * (2.0f * (float)i / (float)(n - 1) - 1.0f) : 0.0f;
-            // Left to right as seen from behind Banjo: the game's yaw turns anticlockwise seen from above.
-            const float a = (facing - offset) * 3.14159265f / 180.0f;
+            const float screen_angle = 360.0f * (float)i / (float)std::max<size_t>(n, 1);
+            const float a = (facing + (mirrored ? screen_angle : -screen_angle)) * 3.14159265f / 180.0f;
             Entry e;
             e.form = shown[i];
-            e.pos[0] = banjo[0] + std::sin(a) * radius;
+            e.screen_angle = screen_angle;
+            e.pos[0] = banjo[0] + std::sin(a) * ring_radius;
             e.pos[1] = banjo[1];
-            e.pos[2] = banjo[2] + std::cos(a) * radius;
-            // Facing back at Banjo (and the camera behind him).
-            e.yaw = std::fmod(std::atan2(banjo[0] - e.pos[0], banjo[2] - e.pos[2]) * 180.0f / 3.14159265f + 360.0f, 360.0f);
+            e.pos[2] = banjo[2] + std::cos(a) * ring_radius;
+            // All face the camera, which is behind Banjo.
+            e.yaw = std::fmod(facing + 180.0f, 360.0f);
             const uint32_t object = spawn(rdram, ctx, statue_actor, e.pos, e.yaw);
             if (tooie::rdram::valid_ptr(object)) {
                 e.marker = read_word(rdram, object);
                 if (forms[e.form].model != 0 && tooie::rdram::valid_ptr(e.marker)) {
                     tooie::rdram::write_half(rdram, e.marker + marker_model, forms[e.form].model);
                 }
+                pose_idle(rdram, ctx, object, forms[e.form]);
             }
             menu.entries.push_back(e);
         }
@@ -381,9 +519,24 @@ namespace {
             std::lock_guard lock{ events.mutex };
             events.list.clear();
         }
+        // The camera: behind Banjo and high, looking down at him along the way he faces. The camera's yaw 0 looks along
+        // -z and grows turning left, so it is his facing plus 180.
+        menu.camera = gameplay_camera(rdram);
+        if (menu.camera != 0) {
+            menu.camera_frozen_before = MEM_BU(dyn_frozen, (gpr)(int32_t)menu.camera);
+            const float f = facing * 3.14159265f / 180.0f;
+            const float p = -camera_pitch * 3.14159265f / 180.0f;
+            const float back = camera_distance * std::cos(p);
+            menu.camera_pos[0] = banjo[0] - std::sin(f) * back;
+            menu.camera_pos[1] = banjo[1] + camera_target_height + camera_distance * std::sin(p);
+            menu.camera_pos[2] = banjo[2] - std::cos(f) * back;
+            menu.camera_yaw = std::fmod(facing + 180.0f, 360.0f);
+        }
+        make_textures(rdram);
         menu.open = true;
         menu.opened_at = Clock::now();
         open_flag = true;
+        hold_camera(rdram);
         pose_statues(rdram);
         if (log_on()) {
             std::fprintf(stderr, "[transform-menu] opened at %.0f %.0f %.0f facing %.0f: form 0x%X, %zu forms:", banjo[0],
@@ -400,6 +553,8 @@ namespace {
             return;
         }
         remove_statues(rdram, ctx);
+        // A map change makes the camera again, so the old one is not written to.
+        release_camera(rdram, !tooie::debug::map_change_busy(rdram) && gameplay_camera(rdram) == menu.camera);
         menu.open = false;
         open_flag = false;
         if (log_on()) {
@@ -407,12 +562,16 @@ namespace {
         }
     }
 
-    // Moves the pick along the arc: right or down is the next form, left or up the one before. Stops at the ends.
+    // Picks the form round the ring nearest the way the stick or the d-pad points (dy -1 is up the screen).
     void move_pick(int dx, int dy) {
-        const int step = dx != 0 ? dx : dy;
-        const int to = (int)menu.picked + step;
-        if (to >= 0 && to < (int)menu.entries.size()) {
-            menu.picked = (size_t)to;
+        const float want = std::atan2((float)dx, (float)-dy) * 180.0f / 3.14159265f;
+        float best = 1000.0f;
+        for (size_t i = 0; i < menu.entries.size(); i++) {
+            const float d = std::fabs(std::fmod(menu.entries[i].screen_angle - want + 540.0f, 360.0f) - 180.0f);
+            if (d < best) {
+                best = d;
+                menu.picked = i;
+            }
         }
     }
 
@@ -495,24 +654,49 @@ namespace {
         return (int)call(rdram, ctx, func_800B8CFC, addr);
     }
 
-    // Draws a sprite asset (func_800D674C loads it) with its middle at x, y, height pixels tall.
-    void draw_sprite(uint8_t* rdram, recomp_context* ctx, uint32_t gfx, uint32_t asset, int x, int y, int height,
-                     uint32_t frame = 0, int y_fix = 0) {
-        const uint32_t image = call(rdram, ctx, func_800D674C, asset);
-        if (!tooie::rdram::valid_ptr(image)) {
-            return;
-        }
-        const gpr image_addr = (gpr)(int32_t)image;
-        const int width = MEM_H(8, image_addr);
-        const int tall = MEM_H(0xA, image_addr);
-        if (width <= 0 || tall <= 0) {
-            return;
-        }
-        const uint32_t frames = std::max<uint32_t>(1, (uint16_t)MEM_H(0, image_addr));
-        write_word(rdram, coords_addr, (uint32_t)(x * 4));
-        write_word(rdram, coords_addr + 4, (uint32_t)((y + y_fix) * 4));
-        call(rdram, ctx, func_800E2568, (uint32_t)(width * height * 4 / tall), (uint32_t)(height * 4));
-        call(rdram, ctx, func_800E30E0, gfx, image, frame % frames, coords_addr);
+    void push(uint8_t* rdram, uint32_t gfx, uint32_t w0, uint32_t w1) {
+        const uint32_t cmd = read_word(rdram, gfx);
+        write_word(rdram, cmd, w0);
+        write_word(rdram, cmd + 4, w1);
+        write_word(rdram, gfx, cmd + 8);
+    }
+
+    // Draws one of this file's I8 textures (size x size texels) over x, y, w, h on the 320 x 240 screen, in the colour
+    // rgba (its alpha times the texel's intensity), blended over what is there.
+    void draw_shape(uint8_t* rdram, uint32_t gfx, uint32_t texture, int size, int x, int y, int w, int h, uint32_t alpha,
+                    uint32_t rgba = 0x000000FFu) {
+        const uint32_t texels = (uint32_t)(size * size);
+        const uint32_t line = (uint32_t)(size + 7) / 8;
+        const uint32_t dxt = (2048u + line - 1) / line;
+        push(rdram, gfx, 0xE7000000, 0);                               // pipe sync
+        push(rdram, gfx, 0xE3000A01, 0x00000000);                      // one cycle
+        push(rdram, gfx, 0xE3000C00, 0x00000000);                      // no perspective
+        push(rdram, gfx, 0xE3001201, 0x00002000);                      // bilinear filter
+        push(rdram, gfx, 0xE3001001, 0x00000000);                      // no palette
+        push(rdram, gfx, 0xE3001402, 0x00000C00);                      // texture convert: filter
+        push(rdram, gfx, 0xE2001E01, 0x00000000);                      // no alpha compare
+        push(rdram, gfx, 0xE200001C, 0x00504240);                      // G_RM_XLU_SURF, G_RM_XLU_SURF2
+        // Colour: the primitive colour; alpha: the texel times the primitive alpha (both cycles).
+        push(rdram, gfx, 0xFCFF97FF, 0xFF2DFEFF);
+        push(rdram, gfx, 0xFA000000, (rgba & 0xFFFFFF00u) | (alpha & 0xFF));
+        // Load the texture as 16-bit words (a block load), then set it up as I8 in tile 0, clamped.
+        push(rdram, gfx, 0xFD900000, texture - 0x80000000u);
+        push(rdram, gfx, 0xF5900000, 0x07000000);
+        push(rdram, gfx, 0xE6000000, 0);
+        push(rdram, gfx, 0xF3000000, 0x07000000 | (((texels + 1) / 2 - 1) << 12) | dxt);
+        push(rdram, gfx, 0xE7000000, 0);
+        push(rdram, gfx, 0xF5880000 | (line << 9), 0x00080200);
+        push(rdram, gfx, 0xF2000000, (uint32_t)(((size - 1) << 2) << 12) | (uint32_t)((size - 1) << 2));
+        // The rectangle, in quarter pixels, with the texture stepped to fill it (s and t steps in 5.10), scaled to land
+        // where the text's coordinates put it.
+        const uint32_t x0 = (uint32_t)(x * 4), y0 = (uint32_t)std::lround(y * 4 / rect_scale);
+        const uint32_t x1 = (uint32_t)((x + w) * 4), y1 = (uint32_t)std::lround((y + h) * 4 / rect_scale);
+        const uint32_t dsdx = (uint32_t)std::lround((double)size * 4.0 / (double)(x1 - x0) * 1024.0);
+        const uint32_t dtdy = (uint32_t)std::lround((double)size * 4.0 / (double)(y1 - y0) * 1024.0);
+        push(rdram, gfx, 0xE4000000 | (x1 << 12) | y1, (x0 << 12) | y0);
+        push(rdram, gfx, 0xE1000000, 0);
+        push(rdram, gfx, 0xF1000000, (dsdx << 16) | dtdy);
+        push(rdram, gfx, 0xE7000000, 0);
     }
 
 }
@@ -553,7 +737,7 @@ void tooie::transform_menu::tick(uint8_t* rdram, recomp_context* ctx) {
         if (asked == 2) {
             console_request = 0;
         }
-        if ((key_pressed || env_pressed) && can_open(rdram)) {
+        if ((key_pressed || env_pressed) && can_open_now(rdram)) {
             env_state = 2;
             console_request = 0;
             open(rdram, ctx);
@@ -578,6 +762,7 @@ void tooie::transform_menu::tick(uint8_t* rdram, recomp_context* ctx) {
     }
     // The game stands still behind the menu.
     write_float(rdram, delta_time_addr, frozen_delta);
+    hold_camera(rdram);
     pose_statues(rdram);
 
     // The Transform key shuts it again, once it has been up a moment.
@@ -622,47 +807,46 @@ void tooie::transform_menu::draw(uint8_t* rdram, recomp_context* ctx, uint32_t g
     if (!menu.open || menu.entries.empty()) {
         return;
     }
-    const int64_t ms = ms_since_start();
     uint32_t offset = 0;
 
-    const Form& f = forms[menu.entries[menu.picked].form];
-    std::string name = f.name;
-    if (f.id == menu.current) {
-        name += " (NOW)";
+    // TOOIE_TRANSFORM_MENU_DRAW=fade or icons draws only that part, to test them apart.
+    static const std::string only = [] { const char* v = std::getenv("TOOIE_TRANSFORM_MENU_DRAW"); return std::string(v != nullptr ? v : ""); }();
+    // The fade over the whole 320 x 240 screen, black with the texture's darkness as its alpha.
+    if (only != "icons") {
+        draw_shape(rdram, gfx, fade_texture, fade_size, 0, 0, 320, 240, fade_alpha);
     }
-    print(rdram, ctx, gfx, offset, colour_blue, text_scale, centre_x, name_y, name, 1);
+    if (only == "fade") {
+        return;
+    }
+    if (only == "probe") {
+        // Two dots at the corners of the 320 x 240 screen, to see where rectangles land.
+        draw_shape(rdram, gfx, circle_texture, icon_size, 0, 0, icon_size, icon_size, 0xFF, 0xFF0000FFu);
+        draw_shape(rdram, gfx, circle_texture, icon_size, 320 - icon_size, 240 - icon_size, icon_size, icon_size, 0xFF, 0x00FF00FFu);
+        draw_shape(rdram, gfx, circle_texture, icon_size, 160 - icon_size / 2, 120 - icon_size / 2, icon_size, icon_size, 0xFF, 0x0000FFFFu);
+        return;
+    }
 
-    // The bar along the bottom: [d-pad] SELECT  [A] TRANSFORM  [B] BACK, centred as a whole.
-    static const int dpad_sprite = [] {
-        const char* v = std::getenv("TOOIE_TRANSFORM_MENU_DPAD");
-        return v != nullptr ? (int)std::strtol(v, nullptr, 16) : -1;
-    }();
-    constexpr int icon = 14;
+    // The bar along the bottom: [d-pad] SELECT  [A] TRANSFORM  [B] BACK, centred as a whole, as in L's picture.
     constexpr int gap = 4;
-    constexpr int spacing = 16;
+    constexpr int spacing = 18;
     const char* labels[3] = { "SELECT", "TRANSFORM", "BACK" };
     int widths[3];
     int total = 0;
     for (int i = 0; i < 3; i++) {
         widths[i] = text_width(rdram, ctx, offset, text_scale, labels[i]);
-        total += icon + gap + widths[i];
+        total += icon_size + gap + widths[i];
     }
     total += spacing * 2;
     int x = centre_x - total / 2;
+    const int icon_y = bar_y - 1 - icon_size / 2;
     for (int i = 0; i < 3; i++) {
-        const int icon_x = x + icon / 2;
-        if (i == 0) {
-            if (dpad_sprite >= 0) {
-                draw_sprite(rdram, ctx, gfx, (uint32_t)dpad_sprite, icon_x, bar_y, icon);
-            } else {
-                // No d-pad picture in the pause menu's set: a plus in the menu font stands for it.
-                print(rdram, ctx, gfx, offset, colour_white, 0.7f, icon_x, bar_y - 7, "+", 1);
-            }
-        } else {
-            draw_sprite(rdram, ctx, gfx, i == 1 ? sprite_a_button : sprite_b_button, icon_x, bar_y, icon);
+        draw_shape(rdram, gfx, i == 0 ? dpad_texture : circle_texture, icon_size, x, icon_y, icon_size, icon_size,
+                   button_grey & 0xFF, button_grey);
+        if (i != 0) {
+            print(rdram, ctx, gfx, offset, colour_white, 0.42f, x + icon_size / 2, bar_y - 4, i == 1 ? "A" : "B", 1);
         }
-        print(rdram, ctx, gfx, offset, colour_white, text_scale, x + icon + gap, bar_y - 5, labels[i]);
-        x += icon + gap + widths[i] + spacing;
+        print(rdram, ctx, gfx, offset, colour_white, text_scale, x + icon_size + gap, bar_y - 5, labels[i]);
+        x += icon_size + gap + widths[i] + spacing;
     }
 }
 

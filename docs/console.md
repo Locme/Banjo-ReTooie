@@ -58,12 +58,12 @@ last <the last output line>
   `u16`, `u32`, `s8`, `s16` and `s32` also work. Where a size is optional and not given, the console works it out from
   the value typed. Hex digits decide it: up to two digits is one byte, up to four is two bytes, more is four. A decimal
   value up to 255 is one byte, up to 65535 is two, and larger is four. A negative value is four bytes.
-* Some commands need the game running. These are `warp`, `status`, `savestate`, `spawn`, `diff`, `perf`,
+* Some commands need the game running. These are `status`, `savestate`, `spawn`, `diff`, `perf`,
   `screenshot`, `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto`, `walkto`, `face`, `look`, `transform`, `pause`,
   `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo`, `invincible`, `jiggies`, `challenge`, `lights`, `recall`, `play` and `input`. Until the game
   is running they wait at the front
-  of the queue, so `start; warp place 1` works on one line. If the game never starts, they never run. The frame,
-  control, map and until forms of `wait` report an error instead of waiting. `load` and `goload` work in the launcher too, and start the
+  of the queue, so `start; status` works on one line. If the game never starts, they never run. The frame,
+  control, map and until forms of `wait` report an error instead of waiting. `load`, `goload` and `warp` work in the launcher too, and start the
   game themselves.
 * A length of time is a number with `ms` or `s` after it and no space (`200ms`, `1.5s`), counted on the clock. A plain
   number of frames is game updates, and at an Unlocked frame rate there can be 300 to 600 of those a second.
@@ -190,8 +190,10 @@ clear
 
 Usage: `warp <list> <n|name> | warp <name> | warp id <map hex> [exit hex]` (also `go`)
 
-Needs a save file loaded. The launcher, the title screen and the file select do not count. The warp goes through the
-Warp tab's own code, and the prompt closes once the warp has been made.
+Warps through the Warp tab's own code, and the prompt closes once the warp has been made. Before a save file is being
+played (the launcher, the logos and title screen, the file select) it loads file 1 first, as `goload` does, then
+warps and holds the queue until Banjo can move in the new map (`wait control`), so a script can start with a warp as
+soon as the game boots.
 
 * `warp <list> <n|name>` warps to an entry of a list. The lists are `place` (also `places`, `level`, `levels`), which
   is the Warp tab's places, meaning levels, areas and the test room, and `map` (also `maps`), which is every map in
@@ -210,7 +212,8 @@ warp place test room
 warp id 1A 0
 ```
 
-Catch: a warp needs a save file. Without one the console reports the error, and the warp is not made.
+Catch: the load before it is file 1's, with `load`'s 60 second timeout; use `goload` for another file. When the load
+fails, the warp is not made.
 
 ### `list`
 
@@ -720,9 +723,10 @@ unlock everything
 Usage: `transformmenu [open|close]`
 
 Opens or shuts the Transform Anywhere Menu (Graphics > WIP), as the Transform key does. An open waits until Banjo can
-transform (no pause, scene, talk or map change under way), so it can be given right after a warp. With no word, it says
-whether the menu is on and whether it is up. While it is up, `press` moves the pick (the stick or the d-pad), `a`
-changes form and `b` goes back.
+transform (no pause, scene, talk or map change under way, and the map change's wipe gone), so it can be given right
+after a warp. With no word, it says
+whether the menu is on and whether it is up. While it is up, `press` picks the form the stick or the d-pad points at
+(`press up` the one ahead of Banjo, at the top of the ring), `a` changes form and `b` goes back.
 
 ```
 set transform_menu on
@@ -1167,6 +1171,22 @@ pos
 ```
 
 Catch: needs a player in the game. Until there is one, it reports an error.
+
+### `anim`
+
+Usage: `anim`
+
+Prints the animation Banjo's animation controller is playing (its asset id, in hex), its length in seconds, his form
+(the form id the Cheats tab's Transformation row uses) and his player state. Standing still, it shows the form's idle
+animation.
+
+```
+transform form_8
+wait control
+anim
+```
+
+Catch: needs a player in the game, and the game running.
 
 ### `objects`
 

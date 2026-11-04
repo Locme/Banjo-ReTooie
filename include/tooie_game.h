@@ -86,6 +86,8 @@ namespace tooie {
     // Level transition speed (src/gameplay/fast_transitions.cpp).
     enum class TransitionSpeed : uint32_t { Original, Fast, Instant };
     inline const std::string transition_speed_option = "transition_speed";
+    // Whether a screen wipe (a map change's or a scene's fade) was drawing within the last tenth of a second.
+    bool wipe_showing();
 
     // High-detail models always (src/gameplay/high_detail_models.cpp), QOL tab.
     inline const std::string high_detail_models_option = "high_detail_models";

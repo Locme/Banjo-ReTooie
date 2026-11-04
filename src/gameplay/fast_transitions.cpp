@@ -12,6 +12,7 @@
 //
 // TOOIE_LOG_TRANSITIONS=1 prints when each wipe starts and ends.
 
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -81,10 +82,24 @@ namespace {
     }
 }
 
+namespace {
+    // When a wipe was last seen drawing (steady clock ticks), for wipe_showing.
+    std::atomic<int64_t> wipe_seen_at{0};
+}
+
+bool tooie::wipe_showing() {
+    const int64_t at = wipe_seen_at.load();
+    return at != 0 && std::chrono::steady_clock::now().time_since_epoch().count() - at <
+        std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::milliseconds(100)).count();
+}
+
 // gctransitionDll_entrypoint_9, after the frame time is in $f2. $a3 is the wipe.
 extern "C" void tooie_transition_frame(uint8_t* rdram, recomp_context* ctx) {
     gpr wipe = ctx->r7;
     bool active = MEM_BU(0x8, wipe) != 0;
+    if (active) {
+        wipe_seen_at = std::chrono::steady_clock::now().time_since_epoch().count();
+    }
     if (log_enabled() && (wipe != logged_wipe || active != logged_active)) {
         fprintf(stderr, "[transition] %.3f wipe %08X %s type %u timer %.3f/%.3f map %03X request %u speed %.0f\n",
             seconds_now(), (uint32_t)wipe, active ? "on" : "off", MEM_BU(0x1C, wipe),

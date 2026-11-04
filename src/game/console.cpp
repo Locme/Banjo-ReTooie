@@ -1036,8 +1036,18 @@ void cmd_quit(Ctx& c) {
     ultramodern::quit();
 }
 
+void begin_load(const std::string& name, int slot, double timeout, const std::string& then);
+
 void cmd_warp(Ctx& c) {
     if (c.w.size() < 2) { error("warp <list> <number or name> | warp <name> | warp id <map hex> [exit hex]"); return; }
+    // Before a save file is being played (the launcher, the logos and title, the file select), the warp loads file 1
+    // first, as goload does, so a script can warp as its first line from the moment the game boots (L, 2026-11-04).
+    // The 30 updates let the file's first map settle before the warp; wait control holds the next line until the new
+    // map is in and Banjo can move.
+    if (!tooie::debug::can_warp()) {
+        begin_load("warp", 0, 60, "wait 30; warp " + join(c.w, 1) + "; wait 30; wait control");
+        return;
+    }
     if (lower(c.w[1]) == "id") {
         // warp id AF [exit]: a map by its number, in hex as everywhere else (TOOIE_WARP, map_names.inc), exit 0 the default.
         uint32_t map = 0, exit = 0;
@@ -1967,6 +1977,33 @@ void cmd_walkto(Ctx& c) {
     timeout = std::min(timeout, 600.0);
     drive_begin("walkto", kDriveWalk, timeout);
     print(format("walking to %.2f %.2f, %.0f away (to within %.0f, up to %.0f s)", x, z, std::hypot(x - p[0], z - p[2]), radius, timeout));
+}
+
+extern "C" void baanim_getAnimCtrlPtr(uint8_t* rdram, recomp_context* ctx);
+extern "C" void anctrl_getIndex(uint8_t* rdram, recomp_context* ctx);
+
+// anim: the animation Banjo's animation controller plays now (its asset id, as anctrl_getIndex gives it), with the
+// form and the player state, to find a form's idle animation.
+void cmd_anim(Ctx& c) {
+    if (c.ctx == nullptr) { error("no game update is running"); return; }
+    const uint32_t player = read_ram(c.rdram, kPlayerTable, 4);
+    if (!tooie::rdram::valid_ptr(player)) { error("there is no player yet"); return; }
+    recomp_context call = *c.ctx;
+    call.r29 = c.ctx->r29 - 0x100;
+    call.r4 = (int32_t)player;
+    baanim_getAnimCtrlPtr(c.rdram, &call);
+    const uint32_t ctrl = (uint32_t)call.r2;
+    if (!tooie::rdram::valid_ptr(ctrl)) { error("Banjo has no animation controller now"); return; }
+    call = *c.ctx;
+    call.r29 = c.ctx->r29 - 0x100;
+    call.r4 = (int32_t)ctrl;
+    anctrl_getIndex(c.rdram, &call);
+    const uint32_t index = (uint32_t)call.r2 & 0xFFFF;
+    const uint32_t block = read_ram(c.rdram, player + 0x120, 4);
+    const uint32_t state = tooie::rdram::valid_ptr(block) ? read_ram(c.rdram, block + 4, 4) : 0;
+    const uint32_t forms = read_ram(c.rdram, player + 0xA0, 4);
+    const uint32_t form = tooie::rdram::valid_ptr(forms) ? tooie::rdram::read_byte(c.rdram, forms + 0x29) : 0;
+    print(format("animation 0x%X, duration %.3f s, form 0x%X, player state %u", index, tooie::rdram::read_float(c.rdram, ctrl + 0xC), form, state));
 }
 
 // objects [radius]: the live objects within radius of Banjo (default 1500), nearest first: the object's address, its
@@ -3691,7 +3728,7 @@ const std::vector<Command>& commands() {
         { "load", {}, false, "load [file 1-3] [timeout s]", "from the launcher, title or file select into a save file with no hands (holds the queue until it is loaded; 60 s)", cmd_load },
         { "goload", {}, false, "goload <file 1-3> <map hex> [exit hex]", "load a save file, warp to a map and wait for it, in one line", cmd_goload },
         { "quit", { "exit" }, false, "quit [code]", "exit the program; the exit code is 1 if any command failed, unless given", cmd_quit },
-        { "warp", { "go" }, true, "warp <list> <n|name> | warp <name> | warp id <map hex> [exit hex]", "warp like the Warp tab (lists: place map), or to a map id", cmd_warp },
+        { "warp", { "go" }, false, "warp <list> <n|name> | warp <name> | warp id <map hex> [exit hex]", "warp like the Warp tab (lists: place map), or to a map id; from the launcher or title it loads file 1 first", cmd_warp },
         { "list", { "ls" }, false, "list [list] [filter]", "the warp lists with their numbers", cmd_list },
         { "status", {}, true, "status", "map, game update count, updates per second, warp state", cmd_status },
         { "settings", { "options" }, false, "settings [filter]", "every setting with its id and value", cmd_settings },
@@ -3709,6 +3746,7 @@ const std::vector<Command>& commands() {
         { "lights", {}, true, "lights [add [r g b [radius [height]]] | undo | clear | list]", "Point Lights's lamps for this map: add one above Banjo (warm, radius 500, 80 up), remove the last, all, or list them (saved to Dev Files/point_lights.txt)", cmd_lights },
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
+        { "anim", {}, true, "anim", "the animation Banjo plays now, with his form and state", cmd_anim },
         { "objects", {}, true, "objects [radius]", "the live objects near Banjo, nearest first (address, marker, model, actor entry, position)", cmd_objects },
         { "face", {}, true, "face <x> <z>", "turn Banjo to face a point", cmd_face },
         { "look", {}, true, "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look off", "hold the gameplay camera looking at Banjo from a direction, 350 back (here: turn it where it stands), for screenshots; a map change ends it", cmd_look },

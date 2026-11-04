@@ -8,6 +8,9 @@ regenerated code, CI, notes and tooling are left out.
 - Gameplay > Difficulty > Minjos Stay Dead (off by default): a Minjo you have killed no longer comes back after you visit another world. Remembered until the game is closed.
 - Console: `objects [radius]` lists the objects near Banjo with their model and actor entry.
 - Console: `transformmenu open|close` opens and shuts the Transform Anywhere Menu.
+- Console: `warp` works as the very first command: from the launcher or the title it loads save file 1, then warps.
+- Transform Anywhere Menu, redone after L's picture: the forms stand small in a ring round Banjo, seen from above, with the scene darkening towards the edges in a soft round fade and a plain bar of grey D-pad, A and B buttons. Point the stick or the D-pad at a form to pick it; the picked one spins slowly. Every model stands in its form's idle pose and leans towards the camera. It waits for a map change's wipe to finish before opening.
+- Console: `anim` prints the animation Banjo is playing, with his form and state.
 
 - Direct First Banjo Shooter Analog Aim: the view no longer moves by itself. The game is given a centred stick in first person, so it stops turning Banjo and the view from it, and only the direct aim turns the view. Stick up looks up.
 - First person (C-up) with the game's own aiming: at Unlocked the view turns at its 30 FPS speed again (yesterday's change had it crawling).
