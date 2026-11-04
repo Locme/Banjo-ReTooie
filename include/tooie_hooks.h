@@ -111,9 +111,10 @@ int tooie_honeycomb_no_expire(uint8_t* rdram, recomp_context* ctx);
 // TOOIE_SPAWN_LOG (src/debug/spawn_log.cpp).
 void tooie_spawn_log_spawn(uint8_t* rdram, recomp_context* ctx);
 void tooie_spawn_log_remove(uint8_t* rdram, recomp_context* ctx);
-// Minjos stay dead (src/gameplay/minjo_stay_dead.cpp).
-void tooie_minjo_spawn(uint8_t* rdram, recomp_context* ctx);
-void tooie_minjo_removed(uint8_t* rdram, recomp_context* ctx);
+// Enemy respawn (src/gameplay/enemy_respawn.cpp).
+int tooie_respawn_skip(uint8_t* rdram, recomp_context* ctx);
+void tooie_respawn_spawned(uint8_t* rdram, recomp_context* ctx);
+void tooie_respawn_removed(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx);

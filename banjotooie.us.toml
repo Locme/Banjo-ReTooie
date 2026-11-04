@@ -2808,12 +2808,17 @@ text = "tooie_spawn_log_spawn(rdram, ctx);"
 [[patches.hook]]
 func = "func_800FFAB0"
 before_vram = 0x800FFAB0
-text = "tooie_spawn_log_remove(rdram, ctx); tooie_minjo_removed(rdram, ctx);"
+text = "tooie_spawn_log_remove(rdram, ctx); tooie_respawn_removed(rdram, ctx);"
 
-# Minjos stay dead (src/gameplay/minjo_stay_dead.cpp): func_80800358_chbadjinjo, a Minjo's set-up, removes it when
-# func_800D395C returns nonzero ($v0, just before the branch on it). The hook makes that answer nonzero for a Minjo
-# killed before. The removal hook above notes the kills.
+# Enemy Respawn (src/gameplay/enemy_respawn.cpp): gspropsDll_entrypoint_1 spawns a map's placed objects, $s1 the prop,
+# through func_80108DC0 at 0x8080022C. Before the call, a killed enemy's spawn is skipped (to the loop's next prop);
+# after it, the new object ($v0) is noted with its prop.
 [[patches.hook]]
-func = "func_80800358_chbadjinjo"
-before_vram = 0x80800378
-text = "tooie_minjo_spawn(rdram, ctx);"
+func = "gspropsDll_entrypoint_1"
+before_vram = 0x8080022C
+text = "if (tooie_respawn_skip(rdram, ctx)) { ctx->r2 = 0; goto L_80800278; }"
+
+[[patches.hook]]
+func = "gspropsDll_entrypoint_1"
+before_vram = 0x80800234
+text = "tooie_respawn_spawned(rdram, ctx);"

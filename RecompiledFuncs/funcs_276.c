@@ -749,6 +749,7 @@ L_808001E8:
     MEM_W(0X10, ctx->r29) = ctx->r9;
     // 0x80800228: sw          $s1, 0x14($sp)
     MEM_W(0X14, ctx->r29) = ctx->r17;
+    if (tooie_respawn_skip(rdram, ctx)) { ctx->r2 = 0; goto L_80800278; }
     // 0x8080022C: jal         0x80108DC0
     // 0x80800230: srl         $a3, $v0, 21
     ctx->r7 = S32(U32(ctx->r2) >> 21);
@@ -757,6 +758,7 @@ L_808001E8:
     // 0x80800230: srl         $a3, $v0, 21
     ctx->r7 = S32(U32(ctx->r2) >> 21);
     after_0:
+    tooie_respawn_spawned(rdram, ctx);
     // 0x80800234: beq         $v0, $zero, L_80800278
     if (ctx->r2 == 0) {
         // 0x80800238: or          $s2, $v0, $zero

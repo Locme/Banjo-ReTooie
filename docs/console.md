@@ -1172,6 +1172,22 @@ pos
 
 Catch: needs a player in the game. Until there is one, it reports an error.
 
+### `kill`
+
+Usage: `kill [radius] [model hex]`
+
+Removes the nearest object within the radius of Banjo (300 when not given), or the nearest one with that model (as
+`objects` lists them), through the game's own removal (func_800FFAB0), the one a beaten enemy goes through. Banjo
+himself is never picked. It prints what it removed. For testing Enemy Respawn and Minjos Stay Dead: a removal near
+Banjo counts as a kill for both.
+
+```
+objects 400
+kill 400 671
+```
+
+Catch: anything can be removed, not only enemies, and some objects may not like it. Needs a player in the game.
+
 ### `anim`
 
 Usage: `anim`

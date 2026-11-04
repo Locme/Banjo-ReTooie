@@ -673,6 +673,15 @@ void tooie::init_config() {
         "Lower Enemy Attack Cooldown",
         "The curated list of enemies (Billy Bob, Boltoid, Diggit, Flatso, Globble, Gruntydactyl, Guvnor, Hothead, Jippo Jim, Keelhaul, Minjo, Moggy, Nutta, Pansie, S'Hard, Soarasaur, Ugger, Washup, Zubba) wait half as long between attacks.",
         false);
+    general.add_enum_option(
+        tooie::damage::enemy_respawn_option,
+        "Enemy Respawn",
+        "<recomp-color primary>Original</recomp-color>: enemies come back as in the game, each time their area loads again. <recomp-color primary>Never</recomp-color>: an enemy you have killed stays gone. Remembered until the game is closed, not in the save file. The game has no respawn timer to make shorter or longer.",
+        {
+            {tooie::damage::EnemyRespawn::Original, "Original", "Original"},
+            {tooie::damage::EnemyRespawn::Never, "Never", "Never"},
+        },
+        tooie::damage::EnemyRespawn::Original);
     general.add_bool_option(
         tooie::damage::minjos_stay_dead_option,
         "Minjos Stay Dead",
@@ -933,14 +942,14 @@ void tooie::init_config() {
     recompui::config::create_page_tab("Gameplay", tooie::gameplay_tab_id, recompui::config::general::id);
     for (const std::string* id : { &tooie::damage::double_damage_option, &tooie::damage::aim_option,
             &tooie::damage::aim_chance_option, &tooie::damage::homing_option, &tooie::damage::strafe_option,
-            &tooie::damage::faster_attacks_option, &tooie::damage::minjos_stay_dead_option, &tooie::canary_mary::mode_option }) {
+            &tooie::damage::faster_attacks_option, &tooie::damage::enemy_respawn_option, &tooie::damage::minjos_stay_dead_option, &tooie::canary_mary::mode_option }) {
         recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
     }
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Difficulty");
     // Difficulty goes to the top of the Gameplay tab, ahead of Boss Rush (L, 2026-10-23).
     for (const std::string* id : { &tooie::damage::double_damage_option, &tooie::damage::aim_option,
             &tooie::damage::aim_chance_option, &tooie::damage::homing_option, &tooie::damage::strafe_option,
-            &tooie::damage::faster_attacks_option, &tooie::damage::minjos_stay_dead_option, &tooie::canary_mary::mode_option }) {
+            &tooie::damage::faster_attacks_option, &tooie::damage::enemy_respawn_option, &tooie::damage::minjos_stay_dead_option, &tooie::canary_mary::mode_option }) {
         recompui::config::set_option_display_before(*id, tooie::boss_rush::option);
     }
     // Features and Back-Ports from General (L, 2026-10-23), with their headings. Saves, shaders, Discord and the

@@ -730,6 +730,16 @@ void tooie::enemy_spawner::tick(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
+bool tooie::enemy_spawner::is_enemy(uint16_t id) {
+    for (const Enemy& e : enemies) {
+        if (e.id == id) {
+            const std::string name = e.name;
+            return name.find("Twinkly") == std::string::npos && name.find("Torch") == std::string::npos;
+        }
+    }
+    return false;
+}
+
 std::vector<std::string> tooie::enemy_spawner::names() {
     std::vector<std::string> out;
     for (const Enemy& enemy : enemies) {

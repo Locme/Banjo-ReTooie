@@ -1981,6 +1981,52 @@ void cmd_walkto(Ctx& c) {
 
 extern "C" void baanim_getAnimCtrlPtr(uint8_t* rdram, recomp_context* ctx);
 extern "C" void anctrl_getIndex(uint8_t* rdram, recomp_context* ctx);
+extern "C" void func_800FFAB0(uint8_t* rdram, recomp_context* ctx);
+
+// kill [radius] [model hex]: removes the nearest object within radius of Banjo (300 when not given), or the nearest
+// with that model (objects shows models), through the game's own removal (func_800FFAB0), which a beaten enemy goes
+// through too. Banjo himself (model FFFF) is never picked. For testing Enemy Respawn and Minjos Stay Dead.
+void cmd_kill(Ctx& c) {
+    double radius = 300.0;
+    uint32_t model_wanted = 0;
+    if ((c.w.size() >= 2 && (!parse_double(c.w[1], &radius) || radius <= 0)) ||
+        (c.w.size() >= 3 && (model_wanted = (uint32_t)std::strtoul(c.w[2].c_str(), nullptr, 16)) == 0)) {
+        error("kill [radius] [model hex]");
+        return;
+    }
+    if (c.ctx == nullptr) { error("no game update is running"); return; }
+    float p[3];
+    if (!tooie::player_cheats::position(c.rdram, p)) { error("there is no player yet"); return; }
+    const uint32_t array = read_ram(c.rdram, 0x80136EE0, 4);
+    if (!tooie::rdram::valid_ptr(array)) { error("no object array"); return; }
+    const uint32_t first = read_ram(c.rdram, array + 0x04, 4);
+    const uint32_t last = read_ram(c.rdram, array + 0x08, 4);
+    if (!tooie::rdram::valid_ptr(first) || !tooie::rdram::valid_ptr(last) || last < first || (last - first) / 0x9C >= 2048) { error("no objects"); return; }
+    uint32_t best = 0, best_model = 0;
+    double best_dist = radius;
+    for (uint32_t i = 0; i <= (last - first) / 0x9C; i++) {
+        const uint32_t object = array + 0x10 + i * 0x9C;
+        const uint32_t marker = read_ram(c.rdram, object, 4);
+        const uint32_t model = tooie::rdram::valid_ptr(marker) ? (read_ram(c.rdram, marker + 0x14, 4) >> 16) : 0;
+        if (model == 0xFFFF || model == 0 || (model_wanted != 0 && model != model_wanted)) continue;
+        double d2 = 0;
+        for (int a = 0; a < 3; a++) {
+            const double d = tooie::rdram::read_float(c.rdram, object + 4 + 4 * a) - p[a];
+            d2 += d * d;
+        }
+        if (std::sqrt(d2) <= best_dist) {
+            best_dist = std::sqrt(d2);
+            best = object;
+            best_model = model;
+        }
+    }
+    if (best == 0) { error(format("nothing to remove within %.0f", radius)); return; }
+    recomp_context call = *c.ctx;
+    call.r29 = c.ctx->r29 - 0x100;
+    call.r4 = (int32_t)best;
+    func_800FFAB0(c.rdram, &call);
+    print(format("removed object %08X, model %03X, %.0f away", best, best_model, best_dist));
+}
 
 // anim: the animation Banjo's animation controller plays now (its asset id, as anctrl_getIndex gives it), with the
 // form and the player state, to find a form's idle animation.
@@ -3746,6 +3792,7 @@ const std::vector<Command>& commands() {
         { "lights", {}, true, "lights [add [r g b [radius [height]]] | undo | clear | list]", "Point Lights's lamps for this map: add one above Banjo (warm, radius 500, 80 up), remove the last, all, or list them (saved to Dev Files/point_lights.txt)", cmd_lights },
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
+        { "kill", {}, true, "kill [radius] [model hex]", "remove the nearest object (or the nearest with that model) as a beaten enemy is removed", cmd_kill },
         { "anim", {}, true, "anim", "the animation Banjo plays now, with his form and state", cmd_anim },
         { "objects", {}, true, "objects [radius]", "the live objects near Banjo, nearest first (address, marker, model, actor entry, position)", cmd_objects },
         { "face", {}, true, "face <x> <z>", "turn Banjo to face a point", cmd_face },

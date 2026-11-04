@@ -27,6 +27,9 @@ namespace tooie::enemy_spawner {
     // Drops a spawn that is still waiting (the master switch went off).
     void reset();
 
+    // Whether the actor id is one of the drop-down's enemies (Twinklies, part of puzzles, and the torch left out).
+    bool is_enemy(uint16_t id);
+
     // Call once per frame from the game thread (tooie_warp_tick).
     void tick(uint8_t* rdram, recomp_context* ctx);
 }

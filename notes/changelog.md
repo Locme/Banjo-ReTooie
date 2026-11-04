@@ -5,7 +5,8 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-04
 
-- Gameplay > Difficulty > Minjos Stay Dead (off by default): a Minjo you have killed no longer comes back after you visit another world. Remembered until the game is closed.
+- Gameplay > Difficulty > Enemy Respawn (Original by default) and Minjos Stay Dead (off by default): with Never, an enemy you have killed stays gone when you come back to its area; Minjos Stay Dead does the same for Minjos alone. Remembered until the game is closed. The game has no respawn timer to scale: it spawns a map's enemies every time the map loads.
+- Console: `kill [radius] [model]` removes the nearest object as a beaten enemy is removed (for testing).
 - Console: `objects [radius]` lists the objects near Banjo with their model and actor entry.
 - Console: `transformmenu open|close` opens and shuts the Transform Anywhere Menu.
 - Console: `warp` works as the very first command: from the launcher or the title it loads save file 1, then warps.
