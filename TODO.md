@@ -2,6 +2,14 @@
 
 Open issues that are known but not fixed yet. Newest first.
 
+## Dual screen support with a map (asked by L, 2026-11-07)
+
+A second screen (a second window, or the second screen of a dual-screen handheld) that shows a map of the area
+Banjo is in, with where he is. For single-screen players the map is an option: shown in a corner or on a key.
+Not started. To work out first: where the map comes from (the game's own pause-menu art is game data and stays out
+of the repo; a map drawn at run time from the level's geometry or from what the game already shows), and how a
+second window fits RT64's single swapchain.
+
 ## Jiggywiggy challenges may slow down above 30 FPS (2026-11-03)
 
 Challenges (the jigsaw puzzles) now run at the chosen Game Frame Rate instead of the recorded 30: the replay is
