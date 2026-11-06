@@ -1721,6 +1721,46 @@ wait 120s
 Catch: it takes a few seconds per effect that is on (at least 2 s each, up to 30 s on a slow PC), so wait long
 enough before reading the file. Keep the camera still: what is on screen changes the times. Needs the game running.
 
+### `bench`
+
+Usage: `bench [start|stop]`
+
+Starts or stops a Benchmark recording, the same as the Benchmark key. It writes `benchmarks/benchmark_<date>.csv` in
+the app folder, four rows a second: the frame rate and frame time, the worst frame, the GPU time per game frame and per
+pass (the port's effects among them), the game's own updates per second and CPU time, input latency, shader compiles,
+and the map and where Banjo is. Stopping writes a `.txt` summary with the settings beside it. With no word, prints
+whether a recording runs.
+
+```
+bench start
+wait 30s
+bench stop
+```
+
+Catch: a crash leaves the `.csv` as far as it got, with no summary. `tools/perf_report.py` reads the csv by map.
+
+### `hostprof`
+
+Usage: `hostprof start [file] | hostprof label <text> | hostprof stop`
+
+A sampling profiler of the whole program: every 2 ms it looks at each thread that used CPU time since the last look and
+notes the function it is in, weighted by the CPU time the thread used since the last look (so waiting counts for nothing). `start` begins (or begins anew) and writes to the file given, or to
+`profiles/profile-<date>.tsv` in the app folder; a relative file is put in the app folder. The file is written again
+every 5 s and on `stop`, so a run that crashes keeps its profile. `label` counts what comes after under that text,
+so one run through several maps splits by map. Each line is samples, label, thread, module and function, tab
+separated, most samples first; 500 samples are a second of one core. With no word, prints where it is writing.
+
+```
+hostprof start
+hostprof label spiral mountain
+warp id AF
+wait 10s
+hostprof stop
+```
+
+Catch: self time only, with no call stacks: a function that calls heavy ones shows only its own share. The names come
+from `BanjoReTooie.pdb`, so keep it beside the exe. Windows only. `TOOIE_PROFILE=<file>` starts it with the program.
+
 ### `tee`
 
 Usage: `tee <file> | tee off`

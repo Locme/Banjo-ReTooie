@@ -188,3 +188,28 @@ Details are in `include/trace.h`, `src/debug/trace.cpp` and
 - Parallax: `TOOIE_PARALLAX=<0-100>` sets it whatever the setting says, `TOOIE_PARALLAX_ALL=1` puts it on every textured world draw (to hunt textures), and `TOOIE_PARALLAX_LOG=1` (or `=<ms>`, starting that long after the first 3D frame, to list one place's textures) prints `[parallax-tex] <hash> on|off tile <n>, <triangles> triangles` once per world texture drawn, so stone the list (parallax_textures[] in src/display/picture_filters.cpp) misses shows as `off`; hashes match the texture dump's PNG names (lib-patches/rt64.patch, rt64_framebuffer_renderer.cpp).
 - Sun shadow distance (src/game/widescreen.cpp, lib-patches/rt64.patch): with sun shadows on, every level box the game culls (func_800E3D0C, the level's own pieces) is drawn anyway, and culled models and effects (func_800E3E8C spheres) within the distance; a second coarse far map (4096, half width 24000, right of the near one in the same texture) covers the whole level past the near map. `TOOIE_SUN_FAR_OFF=1` skips the far map. `TOOIE_SUN_CULL_LOG=1` also prints `[sun-cull] map 0xNN boxes span` (Spiral Mountain about x -11500..11900, Mayahem Temple x -13056..17344); far map cost was lost in lavapipe noise, so the sun shadow maps hold it. `TOOIE_SUN_CULL=0` turns that off; `TOOIE_SUN_CULL=<from>-<to>[,...]` only between those ms after the first cull test (logs `[sun-cull] off/on at`), to compare one camera in one run. `TOOIE_SUN_CULL_LOG=1` prints how many culled spheres and boxes were kept every 2 s. `TOOIE_FX_LOG=1`'s `[sunmap] drawn` line gives the distance and the map's size (2048 up to 3000, 4096 at 6000 and up), and `[sunmap] casters N faces F` how much it drew. Spiral Mountain warp spot, free camera panning: casters 3400-4700 faces at 3000 before, steady 5900-6900 at 20000. At 20000 lavapipe drops to about 1 frame a second, so leave 25 s after a `TOOIE_SET` before a screenshot.
 - Ray tracing (Graphics > Ray tracing, `ray_tracing` in graphics.json): logs `[ray-tracing] hardware ray tracing: yes|no` once from the first frame. lavapipe (Mesa 25) has ray queries, so it takes the traced path headless (`apt install mesa-vulkan-drivers`); `TOOIE_RAY_TRACING_SUPPORT=0` pretends the device has none to test the fallback (logs the notice line and shows the toast); `TOOIE_RT_LOG=1` logs `[rt] BVH built: <geometries>, <triangles>` once a second and `[rt] scene effects pass traced (ray queries)` / `depth march` when that changes. `TOOIE_SCENE_FX_VIEW=20` (the SSR view) shows the traced reflection on shiny surfaces (red: the ray hit nothing). Spiral Mountain (`TOOIE_WARP=AF:0@15000`, 160 s) has the teleport pad and a grate to look at. (lib-patches/rt64.patch rt64_scene_effects.cpp, src/display/picture_filters.cpp).
+
+## Performance sweep
+
+`py tools/perf_sweep.py` visits every map in `src/game/map_names.inc` (the ones the texture sweep skips left out,
+cutscene maps last) with the console's `hostprof` sampler and `bench` recorder running. In each map it waits for
+control, turns the camera three ways with `look`, and moves on. A crash or a hang of 120 s is written to
+`crashes.txt` with the map, crash reports are copied beside it, and the game is started again from the next map. Bad
+pointers the Pass over crashes guard caught are written there as `passed over`. A map that never gave control goes to
+`timeouts.txt`. Output goes to `D:\Projects\Banjo Tooie N64\perf_sweep\<date>` (outside the repo) unless `--out` says
+otherwise.
+
+* `--maps AF,B8` sweeps only those maps; `--dwell 2` is the seconds per camera angle; `--resume` carries on from
+  `progress.txt`; `--dry-run` prints the commands.
+* `--setup "set effects preset enhanced"` runs console commands at the start of every run (a second pass with the
+  effects on), and `--teardown "profile load sweepbefore"` runs commands in a start of its own at the end, to put the
+  settings back. Save them first with `profile save sweepbefore`.
+
+`py tools/perf_report.py <out>` writes `report.txt` and `maps.csv`: per map, the median frame time, the worst frame,
+the GPU time per game frame and per pass, the game's CPU time and the shader compiles, heaviest first; then the
+profile by group (game code, RSP audio, RT64, driver, runtime, the port's own code, OS) and by thread, the top
+functions per map, and what loading each map costs.
+
+The sampler weights each sample by the CPU time the thread used since the last look, but it has no call stacks: a
+thread that worked for part of a look and was waiting when it was looked at shows the wait function. Those are
+counted under OS.

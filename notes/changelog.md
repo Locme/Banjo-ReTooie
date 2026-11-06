@@ -3,6 +3,10 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-06
+
+- Console: `bench start|stop` records the Benchmark (frame times, GPU time per pass, the game's CPU time, the map) and `hostprof start|label|stop` samples where the PC's CPU time goes, by thread and function.
+
 ## 2026-11-04
 
 - Gameplay > Difficulty > Enemy Respawn (Original by default) and Minjos Stay Dead (off by default): with Never, an enemy you have killed stays gone when you come back to its area; Minjos Stay Dead does the same for Minjos alone. Remembered until the game is closed. The game has no respawn timer to scale: it spawns a map's enemies every time the map loads.

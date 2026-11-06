@@ -774,6 +774,8 @@ namespace {
     Benchmark benchmark;
     // Set by the key thread, acted on by the update thread.
     std::atomic<bool> benchmark_toggle{false};
+    // Set by the console (bench start|stop): 1 starts a recording if none runs, 0 stops one; -1 nothing asked.
+    std::atomic<int> benchmark_wanted{-1};
 
     void toggle_benchmark() {
         benchmark_toggle.store(true, std::memory_order_relaxed);
@@ -1180,6 +1182,13 @@ namespace {
             else if (auto_benchmark != nullptr && auto_stop != clock_type::time_point{} && now >= auto_stop && benchmark_running()) {
                 stop_benchmark();
             }
+            int wanted = benchmark_wanted.exchange(-1, std::memory_order_relaxed);
+            if (wanted == 1 && !benchmark_running()) {
+                start_benchmark(game_frames, idle_ns);
+            }
+            else if (wanted == 0 && benchmark_running()) {
+                stop_benchmark();
+            }
             if (benchmark_toggle.exchange(false, std::memory_order_relaxed)) {
                 if (benchmark_running()) {
                     stop_benchmark();
@@ -1334,6 +1343,14 @@ void tooie::frame_overlay::note_scene_done() {
     if (read != 0) {
         scene_read_ns.store(read, std::memory_order_relaxed);
     }
+}
+
+void tooie::frame_overlay::set_benchmark(bool on) {
+    benchmark_wanted.store(on ? 1 : 0, std::memory_order_relaxed);
+}
+
+bool tooie::frame_overlay::benchmark_on() {
+    return benchmark_running();
 }
 
 void tooie::frame_overlay::toggle_cost_check() {

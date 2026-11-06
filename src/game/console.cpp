@@ -39,6 +39,7 @@
 #include "tooie_save_state.h"
 #include "tooie_screenshot.h"
 #include "tooie_frame_overlay.h"
+#include "tooie_host_profiler.h"
 #include "tooie_achievements.h"
 #include "tooie_gfx_budget.h"
 #include "tooie_photo_mode.h"
@@ -1260,6 +1261,58 @@ void cmd_burst(Ctx& c) {
         tooie::screenshot::burst_stop();
         print("burst off: the frames go to screenshots/burst-<stamp>/ (the log names the folder)");
     }
+}
+
+// bench start|stop: the Benchmark recorder (the Benchmark key): benchmarks/benchmark_<date>.csv in the app folder, four
+// rows a second with the frame time, the GPU time by pass, the game's CPU time, shader compiles and the map.
+void cmd_bench(Ctx& c) {
+    if (c.w.size() == 1) { print(tooie::frame_overlay::benchmark_on() ? "a benchmark is recording" : "no benchmark is recording"); return; }
+    if (c.w.size() != 2 || (c.w[1] != "start" && c.w[1] != "stop")) { error("bench start | bench stop"); return; }
+    tooie::frame_overlay::set_benchmark(c.w[1] == "start");
+    print(c.w[1] == "start" ? "benchmark recording to benchmarks/benchmark_<date>.csv in the app folder"
+                            : "benchmark stopped: the .csv and its .txt summary are in benchmarks/ in the app folder");
+}
+
+// hostprof start [file] | label <text> | stop: the sampling profiler (src/debug/host_profiler.cpp). The file is written
+// every 5 s, so a crash leaves it; the label splits one run by map or scene.
+void cmd_hostprof(Ctx& c) {
+    const std::string sub = c.w.size() >= 2 ? lower(c.w[1]) : "";
+    if (sub.empty()) {
+        print(tooie::host_profiler::running() ? "sampling into " + tooie::host_profiler::path() : "the profiler is off");
+        return;
+    }
+    if (sub == "start") {
+        std::filesystem::path path;
+        if (c.w.size() >= 3) {
+            // The rest of the line, so a path with spaces works.
+            path = std::filesystem::u8path(rest_of(c.line, 2));
+            if (path.is_relative()) path = recompui::file::get_app_folder_path() / path;
+        } else {
+            std::time_t t = std::time(nullptr);
+            char stamp[32];
+            std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", std::localtime(&t));
+            path = recompui::file::get_app_folder_path() / "profiles" / (std::string("profile-") + stamp + ".tsv");
+        }
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+        if (!tooie::host_profiler::start(path.string())) { error("the profiler only runs on Windows"); return; }
+        print("sampling every 2 ms into " + tooie::path_text(path) + " (written every 5 s and on hostprof stop)");
+        return;
+    }
+    if (sub == "label" && c.w.size() >= 3) {
+        std::string text = c.w[2];
+        for (size_t i = 3; i < c.w.size(); i++) text += " " + c.w[i];
+        tooie::host_profiler::label(text);
+        print("samples from now on are counted under " + text);
+        return;
+    }
+    if (sub == "stop" && c.w.size() == 2) {
+        if (!tooie::host_profiler::running()) { error("the profiler is off"); return; }
+        uint64_t n = tooie::host_profiler::stop();
+        print(format("profiler stopped: %llu samples in %s", (unsigned long long)n, tooie::host_profiler::path().c_str()));
+        return;
+    }
+    error("hostprof start [file] | hostprof label <text> | hostprof stop");
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -4017,6 +4070,8 @@ const std::vector<Command>& commands() {
         { "dev", {}, false, "dev [on|off]", "make dev.txt next to the exe (shows every hidden tab after a restart); off removes it", cmd_dev },
         { "screenshot", { "shot" }, false, "screenshot [ui]", "save the next frame as a PNG, as F12 does; with ui, the whole window with its menus", cmd_screenshot },
         { "burst", {}, true, "burst start | burst stop", "keep every frame from start to stop and save them, as F12 held does", cmd_burst },
+        { "bench", {}, false, "bench [start|stop]", "record what the frame rate overlay measures to benchmarks/benchmark_<date>.csv", cmd_bench },
+        { "hostprof", {}, false, "hostprof start [file] | label <text> | stop", "sample where the CPU time goes, by thread and function, into a file", cmd_hostprof },
         { "costcheck", { "cost" }, true, "costcheck", "start or stop the Effect Cost Check (GPU time of each effect that is on)", cmd_costcheck },
         { "press", {}, true, "press <buttons> [stick <x> <y>] [frames|n ms|n s]", "hold controller 1's buttons (a+b) and stick (-80..80), for n game updates, a time, or until release", cmd_press },
         { "release", {}, false, "release", "let go of what press holds", cmd_release },

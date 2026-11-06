@@ -72,3 +72,5 @@ from anywhere.
   Belen Masia, Fernando Navarro and Diego Gutierrez: the SMAA Anti-Aliasing option.
 * [FidelityFX Super Resolution 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR)
   by Advanced Micro Devices: the FSR 1 Upscaling option.
+* The Mario Party 3 recomp (GPLv3, same author): the sampling profiler behind the console's
+  `hostprof` (`src/debug/host_profiler.cpp`).
