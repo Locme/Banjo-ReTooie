@@ -165,6 +165,31 @@ others. To work out first:
   without the player saying yes.
 - The game's own files are never part of a pack (AGENTS.md): packs are the authors' own art.
 
+## Renderer plugin system, ray tracing as the first plugin (asked by L, 2026-11-07)
+
+The `.nrm` mods run on the game's side and can't add GPU passes, so ray tracing (RT64 and `rt64-ext`: its shaders,
+acceleration structures, Vulkan ray queries and DXR, switched from `src/display/picture_filters.cpp`) can't become a
+mod as mods are today. A plugin system for the renderer would let it: native plugins (a DLL, or a `.so` on Android)
+that RT64 loads and that register their own passes, shaders and settings. Ray tracing would be the first, and the
+port's other effects could follow.
+
+Performance, worked out before starting:
+
+- The GPU work is the same (the same shaders on the same GPU), and that is nearly all of ray tracing's cost.
+- With the plugin off or missing nothing is called: nothing costs anything, a little better than today.
+- Calls through the plugin interface go through function pointers, a few ns each, a handful to a few dozen a frame:
+  well under a microsecond against 2-4 ms frames (performance sweep, 2026-11-07).
+- No inlining across the boundary: the interface must be per pass, never per draw or per triangle.
+- The real risk: the plugin needs RT64's scene data every frame (draw lists, vertices, transforms, textures,
+  framebuffers). Copied into a format of the plugin's own, that could cost as much as the renderer's whole draw
+  setup (about 1 ms a frame in Terrydactyland); handed over as read-only views of RT64's own buffers, it costs
+  nothing. That is the main design work.
+- Other costs, not speed: the interface has to keep up with RT64 updates, plugin and port are built and versioned
+  together, and a crash in a plugin still ends the game.
+
+A simpler step first: a CMake switch (`TOOIE_RAY_TRACING=OFF`) that leaves the ray tracing code and shaders out of a
+build (Android, low-end PCs), as the options are already hidden there.
+
 ## Earlier open items
 
 L asked (2026-11-07) for the items already in this list to be worked through as well, after the above.
