@@ -117,8 +117,29 @@ The first time the app starts it asks for your Banjo-Tooie ROM (US release) and
 copies it in. Saves, settings, mods and `logs\console.log` are in
 `Android/data/io.github.locme.banjotooie/files` on the phone's storage.
 
-Not done yet: touch controls (use a controller), and leaving the app while the
-game runs (switching away may close or crash it).
+The game shows on-screen touch controls (two sticks, A, B, L, R, Z and Start,
+`src/android/android_platform.cpp` and `TouchOverlay.java`); a touch away from them
+works as a mouse click in the menus. A controller connected to the phone works too.
+
+Not done yet: leaving the app while the game runs (switching away may close or
+crash it).
+
+### Not on Android
+
+These are left out of the settings menus on Android (`hide_options_android_cannot_use`
+in `src/game/config.cpp`), because they cannot work on a phone:
+
+* Window Mode, and the Graphics API choice: the game fills the screen, and Vulkan is the only API.
+* DLSS, DLAA and FSR 3/4 in Upscaler (NVIDIA and AMD libraries for Windows); Snapdragon GSR is listed instead.
+* Discord Status: there is no Discord client to talk to.
+* Background Input Mode: the game cannot keep running when it is not on screen.
+* Mouse Sensitivity (and with it mouse look in first person) and the free camera's Mouse setting: a phone has no mouse.
+* Pass Over Crashes: it needs x86-64 and does nothing on the phone's ARM processor.
+* 3D Hand Cursor: a touch screen has no cursor.
+* Texture Dump > Sweep all maps: it restarts the game after a crash, which Android does not allow.
+
+Ray Tracing needs a phone whose GPU supports Vulkan ray queries; on any other it shows its notice and does nothing.
+
 
 ## Regenerating the recompiled code
 

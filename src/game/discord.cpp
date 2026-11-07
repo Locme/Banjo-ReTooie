@@ -388,6 +388,10 @@ namespace {
 }
 
 void tooie::discord::start(uint8_t* rdram) {
+#if defined(__ANDROID__)
+    // The Discord desktop client is not on a phone, so there is nothing to talk to and no thread is started.
+    (void)rdram;
+#else
     if (*discord_client_id == '\0') {
         return;
     }
@@ -395,4 +399,5 @@ void tooie::discord::start(uint8_t* rdram) {
         // Detached: it only talks to a local pipe, so it can die with the process.
         std::thread(presence_loop, rdram).detach();
     });
+#endif
 }

@@ -213,6 +213,10 @@ namespace {
     // Mouse Sensitivity is 5 by default (L, 2026-10-23). A saved value from before is set to 5 once, so PCs
     // that saved the old default (off, or 50 on a Steam Deck) get 5; changing it afterwards stays.
     void default_mouse_sensitivity() {
+#if defined(__ANDROID__)
+        // A phone has no mouse: the option is not registered there (init_config).
+        return;
+#endif
         const std::filesystem::path marker = recomp::get_config_path() / "mouse_sensitivity_5.done";
         if (std::filesystem::exists(marker)) {
             return;
@@ -428,6 +432,36 @@ namespace {
     }
 }
 
+#if defined(__ANDROID__)
+namespace {
+    // Settings that cannot work on a phone are hidden in the menus (BUILDING.md lists them). They stay registered
+    // with their defaults, so the code that reads them needs no change; each is also off, or does nothing, by
+    // itself on Android (the Discord thread is not started, the memory guard and the API restart are stubs).
+    void hide_options_android_cannot_use() {
+        auto hide = [](recomp::config::Config& config, const std::string& id) {
+            // update_option_hidden looks the id up with operator[], which would hide the first option for an unknown id.
+            if (config.has_option(id)) {
+                config.update_option_hidden(id, true);
+            }
+        };
+        recomp::config::Config& graphics = recompui::config::get_graphics_config();
+        // The window is always the whole screen, and Vulkan is the only graphics API there.
+        hide(graphics, recompui::config::graphics::options::wm_option);
+        hide(graphics, recompui::config::graphics::options::api_option);
+        recomp::config::Config& general = recompui::config::get_general_config();
+        // No Discord on a phone; no controller-in-the-background setting either, as the game cannot run off screen.
+        hide(general, tooie::discord::presence_option);
+        hide(general, recompui::config::general::options::background_input_mode);
+        // The mouse turns the free camera on a PC; a finger only presses the menus.
+        hide(recompui::config::get_config(tooie::qol_tab_id), tooie::free_camera_mouse_option);
+        // The memory guard is a stub on arm64, and the 3D hand is the mouse cursor, which a touch screen has none of.
+        recomp::config::Config& wip = recompui::config::get_config(tooie::wip_tab_id);
+        hide(wip, tooie::memory_guard::option);
+        hide(wip, tooie::hand_cursor::model_option);
+    }
+}
+#endif
+
 void tooie::init_config() {
     // dev.txt next to the exe shows every tab hidden by a switch, including tabs added later (L, 2026-10-23).
     recompui::config::set_show_all_tabs(tooie::dev_file_present());
@@ -453,7 +487,12 @@ void tooie::init_config() {
     general_options.has_rumble_strength = true;
     // Mouse and gyro aiming in first person (src/input/motion_aim.cpp).
     general_options.has_gyro_sensitivity = true;
+#if defined(__ANDROID__)
+    // No mouse on a phone: without this option the frontend also leaves out the mouse look in first person.
+    general_options.has_mouse_sensitivity = false;
+#else
     general_options.has_mouse_sensitivity = true;
+#endif
     auto& general = recompui::config::create_general_tab(general_options);
     tooie::control_scheme::add_option(general);
     general.add_bool_option(
@@ -1279,7 +1318,10 @@ void tooie::init_config() {
         {
             {tooie::TextureDump::Off, "Off", "Off"},
             {tooie::TextureDump::WhilePlaying, "WhilePlaying", "While playing"},
+#if !defined(__ANDROID__)
+            // The sweep starts the game again after a crash, which Android cannot do.
             {tooie::TextureDump::SweepAllMaps, "SweepAllMaps", "Sweep all maps"},
+#endif
         },
         tooie::TextureDump::Off);
     wip.add_bool_option(
@@ -1371,6 +1413,9 @@ void tooie::init_config() {
     split_saved_toon_shading();
     tooie::menu_tree::classify();
     recompui::config::finalize();
+#if defined(__ANDROID__)
+    hide_options_android_cannot_use();
+#endif
     tooie::cheats::reset_on_start();
     move_saved_options_to_graphics();
     show_wip_tab();
