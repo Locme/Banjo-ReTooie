@@ -48,9 +48,26 @@ heaviest with the Enhanced preset.
 
 ## Fix the crashes from the last sweeps (asked by L, 2026-11-07)
 
+The logs, copied out of the build folder so later runs don't overwrite them, are in
+`D:\Projects\Banjo Tooie N64\crash_logs\2026-11-07\` (outside the repo; line numbers are in those copies):
+
+| Issue | Where it is logged |
+|---|---|
+| GI Floor 3 heap corruption (map 0x109) | `PassedOver.txt` lines 447-527 (first: `func_8001C0A0+0x226`, 01:23:41); `hangs.log` 01:23:57 and `hang_2026-11-07_01-23-57.dmp` |
+| Tower of Tragedy quiz (0x15F) | `PassedOver.txt` lines 411-564 (first: `func_800A4C88+0x3c`, 00:37:22); `perf_sweep_A_crashes.txt`; `texture_sweep.txt` lines 1695 on (25 `noted MAJOR 0x15F`) |
+| Mayahem Temple's character parade (0x167) | `PassedOver.txt` lines 565-568 (`func_80800648_chintrochar+0x1c2`, 05:14:54); `texture_sweep.txt` (4 `noted MAJOR 0x167`) |
+| Intro cutscenes (0xA3, 0xAC; chintrochar) | `PassedOver.txt` lines 439-442 (0xA3) and 443-446 (0xAC); `perf_sweep_A_crashes.txt` |
+| A hang during sweep A, map not logged (the game went on) | `hangs.log` 00:57:26 and `hang_2026-11-07_00-57-38.dmp` |
+| A hang of 21 s, map not logged (the game went on) | `hangs.log` 03:56:16 and `hang_2026-11-07_03-56-28.dmp` |
+| Crash on quitting (fixed in c0ddedc) | `crashes.log` 03:28:36 and `crash_2026-11-07_03-28-36.dmp` |
+
+The dumps were made by builds whose PDBs are gone (each build overwrites `BanjoReTooie.pdb`), so they open
+without names; the call stacks in `hangs.log` and `PassedOver.txt` are already named. The PDB in that folder is
+from defb66c and does not match them. The watchdog's hang reports don't say which map they were in: worth adding.
+
 From the performance and texture sweeps (2026-11-07), still to fix: the heap corruption in GI Floor 3 (below), and
 the bad pointers passed over in the Tower of Tragedy quiz (0x15F, 25 in the texture sweep, func_800A4C88 and
-ncpod_*), Mayahem Temple's character parade (0x167, 4) and the intro cutscenes (0xA9, 0xAC, chintrochar) when
+ncpod_*), Mayahem Temple's character parade (0x167, 4) and the intro cutscenes (0xA3, 0xAC, chintrochar) when
 warped into straight away. Those last ones only happen through warps, but a phone has no Pass over crashes guard,
 so there they end the game.
 
