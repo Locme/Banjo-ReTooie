@@ -255,42 +255,8 @@ Mario Party's `draw_provenance.cpp` (draws that move only on logic steps, snap, 
 frame-check scripts, plus the `recomp-stutter` skill's method, built on the fork's capture (7) so any game gets
 them: a list of draws whose motion steps instead of moving smoothly above the game's own rate.
 
-### 31. Speed results kept and compared by commit
-
-Each sweep's results stored with the build's commit; a script that compares two commits map by map and flags what
-got slower beyond the run-to-run spread. Later in CI, with the replay harness (7), as a speed budget per game.
-
 ### 32. Symbols kept for every build
 
 Every build writes over `BanjoReTooie.pdb`, so crash and hang dumps from earlier builds can no longer be named
 (Banjo's sweep dumps of 2026-11-07 could not). Keep the PDB (and the Android `libmain.so` with its symbols) per
 commit in a local symbol store or with each release, so any dump can be read later.
-
-### 33. Map and scene in crash and hang reports
-
-Banjo's watchdog's hang reports don't say which map the game was in (two hangs in its sweep can't be placed). Every
-crash and hang report should carry the game's own location (the game passes it in: map, minigame, scene), the
-build's commit and the settings that touch the renderer.
-
-### 34. A standard benchmark route per game
-
-A fixed route a player can run from the menu or the console (a few maps, set camera moves, set settings), giving
-one score file people can compare across PCs and phones: real numbers from hardware L doesn't have.
-
-### 35. Shader warm-up lists per game
-
-Record which shader and pipeline combinations each game uses across a sweep (RT64 knows each one it builds), and
-ship that list with the game so a first start compiles them up front, as Banjo's "Compile All Shaders At Start"
-does for what a player has already met. First visits then don't stutter even on a new install, and phones gain
-most.
-
-### 36. GPU memory and texture tracking per scene
-
-Per map or scene: GPU memory by kind (render targets, textures, effect buffers, texture pack), textures cached and
-evicted. Banjo's texture sweep logged the totals; the fork should break them down, to set budgets for phones (11).
-
-### 37. Determinism checks
-
-Play a recorded input run twice (Banjo's console has `record` and `play`) and compare the frames through the
-capture (7): a difference means something isn't deterministic (timing-dependent game code, a race in the
-renderer), which also explains bugs that come and go, such as Banjo's one-off heap corruption.
