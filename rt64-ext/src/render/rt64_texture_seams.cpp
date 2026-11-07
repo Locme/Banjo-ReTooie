@@ -80,86 +80,95 @@ namespace RT64 {
                 }
                 return std::make_pair(first, last);
             };
-            // The piece whose edge (other) meets a's edge (edge) at two or more points.
-            auto find = [&](uint32_t ai, uint32_t edge, uint32_t other) -> uint32_t {
+            // Each piece's neighbour along each of its edges: the piece whose opposite edge meets it at two or more points.
+            // One pass over the piece's points serves all four edges (it went over them once per edge, looking each point's
+            // cells up four times: most of RT64's workload thread in the performance sweep, 2026-11-07).
+            // Edges in the order of the result: right (s high meets the other's s low), below (t high), left and above.
+            static constexpr uint32_t edgeBits[4] = { 2u, 8u, 1u, 4u };
+            static constexpr uint32_t otherBits[4] = { 1u, 4u, 2u, 8u };
+            for (uint32_t ai = 0; ai < seamPieces.size(); ai++) {
                 const SeamPiece &a = seamPieces[ai];
-                const bool alongT = (edge & 3u) != 0;
-                uint32_t best = RASTER_SEAM_NONE, bestCount = 0;
-                uint32_t candidates[8] = {};
-                uint32_t counts[8] = {};
-                uint32_t candidateCount = 0;
+                uint32_t candidates[4][8] = {};
+                uint32_t counts[4][8] = {};
+                uint32_t candidateCount[4] = {};
                 for (uint32_t k = 0; k < a.pointCount; k++) {
                     const SeamPoint &pa = seamPoints[a.pointStart + k];
-                    if ((pa.edges & edge) == 0) {
+                    if ((pa.edges & 0xFu) == 0) {
                         continue;
                     }
                     // Only the cells a point within same()'s reach (2e-4 on x and y, with a margin) can be in, usually one (it was all nine around).
                     const int64_t x0 = int64_t(std::floor((pa.position.x - 2.5e-4f) * 2048.0f)), x1 = int64_t(std::floor((pa.position.x + 2.5e-4f) * 2048.0f));
                     const int64_t y0 = int64_t(std::floor((pa.position.y - 2.5e-4f) * 2048.0f)), y1 = int64_t(std::floor((pa.position.y + 2.5e-4f) * 2048.0f));
-                    uint32_t matchedHere[8] = {};
-                    uint32_t matchedHereCount = 0;
+                    // Each piece is counted once per edge for this point.
+                    uint32_t matchedHere[4][8] = {};
+                    uint32_t matchedHereCount[4] = {};
                     for (int64_t cellX = x0; cellX <= x1; cellX++) {
                         for (int64_t cellY = y0; cellY <= y1; cellY++) {
                             auto range = cellRange((uint64_t(uint32_t(int32_t(cellX))) << 32) | uint64_t(uint32_t(int32_t(cellY))));
                             for (auto it = range.first; it != range.second; it++) {
                                 const SeamPoint &pb = seamPoints[it->second];
                                 const uint32_t bi = pointPiece[it->second];
-                                if ((bi == ai) || ((pb.edges & other) == 0) || !same(pa.position, pb.position)) {
+                                if ((bi == ai) || !same(pa.position, pb.position)) {
                                     continue;
                                 }
                                 const SeamPiece &b = seamPieces[bi];
                                 if ((b.format != a.format) || (b.shader != a.shader)) {
                                     continue;
                                 }
-                                if (alongT ? ((b.height != a.height) || (std::abs(pb.t - pa.t) > 0.1f)) : ((b.width != a.width) || (std::abs(pb.u - pa.u) > 0.1f))) {
-                                    continue;
-                                }
-                                // Count each piece once for this point.
-                                bool already = false;
-                                for (uint32_t m = 0; m < matchedHereCount; m++) {
-                                    already = already || (matchedHere[m] == bi);
-                                }
-                                if (already || (matchedHereCount == 8)) {
-                                    continue;
-                                }
-                                matchedHere[matchedHereCount++] = bi;
-                                uint32_t c = 0;
-                                while ((c < candidateCount) && (candidates[c] != bi)) {
-                                    c++;
-                                }
-                                if (c == candidateCount) {
-                                    if (candidateCount == 8) {
+                                for (uint32_t j = 0; j < 4; j++) {
+                                    if (((pa.edges & edgeBits[j]) == 0) || ((pb.edges & otherBits[j]) == 0)) {
                                         continue;
                                     }
-                                    candidates[candidateCount] = bi;
-                                    counts[candidateCount] = 0;
-                                    candidateCount++;
+                                    const bool alongT = (edgeBits[j] & 3u) != 0;
+                                    if (alongT ? ((b.height != a.height) || (std::abs(pb.t - pa.t) > 0.1f)) : ((b.width != a.width) || (std::abs(pb.u - pa.u) > 0.1f))) {
+                                        continue;
+                                    }
+                                    bool already = false;
+                                    for (uint32_t m = 0; m < matchedHereCount[j]; m++) {
+                                        already = already || (matchedHere[j][m] == bi);
+                                    }
+                                    if (already || (matchedHereCount[j] == 8)) {
+                                        continue;
+                                    }
+                                    matchedHere[j][matchedHereCount[j]++] = bi;
+                                    uint32_t c = 0;
+                                    while ((c < candidateCount[j]) && (candidates[j][c] != bi)) {
+                                        c++;
+                                    }
+                                    if (c == candidateCount[j]) {
+                                        if (candidateCount[j] == 8) {
+                                            continue;
+                                        }
+                                        candidates[j][c] = bi;
+                                        counts[j][c] = 0;
+                                        candidateCount[j]++;
+                                    }
+                                    counts[j][c]++;
                                 }
-                                counts[c]++;
                             }
                         }
                     }
                 }
                 // Of pieces alike at the same place, the nearest in draw order.
-                uint32_t bestGap = 0xFFFFFFFFu;
-                for (uint32_t c = 0; c < candidateCount; c++) {
-                    const uint32_t bInstance = seamPieces[candidates[c]].instance;
-                    const uint32_t gap = (bInstance > a.instance) ? (bInstance - a.instance) : (a.instance - bInstance);
-                    if ((counts[c] >= 2) && ((counts[c] > bestCount) || ((counts[c] == bestCount) && (gap < bestGap)))) {
-                        bestCount = counts[c];
-                        bestGap = gap;
-                        best = seamPieces[candidates[c]].tile | (a.world ? 0x80000000u : 0u);
+                uint32_t best[4];
+                for (uint32_t j = 0; j < 4; j++) {
+                    best[j] = RASTER_SEAM_NONE;
+                    uint32_t bestCount = 0, bestGap = 0xFFFFFFFFu;
+                    for (uint32_t c = 0; c < candidateCount[j]; c++) {
+                        const uint32_t bInstance = seamPieces[candidates[j][c]].instance;
+                        const uint32_t gap = (bInstance > a.instance) ? (bInstance - a.instance) : (a.instance - bInstance);
+                        if ((counts[j][c] >= 2) && ((counts[j][c] > bestCount) || ((counts[j][c] == bestCount) && (gap < bestGap)))) {
+                            bestCount = counts[j][c];
+                            bestGap = gap;
+                            best[j] = seamPieces[candidates[j][c]].tile | (a.world ? 0x80000000u : 0u);
+                        }
                     }
                 }
-                return best;
-            };
-            for (uint32_t ai = 0; ai < seamPieces.size(); ai++) {
-                interop::uint4 &n = instanceSeamVector[seamPieces[ai].instance];
-                // Right (s high meets the other's s low), below (t on), left and above.
-                n.x = find(ai, 2u, 1u);
-                n.y = find(ai, 8u, 4u);
-                n.z = find(ai, 1u, 2u);
-                n.w = find(ai, 4u, 8u);
+                interop::uint4 &n = instanceSeamVector[a.instance];
+                n.x = best[0];
+                n.y = best[1];
+                n.z = best[2];
+                n.w = best[3];
             }
             static const bool seamLog = (getenv("TOOIE_SEAM_LOG") != nullptr);
             if (seamLog) {

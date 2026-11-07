@@ -3,6 +3,10 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-07
+
+- A little faster on the CPU everywhere: the game's float rounding changes, RT64's texture hashing for paletted textures, and calls between the game's functions cost less. Measured over twelve maps, two runs each: frame time 2% lower, the game's own CPU time per frame 3-14% lower.
+
 ## 2026-11-06
 
 - Console: `bench start|stop` records the Benchmark (frame times, GPU time per pass, the game's CPU time, the map) and `hostprof start|label|stop` samples where the PC's CPU time goes, by thread and function.

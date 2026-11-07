@@ -173,6 +173,8 @@ endfunction()
 apply_nested_patch(plume lib/rt64/src/contrib/plume)
 # RmlUi (inside RecompFrontend): a note that SVG textures stay premultiplied (lib-patches/README.md).
 apply_nested_patch(RmlUi lib/RecompFrontend/recompui/lib/RmlUi)
+# N64Recomp (inside N64ModernRuntime): the FPU rounding mode through SSE's MXCSR on x86-64 (lib-patches/README.md).
+apply_nested_patch(N64Recomp lib/N64ModernRuntime/N64Recomp)
 # re-spirv (RT64's SPIR-V specialiser): its sort copes with loops, which the raster shaders now have.
 apply_nested_patch(re-spirv lib/rt64/src/contrib/re-spirv)
 

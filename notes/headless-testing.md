@@ -210,6 +210,6 @@ the GPU time per game frame and per pass, the game's CPU time and the shader com
 profile by group (game code, RSP audio, RT64, driver, runtime, the port's own code, OS) and by thread, the top
 functions per map, and what loading each map costs.
 
-The sampler weights each sample by the CPU time the thread used since the last look, but it has no call stacks: a
+The sampler weights each sample by the CPU time the thread used since the last look, and `.callers.tsv` adds two callers per sample; a
 thread that worked for part of a look and was waiting when it was looked at shows the wait function. Those are
 counted under OS.

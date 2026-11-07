@@ -96,6 +96,12 @@ def summarize_maps(per_map, names):
         }
         for c in gpu_cols:
             d[c] = med(num(r.get(c)) for r in rows)
+        # The renderer thread's time per game frame, in its five parts (newer benchmark files only).
+        for c in ("renderer_draws_ms", "renderer_effects_setup_ms", "renderer_record_ms", "renderer_gpu_wait_ms", "renderer_after_ms"):
+            if any(c in r for r in rows):
+                d[c] = med(num(r.get(c)) for r in rows)
+        if "renderer_draws_ms" in d:
+            d["renderer_ms"] = sum(d[c] or 0 for c in ("renderer_draws_ms", "renderer_effects_setup_ms", "renderer_record_ms", "renderer_gpu_wait_ms", "renderer_after_ms"))
         result.append(d)
     return result
 
@@ -124,10 +130,11 @@ def table(rows, cols, heads):
 
 def maps_section(maps):
     out = ["== Maps, heaviest first by median frame_ms ==", ""]
-    heads = ["map", "name", "rows", "frame", "worst", "gpu/gf", "cpu", "gfps", "shdr"]
+    heads = ["map", "name", "rows", "frame", "worst", "gpu/gf", "cpu", "rend", "gfps", "shdr"]
     def row(d):
         return [d["map"], d["name"][:38], str(d["rows"]), f"{d['frame_ms']:.2f}", f"{d['worst_frame_ms']:.1f}",
-                f"{d['gpu_ms_per_game_frame']:.2f}", f"{d['game_cpu_ms']:.2f}", f"{d['game_fps']:.1f}",
+                f"{d['gpu_ms_per_game_frame']:.2f}", f"{d['game_cpu_ms']:.2f}",
+                f"{d['renderer_ms']:.2f}" if "renderer_ms" in d else "-", f"{d['game_fps']:.1f}",
                 f"{d['shader_compiles']:.0f}"]
     out.append(table([row(d) for d in sorted(maps, key=lambda d: -d["frame_ms"])], None, heads))
     for title, key in (("gpu_ms_per_game_frame", "gpu_ms_per_game_frame"), ("game_cpu_ms", "game_cpu_ms"),

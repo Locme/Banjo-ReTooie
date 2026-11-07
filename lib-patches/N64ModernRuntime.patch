@@ -10,7 +10,7 @@ index a1086cf..917be5c 100644
  
  #include <json/json.hpp>
  
-@@ -315,7 +316,28 @@
+@@ -315,7 +316,28 @@ namespace recomp {
  
              std::vector<ConfigOptionUpdateContext> get_config_option_updates() { return config_option_updates; }
              bool is_config_option_disabled(size_t option_index) const { return disabled_options.contains(option_index); }
@@ -40,7 +40,7 @@ index a1086cf..917be5c 100644
              void clear_config_option_updates() {
                  config_option_updates.clear();
              }
-@@ -327,10 +349,20 @@
+@@ -327,10 +349,20 @@ namespace recomp {
                  json_serialize_option_map[option_id] = callback;
              }
  
@@ -62,7 +62,7 @@ index a1086cf..917be5c 100644
              bool loaded_config = false;
              bool is_mod_config = false;
  
-@@ -338,6 +370,15 @@
+@@ -338,6 +370,15 @@ namespace recomp {
              std::string mod_version; // only used if mod
  
              ConfigSchema schema;
@@ -78,7 +78,7 @@ index a1086cf..917be5c 100644
              ConfigStorage storage;
              ConfigStorage temp_storage;
  
-@@ -347,6 +388,14 @@
+@@ -347,6 +388,14 @@ namespace recomp {
              std::vector<ConfigOptionUpdateContext> config_option_updates = {};
              std::unordered_set<size_t> disabled_options = {};
              std::unordered_set<size_t> hidden_options = {};
@@ -161,7 +161,7 @@ diff --git a/librecomp/src/config.cpp b/librecomp/src/config.cpp
 index 6bc03fd..9e1fbf5 100644
 --- a/librecomp/src/config.cpp
 +++ b/librecomp/src/config.cpp
-@@ -84,7 +84,8 @@
+@@ -84,7 +84,8 @@ void Config::set_mod_version(const std::string &mod_version) {
      this->mod_version = mod_version;
  }
  
@@ -171,7 +171,7 @@ index 6bc03fd..9e1fbf5 100644
      return storage;
  }
  
-@@ -125,6 +126,7 @@
+@@ -125,6 +126,7 @@ void Config::add_option(const ConfigOption& option) {
              break;
      }
  
@@ -179,7 +179,7 @@ index 6bc03fd..9e1fbf5 100644
      storage.value_map[option.id] = default_value;
      if (requires_confirmation) {
          temp_storage.value_map[option.id] = default_value;
-@@ -281,9 +283,12 @@
+@@ -281,9 +283,12 @@ bool Config::has_option(const std::string& option_id) const {
  }
  
  const ConfigValueVariant Config::get_option_value_from_storage(const std::string& option_id, const ConfigStorage& src) const {
@@ -195,7 +195,7 @@ index 6bc03fd..9e1fbf5 100644
      }
      return get_option_default_value(option_id);
  }
-@@ -297,6 +302,7 @@
+@@ -297,6 +302,7 @@ const ConfigValueVariant Config::get_temp_option_value(const std::string& option
  }
  
  void Config::determine_changed_option(const std::string& option_id) {
@@ -203,20 +203,19 @@ index 6bc03fd..9e1fbf5 100644
      if (get_option_value(option_id) != get_temp_option_value(option_id)) {
          modified_options.insert(schema.options_by_id[option_id]);
      } else {
-@@ -315,22 +321,31 @@
+@@ -315,22 +321,31 @@ void Config::try_call_option_change_callback(const std::string& option_id, Confi
  }
  
  void Config::set_option_value(const std::string& option_id, ConfigValueVariant value) {
 -    ConfigStorage &conf_storage = requires_confirmation ? temp_storage : storage;
--
--    auto it = conf_storage.value_map.find(option_id);
--    if (it != conf_storage.value_map.end()) {
--        ConfigValueVariant prev_value = it->second;
 +    ConfigValueVariant prev_value;
 +    {
 +        std::lock_guard lock{ values_lock.mutex };
 +        ConfigStorage &conf_storage = requires_confirmation ? temp_storage : storage;
-+
+ 
+-    auto it = conf_storage.value_map.find(option_id);
+-    if (it != conf_storage.value_map.end()) {
+-        ConfigValueVariant prev_value = it->second;
 +        auto it = conf_storage.value_map.find(option_id);
 +        if (it == conf_storage.value_map.end()) {
 +            return;
@@ -244,7 +243,7 @@ index 6bc03fd..9e1fbf5 100644
  }
  
  bool Config::get_enum_option_disabled(size_t option_index, uint32_t enum_index) const {
-@@ -360,9 +375,20 @@
+@@ -360,9 +375,20 @@ nlohmann::json Config::get_json_config() const {
  }
  
  nlohmann::json Config::get_storage_json() const {
@@ -267,7 +266,7 @@ index 6bc03fd..9e1fbf5 100644
  
          if (json_serialize_option_map.contains(option.id)) {
              auto cb = json_serialize_option_map.at(option.id);
-@@ -405,7 +431,12 @@
+@@ -405,7 +431,12 @@ nlohmann::json Config::get_storage_json() const {
  bool Config::save_config_json(nlohmann::json config_json) const {
      std::filesystem::path file_path = get_path_to_config(is_mod_config) / config_file_name;
  
@@ -281,7 +280,7 @@ index 6bc03fd..9e1fbf5 100644
      if (save_callback) {
          save_callback();
      }
-@@ -414,9 +445,14 @@
+@@ -414,9 +445,14 @@ bool Config::save_config_json(nlohmann::json config_json) const {
  }
  
  void Config::apply_option_value(const ConfigOption &option) {
@@ -299,7 +298,7 @@ index 6bc03fd..9e1fbf5 100644
      try_call_option_change_callback(option.id, cur_value, prev_value, OptionChangeContext::Permanent);
  }
  
-@@ -424,6 +460,7 @@
+@@ -424,6 +460,7 @@ void Config::apply_option_value(const std::string &option_id) {
      auto option_by_id_it = schema.options_by_id.find(option_id);
      if (option_by_id_it != schema.options_by_id.end()) {
          apply_option_value(schema.options[option_by_id_it->second]);
@@ -307,7 +306,7 @@ index 6bc03fd..9e1fbf5 100644
          modified_options.erase(option_by_id_it->second);
      }
  }
-@@ -434,6 +471,7 @@
+@@ -434,6 +471,7 @@ bool Config::save_config() {
              apply_option_value(option);
          }
  
@@ -315,7 +314,7 @@ index 6bc03fd..9e1fbf5 100644
          modified_options.clear();
      }
  
-@@ -536,10 +574,13 @@
+@@ -536,10 +574,13 @@ bool Config::load_config(std::function<bool(nlohmann::json &)> validate_callback
          auto json_value = (*json_config_root)[option.id];
  
          auto value = parse_config_option_json_value(json_value, option);
@@ -332,7 +331,7 @@ index 6bc03fd..9e1fbf5 100644
          }
          try_call_option_change_callback(option.id, value, value, OptionChangeContext::Load);
      }
-@@ -559,12 +600,20 @@
+@@ -559,12 +600,20 @@ void Config::revert_temp_config() {
          return;
      }
  
@@ -357,7 +356,7 @@ index 6bc03fd..9e1fbf5 100644
          try_call_option_change_callback(option.id, original_value, temp_value, OptionChangeContext::Temporary);
      }
  
-@@ -576,6 +625,7 @@
+@@ -576,6 +625,7 @@ void Config::revert_temp_config() {
  }
  
  bool Config::is_dirty() const {
@@ -365,7 +364,7 @@ index 6bc03fd..9e1fbf5 100644
      return !modified_options.empty();
  }
  
-@@ -623,7 +673,7 @@
+@@ -623,7 +673,7 @@ void Config::update_option_hidden(size_t option_index, bool hidden) {
          // unchangeable - always hidden
          return;
      }
@@ -374,7 +373,7 @@ index 6bc03fd..9e1fbf5 100644
      if (was_hidden == hidden) {
          return;
      }
-@@ -692,8 +742,87 @@
+@@ -692,8 +742,87 @@ std::string Config::get_enum_option_details(size_t option_index) const {
      return enum_option_details.at(option_index);
  }
  
@@ -539,10 +538,67 @@ index 0f7de83..09ce870 100644
              printf("Opening mod " PATHFMT "\n", mod_path.path().stem().c_str());
              std::string open_error_param;
 diff --git a/librecomp/src/overlays.cpp b/librecomp/src/overlays.cpp
-index 8c8e5d1..3599f5a 100644
+index 8c8e5d1..7340d77 100644
 --- a/librecomp/src/overlays.cpp
 +++ b/librecomp/src/overlays.cpp
-@@ -271,6 +271,24 @@ extern "C" void unload_overlays(int32_t ram_addr, uint32_t size) {
+@@ -2,6 +2,7 @@
+ #include <cassert>
+ #include <cstdio>
+ #include <cstring>
++#include <atomic>
+ #include <unordered_map>
+ #include <vector>
+ 
+@@ -37,6 +38,8 @@ static std::unordered_map<uint32_t, uint16_t> code_sections_by_rom{};
+ static std::unordered_map<uint32_t, uint16_t> patch_code_sections_by_rom{};
+ static std::vector<LoadedSection> loaded_sections{};
+ static std::unordered_map<int32_t, recomp_func_t*> func_map{};
++// Banjo-Tooie: counts changes to func_map, so get_function's per-thread cache knows when its entries are stale.
++static std::atomic<uint32_t> func_map_generation{ 1 };
+ static std::unordered_map<std::string, recomp_func_t*> base_exports{};
+ static std::unordered_map<std::string, recomp_func_ext_t*> ext_base_exports{};
+ static std::unordered_map<std::string, size_t> base_events;
+@@ -148,6 +151,7 @@ std::span<const RelocEntry> recomp::overlays::get_section_relocs(uint16_t code_s
+ 
+ void recomp::overlays::add_loaded_function(int32_t ram, recomp_func_t* func) {
+     func_map[ram] = func;
++    func_map_generation.fetch_add(1, std::memory_order_release);
+ }
+ 
+ void load_overlay(size_t section_table_index, int32_t ram) {
+@@ -156,6 +160,7 @@ void load_overlay(size_t section_table_index, int32_t ram) {
+     for (size_t function_index = 0; function_index < section.num_funcs; function_index++) {
+         const FuncEntry& func = section.funcs[function_index];
+         func_map[ram + func.offset] = func.func;
++        func_map_generation.fetch_add(1, std::memory_order_release);
+     }
+ 
+     loaded_sections.emplace_back(ram, section_table_index);
+@@ -166,6 +171,7 @@ static void load_special_overlay(const SectionTableEntry& section, int32_t ram)
+     for (size_t function_index = 0; function_index < section.num_funcs; function_index++) {
+         const FuncEntry& func = section.funcs[function_index];
+         func_map[ram + func.offset] = func.func;
++        func_map_generation.fetch_add(1, std::memory_order_release);
+     }
+ }
+ 
+@@ -216,6 +222,7 @@ extern "C" void unload_overlay_by_id(uint32_t id) {
+             const auto& func = section.funcs[func_index];
+             uint32_t func_address = func.offset + find_it->loaded_ram_addr;
+             func_map.erase(func_address);
++            func_map_generation.fetch_add(1, std::memory_order_release);
+         }
+         // Reset the section's address in the address table
+         section_addresses[section.index] = section.ram_addr;
+@@ -259,6 +266,7 @@ extern "C" void unload_overlays(int32_t ram_addr, uint32_t size) {
+                 const auto& func = section.funcs[func_index];
+                 uint32_t func_address = func.offset + it->loaded_ram_addr;
+                 func_map.erase(func_address);
++                func_map_generation.fetch_add(1, std::memory_order_release);
+             }
+             // Reset the section's address in the address table
+             section_addresses[section.index] = section.ram_addr;
+@@ -271,8 +279,28 @@ extern "C" void unload_overlays(int32_t ram_addr, uint32_t size) {
      }
  }
  
@@ -561,12 +617,44 @@ index 8c8e5d1..3599f5a 100644
 +        loaded_sections.emplace_back(ram, index);
 +    }
 +    func_map = state.func_map;
++    func_map_generation.fetch_add(1, std::memory_order_release);
 +    std::copy(state.section_addresses.begin(), state.section_addresses.end(), section_addresses);
 +}
 +
  void recomp::overlays::init_overlays() {
      func_map.clear();
++    func_map_generation.fetch_add(1, std::memory_order_release);
      section_addresses = (int32_t *)calloc(sections_info.total_num_sections, sizeof(int32_t));
+ 
+     // Sort the executable sections by rom address
+@@ -362,12 +390,27 @@ recomp_func_t* recomp::overlays::get_func_by_section_rom_function_vram(uint32_t
+ }
+ 
+ extern "C" recomp_func_t * get_function(int32_t addr) {
++    // Banjo-Tooie: a small cache per thread in front of the map, as every jalr and every call through a function
++    // pointer lands here (a hash lookup each time: a few percent of the game thread in the performance sweep,
++    // 2026-11-07). An entry is good while no overlay has been loaded or unloaded since it was filled.
++    struct CacheEntry {
++        int32_t addr;
++        uint32_t generation;
++        recomp_func_t* func;
++    };
++    static thread_local CacheEntry cache[1024] = {};
++    const uint32_t generation = func_map_generation.load(std::memory_order_acquire);
++    CacheEntry& entry = cache[(uint32_t(addr) >> 2) & 1023];
++    if (entry.generation == generation && entry.addr == addr) {
++        return entry.func;
++    }
+     auto func_find = func_map.find(addr);
+     if (func_find == func_map.end()) {
+         fprintf(stderr, "Failed to find function at 0x%08X\n", addr);
+         assert(false);
+         std::exit(EXIT_FAILURE);
+     }
++    entry = { addr, generation, func_find->second };
+     return func_find->second;
+ }
+ 
 diff --git a/librecomp/src/recomp.cpp b/librecomp/src/recomp.cpp
 index 1200f77..8c9697f 100644
 --- a/librecomp/src/recomp.cpp

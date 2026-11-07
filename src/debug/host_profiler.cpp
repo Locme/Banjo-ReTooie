@@ -59,6 +59,7 @@ public:
         std::lock_guard lock{ mutex_ };
         path_ = path;
         counts_.clear();
+        chains_.clear();
         total_ = 0;
         if (!sym_proc_) {
             HANDLE dup = nullptr;
@@ -147,12 +148,48 @@ private:
             if (used < cycles_per_look_ / 50) continue;
             if (SuspendThread(t.handle) == (DWORD)-1) continue;
             CONTEXT ctx{};
-            ctx.ContextFlags = CONTEXT_CONTROL;
             // Weighted by the cycles the thread used since the last look, so a thread that was busy a tenth of the
             // time counts a tenth as much as one that ran the whole time.
-            if (GetThreadContext(t.handle, &ctx)) by_thread[t.name][(uintptr_t)ctx.Rip] += used;
+            ctx.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+            if (GetThreadContext(t.handle, &ctx)) {
+                by_thread[t.name][(uintptr_t)ctx.Rip] += used;
+                // The two functions above it, while the thread is still held, for the .callers.tsv file.
+                Chain chain{ (uintptr_t)ctx.Rip, 0, 0 };
+                unwind_callers(ctx, chain);
+                chains_[label_][t.name][chain] += used;
+            }
             ResumeThread(t.handle);
             total_ += used;
+        }
+    }
+
+    struct Chain {
+        uintptr_t leaf, caller, caller2;
+        bool operator==(const Chain& o) const { return leaf == o.leaf && caller == o.caller && caller2 == o.caller2; }
+    };
+    struct ChainHash {
+        size_t operator()(const Chain& c) const { return std::hash<uintptr_t>()(c.leaf) ^ (std::hash<uintptr_t>()(c.caller) * 31) ^ (std::hash<uintptr_t>()(c.caller2) * 1009); }
+    };
+
+    // Two steps up the held thread's stack with the x64 unwind data (a leaf function with none: its return address is
+    // at the stack pointer). A bad stack ends the walk instead of crashing the program.
+    static void unwind_callers(CONTEXT ctx, Chain& chain) {
+        __try {
+            for (int level = 0; level < 2; level++) {
+                DWORD64 image_base = 0;
+                PRUNTIME_FUNCTION entry = RtlLookupFunctionEntry(ctx.Rip, &image_base, nullptr);
+                if (entry == nullptr) {
+                    ctx.Rip = *(DWORD64*)ctx.Rsp;
+                    ctx.Rsp += 8;
+                } else {
+                    PVOID handler_data = nullptr;
+                    DWORD64 establisher = 0;
+                    RtlVirtualUnwind(UNW_FLAG_NHANDLER, image_base, ctx.Rip, entry, &ctx, &handler_data, &establisher, nullptr);
+                }
+                if (ctx.Rip == 0) break;
+                (level == 0 ? chain.caller : chain.caller2) = (uintptr_t)ctx.Rip;
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
         }
     }
 
@@ -176,6 +213,44 @@ private:
         char hex[32];
         std::snprintf(hex, sizeof hex, "+0x%llx", (unsigned long long)(addr - (uintptr_t)mod));
         return module + hex;
+    }
+
+    const std::pair<std::string, std::string>& named(uintptr_t addr) {
+        auto it = names_.find(addr);
+        if (it == names_.end()) {
+            std::string module;
+            std::string func = name_of(addr, module);
+            it = names_.emplace(addr, std::make_pair(module, func)).first;
+        }
+        return it->second;
+    }
+
+    // <file>.callers.tsv: samples, label, thread, function, its caller, the caller's caller; heaviest first.
+    void write_callers(double per) {
+        struct Row { double n; std::string key; };
+        std::unordered_map<std::string, double> rows;
+        for (auto& [label, threads] : chains_) {
+            for (auto& [tname, chains] : threads) {
+                for (auto& [chain, n] : chains) {
+                    std::string key = label + '\t' + tname + '\t' + named(chain.leaf).second + '\t' +
+                        (chain.caller ? named(chain.caller).second : "-") + '\t' + (chain.caller2 ? named(chain.caller2).second : "-");
+                    rows[key] += n / per;
+                }
+            }
+        }
+        std::vector<Row> sorted;
+        for (auto& [k, n] : rows) if (n >= 0.5) sorted.push_back({ n, k });
+        std::sort(sorted.begin(), sorted.end(), [](const Row& a, const Row& b) { return a.n > b.n; });
+        std::string path = path_;
+        const size_t dot = path.rfind('.');
+        path = (dot == std::string::npos ? path : path.substr(0, dot)) + ".callers.tsv";
+        std::string tmp = path + ".tmp";
+        FILE* f = std::fopen(tmp.c_str(), "w");
+        if (!f) return;
+        std::fprintf(f, "# samples\tlabel\tthread\tfunction\tcaller\tcaller's caller\n");
+        for (const Row& r : sorted) std::fprintf(f, "%.0f\t%s\n", r.n, r.key.c_str());
+        std::fclose(f);
+        MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING);
     }
 
     // Called with mutex_ held.
@@ -216,6 +291,7 @@ private:
         }
         std::fclose(f);
         MoveFileExA(tmp.c_str(), path_.c_str(), MOVEFILE_REPLACE_EXISTING);
+        write_callers(per);
     }
 
     void run(int gen) {
@@ -245,6 +321,7 @@ private:
     std::unordered_map<DWORD, ThreadInfo> threads_;
     std::unordered_map<std::string, std::unordered_map<std::string, std::unordered_map<uintptr_t, uint64_t>>> counts_;
     std::unordered_map<uintptr_t, std::pair<std::string, std::string>> names_;
+    std::unordered_map<std::string, std::unordered_map<std::string, std::unordered_map<Chain, uint64_t, ChainHash>>> chains_;
     uint64_t total_ = 0; // cycles
     ULONG64 cycles_per_look_ = 0;
 };

@@ -817,7 +817,8 @@ namespace {
             std::replace(column.begin(), column.end(), ' ', '_');
             std::fprintf(b.csv, ",gpu_%s_ms", column.c_str());
         }
-        std::fprintf(b.csv, ",game_fps,game_cpu_ms,input_latency_ms,shader_compiles,map,x,y,z\n");
+        std::fprintf(b.csv, ",game_fps,game_cpu_ms,input_latency_ms,shader_compiles,map,x,y,z,"
+            "renderer_draws_ms,renderer_effects_setup_ms,renderer_record_ms,renderer_gpu_wait_ms,renderer_after_ms\n");
         b.started = clock_type::now();
         b.last_tick = b.started;
         b.map_at_start = game_rdram != nullptr ? map_line(game_rdram) : std::string("Map unknown");
@@ -958,9 +959,14 @@ namespace {
                 z = read_float(game_rdram, transform + 8);
             }
         }
-        std::fprintf(b.csv, ",%.1f,%.2f,%.1f,%u,%X,%.0f,%.0f,%.0f\n", frames_delta / tick_s,
+        std::fprintf(b.csv, ",%.1f,%.2f,%.1f,%u,%X,%.0f,%.0f,%.0f", frames_delta / tick_s,
             frames_delta > 0 ? busy / frames_delta : 0.0,
             frames.latencyFrames > 0 ? frames.latencyMs / frames.latencyFrames : 0.0, frames.shaderCompiles, map, x, y, z);
+        // The renderer thread's time per game frame, in the overlay's parts (its Renderer CPU line).
+        for (int i = 0; i < 5; i++) {
+            std::fprintf(b.csv, ",%.3f", frames.cpuFrames > 0 ? frames.cpuMs[i] / frames.cpuFrames : 0.0);
+        }
+        std::fprintf(b.csv, "\n");
         std::fflush(b.csv);
     }
 

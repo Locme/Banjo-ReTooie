@@ -61,6 +61,11 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   (`set_option_parent`, `set_option_expanded`), and button options (a bool shown as a button).
   `is_config_option_hidden` takes `ignore_menu_layers` for Search.
 
+- **`get_function` cache** (`librecomp/src/overlays.cpp`): every `jalr` and call through a function pointer looks
+  the target up in `func_map`, a hash map. A 1024-entry cache per thread now answers repeat lookups; a counter that
+  each change to `func_map` (an overlay loaded or unloaded, a save state's map put back) moves on marks every
+  entry stale. A few percent of the game thread in the performance sweep (2026-11-07).
+
 ## RecompFrontend.patch
 
 * **Option display order** (`recompui/include/recompui/config.h`, `ui_config.cpp`, `ui_config_page_options_menu.cpp`): `set_option_display_before(id, before_id)` shows an option above another in its tab without changing the config schema (used to show MS Anti-Aliasing under Anti-aliasing and scaling).
@@ -377,3 +382,16 @@ Applied in `lib/RecompFrontend/recompui/lib/RmlUi`.
   a generated texture's clear pixels white when it converts it to straight alpha, and the renderer's linear filter
   blended that white into the edge beside it: a white outline round the start menu's art whenever a layer moved by
   part of a pixel (L, 2026-11-03). Clear pixels now take the colour of a neighbour that isn't clear, two pixels out.
+
+## N64Recomp.patch
+
+Applied inside `lib/N64ModernRuntime/N64Recomp` (a submodule of N64ModernRuntime), to `include/recomp.h`, which every
+file in `RecompiledFuncs/` includes.
+
+- On x86-64, `get_cop1_cs` and `set_cop1_cs` (the game's `cfc1`/`ctc1` of the FPU control register, which it uses to
+  change the rounding mode around float to int conversions) read and write SSE's MXCSR rounding bits directly, and
+  `cvt.w.s` / `cvt.w.d` use `cvtss2si` / `cvtsd2si`, which round by MXCSR. They went through `fegetround`,
+  `fesetround`, `lrintf` and `lrint`, which in MSVC's runtime also read and set the x87 unit: about a third of the game
+  thread's own CPU time in the performance sweep (`tools/perf_sweep.py`, 2026-11-07). The floats were already done in
+  SSE, so the results are the same; a check of every mode against the old calls agreed on every value. Other targets
+  (arm64 Android) keep the `fenv` calls.

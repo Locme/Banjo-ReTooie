@@ -1,0 +1,75 @@
+diff --git a/include/recomp.h b/include/recomp.h
+index 73f3e73..831df54 100644
+--- a/include/recomp.h
++++ b/include/recomp.h
+@@ -5,6 +5,11 @@
+ #include <stdint.h>
+ #include <math.h>
+ #include <fenv.h>
++#if defined(_M_X64) || defined(__x86_64__)
++// Banjo-Tooie: the rounding mode through SSE's MXCSR alone (see get_cop1_cs).
++#include <immintrin.h>
++#define RECOMP_SSE_ROUNDING 1
++#endif
+ #include <assert.h>
+ 
+ // Compiler definition to disable inter-procedural optimization, allowing multiple functions to be in a single file without breaking interposition.
+@@ -261,6 +266,25 @@ static inline void do_sdr(uint8_t* rdram, gpr offset, gpr reg, gpr val) {
+     MEM_W(0, dword_address + 0) = hi;
+ }
+ 
++#if RECOMP_SSE_ROUNDING
++// Banjo-Tooie: on x86-64 floats are done in SSE, so the rounding mode the game sets around its float to int
++// conversions (cfc1/ctc1) is MXCSR's, bits 13-14. fegetround and fesetround also read and set the x87 unit, and with
++// MSVC's runtime they were most of the game thread's own CPU time in a profile of every map (tools/perf_sweep.py).
++static inline uint32_t get_cop1_cs() {
++    // MXCSR's 00 nearest, 01 down, 10 up, 11 toward zero; the N64's 0 nearest, 1 toward zero, 2 up, 3 down.
++    static const uint32_t from_sse[4] = { 0, 3, 2, 1 };
++    return from_sse[(_mm_getcsr() >> 13) & 3];
++}
++
++static inline void set_cop1_cs(uint32_t val) {
++    static const uint32_t to_sse[4] = { 0, 3, 2, 1 };
++    const uint32_t csr = _mm_getcsr();
++    const uint32_t want = (csr & ~(3u << 13)) | (to_sse[val & 3] << 13);
++    if (want != csr) {
++        _mm_setcsr(want);
++    }
++}
++#else
+ static inline uint32_t get_cop1_cs() {
+     uint32_t rounding_mode = 0;
+     switch (fegetround()) {
+@@ -304,6 +328,7 @@ static inline void set_cop1_cs(uint32_t val) {
+     }
+     fesetround(round);
+ }
++#endif
+ 
+ #define S32(val) \
+     ((int32_t)(val))
+@@ -363,7 +388,12 @@ static inline void set_cop1_cs(uint32_t val) {
+ 
+ static inline int32_t do_cvt_w_s(float val) {
+     // Rounding mode aware float to 32-bit int conversion.
++#if RECOMP_SSE_ROUNDING
++    // cvtss2si rounds by MXCSR, as lrintf does, without the runtime's call.
++    return _mm_cvtss_si32(_mm_set_ss(val));
++#else
+     return (int32_t)lrintf(val);
++#endif
+ }
+ 
+ #define CVT_W_S(val) \
+@@ -379,7 +409,11 @@ static inline int64_t do_cvt_l_s(float val) {
+ 
+ static inline int32_t do_cvt_w_d(double val) {
+     // Rounding mode aware double to 32-bit int conversion.
++#if RECOMP_SSE_ROUNDING
++    return _mm_cvtsd_si32(_mm_set_sd(val));
++#else
+     return (int32_t)lrint(val);
++#endif
+ }
+ 
+ #define CVT_W_D(val) \

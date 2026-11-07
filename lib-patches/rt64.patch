@@ -394,6 +394,53 @@ index c20fb51..d9e9256 100644
      }
  
      hlslpp::float4x4 matrixTranslation(const hlslpp::float3 &t) {
+diff --git a/src/common/rt64_tmem_hasher.h b/src/common/rt64_tmem_hasher.h
+index 8c6af2b..6fab1c5 100644
+--- a/src/common/rt64_tmem_hasher.h
++++ b/src/common/rt64_tmem_hasher.h
+@@ -71,15 +71,37 @@ namespace RT64 {
+ 
+                 // Version 5 parses every byte individually if TLUT is enabled to determine the TLUT bytes that can be hashed.
+                 if ((version >= 5) && usesTLUT) {
++                    // Banjo-Tooie: the same bitset, faster (this loop was the renderer thread's heaviest function in the
++                    // performance sweep, 2026-11-07): CI4 takes both of a byte's indices from a table, and both stop once
++                    // every index has been seen, as a full bitset hashes the whole palette whatever else follows.
+                     if (loadTile.siz == G_IM_SIZ_4b) {
+-                        for (uint32_t i = 0; i < byteCount; i++) {
+-                            tlutBitset[0] |= (1ULL << (tmemBytes[i] & 0xFU));
+-                            tlutBitset[0] |= (1ULL << ((tmemBytes[i] >> 4U) & 0xFU));
++                        struct NibbleMasks {
++                            uint16_t mask[256];
++                            NibbleMasks() {
++                                for (uint32_t b = 0; b < 256; b++) {
++                                    mask[b] = uint16_t((1U << (b & 0xFU)) | (1U << (b >> 4U)));
++                                }
++                            }
++                        };
++                        static const NibbleMasks nibbles;
++                        uint64_t bits = tlutBitset[0];
++                        for (uint32_t i = 0; (i < byteCount) && (bits != UINT16_MAX); ) {
++                            const uint32_t end = std::min(byteCount, i + 32);
++                            for (; i < end; i++) {
++                                bits |= nibbles.mask[tmemBytes[i]];
++                            }
+                         }
++                        tlutBitset[0] = bits;
+                     }
+                     else {
+-                        for (uint32_t i = 0; i < byteCount; i++) {
+-                            tlutBitset[tmemBytes[i] >> 6U] |= (1ULL << (tmemBytes[i] & 0x3FU));
++                        for (uint32_t i = 0; i < byteCount; ) {
++                            if ((tlutBitset[0] & tlutBitset[1] & tlutBitset[2] & tlutBitset[3]) == UINT64_MAX) {
++                                break;
++                            }
++                            const uint32_t end = std::min(byteCount, i + 64);
++                            for (; i < end; i++) {
++                                tlutBitset[tmemBytes[i] >> 6U] |= (1ULL << (tmemBytes[i] & 0x3FU));
++                            }
+                         }
+                     }
+                 }
 diff --git a/src/gbi/rt64_gbi_extended.cpp b/src/gbi/rt64_gbi_extended.cpp
 index 20c0d4d..c1f4899 100644
 --- a/src/gbi/rt64_gbi_extended.cpp

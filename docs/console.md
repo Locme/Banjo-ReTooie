@@ -1748,7 +1748,8 @@ notes the function it is in, weighted by the CPU time the thread used since the 
 `profiles/profile-<date>.tsv` in the app folder; a relative file is put in the app folder. The file is written again
 every 5 s and on `stop`, so a run that crashes keeps its profile. `label` counts what comes after under that text,
 so one run through several maps splits by map. Each line is samples, label, thread, module and function, tab
-separated, most samples first; 500 samples are a second of one core. With no word, prints where it is writing.
+separated, most samples first; 500 samples are a second of one core. Beside it, `<file>.callers.tsv` has the same samples by
+function, its caller and its caller's caller. With no word, prints where it is writing.
 
 ```
 hostprof start
@@ -1758,7 +1759,8 @@ wait 10s
 hostprof stop
 ```
 
-Catch: self time only, with no call stacks: a function that calls heavy ones shows only its own share. The names come
+Catch: self time, with two callers in the `.callers.tsv` file: a function that calls heavy ones shows only its own
+share in the main file. The names come
 from `BanjoReTooie.pdb`, so keep it beside the exe. Windows only. `TOOIE_PROFILE=<file>` starts it with the program.
 
 ### `tee`
