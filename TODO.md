@@ -2,6 +2,25 @@
 
 Open issues that are known but not fixed yet. Newest first.
 
+## Renderer waits for the GPU on every game frame (performance sweep, 2026-11-07)
+
+RT64's workload thread records a game frame, submits it and waits for the GPU before taking the next
+(`WorkloadQueue::threadRenderFrame`: `execute(); wait();`), so the CPU and GPU never overlap. In Terrydactyland with
+the Enhanced preset the renderer's 2.9 ms a frame was 1.4 ms preparing draws, 0.4 ms recording and 1.0 ms waiting for
+the GPU, whose own time was 0.9 ms (benchmark csv `renderer_*_ms`). Letting one frame be in flight would hide most of
+that wait, more so on slow GPUs, but every per-frame resource of the renderer (command lists, upload buffers, the
+framebuffer renderer's scratch) would need a second copy, and read-backs to RDRAM still have to wait. A big change to
+RT64's core; measure with `tools/perf_sweep.py` before and after.
+
+Also from the sweep, not done yet:
+
+- Sun shadows still cost Terrydactyland about 2 ms a frame of RT64 CPU time (3.7 ms against 1.6 ms with
+  `TOOIE_SUN_CULL=0`): the swept test (`src/game/widescreen.cpp`) keeps much of the level at its low fixed sun.
+  Shorter sweeps (to the ground under each piece rather than the level's lowest point) would keep less.
+- A map change shows no new frame for 1-2 s while the game keeps updating (worst frame 1.7-2.0 s on arrival in most
+  maps). It looks like the game's own black hold, not a stall: the game thread waits, and the sound-slot release
+  (`src/game/preempt.cpp`) never hit its 2 s limit.
+
 ## Dual screen support with a map (asked by L, 2026-11-07)
 
 A second screen (a second window, or the second screen of a dual-screen handheld) that shows a map of the area
