@@ -100,6 +100,39 @@ wrong, and cut what costs much for little. Pairs with the graphical effects swee
 A pass over the settings and start menus: options in the right tabs and groups, names and descriptions that say
 what each does, no doubles, hidden debug options out of the way, and the order of the tabs and rows.
 
+## Console commands on Android (asked by L, 2026-11-07)
+
+Today the console takes commands from stdin, `--exec <file>`, `TOOIE_CONSOLE` and `autoexec.txt`. A phone has no
+terminal, so only `autoexec.txt` works there, and only at start-up. Output goes to `logs/console.log` in the app's
+folder (`Android/data/io.banjoretooie/files`), which `adb` may not be able to read on newer Android versions.
+
+1. **Commands by `adb` intent:** `adb shell am broadcast -a io.banjoretooie.CONSOLE --es cmd "warp id AF; wait control; pos"`.
+   `GameActivity` gets a receiver that passes the text through JNI into the console's queue (`enqueue_line` in
+   `src/game/console.cpp`, behind a new public `tooie::console::submit`), as if typed. It works however strict the
+   phone is about file access. It requires the `DUMP` permission (`registerReceiver(..., "android.permission.DUMP",
+   null, RECEIVER_EXPORTED)`): `adb shell` has it and ordinary apps can't get it, so no other app on the phone can
+   send the game commands.
+2. **Command file:** lines added to `console_in.txt` in the app folder run as if typed, and the file is then emptied
+   (a thread looks every 200 ms, renames the file before reading it so lines written meanwhile wait for the next
+   look). This also works on Windows when the game is started without a terminal, and for longer scripts: `adb push`
+   a file, or `adb shell "echo 'warp id AF' >> .../console_in.txt"`.
+3. **Output to logcat:** every console line also goes to Android's log (`__android_log_print`, tag `BanjoReTooie`, in
+   `out_lines`), so `adb logcat -s BanjoReTooie` shows results live, errors marked as warnings. `console.log` is
+   still written as well.
+4. **Pulling files:** `screenshot`, `bench`, `hostprof`, saves and crash logs all write into the app folder. When
+   `adb` can't read that folder, add a `share <file>` command that copies a file into the phone's Downloads, where
+   `adb pull` always works.
+5. **Typing on the phone:** the existing console prompt opens on the `` ` `` key, which a phone keyboard lacks. Add a
+   way to open it (a five-finger tap, or a hidden button in the start menu) so commands can be typed on the phone.
+6. **Driving it from the PC:** a small script, `tools/android_console.py`, that installs the APK, sends commands,
+   waits for their output in logcat and pulls screenshots, so the PC sweeps (`tools/perf_sweep.py` and the rest) can
+   run against the phone.
+7. **Docs and tests:** an "On Android" section in `docs/console.md` with the exact `adb` lines. The command file and
+   the logcat output are checked on Windows first (through Windows' own debug output); the intent and the rest on a
+   phone connected over USB with USB debugging on.
+
+Steps 1-3 and 7 are the core, a few hours with builds; 4-6 make testing on a phone much easier.
+
 ## Earlier open items
 
 L asked (2026-11-07) for the items already in this list to be worked through as well, after the above.
