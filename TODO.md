@@ -2,19 +2,6 @@
 
 Open issues that are known but not fixed yet. Newest first.
 
-## Heap corruption once in GI Floor 3 (Boiler Plant) during the performance sweep (2026-11-07)
-
-In a sweep through 194 maps (`tools/perf_sweep.py`, Enhanced preset asked for but not applied), arriving in map 0x109
-from 0x108 the game's heap code followed a block pointer of 0xC4961900: `func_8001C0A0+0x226` read it first, then
-`heap_alloc_sided` read and wrote through it (81 MAJOR lines in `logs/PassedOver.txt`, the Pass over crashes guard
-caught them) and the game hung; the watchdog's dump is kept with that sweep's output
-(`D:\Projects\Banjo Tooie N64\perf_sweep\B_enhanced\crash_109`, removed when the sweep was run again). 0xC4961900 is
-the float -1200.8, so something wrote a float over a heap block's header: most likely a write to an object after the
-game freed it. Not seen again: the same sweep with the preset on, sweep A through all 224 maps, and ten trips
-0x108 -> 0x109 in one run were all clean. It came after hundreds of warps in one run, so heap state built up over
-many map changes may be needed; the port's own hooks that write floats into game objects (size cheats, jiggle,
-transform menu, free camera) are the first suspects.
-
 ## Renderer waits for the GPU on every game frame (performance sweep, 2026-11-07)
 
 RT64's workload thread records a game frame, submits it and waits for the GPU before taking the next
@@ -61,11 +48,40 @@ heaviest with the Enhanced preset.
 
 ## Fix the crashes from the last sweeps (asked by L, 2026-11-07)
 
-From the performance and texture sweeps (2026-11-07), still to fix: the heap corruption in GI Floor 3 (below);
+From the performance and texture sweeps (2026-11-07), still to fix: the heap corruption in GI Floor 3 (below), and
 the bad pointers passed over in the Tower of Tragedy quiz (0x15F, 25 in the texture sweep, func_800A4C88 and
 ncpod_*), Mayahem Temple's character parade (0x167, 4) and the intro cutscenes (0xA9, 0xAC, chintrochar) when
 warped into straight away. Those last ones only happen through warps, but a phone has no Pass over crashes guard,
 so there they end the game.
+
+The heap corruption in GI Floor 3 (Boiler Plant): in a sweep through 194 maps (`tools/perf_sweep.py`, Enhanced preset asked for but not applied), arriving in map 0x109
+from 0x108 the game's heap code followed a block pointer of 0xC4961900: `func_8001C0A0+0x226` read it first, then
+`heap_alloc_sided` read and wrote through it (81 MAJOR lines in `logs/PassedOver.txt`, the Pass over crashes guard
+caught them) and the game hung; the watchdog's dump is kept with that sweep's output
+(`D:\Projects\Banjo Tooie N64\perf_sweep\B_enhanced\crash_109`, removed when the sweep was run again). 0xC4961900 is
+the float -1200.8, so something wrote a float over a heap block's header: most likely a write to an object after the
+game freed it. Not seen again: the same sweep with the preset on, sweep A through all 224 maps, and ten trips
+0x108 -> 0x109 in one run were all clean. It came after hundreds of warps in one run, so heap state built up over
+many map changes may be needed; the port's own hooks that write floats into game objects (size cheats, jiggle,
+transform menu, free camera) are the first suspects.
+
+## Presets and default controls, keyboard and controller (asked by L, 2026-11-07)
+
+Settings presets that set many options at once (the Effects Preset does this for the picture: Original, Enhanced,
+Retro) for the rest of the game too, and a good default control layout for both keyboard and mouse and controllers,
+set on first start and restorable from the Controls tab. To work out: which presets (for example Original,
+Recommended, Performance, and a phone one), and what the default bindings should be for each kind of controller.
+
+## Ray tracing fine tune (asked by L, 2026-11-07)
+
+Go through the ray tracing options (reflections, water and metal reflections, shadows, light, path tracing, traced
+light beams) for how they look and what they cost, map by map: settle good defaults and strengths, fix what looks
+wrong, and cut what costs much for little. Pairs with the graphical effects sweep above.
+
+## Menu cleanup (asked by L, 2026-11-07)
+
+A pass over the settings and start menus: options in the right tabs and groups, names and descriptions that say
+what each does, no doubles, hidden debug options out of the way, and the order of the tabs and rows.
 
 ## Earlier open items
 
@@ -111,7 +127,7 @@ Repro with the console (`docs/console.md`): `fps Unlocked`, `goload 1 14F 0`, `g
 `warp id 14F 0`, and start the challenge again the same way. Run with `TOOIE_DEMO_LOG=1` (updates/s and entries/s each
 second) and `TOOIE_FB_LOG=1`.
 
-## Jigsaw board: faint lines along the pieces (2026-11-03, left as the game draws it)
+## Jigsaw board: faint lines along the pieces (2026-11-03, left as the game draws it; the fix to be an option)
 
 Thin lines follow the board's piece grid at every resolution (native 406x228 too), so they are the game's own. The
 dotted cracks between pieces are fixed (vertex snap). Each piece samples only its own 32x32 block of the 160x128 live
@@ -127,6 +143,9 @@ A real fix has to sample the whole picture, not the per-piece block:
   needs a new RDRAM-layout upload path in RT64.
 - C: A, falling back to the game's sampling on frames the CPU changed the picture.
 Needs changes in RT64's tile setup and tile copies (rt64_state.cpp, rt64_framebuffer_manager.cpp).
+
+L (2026-11-07): the fix is to be an option (on or off in the settings), so the board can still be drawn as the
+game draws it.
 
 ## Smaller open items
 
