@@ -2,6 +2,19 @@
 
 Open issues that are known but not fixed yet. Newest first.
 
+## Heap corruption once in GI Floor 3 (Boiler Plant) during the performance sweep (2026-11-07)
+
+In a sweep through 194 maps (`tools/perf_sweep.py`, Enhanced preset asked for but not applied), arriving in map 0x109
+from 0x108 the game's heap code followed a block pointer of 0xC4961900: `func_8001C0A0+0x226` read it first, then
+`heap_alloc_sided` read and wrote through it (81 MAJOR lines in `logs/PassedOver.txt`, the Pass over crashes guard
+caught them) and the game hung; the watchdog's dump is kept with that sweep's output
+(`D:\Projects\Banjo Tooie N64\perf_sweep\B_enhanced\crash_109`, removed when the sweep was run again). 0xC4961900 is
+the float -1200.8, so something wrote a float over a heap block's header: most likely a write to an object after the
+game freed it. Not seen again: the same sweep with the preset on, sweep A through all 224 maps, and ten trips
+0x108 -> 0x109 in one run were all clean. It came after hundreds of warps in one run, so heap state built up over
+many map changes may be needed; the port's own hooks that write floats into game objects (size cheats, jiggle,
+transform menu, free camera) are the first suspects.
+
 ## Renderer waits for the GPU on every game frame (performance sweep, 2026-11-07)
 
 RT64's workload thread records a game frame, submits it and waits for the GPU before taking the next
