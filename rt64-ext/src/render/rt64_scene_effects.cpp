@@ -978,6 +978,15 @@ namespace RT64 {
         effectsSettings.sunShadowSoftness = std::clamp(softness, 0.0f, 1.0f);
     }
 
+    void GetSceneSunDirection(float out[3]) {
+        const std::scoped_lock lock(effectsMutex);
+        const float *sun = effectsSettings.customSun ? effectsSettings.sunDirection : FixedSun;
+        const float length = std::sqrt(sun[0] * sun[0] + sun[1] * sun[1] + sun[2] * sun[2]);
+        for (int c = 0; c < 3; c++) {
+            out[c] = (length > 1e-6f) ? (sun[c] / length) : ((c == 1) ? 1.0f : 0.0f);
+        }
+    }
+
     void SetSceneSun(bool custom, float x, float y, float z) {
         const std::scoped_lock lock(effectsMutex);
         effectsSettings.customSun = custom;

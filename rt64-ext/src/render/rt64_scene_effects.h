@@ -247,6 +247,9 @@ namespace RT64 {
     // Banjo-Tooie: the sun's world direction (towards it) for the sun shadows and light shafts; custom false
     // puts back the fixed sun. A sun below the horizon casts no shadows.
     void SetSceneSun(bool custom, float x, float y, float z);
+    // The direction towards the sun the sun shadow maps use now, in the world, normalised: the one SetSceneSun gave, or
+    // the fixed one. For the game's culling (src/game/widescreen.cpp), which keeps what could shadow the view.
+    void GetSceneSunDirection(float out[3]);
     // Banjo-Tooie: the day and night cycle. The 3D world is multiplied by tint (0 to 1.27 each), its brightest
     // parts less so the darker it is; the sky darkens more, to stars and a moon (the SetSceneSun direction) at
     // night, and glows warm round the sun when the tint is warm. The fog takes the tint too. shafts (0 to 1)

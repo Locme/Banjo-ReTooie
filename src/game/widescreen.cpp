@@ -34,6 +34,11 @@
 #include "tooie_volumetric_shadows.h"
 #include "tooie_rdram.h"
 
+namespace RT64 {
+    // rt64-ext/src/render/rt64_scene_effects.h
+    void GetSceneSunDirection(float out[3]);
+}
+
 namespace {
     constexpr float original_aspect = 4.0f / 3.0f;
 
@@ -196,8 +201,9 @@ extern "C" void func_800CA1B0(uint8_t* rdram, recomp_context* ctx) {
 // (models, effects) and func_800E3D0C(min, max) for boxes (the level's own geometry, in pieces). The sun shadow maps
 // only hold what the game drew, so a cliff just off screen cast its shadow while the camera faced one way and lost
 // it as the camera turned (L's burst of 2026-10-17: a cliff's shadow across Spiral Mountain's path came and went).
-// With sun shadows on, the whole level counts as in view (the far map covers it all) and models within the Sun
-// shadow distance do, so the maps hold the same casters whichever way the camera faces. What lands off screen costs
+// With sun shadows on, what could shadow the view counts as in view: the level's pieces anywhere (the far map covers
+// it all) and models within the Sun shadow distance, whose box swept away from the sun meets the view (shadow_reaches_view),
+// so the maps hold the same casters for what is seen whichever way the camera faces. What lands off screen costs
 // the main picture little: the graphics card drops those triangles before drawing any of their pixels. Both hooks run at the test's
 // end, its answer in $v1 and its arguments still on its stack. Only while the frame's drawing buffers have room
 // (gfx_budget), as for the other extras.
@@ -246,6 +252,67 @@ namespace {
         return true;
     }
 
+    // Whether what lies in the box can shadow the view: the box swept away from the sun, as far as its top could throw
+    // a shadow before reaching the lowest point of the level, tested against the view with the game's own box test
+    // (func_800CAA24, as func_800E3D0C does). Keeping the whole level instead (2026-10-17) made RT64 work through every
+    // piece of it every frame: with sun shadows on, Terrydactyland ran at 3.9 ms a frame against 1.6 ms (2026-11-07).
+    // TOOIE_SUN_SWEEP=0 keeps everything again, to compare.
+    float level_floor = 0.0f;
+    uint16_t level_floor_map = 0xFFFF;
+
+    bool shadow_reaches_view(uint8_t* rdram, recomp_context* ctx, float lo[3], float hi[3], float longest) {
+        static const bool sweep_off = [] { const char* v = std::getenv("TOOIE_SUN_SWEEP"); return v != nullptr && std::strcmp(v, "0") == 0; }();
+        if (sweep_off) {
+            return true;
+        }
+        const uint16_t map = tooie::debug::current_map(rdram);
+        if (map != level_floor_map) {
+            level_floor_map = map;
+            level_floor = lo[1];
+        }
+        level_floor = std::min(level_floor, lo[1]);
+        float sun[3];
+        RT64::GetSceneSunDirection(sun);
+        // With the sun this low its shadows are faded out (the sun shadow map's daylight).
+        if (sun[1] < 0.02f) {
+            return false;
+        }
+        const float length = std::clamp((hi[1] - level_floor) / sun[1], 0.0f, longest);
+        const uint32_t camera = tooie::rdram::read_word(rdram, 0x8012D500u);
+        if (!tooie::rdram::valid_ptr(camera)) {
+            return true;
+        }
+        // The sweep in pieces about the box's size (eight at most), each tested on its own: one box round a long
+        // shadow at a low sun took in much of the view whatever the shadow's way.
+        const float size = std::max({ hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 1.0f });
+        const int pieces = std::clamp(int(std::ceil(length / size)), 1, 8);
+        // The swept box goes on the stack below the test's frame, which nothing else uses while the hook runs.
+        const gpr sp = ctx->r29;
+        const gpr box = sp - 0x40;
+        for (int piece = 0; piece < pieces; piece++) {
+            const float from = length * float(piece) / float(pieces), to = length * float(piece + 1) / float(pieces);
+            for (int axis = 0; axis < 3; axis++) {
+                const float a = -sun[axis] * from, b = -sun[axis] * to;
+                const float piece_lo = lo[axis] + std::min(a, b), piece_hi = hi[axis] + std::max(a, b);
+                uint32_t bits;
+                std::memcpy(&bits, &piece_lo, sizeof(bits));
+                MEM_W(4 * axis, box) = (int32_t)bits;
+                std::memcpy(&bits, &piece_hi, sizeof(bits));
+                MEM_W(12 + 4 * axis, box) = (int32_t)bits;
+            }
+            recomp_context call = *ctx;
+            call.r29 = sp - 0x100;
+            call.r4 = (gpr)(int32_t)camera;
+            call.r5 = box;
+            call.r6 = box + 12;
+            func_800CAA24(rdram, &call);
+            if (call.r2 != 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     void keep(uint8_t* rdram, recomp_context* ctx, float distance) {
         if (!tooie::gfx_budget::room_for_extras(rdram)) {
             return;
@@ -288,7 +355,15 @@ extern "C" void tooie_sun_shadow_cull(uint8_t* rdram, recomp_context* ctx) {
     }
     const float reach = distance + std::max(radius, 0.0f);
     if (dist2 < reach * reach) {
-        keep(rdram, ctx, distance);
+        float lo[3], hi[3];
+        for (uint32_t axis = 0; axis < 3; axis++) {
+            const float c = tooie::rdram::read_float(rdram, position + 4 * axis);
+            lo[axis] = c - std::max(radius, 0.0f);
+            hi[axis] = c + std::max(radius, 0.0f);
+        }
+        if (shadow_reaches_view(rdram, ctx, lo, hi, distance)) {
+            keep(rdram, ctx, distance);
+        }
     }
 }
 
@@ -320,9 +395,19 @@ extern "C" void tooie_sun_shadow_cull_box(uint8_t* rdram, recomp_context* ctx) {
     if (ctx->r3 != 0) {
         return;
     }
-    // The level's own pieces are all kept, wherever they are: the far sun shadow map covers the whole level.
+    // The level's own pieces are kept wherever they are (the far sun shadow map covers the whole level) when their
+    // shadow can reach the view.
     const float distance = sun_cull_distance(rdram);
-    if (distance > 0.0f) {
-        keep(rdram, ctx, distance);
+    const uint32_t box_min = (uint32_t)MEM_W(0x50, ctx->r29);
+    const uint32_t box_max = (uint32_t)MEM_W(0x54, ctx->r29);
+    if (distance > 0.0f && tooie::rdram::valid_ptr(box_min) && tooie::rdram::valid_ptr(box_max)) {
+        float lo[3], hi[3];
+        for (uint32_t axis = 0; axis < 3; axis++) {
+            lo[axis] = tooie::rdram::read_float(rdram, box_min + 4 * axis);
+            hi[axis] = tooie::rdram::read_float(rdram, box_max + 4 * axis);
+        }
+        if (shadow_reaches_view(rdram, ctx, lo, hi, 40000.0f)) {
+            keep(rdram, ctx, distance);
+        }
     }
 }
