@@ -208,3 +208,89 @@ As in the first handover: the replay harness (7) once it exists; until then the 
 and twice after with medians compared, screenshots of the same views diffed against the spread between two runs of
 the old build, and old and new code run side by side on the same inputs where results must be exact. Say what was
 measured, on what machine, and what wasn't.
+
+## Shared measurement: stutters, slow frames and slow functions (L, 2026-11-07)
+
+The mapping both projects built (Banjo's `tools/perf_sweep.py`, `tools/perf_report.py`, the console's `bench`,
+`hostprof` and `costcheck`; Mario Party's `tools/frame_check/` sweeps, `box.py` / `heat.py` / `strip.py` /
+`edges.py`, `profile_sweep.ps1` / `profile_chart.py`, `src/game/host_profiler.cpp`, `draw_provenance.cpp`,
+`frame_capture.cpp`) carries over, split two ways:
+
+- **Into the fork:** what measures the renderer itself, because only RT64 knows when it compiled a shader, uploaded
+  a texture, waited for the GPU or read a picture back.
+- **Into a small shared tools repo** (or a `tools/` folder in the fork, kept out of the library): the game-side
+  drivers, which need each game's console and warps, with one settings file per game (the exe and its folder, how
+  to warp, the map or minigame list, how to quit, and how its function names group in a profile).
+
+### 26. Hitch log with causes
+
+Every presented frame's time, and for each frame longer than about twice the median, what happened in it: shader or
+pipeline compiles (with which), texture uploads (count and bytes), read-backs to RDRAM, framebuffers created or
+resized, GPU waits, and the game's own map change if the game reports one. Written per run as a csv next to the
+benchmark. Banjo's sweep could only say a frame was 1.7-2.0 s long on every arrival and guess at why; this says.
+
+### 27. The sweep tools, shared
+
+One sweep driver (start the exe, feed commands, watch the log, note crashes and hangs and carry on from the next
+entry, copy what crashed), one report script (per map or minigame: median and worst frame, GPU time per pass,
+renderer CPU parts, hitches, shader compiles; heaviest first) and one chart script, taking the per-game settings
+file. Banjo's and Mario Party's versions merged into it.
+
+### 28. The sampling profiler, shared
+
+`host_profiler.cpp` exists twice (Mario Party's original, Banjo's with labels, CPU-time weighting and two callers
+from the x64 unwind data). One copy in the shared tools (or the fork, as an optional piece), Windows and Linux; on
+Android, `simpleperf` covers it.
+
+### 29. Slow-function reports that map back to the game
+
+A recompiled function's name is its N64 address (`func_800C2AB8`), sometimes with an overlay (`_ncpod`). Group the
+profile by game function across all maps, show where each is called from, and, where a decomp or symbol list
+exists, its real name. Banjo found its biggest game-side costs this way (the rounding mode calls, the sound-slot
+busy-wait `func_800C2AB8`).
+
+### 30. Stutter detection for interpolation
+
+Mario Party's `draw_provenance.cpp` (draws that move only on logic steps, snap, or flash for one frame) and its
+frame-check scripts, plus the `recomp-stutter` skill's method, built on the fork's capture (7) so any game gets
+them: a list of draws whose motion steps instead of moving smoothly above the game's own rate.
+
+### 31. Speed results kept and compared by commit
+
+Each sweep's results stored with the build's commit; a script that compares two commits map by map and flags what
+got slower beyond the run-to-run spread. Later in CI, with the replay harness (7), as a speed budget per game.
+
+### 32. Symbols kept for every build
+
+Every build writes over `BanjoReTooie.pdb`, so crash and hang dumps from earlier builds can no longer be named
+(Banjo's sweep dumps of 2026-11-07 could not). Keep the PDB (and the Android `libmain.so` with its symbols) per
+commit in a local symbol store or with each release, so any dump can be read later.
+
+### 33. Map and scene in crash and hang reports
+
+Banjo's watchdog's hang reports don't say which map the game was in (two hangs in its sweep can't be placed). Every
+crash and hang report should carry the game's own location (the game passes it in: map, minigame, scene), the
+build's commit and the settings that touch the renderer.
+
+### 34. A standard benchmark route per game
+
+A fixed route a player can run from the menu or the console (a few maps, set camera moves, set settings), giving
+one score file people can compare across PCs and phones: real numbers from hardware L doesn't have.
+
+### 35. Shader warm-up lists per game
+
+Record which shader and pipeline combinations each game uses across a sweep (RT64 knows each one it builds), and
+ship that list with the game so a first start compiles them up front, as Banjo's "Compile All Shaders At Start"
+does for what a player has already met. First visits then don't stutter even on a new install, and phones gain
+most.
+
+### 36. GPU memory and texture tracking per scene
+
+Per map or scene: GPU memory by kind (render targets, textures, effect buffers, texture pack), textures cached and
+evicted. Banjo's texture sweep logged the totals; the fork should break them down, to set budgets for phones (11).
+
+### 37. Determinism checks
+
+Play a recorded input run twice (Banjo's console has `record` and `play`) and compare the frames through the
+capture (7): a difference means something isn't deterministic (timing-dependent game code, a race in the
+renderer), which also explains bugs that come and go, such as Banjo's one-off heap corruption.
