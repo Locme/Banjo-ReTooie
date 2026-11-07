@@ -34,13 +34,42 @@ Also from the sweep, not done yet:
   maps). It looks like the game's own black hold, not a stall: the game thread waits, and the sound-slot release
   (`src/game/preempt.cpp`) never hit its 2 s limit.
 
-## Dual screen support with a map (asked by L, 2026-11-07)
+## Dual screen support with a map, also on Android (asked by L, 2026-11-07)
 
-A second screen (a second window, or the second screen of a dual-screen handheld) that shows a map of the area
-Banjo is in, with where he is. For single-screen players the map is an option: shown in a corner or on a key.
+A second screen (a second window on a PC, or the second screen of a dual-screen handheld, Android ones included)
+that shows a map of the area Banjo is in, with where he is. With two screens the HUD (honey, notes, eggs and the
+other counters) moves to the bottom screen, and the start (pause) menu stays on the main screen.
 Not started. To work out first: where the map comes from (the game's own pause-menu art is game data and stays out
-of the repo; a map drawn at run time from the level's geometry or from what the game already shows), and how a
-second window fits RT64's single swapchain.
+of the repo; a map drawn at run time from the level's geometry or from what the game already shows), how a
+second window or display fits RT64's single swapchain, how Android reports a second display (the Presentation API
+on dual-screen handhelds), and how the HUD's draws are told apart from the world's to move them.
+
+## Map screen for single-screen players, in the start menu (asked by L, 2026-11-07)
+
+The same map as above on one screen: a Map page in the start (pause) menu that shows the area and where Banjo is.
+Shares the map drawing with the dual-screen work.
+
+## Graphical effects sweep, with research (asked by L, 2026-11-07)
+
+A sweep of every map with each of the port's effects (Sun Shadows, Ambient Occlusion, the reflections, water,
+snow and sand, fur, light shafts, volumetric shadows and the rest) on in turn: what each costs on the GPU and the
+CPU per map (Effect Cost Check, `bench`, `hostprof`, `tools/perf_sweep.py --setup`), and screenshots to check how
+each looks. First read up on how other ports and engines make the same effects cheaper (lower-resolution passes,
+temporal reuse, culling what is off screen), then fix the heaviest. The performance sweep found Sun Shadows (fixed
+in part), Ice Reflections (0.27 ms of GPU in Hailfire Peaks' Ice Train Station) and Ambient Occlusion (0.13 ms) the
+heaviest with the Enhanced preset.
+
+## Fix the crashes from the last sweeps (asked by L, 2026-11-07)
+
+From the performance and texture sweeps (2026-11-07), still to fix: the heap corruption in GI Floor 3 (below);
+the bad pointers passed over in the Tower of Tragedy quiz (0x15F, 25 in the texture sweep, func_800A4C88 and
+ncpod_*), Mayahem Temple's character parade (0x167, 4) and the intro cutscenes (0xA9, 0xAC, chintrochar) when
+warped into straight away. Those last ones only happen through warps, but a phone has no Pass over crashes guard,
+so there they end the game.
+
+## Earlier open items
+
+L asked (2026-11-07) for the items already in this list to be worked through as well, after the above.
 
 ## Jiggywiggy challenges may slow down above 30 FPS (2026-11-03)
 
