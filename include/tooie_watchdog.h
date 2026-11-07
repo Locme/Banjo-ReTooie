@@ -22,6 +22,8 @@ namespace tooie::watchdog {
     void note_window_update();
     // Called on the game thread each controller read; only used by TOOIE_TEST_HANG=game:...
     void note_game_input();
+    // While the app is away (tooie::app_state), nothing sends frames or handles events: no hang is reported then.
+    void set_suspended(bool suspended);
 
     // What the renderer reported at the last presented frame (the frame rate overlay shows it).
     struct RendererInfo {

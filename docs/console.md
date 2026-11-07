@@ -1508,6 +1508,22 @@ resume
 
 Catch: `timescale` still applies to the update that a `step` runs.
 
+### `background`
+
+Usage: `background [seconds]`
+
+Does what the Android app does when it goes to the background and comes back (`src/main/app_state.cpp`), for the
+given time (3 s by default, at most 600). The game stops where it is: no VIs are sent and the game clock stands still.
+The save file is written out, and RT64 releases its swap chain and the window surface it was made on. Afterwards
+both are made again and the game goes on from where it was. The console log shows `[app]` and `[present]` lines for
+each step. Other commands queued meanwhile wait while they need the game.
+
+```
+background 5
+```
+
+Catch: with Direct3D 12 the swap chain is kept, and only the presents stop. The Vulkan swap chain is released.
+
 ### `timescale`
 
 Usage: `timescale [0.05 to 4]` (also `ff`, `slowmo`)

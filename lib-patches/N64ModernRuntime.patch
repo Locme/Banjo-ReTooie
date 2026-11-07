@@ -655,6 +655,37 @@ index 8c8e5d1..7340d77 100644
      return func_find->second;
  }
  
+diff --git a/librecomp/src/pi.cpp b/librecomp/src/pi.cpp
+index 62656ad..e1ed5b3 100644
+--- a/librecomp/src/pi.cpp
++++ b/librecomp/src/pi.cpp
+@@ -112,7 +112,11 @@ void set_save_file_path(const std::u8string& subfolder, const std::u8string& nam
+     save_context.save_file_path = save_folder_path / (name + u8".bin");
+ }
+ 
++// One writer of the save file at a time: the saving thread, or flush_save_file.
++static std::mutex save_file_mutex;
++
+ void update_save_file() {
++    std::lock_guard file_lock{ save_file_mutex };
+     bool saving_failed = false;
+     {
+         std::ofstream save_file = recomp::open_output_file_with_backup(ultramodern::get_save_file_path(), std::ios_base::binary);
+@@ -260,6 +264,14 @@ void ultramodern::change_save_file(const std::u8string& subfolder, const std::u8
+     read_save_file();
+ }
+ 
++void ultramodern::flush_save_file() {
++    // Nothing to write before a game has set up its save.
++    if (save_context.save_buffer.empty() || save_context.save_file_path.empty()) {
++        return;
++    }
++    update_save_file();
++}
++
+ void ultramodern::join_saving_thread() {
+     if (save_context.saving_thread.joinable()) {
+         save_context.saving_thread.join();
 diff --git a/librecomp/src/recomp.cpp b/librecomp/src/recomp.cpp
 index 1200f77..8c9697f 100644
 --- a/librecomp/src/recomp.cpp
@@ -724,7 +755,7 @@ index 2f22456..41b1e8b 100644
          });
  
 diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
-index 3b28af3..f64af16 100644
+index 3b28af3..2867ff4 100644
 --- a/ultramodern/include/ultramodern/ultramodern.hpp
 +++ b/ultramodern/include/ultramodern/ultramodern.hpp
 @@ -2,6 +2,8 @@
@@ -736,7 +767,16 @@ index 3b28af3..f64af16 100644
  #include <cassert>
  #include <stdexcept>
  #include <span>
-@@ -55,6 +57,13 @@ PTR(OSThread) thread_queue_peek(RDRAM_ARG PTR(PTR(OSThread)) queue);
+@@ -41,6 +43,8 @@ void init_thread_cleanup();
+ // Saving
+ void change_save_file(const std::u8string& subfolder, const std::u8string& name);
+ std::filesystem::path get_save_file_path();
++// Writes the save buffer to the save file now (the saving thread otherwise writes it a few ms after each change).
++void flush_save_file();
+ 
+ // Thread queues.
+ constexpr PTR(PTR(OSThread)) running_queue = (PTR(PTR(OSThread)))-1;
+@@ -55,6 +59,13 @@ PTR(OSThread) thread_queue_peek(RDRAM_ARG PTR(PTR(OSThread)) queue);
  void enqueue_external_message(PTR(OSMesgQueue) mq, OSMesg msg, bool jam, bool requeue_if_blocked);
  void wait_for_external_message(RDRAM_ARG1);
  void wait_for_external_message_timed(RDRAM_ARG1, u32 millis);
@@ -750,7 +790,7 @@ index 3b28af3..f64af16 100644
  
  // Thread scheduling.
  void check_running_queue(RDRAM_ARG1);
-@@ -79,7 +88,61 @@ void set_main_thread();
+@@ -79,7 +90,67 @@ void set_main_thread();
  bool is_game_thread();
  void submit_rsp_task(RDRAM_ARG PTR(OSTask) task);
  void send_si_message();
@@ -790,6 +830,12 @@ index 3b28af3..f64af16 100644
  uint32_t get_speed_multiplier();
 +// Changes the game speed at runtime (1 = normal). The game clock continues smoothly from its current value.
 +void set_speed_multiplier(uint32_t multiplier);
++// Holds the game clock (osGetCount, osGetTime, the game's timers) where it is, or lets it go on from there.
++void set_game_clock_frozen(bool frozen);
++// Stops the game while the app is away (an Android app in the background): no VIs are sent and the game clock
++// stands still, so the game threads wait for their next VI and carry on where they were once it is resumed.
++void set_suspended(bool suspended);
++bool is_suspended();
 +// VIs sent per 60th of a second (1 = 60 a second, 2 = 120). Game time and audio are unchanged.
 +uint32_t get_vi_rate_multiplier();
 +void set_vi_rate_multiplier(uint32_t multiplier);
@@ -813,7 +859,7 @@ index 3b28af3..f64af16 100644
  // Time
  std::chrono::high_resolution_clock::time_point get_start();
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index 090cc42..9cf9f62 100644
+index 090cc42..d2ce970 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -1,4 +1,5 @@
@@ -833,7 +879,7 @@ index 090cc42..9cf9f62 100644
  
  #include "blockingconcurrentqueue.h"
  
-@@ -172,6 +175,58 @@ extern "C" void osViSetEvent(RDRAM_ARG PTR(OSMesgQueue) mq_, OSMesg msg, u32 ret
+@@ -172,6 +175,81 @@ extern "C" void osViSetEvent(RDRAM_ARG PTR(OSMesgQueue) mq_, OSMesg msg, u32 ret
  }
  
  uint64_t total_vis = 0;
@@ -876,6 +922,8 @@ index 090cc42..9cf9f62 100644
 +static std::mutex vi_wake_mutex;
 +static std::condition_variable vi_wake_cv;
 +static bool vi_requested = false;
++// set_suspended: no VIs are sent while set. Under vi_wake_mutex.
++static bool vi_suspended = false;
 +static std::atomic<uint64_t> timed_vis_sent{ 0 };
 +
 +void ultramodern::request_vi() {
@@ -886,13 +934,34 @@ index 090cc42..9cf9f62 100644
 +    vi_wake_cv.notify_one();
 +}
 +
++void ultramodern::set_suspended(bool suspended) {
++    // VIs stop before the clock does, and the clock goes on before they start again, so no VI is sent for a time
++    // the clock skipped.
++    if (!suspended) {
++        ultramodern::set_game_clock_frozen(false);
++    }
++    {
++        std::lock_guard lock{ vi_wake_mutex };
++        vi_suspended = suspended;
++    }
++    vi_wake_cv.notify_one();
++    if (suspended) {
++        ultramodern::set_game_clock_frozen(true);
++    }
++}
++
++bool ultramodern::is_suspended() {
++    std::lock_guard lock{ vi_wake_mutex };
++    return vi_suspended;
++}
++
 +uint64_t ultramodern::get_timed_vi_count() {
 +    return timed_vis_sent.load();
 +}
  
  
  extern std::atomic_bool exited;
-@@ -187,10 +242,20 @@ void vi_thread_func() {
+@@ -187,10 +265,32 @@ void vi_thread_func() {
      using namespace std::chrono_literals;
  
      int remaining_retraces = 1;
@@ -902,6 +971,18 @@ index 090cc42..9cf9f62 100644
 +    uint64_t last_ai_tick = 0;
  
      while (!exited) {
++        // While suspended, wait here, and count the next VIs from the time it is resumed.
++        {
++            std::unique_lock lock{ vi_wake_mutex };
++            if (vi_suspended) {
++                // Timed, as nothing wakes this when the program exits.
++                while (vi_suspended && !exited) {
++                    vi_wake_cv.wait_for(lock, std::chrono::milliseconds(100));
++                }
++                vi_base_count = total_vis;
++                vi_base_time = ultramodern::game_time_now();
++            }
++        }
 +        if (vi_rate_multiplier.load() != vi_multiplier) {
 +            vi_multiplier = vi_rate_multiplier.load();
 +            vi_base_count = total_vis;
@@ -914,7 +995,7 @@ index 090cc42..9cf9f62 100644
          //if (next > std::chrono::high_resolution_clock::now()) {
          //    printf("Sleeping for %" PRIu64 " us to get from %" PRIu64 " us to %" PRIu64 " us \n",
          //        (next - std::chrono::high_resolution_clock::now()) / 1us,
-@@ -204,17 +269,42 @@ void vi_thread_func() {
+@@ -204,17 +304,46 @@ void vi_thread_func() {
              // printf("Skipping the next VI wait\n");
              next = std::chrono::high_resolution_clock::now();
          }
@@ -930,7 +1011,7 @@ index 090cc42..9cf9f62 100644
 +            std::unique_lock lock{ vi_wake_mutex };
 +            for (;;) {
 +                auto now = std::chrono::high_resolution_clock::now();
-+                if (now >= next || exited) {
++                if (now >= next || exited || vi_suspended) {
 +                    break;
 +                }
 +                if (vi_requested) {
@@ -944,8 +1025,13 @@ index 090cc42..9cf9f62 100644
 +                vi_wake_cv.wait_until(lock, next);
 +#endif
 +            }
++            if (vi_suspended) {
++                // Back to the wait at the top; an extra VI asked for stays asked for.
++                continue;
++            }
 +            vi_requested = false;
-+        }
+         }
+-        total_vis = new_total_vis;
 +        auto time_now = ultramodern::game_time_now();
 +        if (!extra_vi) {
 +            // Calculate how many VIs have passed
@@ -955,8 +1041,7 @@ index 090cc42..9cf9f62 100644
 +            }
 +            total_vis = new_total_vis;
 +            timed_vis_sent++;
-         }
--        total_vis = new_total_vis;
++        }
 +        last_vi_tick_ns.store(steady_now_ns(), std::memory_order_relaxed);
  
          // If the game hasn't started yet, set a dummy VI mode and origin.
@@ -965,7 +1050,7 @@ index 090cc42..9cf9f62 100644
              static bool odd = false;
              set_dummy_vi(odd);
              odd = !odd;
-@@ -224,10 +314,31 @@ void vi_thread_func() {
+@@ -224,10 +353,31 @@ void vi_thread_func() {
  
          // Queue a screen update for the graphics thread with the current VI register state.
          // Doing this before the VI update is equivalent to updating the screen after the previous frame's scanout finished.
@@ -1000,7 +1085,7 @@ index 090cc42..9cf9f62 100644
  
          // If the game has started, handle sending VI and AI events.
          if (ultramodern::is_game_started()) {
-@@ -240,16 +351,25 @@ void vi_thread_func() {
+@@ -240,16 +390,25 @@ void vi_thread_func() {
                      // Send a message to the VI queue, and do not set it to be requeued if the queue was full.
                      // The worst case scenario is that the game misses a VI message and has to wait a little longer for the next. 
                      ultramodern::enqueue_external_message(cur_state->mq, cur_state->msg, false, false);
@@ -1028,7 +1113,7 @@ index 090cc42..9cf9f62 100644
              events_callbacks.vi_callback();
          }
      }
-@@ -261,12 +381,79 @@ void sp_complete() {
+@@ -261,12 +420,79 @@ void sp_complete() {
      ultramodern::enqueue_external_message(events_context.sp.mq, events_context.sp.msg, false, true);
  }
  
@@ -1108,7 +1193,7 @@ index 090cc42..9cf9f62 100644
  void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_ready) {
      ultramodern::set_native_thread_name("SP Task Thread");
      ultramodern::set_native_thread_priority(ultramodern::ThreadPriority::Normal);
-@@ -283,13 +470,28 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
+@@ -283,13 +509,28 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
              return;
          }
  
@@ -1139,7 +1224,7 @@ index 090cc42..9cf9f62 100644
      }
  }
  
-@@ -359,21 +561,36 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -359,21 +600,36 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
          if (events_context.action_queue.wait_dequeue_timed(action, 1ms)) {
              // Determine the action type and act on it
              if (const auto* task_action = std::get_if<SpTaskAction>(&action)) {
@@ -1181,7 +1266,7 @@ index 090cc42..9cf9f62 100644
                  // TODO hook the parsed event up to the actual parsing point when a callback is added to RT64.
                  ultramodern::extensions::on_displaylist_parsed(displaylist);
                  ultramodern::extensions::on_displaylist_completed(displaylist);
-@@ -455,6 +672,9 @@ void set_dummy_vi(bool odd) {
+@@ -455,6 +711,9 @@ void set_dummy_vi(bool odd) {
  }
  
  extern "C" void osViSwapBuffer(RDRAM_ARG PTR(void) frameBufPtr) {
@@ -1191,7 +1276,7 @@ index 090cc42..9cf9f62 100644
      std::lock_guard lock{ events_context.message_mutex };
      events_context.vi.get_next_state()->framebuffer = frameBufPtr;
  }
-@@ -561,8 +781,38 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+@@ -561,8 +820,38 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
      OSTask* task = TO_PTR(OSTask, task_);
  
      // Send gfx tasks to the graphics action queue
@@ -1441,7 +1526,7 @@ index 812c556..b64dd16 100644
  
      // Wait until the thread is initialized to indicate that it's ready to be started.
 diff --git a/ultramodern/src/timer.cpp b/ultramodern/src/timer.cpp
-index 276301b..2093cc7 100644
+index 276301b..392bfa7 100644
 --- a/ultramodern/src/timer.cpp
 +++ b/ultramodern/src/timer.cpp
 @@ -1,5 +1,9 @@
@@ -1454,7 +1539,7 @@ index 276301b..2093cc7 100644
  #include <set>
  #include "blockingconcurrentqueue.h"
  
-@@ -15,10 +19,19 @@
+@@ -15,10 +19,24 @@
  static std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
  // Offset of the duration since program start used to calculate the value for osGetTime. 
  static int64_t ostime_offset = 0;
@@ -1470,15 +1555,20 @@ index 276301b..2093cc7 100644
 +static std::mutex clock_mutex;
 +static std::chrono::high_resolution_clock::time_point real_base = start_time;
 +static uint64_t game_base = 0;
++// While set, the game clock stays at game_base (set_game_clock_frozen).
++static bool clock_frozen = false;
 +
 +static uint64_t game_ticks_at(std::chrono::high_resolution_clock::time_point t, uint32_t mult) {
++    if (clock_frozen) {
++        return game_base;
++    }
 +    uint64_t delta_micros = std::chrono::duration_cast<std::chrono::microseconds>(t - real_base).count();
 +    return game_base + (delta_micros * counter_per_ms * mult) / 1000;
 +}
  
  struct OSTimer {
      PTR(OSTimer) unused1;
-@@ -37,63 +50,74 @@ struct RemoveTimerAction {
+@@ -37,63 +55,78 @@ struct RemoveTimerAction {
      PTR(OSTimer) timer;
  };
  
@@ -1510,6 +1600,10 @@ index 276301b..2093cc7 100644
  std::chrono::high_resolution_clock::time_point ticks_to_timepoint(uint64_t ticks) {
 -    return start_time + ticks_to_duration(ticks);
 +    std::lock_guard lock{ clock_mutex };
++    // A frozen clock reaches no time: an hour from now, and set_game_clock_frozen wakes the timer thread on thawing.
++    if (clock_frozen) {
++        return std::chrono::high_resolution_clock::now() + std::chrono::hours(1);
++    }
 +    int64_t delta_ticks = (int64_t)(ticks - game_base);
 +    int64_t delta_micros = delta_ticks * 1000 / (int64_t)(counter_per_ms * speed_multiplier.load());
 +    return real_base + std::chrono::microseconds(delta_micros);
@@ -1581,7 +1675,7 @@ index 276301b..2093cc7 100644
          }
      };
  
-@@ -111,30 +135,26 @@ void timer_thread(RDRAM_ARG1) {
+@@ -111,30 +144,26 @@ void timer_thread(RDRAM_ARG1) {
          }
  
          // Get the timer that's closest to running out
@@ -1618,7 +1712,7 @@ index 276301b..2093cc7 100644
              }
          }
      }
-@@ -146,7 +166,30 @@ void ultramodern::init_timers(RDRAM_ARG1) {
+@@ -146,7 +175,47 @@ void ultramodern::init_timers(RDRAM_ARG1) {
  }
  
  uint32_t ultramodern::get_speed_multiplier() {
@@ -1637,6 +1731,23 @@ index 276301b..2093cc7 100644
 +        game_base = game_ticks_at(now, speed_multiplier.load());
 +        real_base = now;
 +        speed_multiplier = multiplier;
++    }
++    timer_context.action_queue.enqueue(WakeAction{});
++}
++
++void ultramodern::set_game_clock_frozen(bool frozen) {
++    {
++        std::lock_guard lock{ clock_mutex };
++        if (frozen == clock_frozen) {
++            return;
++        }
++        auto now = std::chrono::high_resolution_clock::now();
++        if (frozen) {
++            game_base = game_ticks_at(now, speed_multiplier.load());
++        }
++        // The clock goes on from game_base, at real time real_base.
++        real_base = now;
++        clock_frozen = frozen;
 +    }
 +    timer_context.action_queue.enqueue(WakeAction{});
 +}

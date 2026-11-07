@@ -4,13 +4,26 @@ plugins {
     id 'com.android.application'
 }
 
+// The release key: banjoretooie-release.properties (storeFile, storePassword, keyAlias, keyPassword) in the user's
+// .android folder, or the file BANJORETOOIE_KEYSTORE_PROPERTIES names. It lives outside the repo and is never
+// committed. Without it the APK is signed with the debug key, and a phone with a release-signed copy will not take
+// it as an update.
+def releaseKeyFile = file(System.getenv('BANJORETOOIE_KEYSTORE_PROPERTIES') ?:
+        "${System.getProperty('user.home')}/.android/banjoretooie-release.properties")
+def releaseKey = new Properties()
+if (releaseKeyFile.exists()) {
+    releaseKeyFile.withInputStream { releaseKey.load(it) }
+}
+
 android {
     namespace 'io.github.locme.banjotooie'
     compileSdk 34
     ndkVersion '27.2.12479018'
 
     defaultConfig {
-        applicationId 'io.github.locme.banjotooie'
+        // The app's id, and so its folder on the phone: Android/data/io.banjoretooie/files (L, 2026-11-07). The Java
+        // classes keep their package (namespace above).
+        applicationId 'io.banjoretooie'
         // Android 10: every phone from then on has Vulkan 1.1, which RT64 needs.
         minSdk 29
         targetSdk 34
@@ -29,11 +42,21 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            if (releaseKeyFile.exists()) {
+                storeFile file(releaseKey['storeFile'])
+                storePassword releaseKey['storePassword']
+                keyAlias releaseKey['keyAlias']
+                keyPassword releaseKey['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
-            // Signed with the debug key so the APK installs without setting up a release key.
-            signingConfig signingConfigs.debug
+            signingConfig releaseKeyFile.exists() ? signingConfigs.release : signingConfigs.debug
         }
     }
 

@@ -45,6 +45,12 @@ namespace RT64 {
     };
     PaceStats TakePaceStats();
 
+    // Whether the window has a surface to present to (true until told otherwise). An Android app loses its
+    // window's surface when it goes to the background: before that, call this with false, and the present
+    // thread releases the swap chain and its surface (it waits up to timeoutMs for that). Presents are
+    // dropped while there is none. With true, the next present makes the surface and swap chain again.
+    void SetWindowSurfaceAvailable(bool available, uint32_t timeoutMs);
+
     // Frame statistics for the Banjo-Tooie frame rate overlay, taken from the timings RT64
     // already keeps (presentProfiler and rendererGPUProfiler). Each read returns the totals
     // since the last read and starts them again from zero.
@@ -110,6 +116,15 @@ namespace RT64 {
         constexpr auto idleRepaintAfter = std::chrono::milliseconds(100);
         constexpr auto idleRepaintInterval = std::chrono::milliseconds(16);
         void countPresentDone();
+
+        // The window's surface (SetWindowSurfaceAvailable): whether there is one, and whether a swap chain
+        // holds a surface made on it. Both under surfaceMutex.
+        extern std::mutex surfaceMutex;
+        extern std::condition_variable surfaceCondition;
+        extern bool surfaceAvailable;
+        extern bool surfaceInUse;
+        // Called before the swap chain is first made: waits for the window to have a surface and marks it in use.
+        void waitForWindowSurface();
 
         // The present thread's pacing totals since the last TakePaceStats (the game's [pace] log line).
         extern std::atomic<uint64_t> paceShown, paceSkipped, paceSleepNs, paceCallNs, paceWorkloadWaitNs;

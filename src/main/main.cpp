@@ -215,6 +215,9 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
     }
 
     tooie::boot_screen::set_window(window);
+#ifdef __ANDROID__
+    tooie::android::watch_app_state();
+#endif
 
     SDL_SysWMinfo wmInfo;
     SDL_VERSION(&wmInfo.version);

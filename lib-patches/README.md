@@ -52,6 +52,12 @@ so the submodules stay pinned to their upstream commits.
   N64 (Graphics > Low Input Latency, `src/input/low_latency.cpp`). `TOOIE_VI_LOG=1` prints each VI
   message, buffer swap, screen update and player 1 controller read, timed from the latest VI tick.
 
+* **Suspend** (`ultramodern/src/events.cpp`, `ultramodern/src/timer.cpp`, `librecomp/src/pi.cpp`, `ultramodern.hpp`):
+  `set_suspended(true)` stops the VI thread sending VIs and holds the game clock (`set_game_clock_frozen`:
+  `osGetCount`, `osGetTime` and the game's timers stand still), so the game threads wait for their next VI and
+  carry on where they were after `set_suspended(false)`. `flush_save_file` writes the save buffer at once (under a
+  lock shared with the saving thread). For an Android app in the background (`src/main/app_state.cpp`).
+
 To change a patch: edit the files in `lib/N64ModernRuntime`, then
 `git -C lib/N64ModernRuntime diff > lib-patches/N64ModernRuntime.patch`.
 
@@ -321,6 +327,12 @@ RT64's `CMakeLists.txt` includes `rt64-ext/rt64_ext.cmake` at its end, which bui
   `[rt]` lines. Vulkan only: D3D12 reports no ray query support. Add further traced effects (shadows) beside it,
   checking `RayTracingActive()`.
 
+* **Losing the window surface** (`src/hle/rt64_present_queue.cpp/.h`, `src/hle/rt64_application.cpp`; the rest in
+  `rt64-ext/src/hle/rt64_present_queue_ext.cpp`): `SetWindowSurfaceAvailable(false)` has the present thread release
+  the swap chain and its surface between presents (`threadSyncSurface`) and waits for it; presents and repaints are
+  dropped until `SetWindowSurfaceAvailable(true)`, after which the next present makes them again. The first swap
+  chain waits for a surface (`waitForWindowSurface`). An Android app's window loses its surface in the background.
+
 To change it: edit the files in `lib/rt64`, then
 `git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`. New files
 need `git -C lib/rt64 add -N <file>` first, or the diff leaves them out.
@@ -358,6 +370,11 @@ Applied in `lib/rt64/src/contrib/plume` (a submodule of rt64).
   arguments a GPU buffer holds (`vkCmdDrawIndirect`; D3D12 `ExecuteIndirect` with a plain draw command
   signature made on first use, buffer state INDIRECT_ARGUMENT while read). Metal does nothing (instanced 3D
   grass, its only user, has no Metal pipeline).
+
+* **Releasing the surface** (`plume_render_interface.h`, `plume_vulkan.cpp/.h`): `RenderSwapChain::releaseSurface`
+  destroys the swap chain and the `VkSurfaceKHR` (Vulkan; nothing elsewhere), and the next `resize()` makes the surface
+  again (`createSurface`, split from the constructor). A swap chain that can't be made because its surface was lost
+  releases the surface too. Present, acquire, wait and the refresh rate do nothing without a swap chain.
 
 To change it: edit the files in `lib/rt64/src/contrib/plume`, then
 `git -C lib/rt64/src/contrib/plume diff > lib-patches/plume.patch`.

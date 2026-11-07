@@ -188,7 +188,7 @@ index 4827452..2e99945 100644
          D3D12Device(D3D12Interface *renderInterface, const std::string &preferredDeviceName);
          ~D3D12Device() override;
 diff --git a/plume_render_interface.h b/plume_render_interface.h
-index 2048557..b7f78fc 100644
+index 2048557..4e67efc 100644
 --- a/plume_render_interface.h
 +++ b/plume_render_interface.h
 @@ -8,18 +8,28 @@
@@ -246,16 +246,19 @@ index 2048557..b7f78fc 100644
      };
  
      struct RenderPipelineLayout {
-@@ -93,6 +109,8 @@ namespace plume {
+@@ -93,6 +109,11 @@ namespace plume {
          virtual bool needsResize() const = 0;
          virtual void setVsyncEnabled(bool vsyncEnabled) = 0;
          virtual bool isVsyncEnabled() const = 0;
 +        // Banjo-Tooie: with vsync on, prefer a mailbox present mode (no vblank wait, the newest image is shown) where supported.
 +        virtual void setMailboxPreferred(bool mailboxPreferred) { (void)mailboxPreferred; }
++        // Banjo-Tooie: destroys the swap chain and the window surface it was made on (an Android app going to the
++        // background loses its window's surface). The next resize() makes a surface on the window again.
++        virtual void releaseSurface() { }
          virtual uint32_t getWidth() const = 0;
          virtual uint32_t getHeight() const = 0;
          virtual RenderTexture *getTexture(uint32_t textureIndex) = 0;
-@@ -120,6 +138,9 @@ namespace plume {
+@@ -120,6 +141,9 @@ namespace plume {
          virtual void traceRays(uint32_t width, uint32_t height, uint32_t depth, RenderBufferReference shaderBindingTable, const RenderShaderBindingGroupsInfo &shaderBindingGroupsInfo) = 0;
          virtual void drawInstanced(uint32_t vertexCountPerInstance, uint32_t instanceCount, uint32_t startVertexLocation, uint32_t startInstanceLocation) = 0;
          virtual void drawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, int32_t baseVertexLocation, uint32_t startInstanceLocation) = 0;
@@ -265,7 +268,7 @@ index 2048557..b7f78fc 100644
          virtual void setPipeline(const RenderPipeline *pipeline) = 0;
          virtual void setComputePipelineLayout(const RenderPipelineLayout *pipelineLayout) = 0;
          virtual void setComputePushConstants(uint32_t rangeIndex, const void *data, uint32_t offset = 0, uint32_t size = 0) = 0;
-@@ -150,6 +171,10 @@ namespace plume {
+@@ -150,6 +174,10 @@ namespace plume {
          virtual void discardTexture(const RenderTexture* texture) = 0; // D3D12 only.
          virtual void resetQueryPool(const RenderQueryPool *queryPool, uint32_t queryFirstIndex, uint32_t queryCount) = 0;
          virtual void writeTimestamp(const RenderQueryPool *queryPool, uint32_t queryIndex) = 0;
@@ -356,7 +359,7 @@ index 9dcfedf..642572b 100644
          bool sampleLocations = false;
  
 diff --git a/plume_vulkan.cpp b/plume_vulkan.cpp
-index f1dd503..cb2fd69 100644
+index f1dd503..33d7e66 100644
 --- a/plume_vulkan.cpp
 +++ b/plume_vulkan.cpp
 @@ -11,8 +11,14 @@
@@ -1128,7 +1131,7 @@ index f1dd503..cb2fd69 100644
          const uint32_t indexBase = setLayout->descriptorIndexBases[descriptorIndex];
          const uint32_t bindingIndex = setLayout->descriptorBindingIndices[descriptorIndex];
          const VkDescriptorSetLayoutBinding &setLayoutBinding = setLayout->setBindings[bindingIndex];
-@@ -2074,6 +2544,7 @@ namespace plume {
+@@ -2074,91 +2544,18 @@ namespace plume {
      // VulkanSwapChain
  
      VulkanSwapChain::VulkanSwapChain(VulkanCommandQueue *commandQueue, const RenderSwapChainDesc &desc) {
@@ -1136,7 +1139,93 @@ index f1dd503..cb2fd69 100644
          assert(commandQueue != nullptr);
          assert(desc.textureCount > 0);
  
-@@ -2241,6 +2712,7 @@ namespace plume {
+         this->commandQueue = commandQueue;
+         this->desc = desc;
+ 
+-        VkResult res;
+-
+-#   ifdef _WIN64
+-        assert(desc.renderWindow != 0);
+-        VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {};
+-        surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+-        surfaceCreateInfo.hwnd = HWND(desc.renderWindow);
+-        surfaceCreateInfo.hinstance = GetModuleHandle(nullptr);
+-
+-        VulkanInterface *renderInterface = commandQueue->device->renderInterface;
+-        res = vkCreateWin32SurfaceKHR(renderInterface->instance, &surfaceCreateInfo, nullptr, &surface);
+-        if (res != VK_SUCCESS) {
+-            fprintf(stderr, "vkCreateWin32SurfaceKHR failed with error code 0x%X.\n", res);
+-            return;
+-        }
+-#   elif defined(PLUME_SDL_VULKAN_ENABLED)
+-        VulkanInterface *renderInterface = commandQueue->device->renderInterface;
+-        SDL_bool sdlRes = SDL_Vulkan_CreateSurface(desc.renderWindow, renderInterface->instance, &surface);
+-        if (sdlRes == SDL_FALSE) {
+-            fprintf(stderr, "SDL_Vulkan_CreateSurface failed with error %s.\n", SDL_GetError());
+-            return;
+-        }
+-#   elif defined(__ANDROID__)
+-        assert(desc.renderWindow != nullptr);
+-        VkAndroidSurfaceCreateInfoKHR surfaceCreateInfo = {};
+-        surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+-        surfaceCreateInfo.window = desc.renderWindow;
+-
+-        VulkanInterface *renderInterface = commandQueue->device->renderInterface;
+-        res = vkCreateAndroidSurfaceKHR(renderInterface->instance, &surfaceCreateInfo, nullptr, &surface);
+-        if (res != VK_SUCCESS) {
+-            fprintf(stderr, "vkCreateAndroidSurfaceKHR failed with error code 0x%X.\n", res);
+-            return;
+-        }
+-#   elif defined(__linux__)
+-        assert(desc.renderWindow.display != 0);
+-        assert(desc.renderWindow.window != 0);
+-        VkXlibSurfaceCreateInfoKHR surfaceCreateInfo = {};
+-        surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+-        surfaceCreateInfo.dpy = desc.renderWindow.display;
+-        surfaceCreateInfo.window = desc.renderWindow.window;
+-
+-        VulkanInterface *renderInterface = commandQueue->device->renderInterface;
+-        res = vkCreateXlibSurfaceKHR(renderInterface->instance, &surfaceCreateInfo, nullptr, &surface);
+-        if (res != VK_SUCCESS) {
+-            fprintf(stderr, "vkCreateXlibSurfaceKHR failed with error code 0x%X.\n", res);
+-            return;
+-        }
+-#   elif defined(__APPLE__)
+-        assert(desc.renderWindow.window != 0);
+-        assert(desc.renderWindow.view != 0);
+-        // Creates a wrapper around the window for storing and fetching sizes.
+-        this->windowWrapper = std::make_unique<CocoaWindow>(desc.renderWindow.window);
+-        
+-        VkMetalSurfaceCreateInfoEXT surfaceCreateInfo = {};
+-        surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+-        surfaceCreateInfo.pLayer = desc.renderWindow.view;
+-
+-        VulkanInterface *renderInterface = commandQueue->device->renderInterface;
+-        res = vkCreateMetalSurfaceEXT(renderInterface->instance, &surfaceCreateInfo, nullptr, &surface);
+-        if (res != VK_SUCCESS) {
+-            fprintf(stderr, "vkCreateMetalSurfaceEXT failed with error code 0x%X.\n", res);
++        if (!createSurface()) {
+             return;
+         }
+-#   endif
+ 
+-        VkBool32 presentSupported = false;
+         VkPhysicalDevice physicalDevice = commandQueue->device->physicalDevice;
+-        res = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, commandQueue->familyIndex, surface, &presentSupported);
+-        if (res != VK_SUCCESS) {
+-            fprintf(stderr, "vkGetPhysicalDeviceSurfaceSupportKHR failed with error code 0x%X.\n", res);
+-            return;
+-        }
+-
+-        if (!presentSupported) {
+-            fprintf(stderr, "Command queue does not support present.\n");
+-            return;
+-        }
+-
+         VkSurfaceCapabilitiesKHR surfaceCapabilities = {};
+         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
+ 
+@@ -2241,6 +2638,7 @@ namespace plume {
      }
  
      VulkanSwapChain::~VulkanSwapChain() {
@@ -1144,7 +1233,19 @@ index f1dd503..cb2fd69 100644
          releaseImageViews();
          releaseSwapChain();
  
-@@ -2294,6 +2766,10 @@ namespace plume {
+@@ -2254,6 +2652,11 @@ namespace plume {
+     }
+ 
+     bool VulkanSwapChain::present(uint32_t textureIndex, RenderCommandSemaphore **waitSemaphores, uint32_t waitSemaphoreCount) {
++        // Banjo-Tooie: there is nothing to present to while the surface is released.
++        if (vk == VK_NULL_HANDLE) {
++            return false;
++        }
++
+         thread_local std::vector<VkSemaphore> waitSemaphoresVector;
+         waitSemaphoresVector.clear();
+         for (uint32_t i = 0; i < waitSemaphoreCount; i++) {
+@@ -2294,6 +2697,10 @@ namespace plume {
  #else
          if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
  #endif
@@ -1155,19 +1256,33 @@ index f1dd503..cb2fd69 100644
              return false;
          }
  
-@@ -2303,6 +2779,11 @@ namespace plume {
+@@ -2303,6 +2710,11 @@ namespace plume {
      void VulkanSwapChain::wait() {
          assert(desc.enablePresentWait && "Present wait should've been explicitly enabled during swap chain creation before using the wait function.");
  
 +        // Banjo-Tooie: a mailbox present can be replaced before it is shown, so it would never be waited for.
-+        if (createdPresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
++        if ((createdPresentMode == VK_PRESENT_MODE_MAILBOX_KHR) || (vk == VK_NULL_HANDLE)) {
 +            return;
 +        }
 +
          if (currentPresentId >= desc.maxFrameLatency) {
              constexpr uint64_t waitTimeout = 100000000;
              vkWaitForPresentKHR(commandQueue->device->vk, vk, currentPresentId - (desc.maxFrameLatency - 1), waitTimeout);
-@@ -2332,13 +2813,18 @@ namespace plume {
+@@ -2317,6 +2729,13 @@ namespace plume {
+             return false;
+         }
+ 
++        // Banjo-Tooie: the surface was released (releaseSurface); make it again on the window.
++        if ((surface == VK_NULL_HANDLE) && !createSurface()) {
++            width = 0;
++            height = 0;
++            return false;
++        }
++
+         // Destroy any image view references to the current swap chain.
+         releaseImageViews();
+ 
+@@ -2332,13 +2751,18 @@ namespace plume {
  
          createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
          createInfo.surface = surface;
@@ -1187,7 +1302,20 @@ index f1dd503..cb2fd69 100644
          createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
          createInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
          createInfo.compositeAlpha = pickedAlphaFlag;
-@@ -2407,11 +2893,25 @@ namespace plume {
+@@ -2349,6 +2773,12 @@ namespace plume {
+         VkResult res = vkCreateSwapchainKHR(commandQueue->device->vk, &createInfo, nullptr, &vk);
+         if (res != VK_SUCCESS) {
+             fprintf(stderr, "vkCreateSwapchainKHR failed with error code 0x%X.\n", res);
++            // Banjo-Tooie: a surface whose window went away (Android) can't be used again; the next resize makes a new one.
++            vk = createInfo.oldSwapchain;
++            if (res == VK_ERROR_SURFACE_LOST_KHR) {
++                releaseSurface();
++            }
++
+             return false;
+         }
+ 
+@@ -2407,11 +2837,25 @@ namespace plume {
      }
  
      void VulkanSwapChain::setVsyncEnabled(bool vsyncEnabled) {
@@ -1215,17 +1343,137 @@ index f1dd503..cb2fd69 100644
          // FIFO is guaranteed to be supported.
          else {
              requiredPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-@@ -2488,6 +2988,9 @@ namespace plume {
+@@ -2447,6 +2891,10 @@ namespace plume {
+     }
+ 
+     uint32_t VulkanSwapChain::getRefreshRate() const {
++        if (vk == VK_NULL_HANDLE) {
++            return 0;
++        }
++
+         VkRefreshCycleDurationGOOGLE refreshCycle = {};
+         VkResult res = vkGetRefreshCycleDurationGOOGLE(commandQueue->device->vk, vk, &refreshCycle);
+         if (res != VK_SUCCESS) {
+@@ -2485,15 +2933,118 @@ namespace plume {
+     bool VulkanSwapChain::acquireTexture(RenderCommandSemaphore *signalSemaphore, uint32_t *textureIndex) {
+         assert(signalSemaphore != nullptr);
+ 
++        if (vk == VK_NULL_HANDLE) {
++            return false;
++        }
++
          VulkanCommandSemaphore *interfaceSemaphore = static_cast<VulkanCommandSemaphore *>(signalSemaphore);
          VkResult res = vkAcquireNextImageKHR(commandQueue->device->vk, vk, UINT64_MAX, interfaceSemaphore->vk, VK_NULL_HANDLE, textureIndex);
          if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
 +            if (res != VK_ERROR_OUT_OF_DATE_KHR) {
 +                LogFailedCall(commandQueue->device, "vkAcquireNextImageKHR", res);
 +            }
++            return false;
++        }
++
++        return true;
++    }
++
++    // Banjo-Tooie: makes the window surface, on its own so a released one (releaseSurface) can be made again.
++    bool VulkanSwapChain::createSurface() {
++        VkResult res;
++
++#   ifdef _WIN64
++        assert(desc.renderWindow != 0);
++        VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {};
++        surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
++        surfaceCreateInfo.hwnd = HWND(desc.renderWindow);
++        surfaceCreateInfo.hinstance = GetModuleHandle(nullptr);
++
++        VulkanInterface *renderInterface = commandQueue->device->renderInterface;
++        res = vkCreateWin32SurfaceKHR(renderInterface->instance, &surfaceCreateInfo, nullptr, &surface);
++        if (res != VK_SUCCESS) {
++            fprintf(stderr, "vkCreateWin32SurfaceKHR failed with error code 0x%X.\n", res);
++            return false;
++        }
++#   elif defined(PLUME_SDL_VULKAN_ENABLED)
++        VulkanInterface *renderInterface = commandQueue->device->renderInterface;
++        SDL_bool sdlRes = SDL_Vulkan_CreateSurface(desc.renderWindow, renderInterface->instance, &surface);
++        if (sdlRes == SDL_FALSE) {
++            fprintf(stderr, "SDL_Vulkan_CreateSurface failed with error %s.\n", SDL_GetError());
++            return false;
++        }
++#   elif defined(__ANDROID__)
++        assert(desc.renderWindow != nullptr);
++        VkAndroidSurfaceCreateInfoKHR surfaceCreateInfo = {};
++        surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
++        surfaceCreateInfo.window = desc.renderWindow;
++
++        VulkanInterface *renderInterface = commandQueue->device->renderInterface;
++        res = vkCreateAndroidSurfaceKHR(renderInterface->instance, &surfaceCreateInfo, nullptr, &surface);
++        if (res != VK_SUCCESS) {
++            fprintf(stderr, "vkCreateAndroidSurfaceKHR failed with error code 0x%X.\n", res);
++            return false;
++        }
++#   elif defined(__linux__)
++        assert(desc.renderWindow.display != 0);
++        assert(desc.renderWindow.window != 0);
++        VkXlibSurfaceCreateInfoKHR surfaceCreateInfo = {};
++        surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
++        surfaceCreateInfo.dpy = desc.renderWindow.display;
++        surfaceCreateInfo.window = desc.renderWindow.window;
++
++        VulkanInterface *renderInterface = commandQueue->device->renderInterface;
++        res = vkCreateXlibSurfaceKHR(renderInterface->instance, &surfaceCreateInfo, nullptr, &surface);
++        if (res != VK_SUCCESS) {
++            fprintf(stderr, "vkCreateXlibSurfaceKHR failed with error code 0x%X.\n", res);
++            return false;
++        }
++#   elif defined(__APPLE__)
++        assert(desc.renderWindow.window != 0);
++        assert(desc.renderWindow.view != 0);
++        // Creates a wrapper around the window for storing and fetching sizes.
++        this->windowWrapper = std::make_unique<CocoaWindow>(desc.renderWindow.window);
++        
++        VkMetalSurfaceCreateInfoEXT surfaceCreateInfo = {};
++        surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
++        surfaceCreateInfo.pLayer = desc.renderWindow.view;
++
++        VulkanInterface *renderInterface = commandQueue->device->renderInterface;
++        res = vkCreateMetalSurfaceEXT(renderInterface->instance, &surfaceCreateInfo, nullptr, &surface);
++        if (res != VK_SUCCESS) {
++            fprintf(stderr, "vkCreateMetalSurfaceEXT failed with error code 0x%X.\n", res);
++            return false;
++        }
++#   endif
++
++        VkBool32 presentSupported = false;
++        VkPhysicalDevice physicalDevice = commandQueue->device->physicalDevice;
++        res = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, commandQueue->familyIndex, surface, &presentSupported);
++        if (res != VK_SUCCESS) {
++            fprintf(stderr, "vkGetPhysicalDeviceSurfaceSupportKHR failed with error code 0x%X.\n", res);
++            return false;
++        }
++
++        if (!presentSupported) {
++            fprintf(stderr, "Command queue does not support present.\n");
              return false;
          }
  
-@@ -2513,6 +3016,7 @@ namespace plume {
+         return true;
+     }
+ 
++    void VulkanSwapChain::releaseSurface() {
++        releaseImageViews();
++        releaseSwapChain();
++        if (surface != VK_NULL_HANDLE) {
++            vkDestroySurfaceKHR(commandQueue->device->renderInterface->instance, surface, nullptr);
++            surface = VK_NULL_HANDLE;
++        }
++
++        width = 0;
++        height = 0;
++    }
++
+     void VulkanSwapChain::releaseSwapChain() {
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroySwapchainKHR(commandQueue->device->vk, vk, nullptr);
+@@ -2513,6 +3064,7 @@ namespace plume {
      // VulkanFramebuffer
      
      VulkanFramebuffer::VulkanFramebuffer(VulkanDevice *device, const RenderFramebufferDesc &desc) {
@@ -1233,7 +1481,7 @@ index f1dd503..cb2fd69 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -2648,6 +3152,7 @@ namespace plume {
+@@ -2648,6 +3200,7 @@ namespace plume {
      }
  
      VulkanFramebuffer::~VulkanFramebuffer() {
@@ -1241,7 +1489,7 @@ index f1dd503..cb2fd69 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyFramebuffer(device->vk, vk, nullptr);
          }
-@@ -2680,6 +3185,7 @@ namespace plume {
+@@ -2680,6 +3233,7 @@ namespace plume {
      // VulkanQueryPool
  
      VulkanQueryPool::VulkanQueryPool(VulkanDevice *device, uint32_t queryCount) {
@@ -1249,7 +1497,7 @@ index f1dd503..cb2fd69 100644
          assert(device != nullptr);
          assert(queryCount > 0);
  
-@@ -2700,13 +3206,14 @@ namespace plume {
+@@ -2700,13 +3254,14 @@ namespace plume {
      }
  
      VulkanQueryPool::~VulkanQueryPool() {
@@ -1265,7 +1513,7 @@ index f1dd503..cb2fd69 100644
              return;
          }
  
-@@ -2754,6 +3261,7 @@ namespace plume {
+@@ -2754,6 +3309,7 @@ namespace plume {
      // VulkanCommandList
  
      VulkanCommandList::VulkanCommandList(VulkanCommandQueue *queue) {
@@ -1273,7 +1521,7 @@ index f1dd503..cb2fd69 100644
          assert(queue != nullptr);
  
          this->queue = queue;
-@@ -2783,6 +3291,7 @@ namespace plume {
+@@ -2783,6 +3339,7 @@ namespace plume {
      }
  
      VulkanCommandList::~VulkanCommandList() {
@@ -1281,7 +1529,7 @@ index f1dd503..cb2fd69 100644
          if (vk != VK_NULL_HANDLE) {
              vkFreeCommandBuffers(queue->device->vk, commandPool, 1, &vk);
          }
-@@ -2833,8 +3342,9 @@ namespace plume {
+@@ -2833,8 +3390,9 @@ namespace plume {
  
          const bool geometryEnabled = queue->device->capabilities.geometryShader;
          const bool rtEnabled = queue->device->capabilities.raytracing;
@@ -1292,7 +1540,7 @@ index f1dd503..cb2fd69 100644
          thread_local std::vector<VkBufferMemoryBarrier> bufferMemoryBarriers;
          thread_local std::vector<VkImageMemoryBarrier> imageMemoryBarriers;
          bufferMemoryBarriers.clear();
-@@ -2853,7 +3363,7 @@ namespace plume {
+@@ -2853,7 +3411,7 @@ namespace plume {
              bufferMemoryBarrier.offset = 0;
              bufferMemoryBarrier.size = interfaceBuffer->desc.size;
              bufferMemoryBarriers.emplace_back(bufferMemoryBarrier);
@@ -1301,7 +1549,7 @@ index f1dd503..cb2fd69 100644
              interfaceBuffer->barrierStages = stages;
          }
  
-@@ -2873,7 +3383,7 @@ namespace plume {
+@@ -2873,7 +3431,7 @@ namespace plume {
              imageMemoryBarrier.subresourceRange.layerCount = interfaceTexture->desc.arraySize;
              imageMemoryBarrier.subresourceRange.aspectMask = toAspectFlags(interfaceTexture->desc.format, interfaceTexture->desc.flags);
              imageMemoryBarriers.emplace_back(imageMemoryBarrier);
@@ -1310,7 +1558,7 @@ index f1dd503..cb2fd69 100644
              interfaceTexture->textureLayout = textureBarrier.layout;
              interfaceTexture->barrierStages = stages;
          }
-@@ -2931,6 +3441,15 @@ namespace plume {
+@@ -2931,6 +3489,15 @@ namespace plume {
  
          vkCmdDraw(vk, vertexCountPerInstance, instanceCount, startVertexLocation, startInstanceLocation);
      }
@@ -1326,7 +1574,7 @@ index f1dd503..cb2fd69 100644
      
      void VulkanCommandList::drawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, int32_t baseVertexLocation, uint32_t startInstanceLocation) {
          assert(activeGraphicsPipelineLayout != nullptr);
-@@ -3229,6 +3748,27 @@ namespace plume {
+@@ -3229,6 +3796,27 @@ namespace plume {
              imageCopy.imageExtent.depth = srcLocation.placedFootprint.depth;
              vkCmdCopyBufferToImage(vk, srcBuffer->vk, dstTexture->vk, toImageLayout(dstTexture->textureLayout), 1, &imageCopy);
          }
@@ -1354,7 +1602,7 @@ index f1dd503..cb2fd69 100644
          else {
              VkImageCopy imageCopy = {};
              imageCopy.srcSubresource.aspectMask = toAspectFlags(srcTexture->desc.format, srcTexture->desc.flags);
-@@ -3389,13 +3929,15 @@ namespace plume {
+@@ -3389,13 +3977,15 @@ namespace plume {
          buildGeometryInfo.pGeometries = reinterpret_cast<const VkAccelerationStructureGeometryKHR *>(buildInfo.buildData.data());
          buildGeometryInfo.geometryCount = buildInfo.meshCount;
  
@@ -1376,7 +1624,7 @@ index f1dd503..cb2fd69 100644
          vkCmdBuildAccelerationStructuresKHR(vk, 1, &buildGeometryInfo, &buildRangeInfoPtr);
      }
  
-@@ -3459,6 +4001,12 @@ namespace plume {
+@@ -3459,6 +4049,12 @@ namespace plume {
          vkCmdResetQueryPool(vk, interfaceQueryPool->vk, queryFirstIndex, queryCount);
      }
  
@@ -1389,7 +1637,7 @@ index f1dd503..cb2fd69 100644
      void VulkanCommandList::writeTimestamp(const RenderQueryPool *queryPool, uint32_t queryIndex) {
          assert(queryPool != nullptr);
  
-@@ -3500,6 +4048,7 @@ namespace plume {
+@@ -3500,6 +4096,7 @@ namespace plume {
      // VulkanCommandFence
  
      VulkanCommandFence::VulkanCommandFence(VulkanDevice *device) {
@@ -1397,7 +1645,7 @@ index f1dd503..cb2fd69 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -3515,6 +4064,7 @@ namespace plume {
+@@ -3515,6 +4112,7 @@ namespace plume {
      }
  
      VulkanCommandFence::~VulkanCommandFence() {
@@ -1405,7 +1653,7 @@ index f1dd503..cb2fd69 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyFence(device->vk, vk, nullptr);
          }
-@@ -3523,6 +4073,7 @@ namespace plume {
+@@ -3523,6 +4121,7 @@ namespace plume {
      // VulkanCommandSemaphore
  
      VulkanCommandSemaphore::VulkanCommandSemaphore(VulkanDevice *device) {
@@ -1413,7 +1661,7 @@ index f1dd503..cb2fd69 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -3538,6 +4089,7 @@ namespace plume {
+@@ -3538,6 +4137,7 @@ namespace plume {
      }
  
      VulkanCommandSemaphore::~VulkanCommandSemaphore() {
@@ -1421,7 +1669,7 @@ index f1dd503..cb2fd69 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroySemaphore(device->vk, vk, nullptr);
          }
-@@ -3626,7 +4178,7 @@ namespace plume {
+@@ -3626,7 +4226,7 @@ namespace plume {
          }
  
          if (res != VK_SUCCESS) {
@@ -1430,7 +1678,7 @@ index f1dd503..cb2fd69 100644
              return;
          }
      }
-@@ -3636,8 +4188,17 @@ namespace plume {
+@@ -3636,8 +4236,17 @@ namespace plume {
  
          VulkanCommandFence *interfaceFence = static_cast<VulkanCommandFence *>(fence);
          VkResult res = vkWaitForFences(device->vk, 1, &interfaceFence->vk, VK_TRUE, UINT64_MAX);
@@ -1449,7 +1697,7 @@ index f1dd503..cb2fd69 100644
              return;
          }
  
-@@ -3647,6 +4208,7 @@ namespace plume {
+@@ -3647,6 +4256,7 @@ namespace plume {
      // VulkanPool
  
      VulkanPool::VulkanPool(VulkanDevice *device, const RenderPoolDesc &desc) {
@@ -1457,7 +1705,7 @@ index f1dd503..cb2fd69 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -3688,6 +4250,7 @@ namespace plume {
+@@ -3688,6 +4298,7 @@ namespace plume {
      }
  
      VulkanPool::~VulkanPool() {
@@ -1465,7 +1713,7 @@ index f1dd503..cb2fd69 100644
          if (vk != VK_NULL_HANDLE) {
              vmaDestroyPool(device->allocator, vk);
          }
-@@ -3896,6 +4459,20 @@ namespace plume {
+@@ -3896,6 +4507,20 @@ namespace plume {
              featuresChain = &accelerationStructureFeatures;
          }
  
@@ -1486,7 +1734,7 @@ index f1dd503..cb2fd69 100644
          VkPhysicalDeviceFeatures2 deviceFeatures = {};
          deviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
          deviceFeatures.pNext = featuresChain;
-@@ -3932,6 +4509,16 @@ namespace plume {
+@@ -3932,6 +4557,16 @@ namespace plume {
              createDeviceChain = &accelerationStructureFeatures;
          }
  
@@ -1503,7 +1751,7 @@ index f1dd503..cb2fd69 100644
          const bool descriptorIndexingSupported = indexingFeatures.descriptorBindingPartiallyBound && indexingFeatures.descriptorBindingVariableDescriptorCount && indexingFeatures.runtimeDescriptorArray;
          if (descriptorIndexingSupported) {
              indexingFeatures.pNext = createDeviceChain;
-@@ -4084,6 +4671,7 @@ namespace plume {
+@@ -4084,6 +4719,7 @@ namespace plume {
  
          VmaAllocatorCreateInfo allocatorInfo = {};
          allocatorInfo.flags |= bufferDeviceAddressSupported ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : 0;
@@ -1511,7 +1759,7 @@ index f1dd503..cb2fd69 100644
          allocatorInfo.physicalDevice = physicalDevice;
          allocatorInfo.device = vk;
          allocatorInfo.pVulkanFunctions = &vmaFunctions;
-@@ -4097,6 +4685,8 @@ namespace plume {
+@@ -4097,6 +4733,8 @@ namespace plume {
              return;
          }
  
@@ -1520,7 +1768,7 @@ index f1dd503..cb2fd69 100644
          // Find the biggest device local memory available on the device.
          VkDeviceSize memoryHeapSize = 0;
          const VkPhysicalDeviceMemoryProperties *memoryProps = nullptr;
-@@ -4121,8 +4711,10 @@ namespace plume {
+@@ -4121,8 +4759,10 @@ namespace plume {
  
          // Fill capabilities.
          capabilities.geometryShader = deviceFeatures.features.geometryShader;
@@ -1531,7 +1779,7 @@ index f1dd503..cb2fd69 100644
          capabilities.sampleLocations = (sampleLocationProperties.sampleLocationSampleCounts != 0);
          capabilities.resolveRegion = true;
          capabilities.resolveModes = false;
-@@ -4132,6 +4724,7 @@ namespace plume {
+@@ -4132,6 +4772,7 @@ namespace plume {
          capabilities.samplerMirrorClampToEdge = supportedOptionalExtensions.find(VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME) != supportedOptionalExtensions.end();
          capabilities.presentWait = presentWaitSupported;
          capabilities.displayTiming = supportedOptionalExtensions.find(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME) != supportedOptionalExtensions.end();
@@ -1539,7 +1787,7 @@ index f1dd503..cb2fd69 100644
          capabilities.maxTextureSize = physicalDeviceProperties.limits.maxImageDimension2D;
          capabilities.preferHDR = memoryHeapSize > (512 * 1024 * 1024);
          capabilities.dynamicDepthBias = true;
-@@ -4232,7 +4825,8 @@ namespace plume {
+@@ -4232,7 +4873,8 @@ namespace plume {
          thread_local std::vector<uint32_t> geometryPrimitiveCounts;
          geometryPrimitiveCounts.resize(meshCount);
  
@@ -1549,7 +1797,7 @@ index f1dd503..cb2fd69 100644
          VkAccelerationStructureGeometryKHR *geometries = reinterpret_cast<VkAccelerationStructureGeometryKHR *>(buildInfo.buildData.data());
          for (uint32_t i = 0; i < meshCount; i++) {
              const RenderBottomLevelASMesh &mesh = meshes[i];
-@@ -4291,6 +4885,7 @@ namespace plume {
+@@ -4291,6 +4933,7 @@ namespace plume {
          buildSizesInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
          vkGetAccelerationStructureBuildSizesKHR(vk, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildGeometryInfo, geometryPrimitiveCounts.data(), &buildSizesInfo);
  
@@ -1557,7 +1805,7 @@ index f1dd503..cb2fd69 100644
          buildInfo.meshCount = meshCount;
          buildInfo.primitiveCount = primitiveCount;
          buildInfo.preferFastBuild = preferFastBuild;
-@@ -4433,11 +5028,23 @@ namespace plume {
+@@ -4433,11 +5076,23 @@ namespace plume {
          nullBuffer = nullptr; // force destruction before destroying allocator
  
          if (allocator != VK_NULL_HANDLE) {
@@ -1582,7 +1830,7 @@ index f1dd503..cb2fd69 100644
              vk = VK_NULL_HANDLE;
          }
 diff --git a/plume_vulkan.h b/plume_vulkan.h
-index 0a1edbe..7803d5f 100644
+index 0a1edbe..f38af9b 100644
 --- a/plume_vulkan.h
 +++ b/plume_vulkan.h
 @@ -41,7 +41,32 @@
@@ -1662,7 +1910,17 @@ index 0a1edbe..7803d5f 100644
          uint32_t getWidth() const override;
          uint32_t getHeight() const override;
          RenderTexture *getTexture(uint32_t textureIndex) override;
-@@ -311,6 +345,7 @@ namespace plume {
+@@ -258,7 +292,9 @@ namespace plume {
+         RenderWindow getWindow() const override;
+         bool isEmpty() const override;
+         uint32_t getRefreshRate() const override;
++        void releaseSurface() override;
+         void getWindowSize(uint32_t &dstWidth, uint32_t &dstHeight) const;
++        bool createSurface();
+         void releaseSwapChain();
+         void releaseImageViews();
+     };
+@@ -311,6 +347,7 @@ namespace plume {
          void dispatch(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ) override;
          void traceRays(uint32_t width, uint32_t height, uint32_t depth, RenderBufferReference shaderBindingTable, const RenderShaderBindingGroupsInfo &shaderBindingGroupsInfo) override;
          void drawInstanced(uint32_t vertexCountPerInstance, uint32_t instanceCount, uint32_t startVertexLocation, uint32_t startInstanceLocation) override;
@@ -1670,7 +1928,7 @@ index 0a1edbe..7803d5f 100644
          void drawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, int32_t baseVertexLocation, uint32_t startInstanceLocation) override;
          void setPipeline(const RenderPipeline *pipeline) override;
          void setComputePipelineLayout(const RenderPipelineLayout *pipelineLayout) override;
-@@ -342,6 +377,7 @@ namespace plume {
+@@ -342,6 +379,7 @@ namespace plume {
          void discardTexture(const RenderTexture* texture) override;
          void resetQueryPool(const RenderQueryPool *queryPool, uint32_t queryFirstIndex, uint32_t queryCount) override;
          void writeTimestamp(const RenderQueryPool *queryPool, uint32_t queryIndex) override;
@@ -1678,7 +1936,7 @@ index 0a1edbe..7803d5f 100644
          void checkActiveRenderPass();
          void endActiveRenderPass();
          void setDescriptorSet(VkPipelineBindPoint bindPoint, const VulkanPipelineLayout *pipelineLayout, const RenderDescriptorSet *descriptorSet, uint32_t setIndex);
-@@ -417,6 +453,8 @@ namespace plume {
+@@ -417,6 +455,8 @@ namespace plume {
          std::unique_ptr<RenderBuffer> nullBuffer;
          bool loadStoreOpNoneSupported = false;
          bool nullDescriptorSupported = false;

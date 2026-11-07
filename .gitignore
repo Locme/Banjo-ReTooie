@@ -52,3 +52,9 @@ android/.idea/
 android/*.iml
 android/app/*.iml
 icons/*.svg
+
+# Android signing keys and their passwords (BUILDING.md): never committed.
+*.jks
+*.keystore
+*release.properties
+keystore.properties

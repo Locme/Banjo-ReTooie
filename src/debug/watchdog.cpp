@@ -74,6 +74,8 @@ namespace {
     Part screen_part{ "screen", "no frame was presented (the graphics thread, RT64 or the driver is stuck)", screen_threshold };
     Part window_part{ "window", "the window stopped handling events (the main thread is stuck)", window_threshold };
     Part* const parts[] = { &game_part, &screen_part, &window_part };
+    // set_suspended: the parts are not watched, and count as just changed when watching starts again.
+    std::atomic<bool> suspended{false};
 
     // What the renderer reports, for the frame rate overlay.
     std::atomic<int> reported_api{(int)ultramodern::renderer::GraphicsApi::Auto};
@@ -317,6 +319,14 @@ namespace {
                 handle_device_lost();
             }
 
+            if (suspended.load()) {
+                for (Part* part : parts) {
+                    part->last_count = part->count.load(std::memory_order_relaxed);
+                    part->last_change = now;
+                }
+                continue;
+            }
+
             std::string started;
             for (Part* part : parts) {
                 uint64_t count = part->count.load(std::memory_order_relaxed);
@@ -459,6 +469,10 @@ void tooie::watchdog::note_window_update() {
 
 void tooie::watchdog::note_game_input() {
     test_hang_point(game_part);
+}
+
+void tooie::watchdog::set_suspended(bool now_suspended) {
+    suspended.store(now_suspended);
 }
 
 std::unique_ptr<ultramodern::renderer::RendererContext> tooie::watchdog::wrap(

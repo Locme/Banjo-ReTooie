@@ -11,6 +11,8 @@ import android.view.View;
  * On-screen controls for a phone: two sticks (left: Banjo, right: the C buttons), A, B, L, R, Z and
  * Start. The state goes to the game's virtual controller (src/android/android_platform.cpp).
  * Touches that start away from the controls are not taken, so the game's menus still get them.
+ * The controls fade out after a few seconds without a touch, and when a controller is used; the next touch
+ * on the screen (GameActivity passes every one to noteTouch) brings them back.
  */
 public class TouchOverlay extends View {
     static final int BTN_A = 1;
@@ -23,6 +25,9 @@ public class TouchOverlay extends View {
     private static final int STICK_LEFT = 0;
     private static final int STICK_RIGHT = 1;
     private static final int NONE = -1;
+
+    private static final long IDLE_MS = 6000;
+    private static final long FADE_MS = 400;
 
     /** A round control: centre and radius as fractions of the view's shorter side (or width, for x). */
     private static final class Control {
@@ -51,6 +56,14 @@ public class TouchOverlay extends View {
     private final float[] pointerX = new float[10];
     private final float[] pointerY = new float[10];
 
+    private boolean shown = true;
+    private final Runnable idleHide = new Runnable() {
+        @Override
+        public void run() {
+            hide();
+        }
+    };
+
     private int buttons = 0;
     private int leftX = 0, leftY = 0, rightX = 0, rightY = 0;
 
@@ -70,6 +83,49 @@ public class TouchOverlay extends View {
         fill.setColor(Color.argb(60, 255, 255, 255));
         text.setColor(Color.argb(200, 255, 255, 255));
         text.setTextAlign(Paint.Align.CENTER);
+        restartIdleTimer();
+    }
+
+    /** Called for every touch on the screen, before the controls or the game see it. Shows the controls. */
+    void noteTouch(MotionEvent event) {
+        int action = event.getActionMasked();
+        removeCallbacks(idleHide);
+        if (!shown) {
+            shown = true;
+            animate().cancel();
+            animate().alpha(1f).setDuration(100).start();
+        } else if (getAlpha() < 1f) {
+            animate().cancel();
+            setAlpha(1f);
+        }
+        // The timer only runs while no finger is down.
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            restartIdleTimer();
+        }
+    }
+
+    /** Called when a controller is used: hides the controls until the screen is touched. */
+    void noteController() {
+        if (shown) {
+            hide();
+        }
+    }
+
+    private void restartIdleTimer() {
+        removeCallbacks(idleHide);
+        postDelayed(idleHide, IDLE_MS);
+    }
+
+    /** Fades the controls out and lets go of everything held, so no stick or button stays pressed. */
+    private void hide() {
+        removeCallbacks(idleHide);
+        shown = false;
+        animate().cancel();
+        animate().alpha(0f).setDuration(FADE_MS).start();
+        for (int i = 0; i < pointerControl.length; i++) {
+            pointerControl[i] = NONE;
+        }
+        update();
     }
 
     private float unit() {

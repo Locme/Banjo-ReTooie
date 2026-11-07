@@ -1,13 +1,19 @@
 package io.github.locme.banjotooie;
 
+import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.InputDevice;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.SurfaceHolder;
 import android.widget.FrameLayout;
 
 import org.libsdl.app.SDLActivity;
+import org.libsdl.app.SDLSurface;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -26,15 +32,80 @@ public class GameActivity extends SDLActivity {
     private static final String TAG = "BanjoTooie";
     private static final String ASSET_ROOT = "game_files";
 
+    private TouchOverlay touchOverlay;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         unpackGameFiles();
         super.onCreate(savedInstanceState);
         if (getPackageManager().hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)) {
-            addContentView(new TouchOverlay(this), new FrameLayout.LayoutParams(
+            touchOverlay = new TouchOverlay(this);
+            addContentView(touchOverlay, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         }
     }
+
+    // The touch controls fade out when not touched and while a controller is used. SDL still gets every event.
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (touchOverlay != null) {
+            touchOverlay.noteTouch(event);
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (touchOverlay != null && fromController(event.getSource())) {
+            touchOverlay.noteController();
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (touchOverlay != null && fromController(event.getSource())) {
+            touchOverlay.noteController();
+        }
+        return super.dispatchGenericMotionEvent(event);
+    }
+
+    private static boolean fromController(int source) {
+        return (source & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK)) != 0;
+    }
+
+    @Override
+    protected SDLSurface createSDLSurface(Context context) {
+        return new GameSurface(context);
+    }
+
+    /**
+     * SDL's surface view, which also tells the game when the window's surface goes and comes back (the app
+     * going to the background and back). RT64 draws to that surface with Vulkan, so its swap chain has to be
+     * released before SDL lets go of the surface, and made again on the new one (src/android/android_platform.cpp).
+     */
+    private static class GameSurface extends SDLSurface {
+        GameSurface(Context context) {
+            super(context);
+        }
+
+        @Override
+        public void surfaceDestroyed(SurfaceHolder holder) {
+            // Waits (up to 2 s) for RT64 to release its swap chain while the surface is still there.
+            nativeSurfaceLost();
+            super.surfaceDestroyed(holder);
+        }
+
+        @Override
+        public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+            super.surfaceChanged(holder, format, width, height);
+            // surfaceCreated gave SDL the new surface; the next frame shown makes the swap chain on it.
+            nativeSurfaceReady();
+        }
+    }
+
+    private static native void nativeSurfaceLost();
+    private static native void nativeSurfaceReady();
 
     @Override
     protected void onDestroy() {

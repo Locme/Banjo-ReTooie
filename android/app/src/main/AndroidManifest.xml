@@ -47,14 +47,15 @@
             </intent-filter>
         </activity>
 
-        <!-- The game (SDL's activity, which runs libmain.so) -->
+        <!-- The game (SDL's activity, which runs libmain.so). Every configuration change it can get is listed in
+             configChanges, so the activity is kept: a new one would end the game (GameActivity.onDestroy). -->
         <activity
             android:name=".GameActivity"
             android:exported="false"
             android:screenOrientation="sensorLandscape"
             android:alwaysRetainTaskState="true"
             android:launchMode="singleInstance"
-            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density|fontScale|touchscreen|colorMode"
             android:preferMinimalPostProcessing="true">
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />

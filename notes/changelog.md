@@ -5,6 +5,9 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-07
 
+- Android: leaving the app while the game runs (Home, another app, the screen turning off, a call, the notification shade) pauses the game where it is, and it carries on from there when you come back. The save is written out on the way. Console: `background [seconds]` does the same on any system, for testing.
+- Android: the app is now io.banjoretooie (its folder is Android/data/io.banjoretooie/files) and is signed with a release key, so later versions install over it. The first start sets 30 FPS, Original 2x resolution and the Original effects preset, which a phone can carry.
+- Android: the on-screen touch controls fade out after 6 seconds without a touch and while a controller is used, and come back on the next touch.
 - Android: Ray Tracing, Path Tracing and Traced Light Beams are hidden and off (phone GPUs lack Vulkan ray queries or are too slow for them). The Android build builds again: the Snapdragon GSR shader and a name that clashed with Android's read() stopped it.
 - Android: the settings that cannot work on a phone are left out of the menus (Window Mode, Graphics API, Discord Status, Background Input Mode, Mouse Sensitivity, Camera Mouse, Pass Over Crashes, 3D Hand Cursor, and the texture sweep); the BUILDING.md Android section lists them.
 - Quitting no longer sometimes crashes on the way out (with Volumetric Shadows on, a crash report on every quit).

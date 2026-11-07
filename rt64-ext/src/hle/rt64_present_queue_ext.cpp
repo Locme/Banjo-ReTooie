@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdio>
 
 #include "rt64_vi.h"
 
@@ -224,6 +225,64 @@ namespace RT64 {
     void RequestWindowScreenshot(ScreenshotCallback callback) {
         const std::scoped_lock lock(windowShotMutex);
         windowShotCallback = std::move(callback);
+    }
+
+    namespace presentext {
+        std::mutex surfaceMutex;
+        std::condition_variable surfaceCondition;
+        bool surfaceAvailable = true;
+        bool surfaceInUse = false;
+
+        void waitForWindowSurface() {
+            std::unique_lock lock(surfaceMutex);
+            surfaceCondition.wait(lock, []() { return surfaceAvailable; });
+            surfaceInUse = true;
+        }
+    }
+
+    void SetWindowSurfaceAvailable(bool available, uint32_t timeoutMs) {
+        std::unique_lock lock(surfaceMutex);
+        surfaceAvailable = available;
+        surfaceCondition.notify_all();
+        if (!available) {
+            // The present thread looks at this at least every idleRepaintInterval, between presents.
+            if (!surfaceCondition.wait_for(lock, std::chrono::milliseconds(timeoutMs), []() { return !surfaceInUse; })) {
+                fprintf(stderr, "[present] The swap chain was not released within %u ms of the window losing its surface.\n", timeoutMs);
+            }
+        }
+    }
+
+    // Banjo-Tooie: called by the present thread between presents. Releases the swap chain and its surface when
+    // the window has lost its surface (SetWindowSurfaceAvailable), and lets the next present make them again once
+    // it has one. Returns whether the swap chain can be used.
+    bool PresentQueue::threadSyncSurface(bool &swapChainValid) {
+        std::unique_lock lock(surfaceMutex);
+        if (!surfaceAvailable && surfaceInUse) {
+            lock.unlock();
+            {
+                std::unique_lock<std::mutex> threadLock(threadMutex);
+                // Everything already sent to the queue (the last presents' draws) finishes first, as before a resize.
+                ext.presentGraphicsWorker->commandList->begin();
+                ext.presentGraphicsWorker->commandList->end();
+                ext.presentGraphicsWorker->execute();
+                ext.presentGraphicsWorker->wait();
+                swapChainFramebuffers.clear();
+                ext.swapChain->releaseSurface();
+                swapChainValid = false;
+            }
+            fprintf(stdout, "[present] The window lost its surface; the swap chain is released.\n");
+            lock.lock();
+            surfaceInUse = false;
+            surfaceCondition.notify_all();
+        }
+        else if (surfaceAvailable && !surfaceInUse) {
+            // The next present resizes the swap chain, which makes the surface again.
+            surfaceInUse = true;
+            swapChainValid = false;
+            fprintf(stdout, "[present] The window has a surface again; the swap chain is made on it.\n");
+        }
+
+        return surfaceInUse;
     }
 
     void PresentQueue::threadRepaint(bool &swapChainValid) {

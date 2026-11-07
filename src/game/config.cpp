@@ -51,6 +51,7 @@
 #include "tooie_totals_checklist.h"
 #include "tooie_canary_mary.h"
 #include "tooie_game_frame_rate.h"
+#include "ultramodern/config.hpp"
 #include "tooie_frame_overlay.h"
 #include "tooie_fine_aim.h"
 #include "tooie_motion_aim.h"
@@ -478,6 +479,31 @@ namespace {
         if (graphics.has_option(pf::traced_beams_option)) {
             graphics.update_option_value(pf::traced_beams_option, 0.0);
         }
+    }
+
+    // On a phone's first start: settings a phone's CPU and GPU can carry (L, 2026-11-07, "fix performance for
+    // Android"). Applied once (android_defaults.done in the config folder), so what the player changes stays.
+    // - Game Frame Rate 30 FPS, the most the game ever ran at: half the game's CPU work of the 60 FPS default.
+    // - Resolution Original 2x (480 lines): Auto would draw at the whole screen, about 2400 by 1080, five times
+    //   the pixels, on a GPU ten or more times slower than a desktop one.
+    // - Effects Preset Original: none of the port's effect shaders run until the player turns them on.
+    void apply_android_defaults_once() {
+        const std::filesystem::path marker = recomp::get_config_path() / "android_defaults.done";
+        std::error_code ec;
+        if (std::filesystem::exists(marker, ec)) {
+            return;
+        }
+        recomp::config::Config& graphics = recompui::config::get_graphics_config();
+        if (graphics.has_option(tooie::game_frame_rate::option)) {
+            graphics.update_option_value(tooie::game_frame_rate::option, (uint32_t)tooie::game_frame_rate::Mode::Fps30);
+        }
+        if (graphics.has_option(recompui::config::graphics::options::res_option)) {
+            graphics.update_option_value(recompui::config::graphics::options::res_option, (uint32_t)ultramodern::renderer::Resolution::Original2x);
+        }
+        if (graphics.has_option(tooie::picture_filters::preset_option)) {
+            graphics.update_option_value(tooie::picture_filters::preset_option, (uint32_t)tooie::picture_filters::Preset::Original);
+        }
+        std::ofstream(marker) << "Android's first-start graphics defaults were set once (src/game/config.cpp).\n";
     }
 }
 #endif
@@ -1435,6 +1461,7 @@ void tooie::init_config() {
     recompui::config::finalize();
 #if defined(__ANDROID__)
     hide_options_android_cannot_use();
+    apply_android_defaults_once();
 #endif
     tooie::cheats::reset_on_start();
     move_saved_options_to_graphics();

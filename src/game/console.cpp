@@ -23,6 +23,7 @@
 
 #include "tooie_transform_menu.h"
 #include "tooie_console.h"
+#include "tooie_app_state.h"
 #include "tooie_cheats.h"
 #include "tooie_path_text.h"
 #include "tooie_debug.h"
@@ -2778,6 +2779,29 @@ bool g_paused;
 bool g_step_pending;
 double g_timescale = 1.0;
 
+// What an Android app going to the background does, on any system (tooie::app_state): the game stops, RT64 releases
+// its swap chain and window surface, and after the given time both are made again and the game goes on. On its
+// own thread, as releasing the swap chain waits for the present thread.
+void cmd_background(Ctx& c) {
+    double seconds = 3.0;
+    if (c.w.size() >= 2 && (!parse_double(c.w[1], &seconds) || seconds < 0 || seconds > 600)) {
+        error("background [seconds, 0 to 600]");
+        return;
+    }
+    if (tooie::app_state::in_background()) {
+        error("already in the background");
+        return;
+    }
+    print(format("in the background for %.1f s", seconds));
+    std::thread([seconds]() {
+        tooie::app_state::enter_background();
+        tooie::app_state::set_window_surface(false);
+        std::this_thread::sleep_for(std::chrono::milliseconds((long long)(seconds * 1000.0)));
+        tooie::app_state::set_window_surface(true);
+        tooie::app_state::enter_foreground();
+    }).detach();
+}
+
 void cmd_pause(Ctx&) { g_paused = true; print("paused (resume goes on, step runs one game update)"); }
 void cmd_resume(Ctx&) { g_paused = false; print("resumed"); }
 void cmd_step(Ctx&) {
@@ -4040,6 +4064,7 @@ const std::vector<Command>& commands() {
         { "tee", {}, false, "tee <file> | tee off", "copy everything the console prints to a file", cmd_tee },
         { "pause", {}, true, "pause", "stop the game's movement (its delta time), without the pause menu", cmd_pause },
         { "resume", {}, true, "resume", "go on after pause", cmd_resume },
+        { "background", {}, false, "background [seconds]", "act as an Android app sent to the background and back (default 3 s): the game stops, the swap chain is released and made again", cmd_background },
         { "step", {}, true, "step", "one game update while paused", cmd_step },
         { "timescale", { "ff", "slowmo" }, true, "timescale [0.05 to 4]", "scale the game's movement (2 is double speed, 0.5 half)", cmd_timescale },
         { "break", {}, true, "break <address> [value] [8|16|32] [pause] [then <commands>]", "tell when RAM changes or takes a value; can pause or run commands", cmd_break },

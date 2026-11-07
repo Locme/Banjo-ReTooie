@@ -110,19 +110,37 @@ on, and press **Run**. Or build from a command line in `android/`:
 gradlew assembleRelease
 ```
 
-The APK is `android\app\build\outputs\apk\release\app-release.apk` (signed with
-the debug key, so it installs without a release key).
+The APK is `android\app\build\outputs\apk\release\app-release.apk`. It is signed with
+the release key when `%USERPROFILE%\.android\banjoretooie-release.properties` exists
+(`storeFile`, `storePassword`, `keyAlias`, `keyPassword`; or the file that
+`BANJORETOOIE_KEYSTORE_PROPERTIES` names), and with the debug key otherwise. Android
+only updates an installed copy from an APK signed with the same key, so keep the
+release key and its password safe: without them a new version installs only after
+uninstalling, which deletes the saves. The key and its password are never committed.
 
 The first time the app starts it asks for your Banjo-Tooie ROM (US release) and
 copies it in. Saves, settings, mods and `logs\console.log` are in
-`Android/data/io.github.locme.banjotooie/files` on the phone's storage.
+`Android/data/io.banjoretooie/files` on the phone's storage. Uninstalling the app
+deletes that folder, saves included, so copy them out first.
 
 The game shows on-screen touch controls (two sticks, A, B, L, R, Z and Start,
 `src/android/android_platform.cpp` and `TouchOverlay.java`); a touch away from them
-works as a mouse click in the menus. A controller connected to the phone works too.
+works as a mouse click in the menus. The controls fade out after 6 seconds without a
+touch and come back on the next touch; using a controller hides them too, until the screen
+is touched again. A controller connected to the phone works too.
 
-Not done yet: leaving the app while the game runs (switching away may close or
-crash it).
+Leaving the app while the game runs (Home, another app, the screen turning off, a
+call) pauses the game, and it carries on where it was when you come back
+(`src/main/app_state.cpp`; the console's `background 5` does the same on a PC). The
+save is written out as the app goes, since Android may close an app left in the
+background; it then starts again from the title screen. Not yet tried on a phone.
+
+### First start on Android
+
+The first time the game starts on a phone it sets Game Frame Rate to 30 FPS, Resolution to Original 2x and Effects
+Preset to Original (`apply_android_defaults_once` in `src/game/config.cpp`), which a phone can carry; the desktop
+defaults (60 FPS, a picture as big as the screen) cost several times as much. They are set once, so changing them
+afterwards sticks.
 
 ### Not on Android
 

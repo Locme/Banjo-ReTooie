@@ -14,6 +14,9 @@ namespace tooie::android {
     // deletes it. Returns false, after saying why, when the ROM is refused; the game then closes and
     // the launcher asks for a ROM again.
     bool install_picked_rom(std::u8string game_id);
+    // Called once the window is made: the game stops while the app is in the background and goes on when it
+    // comes back (tooie::app_state, from SDL's SDL_APP_WILLENTERBACKGROUND and SDL_APP_DIDENTERFOREGROUND).
+    void watch_app_state();
     // Called every frame from the graphics thread: sends the touch controls' state (TouchOverlay.java)
     // to a virtual game controller, which the game reads like a real pad.
     void update_touch();

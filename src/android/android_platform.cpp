@@ -12,6 +12,7 @@
 
 #include "librecomp/game.hpp"
 #include "tooie_android.h"
+#include "tooie_app_state.h"
 
 namespace fs = std::filesystem;
 
@@ -45,6 +46,29 @@ namespace {
             return;
         }
         touch_pad = SDL_JoystickOpen(index);
+    }
+
+    // Called by SDL as it queues each event, on the thread that reads them (the main thread). SDL sends these as the
+    // activity pauses and resumes: Home, another app, the screen turning off, a call, or the notification shade
+    // pulled over the game. While paused, SDL holds the main thread in SDL_PollEvent and pauses the audio device.
+    int app_state_watch(void*, SDL_Event* event) {
+        switch (event->type) {
+            case SDL_APP_WILLENTERBACKGROUND:
+                // A finger on the touch controls when the app went is not held on return.
+                touch_buttons.store(0);
+                touch_left_x.store(0);
+                touch_left_y.store(0);
+                touch_right_x.store(0);
+                touch_right_y.store(0);
+                tooie::app_state::enter_background();
+                break;
+            case SDL_APP_DIDENTERFOREGROUND:
+                tooie::app_state::enter_foreground();
+                break;
+            default:
+                break;
+        }
+        return 0;
     }
 
     const char* rom_error_text(recomp::RomValidationError error) {
@@ -91,6 +115,10 @@ void tooie::android::setup_paths() {
     std::printf("[android] app folder: %s\n", app_folder.c_str());
 }
 
+void tooie::android::watch_app_state() {
+    SDL_AddEventWatch(app_state_watch, nullptr);
+}
+
 bool tooie::android::install_picked_rom(std::u8string game_id) {
     std::error_code ec;
     const fs::path picked = app_folder / "picked_rom.z64";
@@ -129,6 +157,18 @@ void tooie::android::update_touch() {
     SDL_JoystickSetVirtualAxis(touch_pad, SDL_CONTROLLER_AXIS_LEFTY, touch_left_y.load());
     SDL_JoystickSetVirtualAxis(touch_pad, SDL_CONTROLLER_AXIS_RIGHTX, touch_right_x.load());
     SDL_JoystickSetVirtualAxis(touch_pad, SDL_CONTROLLER_AXIS_RIGHTY, touch_right_y.load());
+}
+
+// Called by GameActivity.java's surface view on the UI thread. Lost comes before SDL lets go of the window's
+// surface and waits for RT64 to release the swap chain made on it; ready comes once SDL has the new surface.
+extern "C" JNIEXPORT void JNICALL
+Java_io_github_locme_banjotooie_GameActivity_nativeSurfaceLost(JNIEnv*, jclass) {
+    tooie::app_state::set_window_surface(false);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_io_github_locme_banjotooie_GameActivity_nativeSurfaceReady(JNIEnv*, jclass) {
+    tooie::app_state::set_window_surface(true);
 }
 
 // Called by TouchOverlay.java on every change. The names must match that class, in package io.github.locme.banjotooie.
