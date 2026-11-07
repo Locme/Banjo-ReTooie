@@ -81,8 +81,10 @@ namespace RT64 {
         double latencyMs = 0.0;
         double worstLatencyMs = 0.0;
         uint32_t shaderCompiles = 0;
-        double sectionMs[14] = {};
-        uint32_t sectionCount[14] = {};
+        // GpuSection::Count in rt64-ext/src/render/rt64_gpu_sections.h (17): this copy must match RT64's layout, or
+        // every field after these is read from the wrong place (it said 14, so the renderer and snow times read 0).
+        double sectionMs[17] = {};
+        uint32_t sectionCount[17] = {};
         uint32_t cpuFrames = 0;
         double cpuMs[5] = {};
         double snowMs[4] = {};
@@ -584,6 +586,7 @@ namespace {
     // The port's extra GPU passes, in RT64::GpuSection order. The first four and the last four are
     // recorded with the game's frame (per_game_frame), the rest at each present.
     constexpr size_t section_count = 17;
+    static_assert(section_count == sizeof(RT64::FrameStats::sectionMs) / sizeof(double), "FrameStats' copy and the section list must agree");
     constexpr const char* section_names[section_count] = {
         "water mask", "eye adaptation", "bloom", "effects", "SMAA", "FXAA", "photo filters", "FSR", "output", "UI",
         "sun shadow map", "ray tracing build", "AO and bounce light", "traced effects",

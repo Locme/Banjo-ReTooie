@@ -58,28 +58,50 @@ namespace RT64 {
             auto same = [](const interop::float3 &a, const interop::float3 &b) {
                 return (std::abs(a.x - b.x) < 2e-4f) && (std::abs(a.y - b.y) < 2e-4f) && (std::abs(a.z - b.z) <= (std::max(std::abs(a.z), std::abs(b.z)) * 2e-3f + 1e-4f));
             };
-            // Each edge point by its cell, with its piece: a list sorted by cell (a hash multimap allocated a node per point
-            // every frame, which with the lookups below was most of the renderer's CPU time in Terrydactyland).
-            thread_local std::vector<std::pair<uint64_t, uint32_t>> pointsByCell;
+            // Each edge point by its cell, with its piece: a hash grid, one chain of points per bucket, built in one pass (a
+            // hash multimap allocated a node per point every frame; a list sorted by cell then took the sort and a binary
+            // search per lookup, still most of RT64's workload thread in the performance sweep, 2026-11-07). Points are
+            // chained in reverse so each chain gives them in index order, the order the sorted list gave.
             thread_local std::vector<uint32_t> pointPiece;
-            pointsByCell.clear();
+            thread_local std::vector<uint64_t> pointCell;
+            thread_local std::vector<uint32_t> pointNext;
+            thread_local std::vector<uint32_t> bucketHead;
+            constexpr uint32_t chainEnd = 0xFFFFFFFFu;
             pointPiece.assign(seamPoints.size(), 0);
+            pointCell.assign(seamPoints.size(), 0);
+            pointNext.assign(seamPoints.size(), chainEnd);
+            uint32_t bucketBits = 4;
+            while ((1u << bucketBits) < (seamPoints.size() * 2)) {
+                bucketBits++;
+            }
+            bucketHead.assign(size_t(1) << bucketBits, chainEnd);
+            auto bucketOf = [bucketBits](uint64_t cell) {
+                return uint32_t((cell * 0x9E3779B97F4A7C15ull) >> (64 - bucketBits));
+            };
             for (uint32_t i = 0; i < seamPieces.size(); i++) {
                 for (uint32_t k = 0; k < seamPieces[i].pointCount; k++) {
                     const uint32_t pi = seamPieces[i].pointStart + k;
                     pointPiece[pi] = i;
-                    pointsByCell.emplace_back(cellOf(seamPoints[pi].position.x, seamPoints[pi].position.y), pi);
+                    pointCell[pi] = cellOf(seamPoints[pi].position.x, seamPoints[pi].position.y);
                 }
             }
-            std::sort(pointsByCell.begin(), pointsByCell.end());
-            auto cellRange = [&](uint64_t cell) {
-                auto first = std::lower_bound(pointsByCell.begin(), pointsByCell.end(), std::pair<uint64_t, uint32_t>(cell, 0));
-                auto last = first;
-                while ((last != pointsByCell.end()) && (last->first == cell)) {
-                    last++;
+            {
+                // Every point a piece covers, from the highest index down.
+                thread_local std::vector<uint8_t> covered;
+                covered.assign(seamPoints.size(), 0);
+                for (const SeamPiece &piece : seamPieces) {
+                    for (uint32_t k = 0; k < piece.pointCount; k++) {
+                        covered[piece.pointStart + k] = 1;
+                    }
                 }
-                return std::make_pair(first, last);
-            };
+                for (uint32_t pi = uint32_t(seamPoints.size()); pi-- > 0; ) {
+                    if (covered[pi]) {
+                        uint32_t &head = bucketHead[bucketOf(pointCell[pi])];
+                        pointNext[pi] = head;
+                        head = pi;
+                    }
+                }
+            }
             // Each piece's neighbour along each of its edges: the piece whose opposite edge meets it at two or more points.
             // One pass over the piece's points serves all four edges (it went over them once per edge, looking each point's
             // cells up four times: most of RT64's workload thread in the performance sweep, 2026-11-07).
@@ -104,10 +126,13 @@ namespace RT64 {
                     uint32_t matchedHereCount[4] = {};
                     for (int64_t cellX = x0; cellX <= x1; cellX++) {
                         for (int64_t cellY = y0; cellY <= y1; cellY++) {
-                            auto range = cellRange((uint64_t(uint32_t(int32_t(cellX))) << 32) | uint64_t(uint32_t(int32_t(cellY))));
-                            for (auto it = range.first; it != range.second; it++) {
-                                const SeamPoint &pb = seamPoints[it->second];
-                                const uint32_t bi = pointPiece[it->second];
+                            const uint64_t cell = (uint64_t(uint32_t(int32_t(cellX))) << 32) | uint64_t(uint32_t(int32_t(cellY)));
+                            for (uint32_t pbi = bucketHead[bucketOf(cell)]; pbi != chainEnd; pbi = pointNext[pbi]) {
+                                if (pointCell[pbi] != cell) {
+                                    continue;
+                                }
+                                const SeamPoint &pb = seamPoints[pbi];
+                                const uint32_t bi = pointPiece[pbi];
                                 if ((bi == ai) || !same(pa.position, pb.position)) {
                                     continue;
                                 }

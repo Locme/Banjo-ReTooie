@@ -5,6 +5,8 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-07
 
+- Frame rate overlay (Full): the Renderer CPU and Snow and sand lines showed 0 or wrong times, and the last three GPU passes (the upscalers') read the wrong numbers; fixed.
+- Blend texture seams costs about a third of what it did on the renderer thread (Terrydactyland's draw setup 1.4 → 0.9 ms per frame).
 - A little faster on the CPU everywhere: the game's float rounding changes, RT64's texture hashing for paletted textures, and calls between the game's functions cost less. Measured over twelve maps, two runs each: frame time 2% lower, the game's own CPU time per frame 3-14% lower.
 
 ## 2026-11-06
