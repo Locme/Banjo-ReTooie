@@ -1049,5 +1049,14 @@ int main(int argc, char** argv) {
     tooie::api_restart::relaunch_if_requested(argc, argv);
 
     // 1 if a console command failed, or the code `quit` was given; 0 otherwise.
-    return tooie::console::exit_code();
+    const int exit_code = tooie::console::exit_code();
+#if !defined(__ANDROID__)
+    // Everything is shut down; static destructors are skipped. Some of them (RT64's extra passes' pipelines and
+    // targets in rt64-ext) still held Vulkan objects whose device was already gone, and destroying them crashed the
+    // program on every quit (plume::VulkanGraphicsPipeline::~VulkanGraphicsPipeline, 2026-11-07). The system frees
+    // them with the process; the C streams are flushed first and the clean-exit marker goes (at_quick_exit).
+    std::fflush(nullptr);
+    std::quick_exit(exit_code);
+#endif
+    return exit_code;
 }

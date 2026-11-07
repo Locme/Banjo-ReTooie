@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-07
 
+- Quitting no longer sometimes crashes on the way out (with Volumetric Shadows on, a crash report on every quit).
 - Sun Shadows is much cheaper on the CPU: off-screen level pieces and models are drawn for the shadow maps only when their shadow can reach the view, not all of them. With the Enhanced preset: Hailfire Peaks Lava Side 4.4 → 3.2 ms a frame, Spiral Mountain 3.4 → 2.8, Terrydactyland 4.4 → 3.7, the same shadows on screen.
 - Frame rate overlay (Full): the Renderer CPU and Snow and sand lines showed 0 or wrong times, and the last three GPU passes (the upscalers') read the wrong numbers; fixed.
 - Blend texture seams costs about a third of what it did on the renderer thread (Terrydactyland's draw setup 1.4 → 0.9 ms per frame).

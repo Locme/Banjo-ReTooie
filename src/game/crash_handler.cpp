@@ -585,5 +585,7 @@ void tooie::install_crash_handler(const fs::path& app_folder) {
     // Keep room for this run's dump: delete all but the newest dumps_kept - 1 (names sort by date).
     prune_dumps("crash_", dumps_kept - 1);
     std::atexit(clean_exit);
+    // main ends through std::quick_exit, which runs only these.
+    std::at_quick_exit(clean_exit);
     install_handlers();
 }
