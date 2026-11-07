@@ -29,7 +29,7 @@ same work decides whether 60 holds at all, so build for those.
 1. Display-list capture and replay (item 7): it makes every other change safe to test.
 2. CPU/GPU overlap and the static-world cache (items 1 and 2): where the measured time goes.
 3. The automation and stats API (item 8), so each game measures the same way.
-4. The rest by need: phones (13, 11, 21, 25), the remaining speed-ups, picture and output.
+4. The rest by need: phones (13, 11), the remaining speed-ups, picture and output.
 
 ## Speed
 
@@ -58,11 +58,11 @@ Keep the last hash per (source address, size, format, palette) and skip hashing 
 written since. The TLUT bitset fast path (2026-11-07) made the hash lambda about 5 times cheaper; skipping it is
 better still.
 
-### 4. Fewer thread handoffs
+### 4. Fewer thread handoffs inside RT64
 
-Count the synchronisation points per frame (game thread to Gfx thread, Gfx to workload, workload to present) and
-remove what isn't needed: batch more work per handoff, spin briefly before sleeping where a wait is usually short,
-and use lock-free queues where the profile shows SRW lock time (`RtlAcquireSRWLockExclusive` /
+Count the synchronisation points per frame between RT64's own threads (the Gfx thread, the workload thread, the
+present thread) and remove what isn't needed: batch more work per handoff, spin briefly before sleeping where a wait
+is usually short, and use lock-free queues where the profile shows SRW lock time (`RtlAcquireSRWLockExclusive` /
 `RtlReleaseSRWLockExclusive` on the workload thread).
 
 ### 5. A pipeline cache on disk
@@ -73,9 +73,9 @@ where compiling is slowest.
 
 ### 6. Parallel draw setup
 
-Spread per-framebuffer work over worker threads: draw setup and the CPU halves of effects (texture seams'
-neighbour search, snow and sand, ground tessellation, effect setup) instead of one after another on the workload
-thread. Texture seams alone was 21-41% of that thread's compute in the sweep before and after its hash grid.
+Spread per-framebuffer work over worker threads: RT64's draw setup and the CPU side of each effect module, instead of
+one after another on the workload thread. In Banjo's sweep one such module (texture seams' neighbour search) was
+21-41% of that thread's compute, so the gain grows with every effect a game turns on.
 
 ### 14. Vertex transform on the GPU
 
@@ -107,26 +107,12 @@ RT64 writes framebuffers back to RDRAM so the game can read them. Track whether 
 framebuffer (by address and frame) and skip the read-back, or do it late, when it doesn't: each read-back is a GPU
 wait.
 
-### 19. Effects that update less often
+### 19. Effect modules that update less often
 
-Shadow maps, reflections and other view-dependent passes don't all need to be redrawn every frame at high frame
-rates: update them every other frame or when the camera or sun moves past a threshold (the far sun shadow map
-already works this way: `SunFarRefresh` in `rt64_scene_effects.cpp`). Half-resolution passes with an upscale for AO,
-reflections and volumetrics.
-
-### 20. Builds tuned for speed
-
-Profile-guided optimisation of the fork and the game (MSVC `/GENPROFILE` then `/USEPROFILE`, or clang's
-`-fprofile-instr-generate` / `-use`), ThinLTO with clang-cl, and per-CPU builds as the port already makes ("newer
-CPUs, 2013 and up"). The recompiled game is huge; PGO's hot/cold code layout helps it most. LLVM BOLT does not
-support Windows (PE/COFF) binaries.
-
-### 21. Thread placement
-
-Put the game thread, the Gfx thread and the workload thread on the fast cores: on hybrid Intel CPUs keep them off
-the efficiency cores (thread priority and `SetThreadInformation` power throttling hints); on Android ask for the big
-cores with the Android Dynamic Performance Framework (`APerformanceHint`), which also tells the phone how long a
-frame should take so it can clock up before falling behind.
+At high frame rates not every view-dependent pass of an effect module needs redrawing each frame: shadow maps,
+reflections and the like can update every other frame, or when the camera or the light moves past a threshold.
+Give modules a way to say how often they need to run, and support half-resolution passes with an upscale (ambient
+occlusion, reflections, volumetrics).
 
 ### 22. Dynamic resolution
 
@@ -192,15 +178,9 @@ and future effects work in any game, not only through Banjo's `rt64_object_veloc
 ### 13. A mobile-first path
 
 On Android, switched on by itself: passes arranged for tiled GPUs (fewer full-screen passes, load and store actions
-that keep work in tile memory), lower-precision formats where the picture is the same, ASTC textures, and a quality
-default per device class. Banjo's Android build sets 30 FPS, Original 2x and the Original effects preset on first
-start (`apply_android_defaults_once` in `src/game/config.cpp`); the fork should own the renderer half of that.
-
-### 25. Android power and heat
-
-Besides the performance hint (21): cap the frame rate to what the device holds steadily rather than the most it
-reaches cold, watch the thermal status (`AThermal_getCurrentThermalStatus`) and step quality down before the phone
-throttles, and stop all GPU work while the app is in the background (done in Banjo, 2026-11-07).
+that keep work in tile memory), lower-precision formats where the picture is the same, ASTC textures, and a
+renderer quality default per device class (internal resolution, MSAA, which effect modules start on). The game sets
+its own defaults on top.
 
 ## How to check each change
 
@@ -209,18 +189,11 @@ and twice after with medians compared, screenshots of the same views diffed agai
 the old build, and old and new code run side by side on the same inputs where results must be exact. Say what was
 measured, on what machine, and what wasn't.
 
-## Shared measurement: stutters, slow frames and slow functions (L, 2026-11-07)
+## Measurement in the renderer: stutters and slow frames (L, 2026-11-07)
 
-The mapping both projects built (Banjo's `tools/perf_sweep.py`, `tools/perf_report.py`, the console's `bench`,
-`hostprof` and `costcheck`; Mario Party's `tools/frame_check/` sweeps, `box.py` / `heat.py` / `strip.py` /
-`edges.py`, `profile_sweep.ps1` / `profile_chart.py`, `src/game/host_profiler.cpp`, `draw_provenance.cpp`,
-`frame_capture.cpp`) carries over, split two ways:
-
-- **Into the fork:** what measures the renderer itself, because only RT64 knows when it compiled a shader, uploaded
-  a texture, waited for the GPU or read a picture back.
-- **Into a small shared tools repo** (or a `tools/` folder in the fork, kept out of the library): the game-side
-  drivers, which need each game's console and warps, with one settings file per game (the exe and its folder, how
-  to warp, the map or minigame list, how to quit, and how its function names group in a profile).
+What only RT64 can measure, because only it knows when it compiled a shader, uploaded a texture, waited for the GPU
+or read a picture back. The game-side tools that drive sweeps (Banjo's `tools/perf_sweep.py`, Mario Party's
+`tools/frame_check/`) read these through the stats API (8) and are not part of the fork.
 
 ### 26. Hitch log with causes
 
@@ -229,34 +202,8 @@ pipeline compiles (with which), texture uploads (count and bytes), read-backs to
 resized, GPU waits, and the game's own map change if the game reports one. Written per run as a csv next to the
 benchmark. Banjo's sweep could only say a frame was 1.7-2.0 s long on every arrival and guess at why; this says.
 
-### 27. The sweep tools, shared
-
-One sweep driver (start the exe, feed commands, watch the log, note crashes and hangs and carry on from the next
-entry, copy what crashed), one report script (per map or minigame: median and worst frame, GPU time per pass,
-renderer CPU parts, hitches, shader compiles; heaviest first) and one chart script, taking the per-game settings
-file. Banjo's and Mario Party's versions merged into it.
-
-### 28. The sampling profiler, shared
-
-`host_profiler.cpp` exists twice (Mario Party's original, Banjo's with labels, CPU-time weighting and two callers
-from the x64 unwind data). One copy in the shared tools (or the fork, as an optional piece), Windows and Linux; on
-Android, `simpleperf` covers it.
-
-### 29. Slow-function reports that map back to the game
-
-A recompiled function's name is its N64 address (`func_800C2AB8`), sometimes with an overlay (`_ncpod`). Group the
-profile by game function across all maps, show where each is called from, and, where a decomp or symbol list
-exists, its real name. Banjo found its biggest game-side costs this way (the rounding mode calls, the sound-slot
-busy-wait `func_800C2AB8`).
-
 ### 30. Stutter detection for interpolation
 
 Mario Party's `draw_provenance.cpp` (draws that move only on logic steps, snap, or flash for one frame) and its
 frame-check scripts, plus the `recomp-stutter` skill's method, built on the fork's capture (7) so any game gets
 them: a list of draws whose motion steps instead of moving smoothly above the game's own rate.
-
-### 32. Symbols kept for every build
-
-Every build writes over `BanjoReTooie.pdb`, so crash and hang dumps from earlier builds can no longer be named
-(Banjo's sweep dumps of 2026-11-07 could not). Keep the PDB (and the Android `libmain.so` with its symbols) per
-commit in a local symbol store or with each release, so any dump can be read later.
