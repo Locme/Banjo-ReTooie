@@ -138,7 +138,8 @@ in `src/game/config.cpp`), because they cannot work on a phone:
 * 3D Hand Cursor: a touch screen has no cursor.
 * Texture Dump > Sweep all maps: it restarts the game after a crash, which Android does not allow.
 
-Ray Tracing needs a phone whose GPU supports Vulkan ray queries; on any other it shows its notice and does nothing.
+* Ray Tracing, Path Tracing, Traced Light Beams and the ray tracing settings: they need Vulkan ray queries, which
+  most phone GPUs lack, and the few that have them are far too slow for it. They are turned off as well as hidden.
 
 
 ## Regenerating the recompiled code

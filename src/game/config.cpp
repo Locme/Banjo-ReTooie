@@ -458,6 +458,26 @@ namespace {
         recomp::config::Config& wip = recompui::config::get_config(tooie::wip_tab_id);
         hide(wip, tooie::memory_guard::option);
         hide(wip, tooie::hand_cursor::model_option);
+        // Ray tracing needs Vulkan ray queries, which most phone GPUs lack, and the few that have them are far too
+        // slow for it at a playable frame rate: all of its options are hidden and the three switches are turned off.
+        namespace pf = tooie::picture_filters;
+        for (const std::string* id : { &pf::ray_tracing_option, &pf::ray_tracing_strength_option, &pf::ray_tracing_reflections_option,
+                 &pf::ray_tracing_water_reflections_option, &pf::ray_tracing_metal_option, &pf::ray_tracing_tiles_option,
+                 &pf::ray_tracing_smooth_option, &pf::ray_tracing_hit_colours_option, &pf::ray_tracing_resolution_option,
+                 &pf::ray_tracing_parallax_option, &pf::ray_detail_half_option, &pf::ray_detail_quarter_option,
+                 &pf::ray_tracing_player_shadows_option, &pf::ray_tracing_smoothing_option, &pf::ray_tracing_brdf_option,
+                 &pf::ray_tracing_subsurface_option, &pf::path_tracing_option, &pf::path_tracing_bounces_option, &pf::traced_beams_option }) {
+            hide(graphics, *id);
+        }
+        if (graphics.has_option(pf::ray_tracing_option)) {
+            graphics.update_option_value(pf::ray_tracing_option, false);
+        }
+        if (graphics.has_option(pf::path_tracing_option)) {
+            graphics.update_option_value(pf::path_tracing_option, false);
+        }
+        if (graphics.has_option(pf::traced_beams_option)) {
+            graphics.update_option_value(pf::traced_beams_option, 0.0);
+        }
     }
 }
 #endif

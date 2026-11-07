@@ -28,7 +28,7 @@ namespace {
         uint32_t type;
         uint32_t at_ms;
     };
-    bool read = false;
+    bool requests_read = false;
     std::vector<Request> requests;
     size_t next = 0;
     std::chrono::steady_clock::time_point started;
@@ -39,7 +39,7 @@ namespace {
     constexpr gpr game_state_addr = (int32_t)0x80127630;
 
     void read_env() {
-        read = true;
+        requests_read = true;
         started = std::chrono::steady_clock::now();
         const char* v = std::getenv("TOOIE_EXPLODE");
         if (v == nullptr) {
@@ -134,7 +134,7 @@ namespace {
 }
 
 void tooie::debug::explode_tick(uint8_t* rdram, recomp_context* ctx) {
-    if (!read) {
+    if (!requests_read) {
         read_env();
     }
     if ((next >= requests.size()) || !tooie::debug::can_warp() || (MEM_B(0x12, game_state_addr) != 0)) {

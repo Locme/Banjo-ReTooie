@@ -80,7 +80,9 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/ObjectVelocityPS.hlsl")
 rt64_ext_shader(build_pixel_shader rt64 "src/shaders/ReactivePS.hlsl")
 # Snapdragon GSR 1 (third-party/snapdragon-gsr, Qualcomm, BSD 3-Clause): Android builds only.
 if(ANDROID)
-    rt64_ext_shader(build_pixel_shader rt64 "src/shaders/GsrPS.hlsl" "-I${RT64_EXT_DIR}/../third-party/snapdragon-gsr")
+    # The output name comes before the extra options, as in the SMAA calls above (it was left out, so the include
+    # was taken as the output name).
+    rt64_ext_shader(build_pixel_shader rt64 "src/shaders/GsrPS.hlsl" "src/shaders/GsrPS.hlsl" "-I${RT64_EXT_DIR}/../third-party/snapdragon-gsr")
 endif()
 
 # Photo mode's filters and sharpening (RT64::SetPhotoGrade, src/gameplay/photo_mode.cpp).
