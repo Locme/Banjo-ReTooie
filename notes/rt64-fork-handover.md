@@ -177,3 +177,5 @@ Performance budget (from the Banjo sweep, 2026-11-07):
 - Whether group 2 effects become plugins at all, or stay compiled-in modules with switches. Plugins pay off when
   effects should ship or update apart from the game.
 - Whether to fork N64ModernRuntime and RecompFrontend in the same way now or after RT64.
+
+The enhancements and speed-ups to build into the fork once it exists are in `notes/rt64-fork-enhancements.md`.
