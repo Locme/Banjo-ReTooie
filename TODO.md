@@ -133,6 +133,38 @@ folder (`Android/data/io.banjoretooie/files`), which `adb` may not be able to re
 
 Steps 1-3 and 7 are the core, a few hours with builds; 4-6 make testing on a phone much easier.
 
+## Move features out of the port into bundled mods (asked by L, 2026-11-07)
+
+Move as much as can be out of the port's own code and into mods that ship with the port, on by default where the
+feature is today and switchable in the Mods tab like any other mod. Jiggle physics (snout, belly, ears, fur,
+backpack, Kazooie, Mumbo: `src/gameplay/snout_jiggle.cpp`) is the first example. Others to weigh: cheats, the enemy spawner,
+gameplay options (Enemy Respawn, Minjos Stay Dead, Mirror Mode, Boss Rush), the Transform Anywhere Menu, photo mode's
+filters, model mods' helpers. What stays in the port: what needs the runtime or RT64 (renderer effects, input,
+saves, the console, crash handling). To work out first:
+
+- What a mod can reach today: N64Recomp mods (`.nrm`) patch and hook game functions and call exported port
+  functions, but can't add RT64 passes or settings-menu pages of the port's kind. Each feature moved needs its hooks
+  (`banjotooie.us.toml`) and settings expressed as a mod's hooks and the mod's own config options.
+- How bundled mods ship: built with the port (`cmake/mods/`), copied into the mods folder at install, updated with
+  the port, and not counted as the player's own mods.
+- That a moved feature behaves the same: same defaults, settings carried over from the port's config, same
+  console commands (or console commands a mod can add).
+
+## Download mods straight from GitHub, texture packs included (asked by L, 2026-11-07)
+
+A way to get mods from inside the game: a list in the Mods tab of mods and texture packs published on GitHub
+(releases of known repositories, or a list file the port's repo keeps), with download, install, update and remove,
+so nothing has to be unpacked by hand. Texture packs are one kind (BT Reloaded and the like, today dropped into the
+mods folder as a `.zip` and unpacked by `src/game/mod_zips.cpp`); `.nrm` mods and asset mods (model mods) the
+others. To work out first:
+
+- Where the list comes from and who keeps it; GitHub's releases API (rate limits without a token: 60 an hour).
+- Big downloads (a 4K texture pack is gigabytes): progress, resuming, free disk space, and on Android the app's
+  own folder and mobile data.
+- Trust: only repositories on the list, checksums for what is downloaded, and no mod code from unknown places run
+  without the player saying yes.
+- The game's own files are never part of a pack (AGENTS.md): packs are the authors' own art.
+
 ## Earlier open items
 
 L asked (2026-11-07) for the items already in this list to be worked through as well, after the above.
