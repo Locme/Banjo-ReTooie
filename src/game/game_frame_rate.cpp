@@ -974,6 +974,9 @@ namespace {
 
     StepGate portrait_gate;
     StepGate blink_gate;
+    StepGate vertex_flicker_gate;
+    StepGate flame_flipbook_gate;
+    StepGate fire_count_gate;
 }
 
 // Talking-head portraits (the zoombox overlay): func_8080156C_gczoombox moves a
@@ -1159,6 +1162,104 @@ extern "C" int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx) {
     return blink_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
 }
 
+// Fires (the chfirefx actor: the torches in Witchyworld's Haunted Cavern and others). chfirefx_entrypoint_3
+// updates a fire's puffs ($s3 = the fire's data, 0x14 a puff from +0x20, $s0 = the puff). A puff's height
+// (+0x4), size (+0xA) and sideways place (+0x8, +0xC) are whole numbers: each game frame the game adds its
+// move for the frame's time and cuts off the fraction. At 30 FPS a frame's rise is many units, but above
+// 30 FPS it is under one, so the puffs hardly rose and the fire burned short and flat (L, 2026-11-09).
+// Above 30 FPS the cut-off fraction is kept for each puff and added to its next move, so a puff goes as
+// far in a second as at 30 FPS. The fire's puff count also grows or shrinks by 2 each game frame as it
+// lights or goes out; above 30 FPS that steps once per 1/30 s of game time for the fire.
+namespace {
+    std::mutex fire_mutex;
+    std::unordered_map<uint32_t, float> fire_fractions;
+}
+
+extern "C" void tooie_fire_puff_whole(uint8_t* rdram, recomp_context* ctx, int which) {
+    (void)rdram;
+    if (!above_30()) {
+        return;
+    }
+    float* value = which == 0 ? &ctx->f16.fl : which == 1 ? &ctx->f6.fl : which == 2 ? &ctx->f18.fl : &ctx->f8.fl;
+    const uint32_t key = (uint32_t)ctx->r16 + (uint32_t)which;
+    std::lock_guard lock{ fire_mutex };
+    if (fire_fractions.size() > 8192) {
+        fire_fractions.clear();
+    }
+    float& fraction = fire_fractions[key];
+    const float total = *value + fraction;
+    const float whole = std::trunc(total);
+    fraction = total - whole;
+    *value = whole;
+}
+
+extern "C" int tooie_fire_count_skip(uint8_t* rdram, recomp_context* ctx) {
+    return fire_count_gate.skip(rdram, (uint32_t)ctx->r19) ? 1 : 0;
+}
+
+// Flames (the suflamefx overlay: torches and braziers, such as the ones in Witchyworld's Haunted Cavern
+// and Hailfire Peaks). suflamefx_entrypoint_2 updates a flame's puffs ($s1 = the flame, 0x30 a puff from
+// +0x20): each rises by its speed x the frame's time, but its width and depth are multiplied by the flame's
+// shrink (+0x10) and its age goes up by the flame's ageing step (+0x14) once per game frame, and the flame's
+// picture (a puff's +0x2C) steps once per game frame. Above 30 FPS the puffs shrank and died in a fraction of
+// the time, so the flame stood short and flat (L, 2026-11-09). Above 30 FPS the shrink is raised to the
+// power of the frame's share of 1/30 s and the age step is scaled by it, so a puff lives and shrinks as long
+// as at 30 FPS; the picture steps once per 1/30 s of game time for that flame.
+extern "C" void tooie_flame_puff_step(uint8_t* rdram, recomp_context* ctx, int which) {
+    (void)rdram;
+    if (!above_30()) {
+        return;
+    }
+    const float share = read_float(rdram, delta_time_addr) * 30.0f;
+    if (!(share > 0.0f) || share >= 1.0f) {
+        return;
+    }
+    if (which == 0) {
+        ctx->f18.fl = std::pow(ctx->f18.fl, share);
+    } else if (which == 1) {
+        ctx->f8.fl = std::pow(ctx->f8.fl, share);
+    } else {
+        ctx->f16.fl *= share;
+    }
+}
+
+extern "C" int tooie_flame_picture_skip(uint8_t* rdram, recomp_context* ctx) {
+    return flame_flipbook_gate.skip(rdram, (uint32_t)ctx->r17) ? 1 : 0;
+}
+
+// Flickering map light (the vpflicker overlay, one of the map's vertex effects), such as the green
+// light in the mouth of Grunty's Lair in Spiral Mountain and inside it (map 0xAD): vpflicker_entrypoint_2
+// ($a0 = the effect) adds a random step (func_800DC264) to the effect's brightness, holds it between its
+// limits, and marks the map pieces it lights to be coloured again by that brightness. It runs once per game
+// frame and takes no frame time, so the light took 30 random steps a second at 30 FPS but 400 or more at
+// Uncapped, where the whole area flashed (L, 2026-11-09). Above 30 FPS the step is skipped until 1/30 s of
+// game time has gone by for that effect, so the light flickers as it does at 30 FPS; between steps the
+// pieces keep the colours they were given.
+extern "C" int tooie_vertex_flicker_skip(uint8_t* rdram, recomp_context* ctx) {
+    return vertex_flicker_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
+}
+
+// Flickering lights (the sulights overlay), such as the green light in the mouth of Grunty's
+// Lair in Spiral Mountain and inside it (map 0xAD). sulights_entrypoint_9 adds the frame's time
+// to each light effect's clock (+0x34, held at most at +0x38) and runs its update every game
+// frame. The flicker's update, func_8080021C_sulights ($a0 = the effect), picks up or down at
+// random and moves each colour channel by its range x rate (+0x38) x the clock, then sets the
+// clock back to 0. So the light took a random step on every frame: 30 a second at 30 FPS, but
+// 400 or more at Uncapped, where it flashed and shimmered (L, 2026-11-09). Above 30 FPS the
+// update is skipped until the clock holds 1/30 s, so the steps come at the 30 FPS rate and are
+// the same size. The clock keeps counting while skipped, as the effect's own fields do the rest.
+extern "C" int tooie_light_flicker_skip(uint8_t* rdram, recomp_context* ctx) {
+    if (!above_30()) {
+        return 0;
+    }
+    const int32_t effect = (int32_t)ctx->r4;
+    const float clock = read_float(rdram, effect + 0x34);
+    const float most = read_float(rdram, effect + 0x38);
+    // The clock never passes +0x38, so a light with a smaller +0x38 steps when it gets there.
+    const float step = std::min(1.0f / 30.0f, most);
+    return clock < step - 0.0001f ? 1 : 0;
+}
+
 // The ice storm (chfireicestorm, Icy Side) spawns one to three snow puffs every game frame
 // (func_80800DC8 and func_80800E08, each a new emitter), whatever the frame's time, while the
 // puffs only age and die by that time. With time frozen (Photo Mode, the ESC menu's pause:
@@ -1323,3 +1424,6 @@ void tooie::game_frame_rate::add_option(recomp::config::Config& graphics) {
         },
         Mode::Fps60);
 }
+
+
+

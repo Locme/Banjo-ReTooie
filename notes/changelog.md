@@ -3,6 +3,11 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-09
+
+- Above 30 FPS, flickering map lights flicker at the 30 FPS pace again instead of flashing: the green light in the mouth of Grunty's Lair in Spiral Mountain and inside it, and every other map light the game flickers the same way.
+- Above 30 FPS, torch fires burn as tall as at 30 FPS again instead of short and flat (Witchyworld's Haunted Cavern, Terrydactyland's Bonfire Cavern and every other fire of that kind), and they light up and go out at the 30 FPS pace.
+
 ## 2026-11-07
 
 - Android: leaving the app while the game runs (Home, another app, the screen turning off, a call, the notification shade) pauses the game where it is, and it carries on from there when you come back. The save is written out on the way. Console: `background [seconds]` does the same on any system, for testing.

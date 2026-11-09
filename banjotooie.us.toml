@@ -961,6 +961,84 @@ func = "func_80101A50"
 before_vram = 0x80101A58
 text = "if (tooie_blink_step_skip(rdram, ctx)) { ctx->r6 = ctx->r4; goto L_80101B58; }"
 
+# chfirefx_entrypoint_3 updates a fire's puffs ($s3 = the fire's data, $s0 = the puff). A puff's height,
+# size and sideways place are whole numbers that get the frame's move and lose the fraction each game frame,
+# so above 30 FPS the puffs hardly rose and torches burned short and flat. Above 30 FPS the lost fraction is
+# kept per puff and added back ($f16, $f6, $f18, $f8 before each cut); the puff count steps by 2 as the fire
+# lights or goes out once per 1/30 s of game time for that fire (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "chfirefx_entrypoint_3"
+before_vram = 0x8080032C
+text = "if (tooie_fire_count_skip(rdram, ctx)) { ctx->r8 = MEM_HU(ctx->r19, 0X10); goto L_80800354; }"
+
+[[patches.hook]]
+func = "chfirefx_entrypoint_3"
+before_vram = 0x808003C4
+text = "if (tooie_fire_count_skip(rdram, ctx)) { goto L_808003DC; }"
+
+[[patches.hook]]
+func = "chfirefx_entrypoint_3"
+before_vram = 0x808004E0
+text = "tooie_fire_puff_whole(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "chfirefx_entrypoint_3"
+before_vram = 0x80800510
+text = "tooie_fire_puff_whole(rdram, ctx, 1);"
+
+[[patches.hook]]
+func = "chfirefx_entrypoint_3"
+before_vram = 0x808005AC
+text = "tooie_fire_puff_whole(rdram, ctx, 2);"
+
+[[patches.hook]]
+func = "chfirefx_entrypoint_3"
+before_vram = 0x808005C4
+text = "tooie_fire_puff_whole(rdram, ctx, 3);"
+
+# suflamefx_entrypoint_2 updates a flame's puffs ($s1 = the flame, $s0 = the puff). Each puff's width and
+# depth shrink by a factor ($f18, then $f8) and its age goes up by a step ($f16) once per game frame, so
+# above 30 FPS the puffs died in a fraction of the time and torches burned short and flat. Above 30 FPS the
+# factors are raised to, and the step scaled by, the frame's share of 1/30 s; the flame's picture (the puff's
+# +0x2C) steps once per 1/30 s of game time for that flame (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "suflamefx_entrypoint_2"
+before_vram = 0x8080010C
+text = "tooie_flame_puff_step(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "suflamefx_entrypoint_2"
+before_vram = 0x80800118
+text = "tooie_flame_puff_step(rdram, ctx, 1);"
+
+[[patches.hook]]
+func = "suflamefx_entrypoint_2"
+before_vram = 0x80800124
+text = "tooie_flame_puff_step(rdram, ctx, 2);"
+
+[[patches.hook]]
+func = "suflamefx_entrypoint_2"
+before_vram = 0x80800154
+text = "if (tooie_flame_picture_skip(rdram, ctx)) { ctx->r4 = ADD32(ctx->r16, 0X18); ctx->r5 = ctx->r16; goto L_8080018C; }"
+
+# vpflicker_entrypoint_2 steps a flickering map light (a vertex effect, $a0 = the effect) by a random
+# amount once per game frame, so above 30 FPS the light flashed many times faster (the green light in
+# the mouth of Grunty's Lair, Spiral Mountain). Above 30 FPS it is skipped until 1/30 s of game time has
+# gone by for that effect (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "vpflicker_entrypoint_2"
+before_vram = 0x808000D0
+text = "if (tooie_vertex_flicker_skip(rdram, ctx)) { return; }"
+
+# func_8080021C_sulights moves a flickering light's colour one random step per game frame
+# ($a0 = the light effect), so above 30 FPS the light flickered many times faster (the green
+# light in the mouth of Grunty's Lair, Spiral Mountain). Above 30 FPS it is skipped until 1/30 s
+# of game time has gone by on the effect's own clock (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_8080021C_sulights"
+before_vram = 0x8080021C
+text = "if (tooie_light_flicker_skip(rdram, ctx)) { return; }"
+
 # The ice storm (chfireicestorm, Icy Side) spawns snow puffs each game frame through
 # func_80800DC8 and func_80800E08; the puffs die by game time only, so with time frozen
 # (Photo Mode, the ESC menu) they piled up until the display list overflowed onto the

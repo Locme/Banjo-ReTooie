@@ -4412,6 +4412,7 @@ RECOMP_FUNC void chfirefx_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
     }
     // 0x80800328: nop
 
+    if (tooie_fire_count_skip(rdram, ctx)) { ctx->r8 = MEM_HU(ctx->r19, 0X10); goto L_80800354; }
     // 0x8080032C: lh          $t7, 0xA($s3)
     ctx->r15 = MEM_H(ctx->r19, 0XA);
     // 0x80800330: lh          $v0, 0xC($s3)
@@ -4546,6 +4547,7 @@ L_80800354:
     // 0x808003C0: lh          $t2, 0xA($s3)
     ctx->r10 = MEM_H(ctx->r19, 0XA);
 L_808003C4:
+    if (tooie_fire_count_skip(rdram, ctx)) { goto L_808003DC; }
     // 0x808003C4: addiu       $t3, $t2, -0x2
     ctx->r11 = ADD32(ctx->r10, -0X2);
     // 0x808003C8: sh          $t3, 0xA($s3)
@@ -4759,6 +4761,7 @@ L_808004C0:
     CHECK_FR(ctx, 10);
     NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f10.fl); 
     ctx->f16.fl = ctx->f8.fl + ctx->f10.fl;
+    tooie_fire_puff_whole(rdram, ctx, 0);
     // 0x808004E0: trunc.w.s   $f18, $f16
     CHECK_FR(ctx, 18);
     CHECK_FR(ctx, 16);
@@ -4797,6 +4800,7 @@ L_808004C0:
     CHECK_FR(ctx, 10);
     NAN_CHECK(ctx->f18.fl); NAN_CHECK(ctx->f10.fl); 
     ctx->f6.fl = ctx->f18.fl + ctx->f10.fl;
+    tooie_fire_puff_whole(rdram, ctx, 1);
     // 0x80800510: trunc.w.s   $f4, $f6
     CHECK_FR(ctx, 4);
     CHECK_FR(ctx, 6);
@@ -4921,6 +4925,7 @@ L_808004C0:
     CHECK_FR(ctx, 8);
     NAN_CHECK(ctx->f16.fl); NAN_CHECK(ctx->f8.fl); 
     ctx->f18.fl = ctx->f16.fl + ctx->f8.fl;
+    tooie_fire_puff_whole(rdram, ctx, 2);
     // 0x808005AC: trunc.w.s   $f10, $f18
     CHECK_FR(ctx, 10);
     CHECK_FR(ctx, 18);
@@ -4939,6 +4944,7 @@ L_808004C0:
     CHECK_FR(ctx, 16);
     NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f16.fl); 
     ctx->f8.fl = ctx->f4.fl + ctx->f16.fl;
+    tooie_fire_puff_whole(rdram, ctx, 3);
     // 0x808005C4: trunc.w.s   $f18, $f8
     CHECK_FR(ctx, 18);
     CHECK_FR(ctx, 8);

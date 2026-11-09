@@ -110,6 +110,7 @@ L_808000DC:
     MEM_W(0X10, ctx->r16) = ctx->f10.u32l;
     // 0x80800108: lwc1        $f18, 0x10($s1)
     ctx->f18.u32l = MEM_W(ctx->r17, 0X10);
+    tooie_flame_puff_step(rdram, ctx, 0);
     // 0x8080010C: mul.s       $f6, $f16, $f18
     CHECK_FR(ctx, 6);
     CHECK_FR(ctx, 16);
@@ -120,6 +121,7 @@ L_808000DC:
     MEM_W(0XC, ctx->r16) = ctx->f6.u32l;
     // 0x80800114: lwc1        $f8, 0x10($s1)
     ctx->f8.u32l = MEM_W(ctx->r17, 0X10);
+    tooie_flame_puff_step(rdram, ctx, 1);
     // 0x80800118: mul.s       $f10, $f4, $f8
     CHECK_FR(ctx, 10);
     CHECK_FR(ctx, 4);
@@ -130,6 +132,7 @@ L_808000DC:
     MEM_W(0X14, ctx->r16) = ctx->f10.u32l;
     // 0x80800120: lwc1        $f16, 0x14($s1)
     ctx->f16.u32l = MEM_W(ctx->r17, 0X14);
+    tooie_flame_puff_step(rdram, ctx, 2);
     // 0x80800124: add.s       $f18, $f0, $f16
     CHECK_FR(ctx, 18);
     CHECK_FR(ctx, 0);
@@ -173,6 +176,7 @@ L_8080014C:
     ctx->r6 = ctx->r21 | 0;
     after_1:
 L_80800154:
+    if (tooie_flame_picture_skip(rdram, ctx)) { ctx->r4 = ADD32(ctx->r16, 0X18); ctx->r5 = ctx->r16; goto L_8080018C; }
     // 0x80800154: lbu         $t8, 0x1A($s1)
     ctx->r24 = MEM_BU(ctx->r17, 0X1A);
     // 0x80800158: addiu       $a0, $s0, 0x18

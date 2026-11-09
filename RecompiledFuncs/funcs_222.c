@@ -4714,6 +4714,7 @@ RECOMP_FUNC void func_800F8A5C(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void vpflicker_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_vertex_flicker_skip(rdram, ctx)) { return; }
     // 0x808000D0: lui         $at, 0x8080
     ctx->r1 = S32(RELOC_HI16(2986, 0X3F0) << 16);
     // 0x808000D4: addiu       $sp, $sp, -0x18
