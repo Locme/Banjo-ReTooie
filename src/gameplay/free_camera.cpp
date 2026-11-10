@@ -106,6 +106,8 @@ namespace {
     // Floor clearance (WIP): the downward line test runs from this far above the camera to this far below it.
     constexpr float floor_probe_up = 40.0f;
     constexpr float floor_probe_down = 60.0f;
+    // Floor clearance under water: the radius of the downward test, so the camera stays this far off the bottom.
+    constexpr float water_floor_radius = 15.0f;
     // Smooth stairs: rate (per second) the orbit height follows Banjo, and the jump (teleport) that snaps it.
     constexpr float pivot_rate = 8.0f;
     constexpr float pivot_snap = 300.0f;
@@ -453,6 +455,9 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     bool blocked = false;
     bool easing = false;
     float fade = 1.0f;
+    // Floor clearance, for the log: whether the probe hit, where it stopped, its normal, and the lift.
+    bool floor_hit = false;
+    float floor_stop = 0.0f, floor_lift = 0.0f, floor_normal[3] = { 0.0f, 0.0f, 0.0f };
     if (on && gameplay && !paused) {
         const bool stick = stick_x != 0.0f || stick_y != 0.0f || orbit_x != 0.0f || orbit_y != 0.0f ||
             wheel_notches != 0 || rb_zoom_input != 0.0f;
@@ -671,7 +676,14 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             if (option<bool>(tooie::free_camera_floor_clearance_option, true)) {
                 const float from[3] = { want[0], want[1] + floor_probe_up, want[2] };
                 float down[3] = { want[0], want[1] - floor_probe_down, want[2] };
-                if (sweep(rdram, ctx, from, down) && down[1] > want[1]) {
+                // Under water the test is thin: the wide one rests 45 above the floor, so it lifted the camera
+                // while it was still well clear of the bottom, with nothing touching it (L, 2026-11-10, the
+                // Spiral Mountain pool). On land the wide test stays, to keep the eye well off the ground.
+                const float radius = tooie::water_camera::under_water(player_state) ? water_floor_radius : sweep_radius;
+                floor_hit = sweep(rdram, ctx, from, down, floor_normal, radius);
+                floor_stop = down[1];
+                if (floor_hit && down[1] > want[1]) {
+                    floor_lift = down[1] - want[1];
                     want[1] = down[1];
                 }
             }
@@ -709,6 +721,10 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             player_state, speed, easing, state.wall, fade);
         std::fflush(stdout);
     }
+        if (floor_hit) {
+            std::printf("[freecam] floor probe stop y %.1f normal %.2f %.2f %.2f lift %.1f\n",
+                floor_stop, floor_normal[0], floor_normal[1], floor_normal[2], floor_lift);
+        }
 }
 
 bool tooie::free_camera::sweep_line(uint8_t* rdram, recomp_context* ctx, const float from[3], float to[3], float normal[3]) {

@@ -256,6 +256,10 @@ void tooie::water_camera::add_options(recomp::config::Config& qol) {
         true);
 }
 
+bool tooie::water_camera::under_water(uint32_t player_state) {
+    return submerged(player_state);
+}
+
 bool tooie::water_camera::look_up_under_water(uint32_t player_state) {
     return option(tooie::water_camera_option, true) && option(tooie::water_camera_look_up_option, true) &&
         submerged(player_state);

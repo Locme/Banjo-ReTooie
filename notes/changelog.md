@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-10
 
+- Free camera under water: swinging the camera down below Banjo no longer pushes it back up while nothing is in the way. Floor Clearance kept it a wide margin off the bottom, so it rose well before it reached the floor; under water it now only lifts the camera right at the floor.
 - Above 30 FPS, characters turn their heads to look at Banjo and back at the 30 FPS pace, smoothly, instead of stalling and then snapping round (most characters share this, Bottles and his family among them).
 - Above 30 FPS, in both Canary Mary races (Glitter Gulch Mine and Cloud Cuckooland) your cart or mouse keeps its speed between presses as at 30 FPS instead of losing it many times faster, and the cart settles after the race at the 30 FPS pace.
 - Above 30 FPS, the shared code that moves characters' mouths and faces toward the shape for each letter they say steps at the 30 FPS pace and moves a little every frame.

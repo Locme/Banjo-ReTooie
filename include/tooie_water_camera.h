@@ -34,6 +34,9 @@ namespace tooie::water_camera {
     // go further below him, to look up at the surface, down to this many degrees of elevation.
     bool look_up_under_water(uint32_t player_state);
     constexpr float look_up_low_limit = -60.0f;
+
+    // True while Banjo is under water (swimming below the surface, not floating on it).
+    bool under_water(uint32_t player_state);
 }
 
 #endif
