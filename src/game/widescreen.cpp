@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -253,23 +254,83 @@ namespace {
     }
 
     // Whether what lies in the box can shadow the view: the box swept away from the sun, as far as its top could throw
-    // a shadow before reaching the lowest point of the level, tested against the view with the game's own box test
+    // a shadow before reaching the ground beneath it, tested against the view with the game's own box test
     // (func_800CAA24, as func_800E3D0C does). Keeping the whole level instead (2026-10-17) made RT64 work through every
     // piece of it every frame: with sun shadows on, Terrydactyland ran at 3.9 ms a frame against 1.6 ms (2026-11-07).
     // TOOIE_SUN_SWEEP=0 keeps everything again, to compare.
     float level_floor = 0.0f;
     uint16_t level_floor_map = 0xFFFF;
 
+    // The ground under each part of the level: a grid of 1024-unit squares over x and z (-32768 to 32768, which every
+    // level fits in), each holding the lowest bottom of the level's pieces over it. The game tests every piece every
+    // frame, so the grid fills from those tests (record_floor) on the map's first frame. A square no piece covers
+    // counts as the level's lowest point. Pieces' bottoms lie below their surfaces, so a sweep stopped at the grid
+    // ends no sooner than the shadow does. TOOIE_SUN_SWEEP=floor sweeps to the level's lowest point as before.
+    constexpr int floor_cells = 64;
+    constexpr float floor_cell_size = 1024.0f;
+    constexpr float floor_origin = -32768.0f;
+    float floor_grid[floor_cells * floor_cells];
+
+    void reset_floor(uint16_t map, float first) {
+        if (map != level_floor_map) {
+            level_floor_map = map;
+            level_floor = first;
+            std::fill(std::begin(floor_grid), std::end(floor_grid), INFINITY);
+        }
+    }
+
+    int floor_cell(float coordinate) {
+        return std::clamp(int(std::floor((coordinate - floor_origin) / floor_cell_size)), 0, floor_cells - 1);
+    }
+
+    void record_floor(uint8_t* rdram, const float lo[3], const float hi[3]) {
+        reset_floor(tooie::debug::current_map(rdram), lo[1]);
+        level_floor = std::min(level_floor, lo[1]);
+        const int x0 = floor_cell(lo[0]), x1 = floor_cell(hi[0]), z0 = floor_cell(lo[2]), z1 = floor_cell(hi[2]);
+        for (int z = z0; z <= z1; z++) {
+            for (int x = x0; x <= x1; x++) {
+                float& cell = floor_grid[z * floor_cells + x];
+                cell = std::min(cell, lo[1]);
+            }
+        }
+    }
+
+    // The lowest ground under the x and z extent from lo to hi.
+    float floor_under(float lo_x, float lo_z, float hi_x, float hi_z) {
+        float lowest = INFINITY;
+        const int x0 = floor_cell(lo_x), x1 = floor_cell(hi_x), z0 = floor_cell(lo_z), z1 = floor_cell(hi_z);
+        for (int z = z0; z <= z1; z++) {
+            for (int x = x0; x <= x1; x++) {
+                lowest = std::min(lowest, floor_grid[z * floor_cells + x]);
+            }
+        }
+        return std::isfinite(lowest) ? std::max(lowest, level_floor) : level_floor;
+    }
+
+    // How far the box's top travels away from the sun before it is below the ground under where it has got to, at
+    // most longest. Steps of about one grid square across the ground.
+    float sweep_length(const float lo[3], const float hi[3], const float sun[3], float longest) {
+        const float to_level_floor = std::clamp((hi[1] - level_floor) / sun[1], 0.0f, longest);
+        static const bool to_floor = [] { const char* v = std::getenv("TOOIE_SUN_SWEEP"); return v != nullptr && std::strcmp(v, "floor") == 0; }();
+        if (to_floor) {
+            return to_level_floor;
+        }
+        const float across = std::sqrt(sun[0] * sun[0] + sun[2] * sun[2]);
+        const float step = (across > 1e-3f) ? floor_cell_size / across : to_level_floor;
+        for (float t = 0.0f;; t = std::min(t + step, to_level_floor)) {
+            const float dx = -sun[0] * t, dz = -sun[2] * t;
+            if (hi[1] - sun[1] * t <= floor_under(lo[0] + dx, lo[2] + dz, hi[0] + dx, hi[2] + dz) || t >= to_level_floor) {
+                return t;
+            }
+        }
+    }
+
     bool shadow_reaches_view(uint8_t* rdram, recomp_context* ctx, float lo[3], float hi[3], float longest) {
         static const bool sweep_off = [] { const char* v = std::getenv("TOOIE_SUN_SWEEP"); return v != nullptr && std::strcmp(v, "0") == 0; }();
         if (sweep_off) {
             return true;
         }
-        const uint16_t map = tooie::debug::current_map(rdram);
-        if (map != level_floor_map) {
-            level_floor_map = map;
-            level_floor = lo[1];
-        }
+        reset_floor(tooie::debug::current_map(rdram), lo[1]);
         level_floor = std::min(level_floor, lo[1]);
         float sun[3];
         RT64::GetSceneSunDirection(sun);
@@ -277,7 +338,7 @@ namespace {
         if (sun[1] < 0.02f) {
             return false;
         }
-        const float length = std::clamp((hi[1] - level_floor) / sun[1], 0.0f, longest);
+        const float length = sweep_length(lo, hi, sun, longest);
         const uint32_t camera = tooie::rdram::read_word(rdram, 0x8012D500u);
         if (!tooie::rdram::valid_ptr(camera)) {
             return true;
@@ -392,22 +453,25 @@ extern "C" void tooie_sun_shadow_cull_box(uint8_t* rdram, recomp_context* ctx) {
             last = now;
         }
     }
+    const float distance = sun_cull_distance(rdram);
+    const uint32_t box_min = (uint32_t)MEM_W(0x50, ctx->r29);
+    const uint32_t box_max = (uint32_t)MEM_W(0x54, ctx->r29);
+    if (distance <= 0.0f || !tooie::rdram::valid_ptr(box_min) || !tooie::rdram::valid_ptr(box_max)) {
+        return;
+    }
+    float lo[3], hi[3];
+    for (uint32_t axis = 0; axis < 3; axis++) {
+        lo[axis] = tooie::rdram::read_float(rdram, box_min + 4 * axis);
+        hi[axis] = tooie::rdram::read_float(rdram, box_max + 4 * axis);
+    }
+    // Every piece tested, in view or not, marks the ground under it for the sweeps.
+    record_floor(rdram, lo, hi);
     if (ctx->r3 != 0) {
         return;
     }
     // The level's own pieces are kept wherever they are (the far sun shadow map covers the whole level) when their
     // shadow can reach the view.
-    const float distance = sun_cull_distance(rdram);
-    const uint32_t box_min = (uint32_t)MEM_W(0x50, ctx->r29);
-    const uint32_t box_max = (uint32_t)MEM_W(0x54, ctx->r29);
-    if (distance > 0.0f && tooie::rdram::valid_ptr(box_min) && tooie::rdram::valid_ptr(box_max)) {
-        float lo[3], hi[3];
-        for (uint32_t axis = 0; axis < 3; axis++) {
-            lo[axis] = tooie::rdram::read_float(rdram, box_min + 4 * axis);
-            hi[axis] = tooie::rdram::read_float(rdram, box_max + 4 * axis);
-        }
-        if (shadow_reaches_view(rdram, ctx, lo, hi, 40000.0f)) {
-            keep(rdram, ctx, distance);
-        }
+    if (shadow_reaches_view(rdram, ctx, lo, hi, 40000.0f)) {
+        keep(rdram, ctx, distance);
     }
 }

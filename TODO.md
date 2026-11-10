@@ -16,7 +16,10 @@ Also from the sweep, not done yet:
 
 - Sun shadows still cost Terrydactyland about 2 ms a frame of RT64 CPU time (3.7 ms against 1.6 ms with
   `TOOIE_SUN_CULL=0`): the swept test (`src/game/widescreen.cpp`) keeps much of the level at its low fixed sun.
-  Shorter sweeps (to the ground under each piece rather than the level's lowest point) would keep less.
+  Since 2026-11-10 the sweeps stop at the ground under each piece (a grid of the lowest piece bottoms), not the
+  level's lowest point: over the same TDL camera path that kept 40,600 culled pieces against 62,500
+  (`TOOIE_SUN_SWEEP=floor`), with about the same faces in the shadow map (3,400 against 3,600). The time saved is not
+  measured yet: the runs on L's PC swung from 160 to 285 FPS between runs of the same build while other work ran.
 - A map change shows no new frame for 1-2 s while the game keeps updating (worst frame 1.7-2.0 s on arrival in most
   maps). It looks like the game's own black hold, not a stall: the game thread waits, and the sound-slot release
   (`src/game/preempt.cpp`) never hit its 2 s limit.
