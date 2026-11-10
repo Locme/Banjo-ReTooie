@@ -374,6 +374,55 @@ namespace {
         return false;
     }
 
+    // Whether the box from lo to hi meets the view, with the game's own box test (func_800CAA24); the box goes on the
+    // stack below the test's frame, as in shadow_reaches_view.
+    bool box_meets_view(uint8_t* rdram, recomp_context* ctx, const float lo[3], const float hi[3]) {
+        const uint32_t camera = tooie::rdram::read_word(rdram, 0x8012D500u);
+        if (!tooie::rdram::valid_ptr(camera)) {
+            return true;
+        }
+        const gpr sp = ctx->r29;
+        const gpr box = sp - 0x40;
+        for (int axis = 0; axis < 3; axis++) {
+            uint32_t bits;
+            std::memcpy(&bits, &lo[axis], sizeof(bits));
+            MEM_W(4 * axis, box) = (int32_t)bits;
+            std::memcpy(&bits, &hi[axis], sizeof(bits));
+            MEM_W(12 + 4 * axis, box) = (int32_t)bits;
+        }
+        recomp_context call = *ctx;
+        call.r29 = sp - 0x100;
+        call.r4 = (gpr)(int32_t)camera;
+        call.r5 = box;
+        call.r6 = box + 12;
+        func_800CAA24(rdram, &call);
+        return call.r2 != 0;
+    }
+
+    // Ray tracing: whether a piece of the level is over what is in view, as a roof is. The traced sun shadows leave a
+    // shut-in spot alone (Enclosed in SceneEffectsPS.hlsl: straight up and four ways up at 55 degrees from straight up
+    // all meet the level), and the rays only meet what the game drew. A cave's roof over the part in view was culled
+    // as the camera looked down or away, so the spots under it counted as open and took the sun's shadow, which came
+    // and went as the camera turned (L, 2026-11-10, Terrydactyland's Inside the Mountain pool). The space under the
+    // piece down to the ground, widened as far as those slanted rays reach (at most 4000), is tested against the view.
+    // TOOIE_RT_OVERHEAD=0 leaves these pieces culled, to compare.
+    bool overhead_reaches_view(uint8_t* rdram, recomp_context* ctx, const float lo[3], const float hi[3]) {
+        static const bool off = [] { const char* v = std::getenv("TOOIE_RT_OVERHEAD"); return v != nullptr && std::strcmp(v, "0") == 0; }();
+        if (off || !tooie::picture_filters::ray_tracing_active()) {
+            return false;
+        }
+        const float ground = std::min(floor_under(lo[0], lo[2], hi[0], hi[2]), lo[1]);
+        // Only pieces that hang clear of the ground under them (a roof, a ceiling, an overhang, a bridge). Hills and
+        // cliffs reach down to it, and keeping them for their height cost outdoor levels about 2 ms a frame (Terrydactyland).
+        if (lo[1] - ground < 200.0f) {
+            return false;
+        }
+        const float spread = std::min((hi[1] - ground) * 1.44f, 4000.0f);
+        const float under_lo[3] = { lo[0] - spread, ground, lo[2] - spread };
+        const float under_hi[3] = { hi[0] + spread, hi[1], hi[2] + spread };
+        return box_meets_view(rdram, ctx, under_lo, under_hi);
+    }
+
     void keep(uint8_t* rdram, recomp_context* ctx, float distance) {
         if (!tooie::gfx_budget::room_for_extras(rdram)) {
             return;
@@ -470,8 +519,8 @@ extern "C" void tooie_sun_shadow_cull_box(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     // The level's own pieces are kept wherever they are (the far sun shadow map covers the whole level) when their
-    // shadow can reach the view.
-    if (shadow_reaches_view(rdram, ctx, lo, hi, 40000.0f)) {
+    // shadow can reach the view, and with ray tracing when they are over it (overhead_reaches_view).
+    if (shadow_reaches_view(rdram, ctx, lo, hi, 40000.0f) || overhead_reaches_view(rdram, ctx, lo, hi)) {
         keep(rdram, ctx, distance);
     }
 }
