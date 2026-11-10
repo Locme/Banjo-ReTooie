@@ -112,7 +112,8 @@ folder (`Android/data/io.banjoretooie/files`), which `adb` may not be able to re
    phone is about file access. It requires the `DUMP` permission (`registerReceiver(..., "android.permission.DUMP",
    null, RECEIVER_EXPORTED)`): `adb shell` has it and ordinary apps can't get it, so no other app on the phone can
    send the game commands.
-2. **Command file:** lines added to `console_in.txt` in the app folder run as if typed, and the file is then emptied
+2. **Command file:** done on the desktop as `console_inbox.txt` in the config folder (`src/game/console.cpp`); not
+   yet checked on a phone. As planned: lines added to `console_in.txt` in the app folder run as if typed, and the file is then emptied
    (a thread looks every 200 ms, renames the file before reading it so lines written meanwhile wait for the next
    look). This also works on Windows when the game is started without a terminal, and for longer scripts: `adb push`
    a file, or `adb shell "echo 'warp id AF' >> .../console_in.txt"`.
@@ -189,6 +190,29 @@ Performance, worked out before starting:
 
 A simpler step first: a CMake switch (`TOOIE_RAY_TRACING=OFF`) that leaves the ray tracing code and shaders out of a
 build (Android, low-end PCs), as the options are already hidden there.
+
+## Texture dump: what is left (2026-11-08)
+
+The dump records each texture's context (map, entrance, HUD, the asset it belongs to; `src/game/texture_context.cpp`
+and RT64's display-list hook) and `tools/organize_textures.py` sorts a dump by it. Still open:
+
+- A dump found emptied: on 2026-11-08, after a short `sweep fast` test, `texture_dump/png` held only that test's 2,367
+  textures, where the full sweep's 8,728 PNGs and its `rt64.json` had been. No code in `texture_sweep.cpp` removes the
+  folder, so the cause isn't found. Back the folder up before the next quick pass and check whether a start or a resume
+  empties it. The 8,728 are still in `D:\Projects\Banjo Tooie N64\texture_organized_test` (hard links, with
+  `manifest.csv`).
+- `rt64.json` is only written when dumping stops (`write_pack_database`). A game closed or crashed mid-sweep leaves
+  none, and the organiser then stops with "no readable rt64.json" (L hit this, 2026-11-08). Write it as the dump goes,
+  or let the organiser build it from the PNGs and their json files.
+- The Texture Dump option stays on "Sweep all maps" after a sweep finishes, and `TOOIE_TEXTURE_DUMP=sweep` saves it
+  that way to `wip.json`, so the menu shows it as if it were the default (L, 2026-11-08). A finished or stopped sweep
+  should set it back to Off, and the environment variable should not be saved.
+- The folders only appear when the organiser is run by hand. Run it at the end of a sweep (L asked, 2026-11-08).
+- In the hook's test run (map 0xAF), `dl_command` went up to 0xD5A9A0, above the 8 MB of N64 memory, while `dl_list`
+  stayed below it; probably display lists called from the top-level one in the port's extended memory. Check before
+  relying on the addresses for anything beyond what `texture_context.cpp` does now. 12 of that run's 131 textures had no
+  recorded load (both fields 0) and so no context.
+- `sweep fast` and `sweep more` have only had short runs: a whole fast pass followed by a more pass is still to do.
 
 ## Earlier open items
 
