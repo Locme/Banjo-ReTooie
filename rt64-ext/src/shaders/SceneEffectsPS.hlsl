@@ -1778,6 +1778,18 @@ float TraceDistance(float3 origin, float3 direction, float reach) {
     return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? query.CommittedRayT() : -1.0f;
 }
 
+// Whether the sky shows anywhere on the screen: the depth at sixteen points over it (4 x 4), any at the far plane.
+bool SkyOnScreen() {
+    const float2 size = gConstants.projection.zw;
+    [unroll] for (int k = 0; k < 16; k++) {
+        const float2 at = (float2(float(k & 3), float(k >> 2)) + 0.5f) * 0.25f * size;
+        if (LoadDepth(int2(at)) >= 0.99999f) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // TraceDistance with the geometry it met too (any where it met none), from the same ray.
 float TraceDistanceGeometry(float3 origin, float3 direction, float reach, out uint geometry, out uint primitive) {
     geometry = 0u;
@@ -2831,6 +2843,13 @@ float4 WaterReflectionMarch(float3 surface, float3 r, float nearest, out bool hi
                 if (all(skyAt == skyInside) && (LoadDepth(int2(skyInside)) >= 0.99999f)) {
                     return float4(gColor.Load(int3(int2(skyInside), 0)).rgb, RayEdgeFade(skyInside));
                 }
+            }
+            // With no sky anywhere on the screen (a cave), a ray that met nothing went past its reach under a high roof or
+            // out through what the game didn't draw this frame (the traced scene is only what it drew), not out to the
+            // sky: no reflection, the water's own picture. The haze showed in Terrydactyland's Inside the Mountain as
+            // light patches on the pool, shaped by the walkways and moving with the camera (L, 2026-11-10).
+            if (!SkyOnScreen()) {
+                return 0.0f;
             }
             return float4(gConstants.fogColor.rgb, 0.6f);
         }
