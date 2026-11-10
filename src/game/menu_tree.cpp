@@ -12,6 +12,7 @@
 #include "recompui/config.h"
 #include "tooie_game.h"
 #include "tooie_free_camera.h"
+#include "tooie_water_camera.h"
 #include "tooie_menu_tree.h"
 #include "tooie_picture_filters.h"
 #include "tooie_snout_jiggle.h"
@@ -111,6 +112,12 @@ void tooie::menu_tree::classify() {
             &tooie::free_camera_gyro_option, &tooie::free_camera_floor_clearance_option, &tooie::free_camera_look_up_option };
         for (const std::string* row : rows) {
             qol->set_option_parent(*row, tooie::free_camera_option);
+        }
+        const std::vector<const std::string*> water_rows = { &tooie::water_camera_waterline_option,
+            &tooie::water_camera_splash_option, &tooie::water_camera_bob_option, &tooie::water_camera_drag_option,
+            &tooie::water_camera_follow_option, &tooie::water_camera_torpedo_option, &tooie::water_camera_look_up_option };
+        for (const std::string* row : water_rows) {
+            qol->set_option_parent(*row, tooie::water_camera_option);
         }
     }
 

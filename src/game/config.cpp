@@ -38,6 +38,7 @@
 #include "tooie_debug.h"
 #include "tooie_discord.h"
 #include "tooie_free_camera.h"
+#include "tooie_water_camera.h"
 #include "tooie_level_warp.h"
 #include "tooie_parallax_pick.h"
 #include "tooie_tiptoe.h"
@@ -957,6 +958,7 @@ void tooie::init_config() {
         "Look Up",
         "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
         true);
+    tooie::water_camera::add_options(qol);
     tooie::photo_mode::add_options(qol);
     qol.add_enum_option(
         tooie::talon_trot::mode_option,

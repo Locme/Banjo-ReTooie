@@ -4633,6 +4633,7 @@ L_800B4944:
     CHECK_FR(ctx, 20);
     NAN_CHECK(ctx->f18.fl); NAN_CHECK(ctx->f20.fl); 
     ctx->f4.fl = MUL_S(ctx->f18.fl, ctx->f20.fl);
+    tooie_particle_whole(rdram, ctx, 0);
     // 0x800B495C: trunc.w.s   $f6, $f4
     CHECK_FR(ctx, 6);
     CHECK_FR(ctx, 4);
@@ -4688,6 +4689,7 @@ L_800B4994:
     CHECK_FR(ctx, 20);
     NAN_CHECK(ctx->f10.fl); NAN_CHECK(ctx->f20.fl); 
     ctx->f18.fl = MUL_S(ctx->f10.fl, ctx->f20.fl);
+    tooie_particle_whole(rdram, ctx, 1);
     // 0x800B49A8: trunc.w.s   $f4, $f18
     CHECK_FR(ctx, 4);
     CHECK_FR(ctx, 18);
@@ -4770,6 +4772,7 @@ L_800B49E0:
     CHECK_FR(ctx, 4);
     CHECK_FR(ctx, 8);
     ctx->f4.fl = CVT_S_W(ctx->f8.u32l);
+    tooie_particle_whole(rdram, ctx, 2);
     // 0x800B4A20: trunc.w.s   $f10, $f6
     CHECK_FR(ctx, 10);
     CHECK_FR(ctx, 6);
@@ -4824,6 +4827,7 @@ L_800B49E0:
     CHECK_FR(ctx, 10);
     NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f10.fl); 
     ctx->f8.fl = ctx->f4.fl + ctx->f10.fl;
+    tooie_particle_whole(rdram, ctx, 3);
     // 0x800B4A60: trunc.w.s   $f18, $f8
     CHECK_FR(ctx, 18);
     CHECK_FR(ctx, 8);
@@ -4858,6 +4862,7 @@ L_800B49E0:
     ctx->r14 = MEM_H(ctx->r2, 0X26);
     // 0x800B4A88: lwc1        $f16, 0xD0($s1)
     ctx->f16.u32l = MEM_W(ctx->r17, 0XD0);
+    tooie_particle_drag(rdram, ctx, 0);
     // 0x800B4A8C: addiu       $a0, $a0, 0x1
     ctx->r4 = ADD32(ctx->r4, 0X1);
     // 0x800B4A90: mtc1        $t6, $f14
@@ -4911,6 +4916,7 @@ L_800B4AAC:
     MEM_H(0X24, ctx->r2) = ctx->r9;
     // 0x800B4AC8: lwc1        $f16, 0xD0($s1)
     ctx->f16.u32l = MEM_W(ctx->r17, 0XD0);
+    tooie_particle_drag(rdram, ctx, 0);
     // 0x800B4ACC: mul.s       $f18, $f14, $f16
     CHECK_FR(ctx, 18);
     CHECK_FR(ctx, 14);
@@ -4963,6 +4969,7 @@ L_800B4AF4:
     ctx->f16.u32l = MEM_W(ctx->r3, 0X10);
     // 0x800B4B04: lwc1        $f14, 0xD0($s1)
     ctx->f14.u32l = MEM_W(ctx->r17, 0XD0);
+    tooie_particle_drag(rdram, ctx, 1);
     // 0x800B4B08: addiu       $a0, $a0, 0x1
     ctx->r4 = ADD32(ctx->r4, 0X1);
     // 0x800B4B0C: mul.s       $f18, $f16, $f14
@@ -4988,6 +4995,7 @@ L_800B4B1C:
     MEM_W(0X10, ctx->r3) = ctx->f18.u32l;
     // 0x800B4B20: lwc1        $f14, 0xD0($s1)
     ctx->f14.u32l = MEM_W(ctx->r17, 0XD0);
+    tooie_particle_drag(rdram, ctx, 1);
     // 0x800B4B24: addiu       $a0, $a0, 0x1
     ctx->r4 = ADD32(ctx->r4, 0X1);
     // 0x800B4B28: addiu       $v1, $v1, 0x4

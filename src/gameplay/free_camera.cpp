@@ -53,6 +53,7 @@
 #include "tooie_mirror_mode.h"
 #include "tooie_transform_menu.h"
 #include "tooie_rdram.h"
+#include "tooie_water_camera.h"
 
 namespace {
     // PlayerState pointers by player at 0x80135490; PlayerState +0xE4 points at Banjo's position
@@ -150,6 +151,7 @@ namespace {
         uint32_t middle = 0;    // middle button presses last step
         bool has_wheel = false;
         float pivot_y = 0.0f;   // smooth stairs: the height the camera orbits, eased towards Banjo's
+        float pivot_target = 0.0f;   // Banjo's orbit height at the last step, to tell a teleport from a fall
         bool has_pivot = false;
         int fine_dir = 0;         // fine-tune: the way the push goes now (-1 closer, 1 further, 0 none)
         bool fine_max_played = false;
@@ -541,13 +543,20 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             // The camera's offset from the pivot, turned about the vertical by the yaw change.
             // Smooth stairs: the orbit height follows Banjo's with an ease, so steps don't bob the camera.
             const float pivot_target = banjo[1] + pivot_height;
+            // A jump of more than pivot_snap in one step is a teleport (a warp, a respawn) and snaps the height.
+            // A long fall only makes the eased height lag: it fell behind past pivot_snap and snapped to Banjo
+            // every tenth of a second or so, which stuttered the view on big drops (L, 2026-11-10, Terrydactyland's
+            // Inside the Mountain into the water). The lag is held at pivot_snap instead, so the camera trails him
+            // smoothly and eases back once he lands.
             if (!state.has_pivot || !option<bool>(tooie::free_camera_smooth_height_option, true) ||
-                std::fabs(pivot_target - state.pivot_y) > pivot_snap) {
+                std::fabs(pivot_target - state.pivot_target) > pivot_snap) {
                 state.pivot_y = pivot_target;
             }
             else {
                 state.pivot_y += (pivot_target - state.pivot_y) * ease(pivot_rate, dt);
+                state.pivot_y = std::clamp(state.pivot_y, pivot_target - pivot_snap, pivot_target + pivot_snap);
             }
+            state.pivot_target = pivot_target;
             state.has_pivot = true;
             const float pivot[3] = { banjo[0], state.pivot_y, banjo[2] };
             const float ox = pos[0] - pivot[0];
@@ -568,7 +577,11 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             const float horizontal = std::sqrt(rx * rx + rz * rz);
             const float distance = std::sqrt(horizontal * horizontal + oy * oy);
             const bool look_up = option<bool>(tooie::free_camera_look_up_option, true);
-            const float low_limit = look_up ? look_min_elevation : min_elevation;
+            // Under water (Water Camera > Look Up Under Water) there is no floor to keep above, so it may go
+            // further below Banjo, to look up at the surface.
+            const float low_limit = tooie::water_camera::look_up_under_water(player_state) ?
+                std::min(look_up ? look_min_elevation : min_elevation, tooie::water_camera::look_up_low_limit) :
+                (look_up ? look_min_elevation : min_elevation);
             float tilt_left = tilt_input;
             // Look-up tilt: a push past the lowest eye height raises the view instead of closing in; tilting
             // back lowers the view first.
@@ -676,6 +689,10 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             write_float(rdram, camera + cam_rot + 0, wrap_degrees(view_pitch));
             write_float(rdram, camera + cam_rot + 4, state.yaw);
         }
+    }
+    // The water camera's touches (src/gameplay/water_camera.cpp), on the game's camera or the free camera alike.
+    if (gameplay && !paused) {
+        tooie::water_camera::apply(rdram, ctx, camera, player_state, banjo);
     }
     // TOOIE_FREECAM_FADE=<0..1> caps Banjo's fade while the free camera is held, to check the faded look headless.
     static const float forced_fade = std::getenv("TOOIE_FREECAM_FADE") ? std::strtof(std::getenv("TOOIE_FREECAM_FADE"), nullptr) : 1.0f;

@@ -3,6 +3,14 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-10
+
+- Above 30 FPS, the underwater camera sway (Jolly Roger's Lagoon's Sea Bottom and Atlantis, and other deep water) moves at the 30 FPS pace instead of shaking the whole picture, and it stands still while the game is paused.
+- Above 30 FPS, the Talon Torpedo and the Sub-Aqua transformation speed up and swing round to a new heading at the 30 FPS pace instead of snapping to it many times faster: the torpedo's wind-up, its kick as it shoots off and its cruising speed now match 30 FPS.
+- Free camera: on a long fall the camera follows Banjo down smoothly instead of jumping after him every tenth of a second or so (Smooth height let its height fall behind and then snapped it to him); a warp or respawn still snaps it at once.
+- Above 30 FPS, particles move, slow down and spin as far in a second as at 30 FPS: the Talon Torpedo's bubbles no longer stay small and bunched up behind Kazooie, and the same goes for every other particle the game moves (splashes, sparkles, smoke).
+- New QOL > Water Camera, with seven toggles under it, all on: Off the Waterline (the camera never rests half in and half out of the water), Smooth Splash, Surface Bob, Underwater Drag, Follow the Torpedo (the camera follows the Talon Torpedo from behind and turns as Kazooie turns, instead of staying back by Banjo), Torpedo Pull-Back (it drops back and the view widens as she speeds up) and Look Up Under Water (the free camera can go down to 60 degrees below Banjo under water, to look up).
+
 ## 2026-11-09
 
 - Above 30 FPS, flickering map lights flicker at the 30 FPS pace again instead of flashing: the green light in the mouth of Grunty's Lair in Spiral Mountain and inside it, and every other map light the game flickers the same way.

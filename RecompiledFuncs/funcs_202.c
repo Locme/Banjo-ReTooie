@@ -2427,6 +2427,7 @@ RECOMP_FUNC void func_80114EEC(uint8_t* rdram, recomp_context* ctx) {
     ctx->r14 = ADD32(0, 0X1);
     // 0x80114F84: sb          $t6, 0xD($s0)
     MEM_B(0XD, ctx->r16) = ctx->r14;
+    tooie_underwater_wobble_step(rdram, ctx);
     // 0x80114F88: add.s       $f4, $f16, $f18
     CHECK_FR(ctx, 4);
     CHECK_FR(ctx, 16);

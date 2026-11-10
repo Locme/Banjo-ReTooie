@@ -1260,6 +1260,164 @@ extern "C" int tooie_light_flicker_skip(uint8_t* rdram, recomp_context* ctx) {
     return clock < step - 0.0001f ? 1 : 0;
 }
 
+// The underwater camera wobble (Jolly Roger's Lagoon's Sea Bottom and Atlantis, and other deep water).
+// func_80114EEC ($s0 = the wobble) adds sin(phase) x 1.5 to the camera's field of view and
+// sin(1.5 x phase) x 1.5 to its aspect for the frame (func_800C4B90; the camera update adds them and clears
+// them, func_800C54F0), then moves the phase (+0x10) on by 2 degrees. That step takes no frame time, so
+// the picture swayed 60 degrees of phase a second at 30 FPS but 800 or more at Uncapped, where the
+// whole picture shook (L, 2026-11-10). $f18 holds the 2 just before it is added; above 30 FPS it is scaled
+// by the frame's share of 1/30 s, so the wobble keeps the 30 FPS pace (and stands still while paused).
+extern "C" void tooie_underwater_wobble_step(uint8_t* rdram, recomp_context* ctx) {
+    if (!above_30()) {
+        return;
+    }
+    const float share = read_float(rdram, delta_time_addr) * 30.0f;
+    if (!(share >= 0.0f) || share >= 1.0f) {
+        return;
+    }
+    ctx->f18.fl *= share;
+}
+
+// Thrust movement (the bamovethrust overlay): the Talon Torpedo and the Sub-Aqua transformation in Jolly
+// Roger's Lagoon. bamovethrust_entrypoint_5 ($s0 = the player) sets the velocity to k x itself (k = the
+// thrust's +0x84, 0.85 for the torpedo under water) plus a push of the thrust's speed along the way he
+// faces, once per game frame with no frame time; only the step from velocity to position takes the
+// frame's time. The top speed (push / (1 - k)) is the same at any rate, but at 30 FPS the velocity
+// eases round to a new heading over about a fifth of a second, and at Uncapped in a hundredth: the
+// torpedo snapped to every touch of the stick and could not be steered (L, 2026-11-10). Here, after
+// the game has worked out k x velocity ($sp +0x2C) and the push ($sp +0x38), and above 30 FPS, k becomes
+// k ^ (the frame's share of 1/30 s) and the push is scaled to keep the same top speed, so the torpedo
+// turns and speeds up as at 30 FPS. While it winds up k is 1 and the push alone is scaled.
+extern "C" void tooie_thrust_step(uint8_t* rdram, recomp_context* ctx) {
+    static const bool off = std::getenv("TOOIE_NO_THRUST_FIX") != nullptr;   // A/B for tests
+    // TOOIE_THRUST_LOG=1: each frame, game time, the step, and the velocity before this frame's update
+    // (the thrust's +0x10) as its speed and heading across the ground.
+    static const bool log = std::getenv("TOOIE_THRUST_LOG") != nullptr;
+    const gpr thrust = (int32_t)MEM_W(0xC8, ctx->r16);
+    if (log) {
+        const float vx = read_float(rdram, thrust + 0x10), vy = read_float(rdram, thrust + 0x14), vz = read_float(rdram, thrust + 0x18);
+        std::printf("[thrust] t %.3f dt %.4f speed %.1f heading %.1f\n", game_seconds_total.load(), read_float(rdram, delta_time_addr),
+            std::sqrt(vx * vx + vy * vy + vz * vz), std::atan2(vx, vz) * 57.2958f);
+        std::fflush(stdout);
+    }
+    if (off || !above_30()) {
+        return;
+    }
+    const float share = read_float(rdram, delta_time_addr) * 30.0f;
+    if (!(share >= 0.0f) || share >= 1.0f) {
+        return;
+    }
+    // k is 1 while the torpedo winds up before it shoots off: the push then piles up once per frame
+    // with nothing taken away (30 a second at 30 FPS, 500 at Uncapped), and the frame's share of it
+    // is the push x the share.
+    const float k = read_float(rdram, thrust + 0x84);
+    if (!(k > 0.0f && k <= 1.0f)) {
+        return;
+    }
+    const float kept = (k == 1.0f) ? 1.0f : std::pow(k, share);
+    const float keep_scale = kept / k;
+    float push_scale = (k == 1.0f) ? share : (1.0f - kept) / (1.0f - k);
+    // The game sets some speeds for one frame only: as the torpedo shoots off it pushes at 225 for one
+    // frame, then at 22.5. At 30 FPS that frame lasts 1/30 s and gives the kick (velocity 226 to 417);
+    // above 30 FPS it lasted a few milliseconds and the kick was lost. So each new speed (the thrust's
+    // +0x8C, which the push was made from) is held for 1/30 s of game time before the next one counts.
+    {
+        static uint32_t held_thrust = 0;
+        static float held_speed = 0.0f;
+        static float held_time = 0.0f;
+        const float speed = read_float(rdram, thrust + 0x8C);
+        const float dt = read_float(rdram, delta_time_addr);
+        if ((uint32_t)thrust != held_thrust) {
+            held_thrust = (uint32_t)thrust;
+            held_speed = speed;
+            held_time = 0.0f;
+        }
+        if (speed != held_speed && held_time >= 1.0f / 30.0f - 0.0001f) {
+            held_speed = speed;
+            held_time = 0.0f;
+        }
+        held_time += dt;
+        if (speed != held_speed && speed != 0.0f) {
+            push_scale *= held_speed / speed;
+        }
+    }
+    const gpr velocity = ctx->r29 + 0x2C;
+    const gpr push = ctx->r29 + 0x38;
+    for (int i = 0; i < 3; i++) {
+        write_float(rdram, velocity + 4 * i, read_float(rdram, velocity + 4 * i) * keep_scale);
+        write_float(rdram, push + 4 * i, read_float(rdram, push + 4 * i) * push_scale);
+    }
+}
+
+// Particles (func_800B4790, the update for every particle emitter: the Talon Torpedo's bubble trail,
+// splashes, sparkles, smoke). Each particle keeps its place, speed and spin as whole numbers; every
+// game frame the game adds speed x the frame's time (or acceleration x it, or spin x it) and cuts off
+// the fraction. At 30 FPS a bubble at 60 units a second moves 2 a frame, but at Uncapped 0.12, cut to
+// 0, so slow particles hardly left where they were made: the torpedo's bubbles stayed small and bunched
+// (L, 2026-11-10). Above 30 FPS each part moves by what one 30 FPS frame would move it (cut the same
+// way: trunc(place + speed / 30) - place, and so on) x the frame's share of 1/30 s, and the fraction
+// left over is kept per particle and part (which: 0 and 1 the spin, 2 the place, 3 the speed) and added
+// back next frame. So particles go as far in a second as at 30 FPS, smoothly. When a particle dies the
+// last one is copied into its slot and takes over that slot's fractions, an error under one unit.
+namespace {
+    std::mutex particle_mutex;
+    std::unordered_map<uint32_t, float> particle_fractions;
+}
+
+extern "C" void tooie_particle_whole(uint8_t* rdram, recomp_context* ctx, int which) {
+    (void)rdram;
+    if (!above_30()) {
+        return;
+    }
+    const float dt = ctx->f20.fl;   // the frame's time step, as the update read it
+    if (!(dt > 0.0f) || dt >= 1.0f / 30.0f) {
+        return;
+    }
+    float* value = which == 0 ? &ctx->f4.fl : which == 1 ? &ctx->f18.fl : which == 2 ? &ctx->f6.fl : &ctx->f8.fl;
+    // The 30 FPS frame's move. Spin: + trunc(spin speed / 30) ($f18 or $f10 holds the spin speed).
+    // Place: trunc(place + speed / 30) - place ($f18 the speed). Speed: the same with the
+    // acceleration ($f4 the speed, $f6 the acceleration).
+    float step;
+    if (which < 2) {
+        step = std::trunc((which == 0 ? ctx->f18.fl : ctx->f10.fl) / 30.0f);
+    } else {
+        const float rate = which == 2 ? ctx->f18.fl : ctx->f6.fl;
+        const float from = which == 2 ? std::round(*value - rate * dt) : ctx->f4.fl;
+        step = std::trunc(from + rate / 30.0f) - from;
+        *value = from;
+    }
+    const float move = step * dt * 30.0f;
+    // $a1 is 4, 8 or 12 for x, y and z by the time the place and speed are cut.
+    const uint32_t part = which < 2 ? 0x2C : (which == 2 ? 0x4 : 0x40) + (uint32_t)ctx->r5;
+    const uint32_t key = (uint32_t)ctx->r16 + part;
+    std::lock_guard lock{ particle_mutex };
+    if (particle_fractions.size() > 16384) {
+        particle_fractions.clear();
+    }
+    float& fraction = particle_fractions[key];
+    const float total = move + fraction;
+    const float whole = std::trunc(total);
+    fraction = total - whole;
+    *value = (which < 2 ? 0.0f : *value) + whole;
+}
+
+// The same update slows the speed and size of particles that have drag (the emitter's flags 0x2000 and
+// 0x4000) by the emitter's factor (+0xD0) once per game frame, so above 30 FPS they slowed many times
+// faster. The factor just loaded ($f16 or $f14, which 0 or 1) is raised to the frame's share of 1/30 s.
+extern "C" void tooie_particle_drag(uint8_t* rdram, recomp_context* ctx, int which) {
+    if (!above_30()) {
+        return;
+    }
+    const float share = read_float(rdram, delta_time_addr) * 30.0f;
+    if (!(share >= 0.0f) || share >= 1.0f) {
+        return;
+    }
+    float* factor = which == 0 ? &ctx->f16.fl : &ctx->f14.fl;
+    if (*factor > 0.0f) {
+        *factor = std::pow(*factor, share);
+    }
+}
+
 // The ice storm (chfireicestorm, Icy Side) spawns one to three snow puffs every game frame
 // (func_80800DC8 and func_80800E08, each a new emitter), whatever the frame's time, while the
 // puffs only age and die by that time. With time frozen (Photo Mode, the ESC menu's pause:

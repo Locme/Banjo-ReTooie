@@ -342,6 +342,7 @@ RECOMP_FUNC void bamovethrust_entrypoint_5(uint8_t* rdram, recomp_context* ctx) 
     // 0x8080010C: lw          $a1, 0x84($t7)
     ctx->r5 = MEM_W(ctx->r15, 0X84);
     after_2:
+    tooie_thrust_step(rdram, ctx);
     // 0x80800110: lw          $a0, 0xC8($s0)
     ctx->r4 = MEM_W(ctx->r16, 0XC8);
     // 0x80800114: addiu       $a1, $sp, 0x2C

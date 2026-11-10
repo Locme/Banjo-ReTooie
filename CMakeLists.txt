@@ -369,6 +369,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/display/draw_distance.cpp
     ${CMAKE_SOURCE_DIR}/src/display/gfx_budget.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/free_camera.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/water_camera.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/high_detail_models.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/day_night.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/sun_control.cpp

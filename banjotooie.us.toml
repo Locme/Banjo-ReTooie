@@ -1030,6 +1030,70 @@ func = "vpflicker_entrypoint_2"
 before_vram = 0x808000D0
 text = "if (tooie_vertex_flicker_skip(rdram, ctx)) { return; }"
 
+# func_80114EEC is the underwater camera wobble: it adds sin(phase) to the camera's field of view
+# and aspect for the frame, then moves the phase ($s0 +0x10) on by 2 once per game frame, so above
+# 30 FPS the whole picture swayed many times faster (the Sea Bottom in Jolly Roger's Lagoon). Above
+# 30 FPS the 2 ($f18) is scaled by the frame's share of 1/30 s (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_80114EEC"
+before_vram = 0x80114F88
+text = "tooie_underwater_wobble_step(rdram, ctx);"
+
+# bamovethrust_entrypoint_5 (the Talon Torpedo and the Sub-Aqua transformation) sets the velocity to
+# k x itself plus a push once per game frame, so above 30 FPS the torpedo snapped to each new heading
+# and could not be steered. After k x velocity ($sp +0x2C) and the push ($sp +0x38) are made, above
+# 30 FPS both are scaled to the frame's time with the same top speed (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "bamovethrust_entrypoint_5"
+before_vram = 0x80800110
+text = "tooie_thrust_step(rdram, ctx);"
+
+# func_800B4790 updates every particle emitter's particles. Their place, speed and spin are whole
+# numbers that get the frame's move and lose the fraction each game frame, so above 30 FPS slow
+# particles hardly moved (the Talon Torpedo's bubbles stayed small and bunched). Above 30 FPS the lost
+# fraction is kept per particle and added back ($f4, $f18, $f6, $f8 before each cut). The drag factor
+# (+0xD0, $f16 or $f14 after each load) is raised to the frame's share of 1/30 s
+# (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_800B4790"
+before_vram = 0x800B495C
+text = "tooie_particle_whole(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "func_800B4790"
+before_vram = 0x800B49A8
+text = "tooie_particle_whole(rdram, ctx, 1);"
+
+[[patches.hook]]
+func = "func_800B4790"
+before_vram = 0x800B4A20
+text = "tooie_particle_whole(rdram, ctx, 2);"
+
+[[patches.hook]]
+func = "func_800B4790"
+before_vram = 0x800B4A60
+text = "tooie_particle_whole(rdram, ctx, 3);"
+
+[[patches.hook]]
+func = "func_800B4790"
+before_vram = 0x800B4A8C
+text = "tooie_particle_drag(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "func_800B4790"
+before_vram = 0x800B4ACC
+text = "tooie_particle_drag(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "func_800B4790"
+before_vram = 0x800B4B08
+text = "tooie_particle_drag(rdram, ctx, 1);"
+
+[[patches.hook]]
+func = "func_800B4790"
+before_vram = 0x800B4B24
+text = "tooie_particle_drag(rdram, ctx, 1);"
+
 # func_8080021C_sulights moves a flickering light's colour one random step per game frame
 # ($a0 = the light effect), so above 30 FPS the light flickered many times faster (the green
 # light in the mouth of Grunty's Lair, Spiral Mountain). Above 30 FPS it is skipped until 1/30 s
