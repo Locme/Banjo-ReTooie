@@ -19,6 +19,9 @@
 #define SUN_SHADOW_MAP_DEFAULT_HALF 3000.0f
 #define SUN_SHADOW_MAP_HALF_STEP 50.0f
 #define SUN_SHADOW_MAP_VIEW_FLAG 1000000.0f
+// shadows.y also carries, in steps of this, how many times further out than usual the traced and mapped shadows fade
+// (0 to 7 steps for 1 to 8 times), for overview shots of a whole level from far above (the console's farshadows).
+#define SHADOW_FADE_FLAG 2000000.0f
 // The far map: a second, coarser square over the whole level (SUN_SHADOW_MAP_FAR_HALF each way round the camera),
 // drawn beside the near one in the same depth texture (the near map at x 0, the far one at x = the near map's size).
 // Past the near map's edge the shadows come from it. Its half width is larger than the setting can go, which is how

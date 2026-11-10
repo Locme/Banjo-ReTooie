@@ -93,6 +93,8 @@ namespace RT64 {
         float sunShadowReach = 450.0f;
         // Banjo-Tooie: the Sun shadow distance setting, the sun shadow map's half width in world units.
         float sunShadowDistance = 3000.0f;
+        // Banjo-Tooie: how many times further out than usual the shadows fade, 1 to 8 (the console's farshadows).
+        float shadowFadeScale = 1.0f;
         bool sunShadowOnBanjo = true;
         float sunShadowSoftness = 0.6f;
         bool customSun = false;
@@ -244,6 +246,9 @@ namespace RT64 {
     void SetSceneSunShadows(float strength, bool onBanjo = true, float softness = 0.6f);
     // Banjo-Tooie: how far round the camera the sun shadow map reaches (half its square's width, world units).
     void SetSceneSunShadowDistance(float distance);
+    // Banjo-Tooie: how many times further out than usual the traced and mapped shadows fade (1 to 8, rounded), for
+    // overview shots of a whole level from far above. 1 is play.
+    void SetSceneShadowFadeScale(float scale);
     // Banjo-Tooie: the sun's world direction (towards it) for the sun shadows and light shafts; custom false
     // puts back the fixed sun. A sun below the horizon casts no shadows.
     void SetSceneSun(bool custom, float x, float y, float z);

@@ -1291,7 +1291,8 @@ are kept when it is closed and come back when it is opened again. A move of more
 
 Usage: `cam`
 
-Prints the camera as the frame is drawn from it: its position, its pitch, yaw and roll in degrees (a positive pitch
+Prints the camera as the frame is drawn from it: its position, its pitch, yaw and roll in degrees, its vertical field
+of view in degrees (camera +0xE4, src/gameplay/field_of_view.cpp) (a positive pitch
 looks up, yaw 0 looks along -z), and the camera controller's mode (2 is the gameplay camera).
 
 ```
@@ -1421,16 +1422,19 @@ him again. Needs a player in the game.
 
 ### `look`
 
-Usage: `look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look off`
+Usage: `look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look from <x> <y> <z> <yaw> <pitch> | look off`
 
 Holds the gameplay camera looking at Banjo, for screenshots. `look <yaw> [pitch] [distance]` puts the camera `distance`
 units back from Banjo's head (60 above his feet) against that view direction, so he is in the middle of the picture.
 Yaw 0 looks along -z and grows turning left, and a positive pitch looks up, so `look 0 -20` looks along -z and down
 at him from slightly above. The pitch is 0 and the distance 350 when not given. The pitch is kept between -89 and 89,
-and the distance between 1 and 5000. `look at <x> <y> <z> [distance]` takes the view direction from Banjo's head to the
+and the distance between 1 and 20000. `look 0 -89 4000` looks straight down on the level from 4000 above Banjo. `look at <x> <y> <z> [distance]` takes the view direction from Banjo's head to the
 point, so the point is behind him in the picture. When a wall or floor is between Banjo's head and the place worked
 out, the camera is pulled in to just in front of it, with the line test the free camera uses, and the output says
 `pulled in front of a wall`.
+
+`look from <x> <y> <z> <yaw> <pitch>` puts the camera at that point with those angles, with no wall test, so it
+can stand above a level's invisible ceiling (Spiral Mountain's is at about 4850) for a view of the whole level.
 
 `look here <yaw> [pitch]` and `look here at <x> <y> <z>` turn the camera where it stands instead, with no distance and
 no wall test. It prints where the camera is and the angles. `look off` gives the camera back to the game.
@@ -1526,6 +1530,42 @@ lights add 255 120 40 800 40
 set point_lights on; set point_lights_strength 100
 lights list
 lights undo
+```
+
+### `sun`
+
+Usage: `sun [<azimuth> <elevation> | save | clear]`
+
+The current map's sun under ray tracing, the one Move Sun (Controls > Ray Trace Debug) moves by hand. `sun <azimuth>
+<elevation>` moves it, in degrees: azimuth 0 points the sun towards +z and 90 towards +x, and the elevation is its
+height above the horizon, kept between 9 and 90. The move is not saved. `sun save` writes the map's sun to
+`Dev Files/sun.txt`, as Save Sun Location does, and `sun clear` drops the moved sun so the saved or built-in one shows
+again. With no word it prints the map's moved or saved sun.
+
+```
+sun 150 60
+wait 100ms
+screenshot
+sun save
+sun clear
+```
+
+Catch: the sun is sent again on the next game frame, so wait a frame before a screenshot. Needs a file loaded.
+
+### `farshadows`
+
+Usage: `farshadows <1 to 8 | off>`
+
+In play the traced and mapped shadows (sun and lamps) fade out from 4000 to 7000 units from the camera, where a shadow
+is a pixel or two. `farshadows 6` makes them fade six times further out, so an overview of a whole level from far
+above (`look from`) shows its shadows. `farshadows off` (or 1) puts back the play distances. It is not saved, and costs
+more rays per frame while on.
+
+```
+farshadows 6
+look from 0 20000 0 0 -89
+screenshot
+farshadows off
 ```
 
 ### `ach`

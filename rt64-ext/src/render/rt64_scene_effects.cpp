@@ -970,6 +970,11 @@ namespace RT64 {
         effectsSettings.sunShadowDistance = std::clamp(distance, 500.0f, 40000.0f);
     }
 
+    void SetSceneShadowFadeScale(float scale) {
+        const std::scoped_lock lock(effectsMutex);
+        effectsSettings.shadowFadeScale = std::round(std::clamp(scale, 1.0f, 8.0f));
+    }
+
     void SetSceneSunShadows(float strength, bool onBanjo, float softness) {
         const std::scoped_lock lock(effectsMutex);
         userSunShadows = strength;
@@ -3219,7 +3224,7 @@ namespace RT64 {
             // 16384 when raindrops land on the screen).
             const float mistPacked = settings.timeOfDay ? 4.0f * (512.0f * std::round(settings.dayWet * 31.0f) + (settings.dayDrops ? 16384.0f : 0.0f)) : 0.0f;
             constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain),
-                std::min(settings.sunShadowReach, 999.0f) + 1000.0f * std::round(settings.sunShadowDistance / SUN_SHADOW_MAP_HALF_STEP), dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f + mistPacked };
+                std::min(settings.sunShadowReach, 999.0f) + 1000.0f * std::round(settings.sunShadowDistance / SUN_SHADOW_MAP_HALF_STEP) + SHADOW_FADE_FLAG * (settings.shadowFadeScale - 1.0f), dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f + mistPacked };
             if (sunLength > 1e-6f) {
                 float shafts = settings.lightShafts * settings.dayShafts;
                 if (settings.timeOfDay) {

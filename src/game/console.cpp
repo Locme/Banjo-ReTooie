@@ -47,6 +47,12 @@
 #include "tooie_photo_mode.h"
 #include "tooie_texture_sweep.h"
 #include "tooie_vram_log.h"
+#include "tooie_sun_control.h"
+
+// rt64-ext (rt64_scene_effects.cpp), for farshadows.
+namespace RT64 {
+    void SetSceneShadowFadeScale(float scale);
+}
 #include "librecomp/mods.hpp"
 #include "recomp.h"
 #include "recompui/recompui.h"
@@ -2336,7 +2342,7 @@ void cmd_cam(Ctx& c) {
     const uint32_t camera = tooie::rdram::valid_ptr(ctl) ? read_ram(c.rdram, ctl, 4) : 0;
     if (!tooie::rdram::valid_ptr(camera)) { error("no camera yet"); return; }
     auto f = [&](uint32_t off) { return tooie::rdram::read_float(c.rdram, camera + off); };
-    print(format("camera at %.1f %.1f %.1f, pitch %.2f yaw %.2f roll %.2f, mode %d", f(0), f(4), f(8), f(0x18), f(0x1C), f(0x20),
+    print(format("camera at %.1f %.1f %.1f, pitch %.2f yaw %.2f roll %.2f, fov %.2f, mode %d", f(0), f(4), f(8), f(0x18), f(0x1C), f(0x20), f(0xE4),
         (int)(int16_t)read_ram(c.rdram, ctl + 0x16, 2)));
 }
 
@@ -2505,10 +2511,25 @@ void look_tick(uint8_t* rdram) {
         print("the camera is the game's again (the map changed)");
         return;
     }
+    // The game can make its dynamic camera again (it did with the camera far above Spiral Mountain), so the current
+    // one is looked up each time.
+    if (uint32_t now = gameplay_camera(rdram); now != 0 && now != g_look.dynamic) {
+        fprintf(stderr, "[look] the dynamic camera moved from %08X to %08X\n", g_look.dynamic, now);
+        g_look.dynamic = now;
+    }
     write_ram(rdram, g_look.dynamic + kDynFrozen, 1, 1);
     for (int k = 0; k < 3; k++) tooie::rdram::write_float(rdram, g_look.dynamic + kDynPos + 4 * k, g_look.pos[k]);
     tooie::rdram::write_float(rdram, g_look.dynamic + kDynRot, g_look.pitch);
     tooie::rdram::write_float(rdram, g_look.dynamic + kDynRot + 4, g_look.yaw);
+    // The viewport camera too (as cam reads it): the dynamic camera hands its place on by the frame's delta time, so
+    // while the game is paused (pause) the view would stay where it was.
+    uint32_t ctl = tooie::free_camera::last_controller();
+    uint32_t camera = tooie::rdram::valid_ptr(ctl) ? read_ram(rdram, ctl, 4) : 0;
+    if (tooie::rdram::valid_ptr(camera) && read_ram(rdram, ctl + kCtlDynamic, 4) == g_look.dynamic) {
+        for (int k = 0; k < 3; k++) tooie::rdram::write_float(rdram, camera + 4 * k, g_look.pos[k]);
+        tooie::rdram::write_float(rdram, camera + 0x18, g_look.pitch);
+        tooie::rdram::write_float(rdram, camera + 0x1C, g_look.yaw);
+    }
 }
 
 constexpr float kHeadHeight = 60.0f;          // Banjo's feet to the point the free camera orbits (free_camera.cpp)
@@ -2518,13 +2539,34 @@ constexpr double kLookDistance = 350.0;
 // put `distance` back from Banjo's head along the view and looks at him, pulled in front of any wall between (the
 // free camera's line test); with it, the camera turns where it stands.
 void cmd_look(Ctx& c) {
-    const char* usage = "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look off";
+    const char* usage = "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look from <x> <y> <z> <yaw> <pitch> | look off";
     if (c.w.size() < 2) { error(usage); return; }
     if (lower(c.w[1]) == "off") {
         if (!g_look.on) { print("the camera is the game's already"); return; }
         write_ram(c.rdram, g_look.dynamic + kDynFrozen, g_look.frozen_before, 1);
         g_look.on = false;
         print("the camera is the game's again");
+        return;
+    }
+    // look from <x> <y> <z> <yaw> <pitch>: the camera put exactly there, with no wall test, so it can stand above a
+    // level's invisible ceiling for a view of the whole level.
+    if (lower(c.w[1]) == "from") {
+        double v[5];
+        if (c.w.size() != 7) { error(usage); return; }
+        for (int k = 0; k < 5; k++) if (!parse_double(c.w[2 + k], &v[k])) { error(usage); return; }
+        uint32_t dynamic = g_look.on ? g_look.dynamic : gameplay_camera(c.rdram);
+        if (dynamic == 0 || !tooie::debug::can_warp()) { error("the gameplay camera is not running (a scene, a fixed camera, or no file loaded)"); return; }
+        if (!g_look.on) {
+            g_look.dynamic = dynamic;
+            g_look.map = tooie::debug::current_map(c.rdram);
+            g_look.frozen_before = read_ram(c.rdram, dynamic + kDynFrozen, 1);
+        }
+        for (int k = 0; k < 3; k++) g_look.pos[k] = (float)v[k];
+        g_look.yaw = wrap_360(v[3]);
+        g_look.pitch = wrap_360(std::clamp(v[4], -89.0, 89.0));
+        g_look.on = true;
+        look_tick(c.rdram);
+        print(format("camera at %.0f %.0f %.0f looking yaw %.1f, pitch %.1f (look off gives it back)", v[0], v[1], v[2], wrap_360(v[3]), std::clamp(v[4], -89.0, 89.0)));
         return;
     }
     size_t i = 1;
@@ -2556,7 +2598,7 @@ void cmd_look(Ctx& c) {
         if (i >= c.w.size() || !parse_double(c.w[i], &yaw) || (i + 1 < c.w.size() && !parse_double(c.w[i + 1], &pitch))) { error(usage); return; }
         next = i + 2;
     }
-    if (next < c.w.size() && (here || !parse_double(c.w[next], &distance) || distance < 1 || distance > 5000)) { error(usage); return; }
+    if (next < c.w.size() && (here || !parse_double(c.w[next], &distance) || distance < 1 || distance > 20000)) { error(usage); return; }
     pitch = std::clamp(pitch, -89.0, 89.0);
     bool pulled_in = false;
     if (!here) {
@@ -2580,6 +2622,47 @@ void cmd_look(Ctx& c) {
     look_tick(c.rdram);
     print(format("camera at %.0f %.0f %.0f looking yaw %.1f, pitch %.1f%s (look off gives it back)", pos[0], pos[1], pos[2], wrap_360(yaw), pitch,
         pulled_in ? ", pulled in front of a wall" : ""));
+}
+
+// farshadows <1 to 8 | off>: the traced and mapped shadows fade that many times further from the camera than in play
+// (from 4000 to 7000 units), so an overview of a whole level from far above (look from) shows them. Not saved.
+void cmd_farshadows(Ctx& c) {
+    double scale = 1.0;
+    if (c.w.size() != 2 || (lower(c.w[1]) != "off" && (!parse_double(c.w[1], &scale) || scale < 1.0 || scale > 8.0))) { error("farshadows <1 to 8 | off>"); return; }
+    RT64::SetSceneShadowFadeScale((float)scale);
+    if (scale <= 1.0) print("shadows fade as in play again");
+    else print(format("shadows fade %.0f times further out (from %.0f to %.0f units)", std::round(scale), 4000.0 * std::round(scale), 7000.0 * std::round(scale)));
+}
+
+// sun [<azimuth> <elevation> | save | clear]: the current map's sun, for scripted searches (sun_control.cpp). The sun
+// is sent again on the next game frame, so give it a frame (wait 100ms) before a screenshot.
+void cmd_sun(Ctx& c) {
+    const char* usage = "sun [<azimuth deg> <elevation deg> | save | clear]";
+    const uint16_t map = (uint16_t)tooie::debug::current_map(c.rdram);
+    float az = 0, el = 0;
+    bool by_hand = false;
+    if (c.w.size() == 1) {
+        if (tooie::sun_control::get(map, az, el, by_hand)) print(format("map %X sun: azimuth %.1f, elevation %.1f (%s)", map, az, el, by_hand ? "moved, not saved" : "from sun.txt"));
+        else print(format("map %X has no sun of its own here (the built-in table's or RT64's)", map));
+        return;
+    }
+    const std::string word = lower(c.w[1]);
+    if (word == "save") {
+        if (!tooie::sun_control::save(map)) { error("nothing to save: move the sun first (sun <azimuth> <elevation>), or sun.txt could not be written"); return; }
+        tooie::sun_control::get(map, az, el, by_hand);
+        print(format("saved map %X sun %.1f %.1f to sun.txt", map, az, el));
+        return;
+    }
+    if (word == "clear") {
+        tooie::sun_control::clear(map);
+        print(format("map %X sun moved back to its saved or built-in one", map));
+        return;
+    }
+    double a, e;
+    if (c.w.size() != 3 || !parse_double(c.w[1], &a) || !parse_double(c.w[2], &e)) { error(usage); return; }
+    tooie::sun_control::set(map, (float)a, (float)e);
+    tooie::sun_control::get(map, az, el, by_hand);
+    print(format("map %X sun: azimuth %.1f, elevation %.1f (not saved)", map, az, el));
 }
 
 void cmd_peek(Ctx& c) {
@@ -4158,7 +4241,9 @@ const std::vector<Command>& commands() {
         { "anim", {}, true, "anim", "the animation Banjo plays now, with his form and state", cmd_anim },
         { "objects", {}, true, "objects [radius]", "the live objects near Banjo, nearest first (address, marker, model, actor entry, position)", cmd_objects },
         { "face", {}, true, "face <x> <z>", "turn Banjo to face a point", cmd_face },
-        { "look", {}, true, "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look off", "hold the gameplay camera looking at Banjo from a direction, 350 back (here: turn it where it stands), for screenshots; a map change ends it", cmd_look },
+        { "farshadows", {}, false, "farshadows <1 to 8 | off>", "the traced and mapped shadows fade that many times further from the camera than in play, for overview shots of a whole level (not saved)", cmd_farshadows },
+        { "sun", {}, true, "sun [<azimuth deg> <elevation deg> | save | clear]", "this map's sun under ray tracing: print it, move it (azimuth 0 towards +z, 90 towards +x; elevation 9 to 90), save it to Dev Files/sun.txt, or drop the moved one", cmd_sun },
+        { "look", {}, true, "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look from <x> <y> <z> <yaw> <pitch> | look off", "hold the gameplay camera looking at Banjo from a direction, 350 back (here: turn it where it stands), for screenshots; a map change ends it", cmd_look },
         { "transform", {}, true, "transform [form]", "the Cheats tab's Transformation row (turns the cheats on)", cmd_transform },
         { "transformmenu", {}, true, "transformmenu [open|close]", "open or shut the Transform Anywhere Menu (WIP tab), as the Transform key does", cmd_transformmenu },
         { "repeat", {}, false, "repeat <n> <command>", "run a command n times", cmd_repeat },

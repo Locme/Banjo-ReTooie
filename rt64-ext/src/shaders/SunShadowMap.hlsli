@@ -38,12 +38,19 @@ struct SunMapFrame {
 // shadows.y: |y| = the screen-space reach (under 1000) + 1000 * the map's half width in steps of
 // SUN_SHADOW_MAP_HALF_STEP, + SUN_SHADOW_MAP_VIEW_FLAG for the headless map view; negative when the map was drawn.
 float SunMapPacked(float y) {
-    const float a = abs(y);
+    float a = abs(y);
+    a -= SHADOW_FADE_FLAG * floor(a / SHADOW_FADE_FLAG);
     return (a >= SUN_SHADOW_MAP_VIEW_FLAG - 0.5f) ? (a - SUN_SHADOW_MAP_VIEW_FLAG) : a;
 }
 
 bool SunMapView(float y) {
-    return abs(y) >= SUN_SHADOW_MAP_VIEW_FLAG - 0.5f;
+    const float a = abs(y);
+    return a - SHADOW_FADE_FLAG * floor(a / SHADOW_FADE_FLAG) >= SUN_SHADOW_MAP_VIEW_FLAG - 0.5f;
+}
+
+// How many times further out than usual the shadows fade (1 in play; more for the console's farshadows).
+float ShadowFadeScale(float y) {
+    return 1.0f + floor(abs(y) / SHADOW_FADE_FLAG);
 }
 
 float SunMapReach(float y) {

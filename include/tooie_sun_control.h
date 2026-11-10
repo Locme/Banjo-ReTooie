@@ -15,6 +15,15 @@ namespace tooie::sun_control {
     // The sun moved by hand or saved in sun.txt for the map: a unit vector towards it in the world. False when the
     // map has neither (the level keeps its built-in sun).
     bool map_sun(uint16_t map, float out[3]);
+
+    // The console's `sun` command (src/game/console.cpp), for scripted sun searches. set moves the map's sun as Move
+    // Sun does (not saved; the elevation is kept from 9 to 90 degrees), save writes the map's sun to sun.txt as Save
+    // Sun Location does, and clear drops the moved sun so the saved or built-in one shows again. Each takes effect on
+    // the next game frame. get gives the map's moved or saved sun in degrees, and whether it was moved this session.
+    void set(uint16_t map, float azimuth, float elevation);
+    bool save(uint16_t map);
+    void clear(uint16_t map);
+    bool get(uint16_t map, float& azimuth, float& elevation, bool& moved_by_hand);
 }
 
 #endif

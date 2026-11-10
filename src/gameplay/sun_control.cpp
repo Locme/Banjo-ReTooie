@@ -47,6 +47,8 @@ namespace {
     std::map<uint16_t, Sun> moved;
     std::map<uint16_t, Sun> saved;
     bool loaded = false;
+    // Set by the console's sun commands, so the next tick sends the sun again.
+    bool console_changed = false;
 
     void to_vector(const Sun& s, float out[3]) {
         const float az = s.azimuth * pi / 180.0f;
@@ -228,7 +230,8 @@ bool tooie::sun_control::tick(uint16_t map, const float start[3]) {
 
     std::lock_guard lock{ mutex };
     load();
-    bool changed = false;
+    bool changed = console_changed;
+    console_changed = false;
     if (turn != 0.0f || raise != 0.0f) {
         Sun s;
         if (auto it = moved.find(map); it != moved.end()) {
@@ -292,4 +295,59 @@ bool tooie::sun_control::map_sun(uint16_t map, float out[3]) {
         return true;
     }
     return false;
+}
+
+void tooie::sun_control::set(uint16_t map, float azimuth, float elevation) {
+    std::lock_guard lock{ mutex };
+    load();
+    moved[map] = clamped({ azimuth, elevation });
+    console_changed = true;
+}
+
+bool tooie::sun_control::save(uint16_t map) {
+    std::lock_guard lock{ mutex };
+    load();
+    Sun s;
+    if (auto it = moved.find(map); it != moved.end()) {
+        s = it->second;
+    }
+    else if (auto it = saved.find(map); it != saved.end()) {
+        s = it->second;
+    }
+    else {
+        return false;
+    }
+    if (!::save(map, s)) {
+        return false;
+    }
+    saved[map] = s;
+    fprintf(stderr, "[sun] saved map 0x%X az %.1f el %.1f to sun.txt\n", map, s.azimuth, s.elevation);
+    return true;
+}
+
+void tooie::sun_control::clear(uint16_t map) {
+    std::lock_guard lock{ mutex };
+    load();
+    moved.erase(map);
+    console_changed = true;
+}
+
+bool tooie::sun_control::get(uint16_t map, float& azimuth, float& elevation, bool& moved_by_hand) {
+    std::lock_guard lock{ mutex };
+    load();
+    const Sun* s = nullptr;
+    if (auto it = moved.find(map); it != moved.end()) {
+        s = &it->second;
+        moved_by_hand = true;
+    }
+    else if (auto it = saved.find(map); it != saved.end()) {
+        s = &it->second;
+        moved_by_hand = false;
+    }
+    if (s == nullptr) {
+        return false;
+    }
+    azimuth = s->azimuth;
+    elevation = s->elevation;
+    return true;
 }

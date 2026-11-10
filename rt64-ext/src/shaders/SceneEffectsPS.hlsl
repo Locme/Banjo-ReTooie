@@ -1570,7 +1570,7 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
     if (count == 0u) {
         return 1.0f;
     }
-    const float distanceFade = saturate(1.0f - (-center.z - 4000.0f) / 3000.0f);
+    const float distanceFade = saturate(1.0f - (-center.z / ShadowFadeScale(gConstants.shadows.y) - 4000.0f) / 3000.0f);
     if (distanceFade <= 0.0f) {
         return 1.0f;
     }
@@ -1695,7 +1695,7 @@ float ModelShadow(float3 center, float3 normal) {
     }
     // Faded out from 3000 to 4000 units away: there a model's shadow is a pixel or two, and its rays were traced for every
     // floor pixel out to the horizon.
-    const float distanceFade = saturate((4000.0f + center.z) / 1000.0f);
+    const float distanceFade = saturate((4000.0f + center.z / ShadowFadeScale(gConstants.shadows.y)) / 1000.0f);
     if (distanceFade <= 0.0f) {
         return 1.0f;
     }
@@ -4665,7 +4665,7 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
     const float3 sun = gConstants.sun.xyz;
     const float distance = -center.z;
     // Fades out with distance: far away the depth buffer is too coarse and the shadows too small to tell.
-    const float near = saturate(1.0f - (distance - 4000.0f) / 3000.0f);
+    const float near = saturate(1.0f - (distance / ShadowFadeScale(gConstants.shadows.y) - 4000.0f) / 3000.0f);
     if (near <= 0.0f) {
 #ifdef RAY_TRACED
         if (gSunHalf == 1) {
