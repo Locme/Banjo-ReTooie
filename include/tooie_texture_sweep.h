@@ -16,6 +16,9 @@ namespace tooie {
 }
 
 namespace tooie::texture_sweep {
+    // Full: every entrance of every map, turning the camera. Fast: entrance 0 of every map, no turn, shorter
+    // waits. More: the other entrances of the maps that gave textures in a fast pass.
+    enum class Mode { Full, Fast, More };
     // Call once per frame from the game thread (tooie_warp_tick).
     void tick(uint8_t* rdram);
     // Asks "Start the texture sweep?" when Sweep all maps is picked in the menu.
@@ -26,7 +29,7 @@ namespace tooie::texture_sweep {
     bool sweeping();
     // Starts the sweep as the menu prompt's Start sweep button does, once Texture dump is set to Sweep all maps
     // (developer console).
-    void confirm_start();
+    void confirm_start(Mode mode = Mode::Full);
     // True while a sweep is in a map with DEV > Pass over crashes on: a crash or hang should call pass_over.
     bool pass_over_active();
     // From the crash handler or the watchdog: writes the MAJOR line for the entrance the sweep is in,

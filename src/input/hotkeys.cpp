@@ -70,7 +70,7 @@ void tooie::hotkeys::register_inputs() {
     add(GameInput::PICK_DELETE, "Delete Saved Pick",
         "In a pick mode, puts the texture or model under the cursor back to the built-in choice and deletes its save from its file in the Dev Files folder.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
     add(GameInput::PICK_COPY, "Copy Pick",
-        "In a pick mode, copies the pick of the texture or model under the cursor.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
+        "In a pick mode, copies the pick of the texture or model under the cursor. In a texture pick mode it also writes the texture's hash to picked_texture.txt in the Dev Files folder, for tools/texture_forge.py.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
     add(GameInput::PICK_PASTE, "Paste Pick",
         "In a pick mode, gives the texture or model under the cursor the copied pick (not saved until you save it).", SDL_SCANCODE_UNKNOWN, "Pick Modes");
     add(GameInput::PICK_UNDO, "Undo Pick",

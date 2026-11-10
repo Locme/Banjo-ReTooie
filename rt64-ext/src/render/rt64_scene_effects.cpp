@@ -1104,11 +1104,47 @@ namespace RT64 {
     static std::mutex parallaxMutex;
     static std::unordered_map<uint64_t, uint32_t> parallaxTextures;
 
+    static std::atomic<uint32_t> heightBakeGeneration = 0;
+    static std::atomic<bool> heightBakeWanted = false;
+    static std::atomic<float> parallaxSmoothness = 0.25f;
+
+    // Whether the height maps are wanted (parallax or displaced ground on), a new generation when that turns on.
+    static void UpdateHeightBakeWanted(float parallax, float ground) {
+        const bool wanted = (parallax > 0.0f) || (ground > 0.0f);
+        if (wanted && !heightBakeWanted.exchange(wanted)) {
+            heightBakeGeneration++;
+        }
+        heightBakeWanted = wanted;
+    }
+
     void SetSceneParallax(float depth, bool original, bool all) {
         const std::scoped_lock lock(effectsMutex);
+        if ((effectsSettings.parallaxOriginal != original) || (effectsSettings.parallaxAll != all)) {
+            heightBakeGeneration++;
+        }
         effectsSettings.parallax = std::clamp(depth, 0.0f, 1.0f);
         effectsSettings.parallaxOriginal = original;
         effectsSettings.parallaxAll = all;
+        UpdateHeightBakeWanted(effectsSettings.parallax, effectsSettings.groundDisplacement);
+    }
+
+    void SetSceneParallaxSmoothness(float amount) {
+        amount = std::clamp(amount, 0.0f, 1.0f);
+        if (parallaxSmoothness.exchange(amount) != amount) {
+            heightBakeGeneration++;
+        }
+    }
+
+    float SceneParallaxSmoothness() {
+        return parallaxSmoothness;
+    }
+
+    bool SceneHeightBakeWanted() {
+        return heightBakeWanted;
+    }
+
+    uint32_t SceneHeightBakeGeneration() {
+        return heightBakeGeneration;
     }
 
     static std::atomic<bool> textureSeamsBlend = true;
@@ -1132,8 +1168,12 @@ namespace RT64 {
             textures[hashes[i]] = uint32_t(ranges[i * 2]) | (uint32_t(std::max(ranges[i * 2 + 1], uint8_t(ranges[i * 2] + 1))) << 8) |
                 ((style & 0x7Fu) << 17) | ((style & 0x80u) << 17) | (fine << 25);
         }
-        const std::scoped_lock lock(parallaxMutex);
-        parallaxTextures.swap(textures);
+        {
+            const std::scoped_lock lock(parallaxMutex);
+            parallaxTextures.swap(textures);
+        }
+        // Baked again with the new list's shapes and ranges.
+        heightBakeGeneration++;
     }
 
     static std::mutex pickMutex;
@@ -2190,6 +2230,7 @@ namespace RT64 {
             const std::scoped_lock lock(effectsMutex);
             effectsSettings.groundDisplacement = std::clamp(amount, 0.0f, 1.0f);
             effectsSettings.groundReach = std::clamp(reach, 500.0f, 50000.0f);
+            UpdateHeightBakeWanted(effectsSettings.parallax, effectsSettings.groundDisplacement);
         }
 
         // The floors' displaced shaders compile with the shader list from now on, not on a first visit.

@@ -15,6 +15,8 @@ namespace tooie::host_profiler {
     void label(const std::string& text);
     bool running();
     std::string path();
+    // A code address's function name from BanjoReTooie.pdb (module+offset when it has none). Windows only.
+    std::string function_name(uintptr_t addr);
 }
 
 #endif

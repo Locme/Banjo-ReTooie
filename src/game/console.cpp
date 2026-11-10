@@ -41,6 +41,7 @@
 #include "tooie_screenshot.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_host_profiler.h"
+#include "tooie_write_watch.h"
 #include "tooie_achievements.h"
 #include "tooie_gfx_budget.h"
 #include "tooie_photo_mode.h"
@@ -49,6 +50,7 @@
 #include "librecomp/mods.hpp"
 #include "recomp.h"
 #include "recompui/recompui.h"
+#include "recompui/renderer.h"
 #include "recompinput/input_state.h"
 #include "recompui/config.h"
 #include "librecomp/config.hpp"
@@ -1041,6 +1043,21 @@ void cmd_quit(Ctx& c) {
     ultramodern::quit();
 }
 
+void cmd_quitprompt(Ctx& c) {
+    const std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "open";
+    if (what != "open" && what != "close") { error("quitprompt [open | close]"); return; }
+    auto lifetime = recompui::lock_context_lifetime();
+    if (!recompui::contexts_alive()) { error("the menus are not up"); return; }
+    // The same prompt as closing the window or Alt+F4; its Quit button exits the game.
+    if (what == "open") {
+        recompui::open_quit_game_prompt();
+        print("quit prompt open");
+    } else {
+        recompui::close_prompt();
+        print("quit prompt closed");
+    }
+}
+
 void begin_load(const std::string& name, int slot, double timeout, const std::string& then);
 
 void cmd_warp(Ctx& c) {
@@ -1276,6 +1293,31 @@ void cmd_bench(Ctx& c) {
 
 // hostprof start [file] | label <text> | stop: the sampling profiler (src/debug/host_profiler.cpp). The file is written
 // every 5 s, so a crash leaves it; the label splits one run by map or scene.
+// texpack reload: loads every enabled texture pack again from its folder, rt64.json and image files both, as turning a
+// pack off and on in the Mods menu does; for tools that change a pack's files while the game runs
+// (tools/texture_forge.py). The reload happens on the render thread's next frame.
+void cmd_texpack(Ctx& c) {
+    if (c.w.size() < 2 || lower(c.w[1]) != "reload") {
+        error("texpack reload");
+        return;
+    }
+    recompui::renderer::trigger_texture_pack_update();
+    print("texture packs reload on the next frame");
+}
+
+// writewatch <address> [seconds]: which host code writes an RDRAM word (src/debug/write_watch.cpp).
+void cmd_writewatch(Ctx& c) {
+    uint32_t address = 0;
+    double seconds = 3.0;
+    if (c.w.size() < 2 || !parse_addr(c.w[1], &address) || (c.w.size() >= 3 && !parse_double(c.w[2], &seconds))) {
+        error("writewatch <address> [seconds]");
+        return;
+    }
+    const std::string text = tooie::write_watch::start(c.rdram, address, seconds);
+    if (text.rfind("ERR ", 0) == 0) { error(text.substr(4)); return; }
+    print(text);
+}
+
 void cmd_hostprof(Ctx& c) {
     const std::string sub = c.w.size() >= 2 ? lower(c.w[1]) : "";
     if (sub.empty()) {
@@ -2223,10 +2265,44 @@ void cmd_uimove(Ctx& c) {
     print(format("%s moved by %.0f %.0f", what.c_str(), x, y));
 }
 
-// menu open|close: opens or shuts the Esc menu, as the Esc key does.
+// menu open|close: opens or shuts the Esc menu, as the Esc key does. menu tab <id>: shows that settings tab.
+// menu expand <setting> [off]: opens (or shuts) the arrow of a setting with settings under it, as clicking it does.
 void cmd_menu(Ctx& c) {
     const std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
-    if (what != "open" && what != "close") { error("menu open | menu close"); return; }
+    const char* usage = "menu open | menu close | menu tab <id> | menu expand <setting> [off]";
+    if (what == "tab" || what == "expand") {
+        if (c.w.size() < 3) { error(usage); return; }
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) { error("the menus are not up"); return; }
+        std::string said;
+        if (what == "tab") {
+            const std::string id = lower(c.w[2]);
+            try {
+                with_context(recompui::config::get_config_context_id(), [&] { recompui::config::set_tab(id); });
+                said = "showing the " + id + " tab";
+            } catch (...) {
+                error("no tab \"" + id + "\" (or the Esc menu is not made yet)");
+                return;
+            }
+        } else {
+            SettingRef ref;
+            if (!lookup_setting(c.w[2], &ref)) return;
+            if (ref.config == nullptr || !ref.config->has_option_children(ref.index)) {
+                error(ref.full_id() + " has no settings under it");
+                return;
+            }
+            const bool open = !(c.w.size() >= 4 && lower(c.w[3]) == "off");
+            // Opened as clicking its arrow does, and scrolled into view so a screenshot shows it.
+            with_context(recompui::config::get_config_context_id(), [&] {
+                ref.config->set_option_expanded(ref.index, open);
+                recompui::layout_offsets::scroll_into_view("row." + ref.id());
+            });
+            said = ref.full_id() + (open ? " opened" : " shut");
+        }
+        print(said);
+        return;
+    }
+    if (what != "open" && what != "close") { error(usage); return; }
     // As src/ui/brightness_panel.cpp opens it: with the UI's contexts kept alive and the menu's context open.
     auto lifetime = recompui::lock_context_lifetime();
     if (!recompui::contexts_alive()) { error("the menus are not up"); return; }
@@ -2778,6 +2854,8 @@ constexpr uint32_t kDeltaTime = 0x8012C760;
 bool g_paused;
 bool g_step_pending;
 double g_timescale = 1.0;
+// The texture sweep's quick passes raise the speed (tooie::console::set_sweep_timescale); it multiplies g_timescale.
+std::atomic<double> g_sweep_timescale{1.0};
 
 // What an Android app going to the background does, on any system (tooie::app_state): the game stops, RT64 releases
 // its swap chain and window surface, and after the given time both are made again and the game goes on. On its
@@ -2825,7 +2903,8 @@ void time_tick(uint8_t* rdram) {
         return;
     }
     g_step_pending = false;
-    if (g_timescale != 1.0) tooie::rdram::write_float(rdram, kDeltaTime, tooie::rdram::read_float(rdram, kDeltaTime) * (float)g_timescale);
+    const double scale = g_timescale * g_sweep_timescale.load();
+    if (scale != 1.0) tooie::rdram::write_float(rdram, kDeltaTime, tooie::rdram::read_float(rdram, kDeltaTime) * (float)scale);
 }
 
 // break <address> [value] [8|16|32] [pause] [then <command>]: tells when RAM changes (or takes a value).
@@ -3071,17 +3150,20 @@ void cmd_profile(Ctx& c) {
     print(format("%d settings saved to %s", n, tooie::path_text(file).c_str()));
 }
 
-// sweep start | sweep stop: the texture sweep (Texture dump > Sweep all maps), without the menu prompt.
+// sweep start | fast | more | stop: the texture sweep (Texture dump > Sweep all maps), without the menu prompt.
 void cmd_sweep(Ctx& c) {
     std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
-    if (what == "start") {
+    if (what == "start" || what == "fast" || what == "more") {
         if (!set_setting(tooie::texture_dump_option, "sweepallmaps")) return;
-        tooie::texture_sweep::confirm_start();
-        print("texture sweep started (about 40 minutes; sweep stop ends it)");
+        tooie::texture_sweep::confirm_start(what == "fast" ? tooie::texture_sweep::Mode::Fast :
+            what == "more" ? tooie::texture_sweep::Mode::More : tooie::texture_sweep::Mode::Full);
+        print(what == "start" ? "texture sweep started (about 40 minutes; sweep stop ends it)" :
+            what == "fast" ? "fast texture sweep started (entrance 0 of every map; sweep stop ends it; sweep more goes on from it)" :
+            "texture sweep of more entrances started (maps that gave textures in sweep fast; sweep stop ends it)");
         return;
     }
     if (what == "stop") { set_setting(tooie::texture_dump_option, "off"); return; }
-    print(tooie::texture_sweep::sweeping() ? "sweeping" : "not sweeping (sweep start | sweep stop)");
+    print(tooie::texture_sweep::sweeping() ? "sweeping" : "not sweeping (sweep start | fast | more | stop)");
 }
 
 void cmd_photo(Ctx&) {
@@ -4031,6 +4113,7 @@ const std::vector<Command>& commands() {
         { "load", {}, false, "load [file 1-3] [timeout s]", "from the launcher, title or file select into a save file with no hands (holds the queue until it is loaded; 60 s)", cmd_load },
         { "goload", {}, false, "goload <file 1-3> <map hex> [exit hex]", "load a save file, warp to a map and wait for it, in one line", cmd_goload },
         { "quit", { "exit" }, false, "quit [code]", "exit the program; the exit code is 1 if any command failed, unless given", cmd_quit },
+        { "quitprompt", {}, false, "quitprompt [open | close]", "show or shut the quit prompt that closing the window opens", cmd_quitprompt },
         { "warp", { "go" }, false, "warp <list> <n|name> | warp <name> | warp id <map hex> [exit hex]", "warp like the Warp tab (lists: place map), or to a map id; from the launcher or title it loads file 1 first", cmd_warp },
         { "list", { "ls" }, false, "list [list] [filter]", "the warp lists with their numbers", cmd_list },
         { "status", {}, true, "status", "map, game update count, updates per second, warp state", cmd_status },
@@ -4049,7 +4132,7 @@ const std::vector<Command>& commands() {
         { "lights", {}, true, "lights [add [r g b [radius [height]]] | undo | clear | list]", "Point Lights's lamps for this map: add one above Banjo (warm, radius 500, 80 up), remove the last, all, or list them (saved to Dev Files/point_lights.txt)", cmd_lights },
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
-        { "menu", {}, false, "menu open | menu close", "open or shut the Esc menu", cmd_menu },
+        { "menu", {}, false, "menu open | menu close | menu tab <id> | menu expand <setting> [off]", "open or shut the Esc menu, show a tab, open a setting's arrow", cmd_menu },
         { "menupos", {}, false, "menupos [<x> <y> | reset]", "move the Esc menu from the middle by x, y (dp), at once", cmd_menupos },
         { "uimove", {}, false, "uimove list | <entry> <x> <y> | <entry> reset | reset | save", "move single tabs, rows and buttons of the Esc menu by x, y (dp), at once; save writes assets/ui_layout.json", cmd_uimove },
         { "cam", {}, true, "cam", "the camera's position and angles as drawn, and its mode", cmd_cam },
@@ -4076,7 +4159,7 @@ const std::vector<Command>& commands() {
         { "config", {}, false, "config export|import <folder>", "copy every settings file out or in (import needs a restart)", cmd_config },
         { "save", {}, false, "save backup | save list", "copy the save file into save_backups", cmd_save },
         { "profile", {}, false, "profile save|load <name> | profile list", "keep every setting's value under a name and set them again", cmd_profile },
-        { "sweep", {}, true, "sweep [start|stop]", "the texture sweep (Texture dump > Sweep all maps)", cmd_sweep },
+        { "sweep", {}, true, "sweep [start|fast|more|stop]", "the texture sweep (Texture dump > Sweep all maps); fast and more are the quick passes", cmd_sweep },
         { "photo", {}, true, "photo", "photo mode on or off, as its key", cmd_photo },
         { "ach", { "achievements" }, false, "ach [filter]", "the achievements and which are unlocked", cmd_ach },
         { "item", { "give", "items" }, true, "item [list] | item <name|n> [value|+n|-n]", "read or set an item counter (eggs, feathers, Glowbos...) through the game's own functions", cmd_item },
@@ -4096,6 +4179,8 @@ const std::vector<Command>& commands() {
         { "screenshot", { "shot" }, false, "screenshot [ui]", "save the next frame as a PNG, as F12 does; with ui, the whole window with its menus", cmd_screenshot },
         { "burst", {}, true, "burst start | burst stop", "keep every frame from start to stop and save them, as F12 held does", cmd_burst },
         { "bench", {}, false, "bench [start|stop]", "record what the frame rate overlay measures to benchmarks/benchmark_<date>.csv", cmd_bench },
+        { "texpack", {}, false, "texpack reload", "load the enabled texture packs again from their folders, for tools that change a pack's files", cmd_texpack },
+        { "writewatch", { "ww" }, true, "writewatch <address> [seconds]", "count which host functions write a RAM word, with their callers (Windows)", cmd_writewatch },
         { "hostprof", {}, false, "hostprof start [file] | label <text> | stop", "sample where the CPU time goes, by thread and function, into a file", cmd_hostprof },
         { "costcheck", { "cost" }, true, "costcheck", "start or stop the Effect Cost Check (GPU time of each effect that is on)", cmd_costcheck },
         { "press", {}, true, "press <buttons> [stick <x> <y>] [frames|n ms|n s]", "hold controller 1's buttons (a+b) and stick (-80..80), for n game updates, a time, or until release", cmd_press },
@@ -4514,6 +4599,36 @@ void stdin_thread() {
     }
 }
 
+// console_inbox.txt in the config folder (where the Dev Files folder, mods and saves are; with a portable install the
+// game's own folder, which the app folder of console_state.txt need not be): for tools that run beside the game and can't write to its stdin. Each
+// line in it is a command; the file is taken (renamed, so a tool writing a new one doesn't lose lines), read and
+// deleted about five times a second. A tool writes it to a .tmp file first and renames it, so no line is half read.
+void inbox_thread() {
+    for (;;) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        // Empty until the game's folders are set up at startup.
+        const std::filesystem::path config = recomp::get_config_path();
+        if (config.empty()) continue;
+        const std::filesystem::path inbox = config / "console_inbox.txt";
+        const std::filesystem::path taken = config / "console_inbox.reading";
+        std::error_code ec;
+        if (!std::filesystem::exists(inbox, ec)) continue;
+        std::filesystem::remove(taken, ec);
+        std::filesystem::rename(inbox, taken, ec);
+        if (ec) continue;
+        {
+            std::ifstream in{ taken };
+            std::string line;
+            while (std::getline(in, line)) {
+                line = trim(line);
+                if (line.empty() || line[0] == '#') continue;
+                enqueue_line(line);
+            }
+        }
+        std::filesystem::remove(taken, ec);
+    }
+}
+
 // Before the game starts, the queue is run here (start, settings, quit, waits in ms).
 void pregame_thread() {
     // Commands start once the launcher is on screen (or the game has started some other way).
@@ -4584,6 +4699,7 @@ void tooie::console::start(int argc, char** argv) {
     }
     if (const char* env = std::getenv("TOOIE_CONSOLE")) enqueue_line(env);
     std::thread(stdin_thread).detach();
+    std::thread(inbox_thread).detach();
     std::thread(pregame_thread).detach();
 }
 
@@ -4662,6 +4778,10 @@ extern "C" int tooie_debug_log_on(const char* env_name) {
 }
 
 // Controller input (tooie::debug::get_n64_input): a press takes over controller 1's buttons and stick.
+void tooie::console::set_sweep_timescale(double scale) {
+    g_sweep_timescale = scale;
+}
+
 bool tooie::console::apply_input(int controller, uint16_t* buttons, float* x, float* y, bool got) {
     if (controller != 0) return got;
     std::lock_guard lock{ g_input_mutex };

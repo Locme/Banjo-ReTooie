@@ -91,6 +91,9 @@ rt64_ext_shader(build_pixel_shader rt64 "src/shaders/PhotoGradePS.hlsl")
 # Live texture upscaling in the texture cache (RT64::SetTextureUpscale).
 rt64_ext_shader(build_compute_shader rt64 "src/shaders/TextureUpscaleCS.hlsl")
 
+# Parallax height maps baked in the texture cache as textures load (TextureCache::refreshHeights).
+rt64_ext_shader(build_compute_shader rt64 "src/shaders/HeightBakeCS.hlsl")
+
 # Kazooie's feathers (geometry shader; D3D12 and Vulkan only, see build_geometry_shader in RT64's CMakeLists.txt).
 rt64_ext_shader(build_geometry_shader rt64 "src/shaders/FeatherGS.hlsl")
 

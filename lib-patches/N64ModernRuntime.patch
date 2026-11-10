@@ -158,7 +158,7 @@ index 35703bd..7095517 100644
          uint32_t get_section_ram_addr(uint16_t code_section_index);
          std::span<const RelocEntry> get_section_relocs(uint16_t code_section_index);
 diff --git a/librecomp/src/config.cpp b/librecomp/src/config.cpp
-index 6bc03fd..9e1fbf5 100644
+index 6bc03fd..0952944 100644
 --- a/librecomp/src/config.cpp
 +++ b/librecomp/src/config.cpp
 @@ -84,7 +84,8 @@ void Config::set_mod_version(const std::string &mod_version) {
@@ -373,7 +373,7 @@ index 6bc03fd..9e1fbf5 100644
      if (was_hidden == hidden) {
          return;
      }
-@@ -692,8 +742,87 @@ std::string Config::get_enum_option_details(size_t option_index) const {
+@@ -692,8 +742,89 @@ std::string Config::get_enum_option_details(size_t option_index) const {
      return enum_option_details.at(option_index);
  }
  
@@ -431,6 +431,8 @@ index 6bc03fd..9e1fbf5 100644
 +    } else {
 +        expanded_options.erase(option_index);
 +    }
++    // Its own row changes too (its arrow, and a number option's switch or slider), when opened from code.
++    report_config_option_update(option_index, ConfigOptionUpdateType::Hidden);
 +    // Every option under it shows or hides.
 +    for (const auto& [child, parent] : option_parents) {
 +        for (auto it = option_parents.find(child); it != option_parents.end(); it = option_parents.find(it->second)) {

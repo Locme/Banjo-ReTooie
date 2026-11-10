@@ -30,6 +30,8 @@ resets `lib/rt64` doesn't touch it.
 | `src/shaders/TextureUpscaleCS.hlsl` | Live texture upscaling |
 | `src/render/rt64_gpu_sections.h` | GPU timings for the frame overlay (included by the framebuffer renderer and scene effects, unchanged) |
 | `src/shaders/Parallax.hlsli` | Parallax (included by RasterPS and GroundTess) |
+| `src/shaders/ParallaxShape.hlsli` | Parallax texture shapes (included by Parallax.hlsli and HeightBakeCS) |
+| `src/shaders/HeightBakeCS.hlsl` | Parallax height maps baked as textures load (TextureCache::refreshHeights) |
 | `src/shaders/GroundTess.hlsl` | Displaced ground |
 | `src/shaders/WaterTess.hlsl`, `WaterTess.hlsli` | Tessellated water |
 | `src/shaders/Fur.hlsli` | Banjo's fur (included by RasterPS) |

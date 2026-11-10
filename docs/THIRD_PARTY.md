@@ -56,7 +56,7 @@ from anywhere.
 * [Vidanox/BanjoTooieRecompiled](https://github.com/Vidanox/BanjoTooieRecompiled):
   its engineering notes documented several Tooie-specific facts used here.
 * [ScriptHawk](https://github.com/Isotarge/ScriptHawk) by Isotarge: map and flag
-  data.
+  data, and the model names in `tools/texture_categories.csv` (MIT, licence text at the top of that file).
 * retroben, illusion and wedarobi: facts from the Xenia Banjo-Tooie game patch.
 * The [Banjo-Tooie Archipelago world](https://github.com/jjjj12212/AP_Banjo-Tooie)
   and its authors: the rules behind the Totals checklist's NOW column.

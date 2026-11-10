@@ -15,6 +15,11 @@ printed in the game by `help`.
 * **Scripts:** each line on stdin is a command (`BanjoReTooie < test.txt`, or a pipe). `--exec <file>` and
   `TOOIE_CONSOLE="cmd; cmd"` do the same. No window focus is needed. Lines that start with `#` are comments, both on
   stdin and in a file run by `exec`.
+* **Tools beside the game:** a program that did not start the game writes its commands, one per line, to
+  `console_inbox.txt` in the game's config folder: the one with the `Dev Files` folder, `mods` and `saves` (for a
+  portable install, the game's own folder; `console_state.txt` can be elsewhere). The game takes the file about five
+  times a second: it renames it, runs its lines and deletes it. Write a `.tmp` file first and rename it to
+  `console_inbox.txt`, so the game never reads half a line. Results go to stdout and the log as usual.
 * **Tab:** in the prompt, Tab completes the first word of the line, while the line has no space yet. If one command name
   or alias starts with what is typed, it is filled in with a space after it. If several match, they are printed on one
   output line. Only command names and your own aliases are completed: not shortcuts, command aliases such as `ls`, or
@@ -85,6 +90,19 @@ start; warp place 1
 ```
 
 Catch: `start` works before the game runs, so it can be the first line of a script.
+
+### `quitprompt`
+
+Usage: `quitprompt [open | close]`
+
+Shows the prompt that closing the window or Alt+F4 opens ("Leaving so soon?", in the brown and gold look of the
+game's menus), or shuts it. `open` is the default. Its Quit button exits the game, as from the window.
+
+```
+quitprompt
+screenshot ui
+quitprompt close
+```
 
 ### `load`
 
@@ -365,6 +383,15 @@ by its id. An id that is not a mod is refused. The command does not restart the 
 mod list
 mod off <id from mod list>
 ```
+
+### `texpack`
+
+Usage: `texpack reload`
+
+Loads every enabled texture pack again from its folder: `rt64.json` and the image files, as switching a pack off and
+on in the Mods menu does. For tools that change a pack's files while the game runs (`tools/texture_forge.py`). It
+happens on the next frame. Every replacement is unloaded and streams back in, so the pack's textures show their
+originals for a moment. A pack shipped as a `.zip` reloads from the folder it was unpacked into.
 
 ### `config`
 
@@ -1072,6 +1099,29 @@ trace stop 80127630
 Catch: the game has to be running to start a trace, and changes are only checked during game updates, so nothing is
 printed while the game is paused or not running.
 
+### `writewatch`
+
+Usage: `writewatch <address> [seconds]` (also `ww`)
+
+Finds what changes a value. For the given number of seconds (3 when not given, 0.5 to 60) the CPU stops the game
+thread on every write to the 32-bit word at the address, and the program notes the host function that wrote it and
+the two functions that called that one. Then it prints how many writes there were and the writers, most first, named
+from `BanjoReTooie.pdb`: the recompiled game's own functions show as `func_<address>` or `<overlay>_entrypoint_<n>`,
+the names the game's code has in `RecompiledFuncs`.
+
+```
+writewatch 80DA53FC
+writewatch 0x8012AB08 10
+```
+
+Worked example: the lair's flickering light. `ramlog` showed map vertex colours at `80DA53F0` changing every update;
+`writewatch 80DA53FC` printed `aligned8_memcpy <- vpmodule_entrypoint_3 <- func_800BE7F8 <- func_800BE9E4`: the map's
+vertex effects copy the colours in, and the flicker is one of those effects.
+
+Catch: only writes from the game thread are seen (the thread the console runs on). The value is read where the
+program keeps the game's memory, so a write the game makes through a copy routine shows that routine first. One watch
+at a time. Windows only. Needs the game running.
+
 ### `memview`
 
 Usage: `memview <address> [rows]` | `memview off` | `memview`
@@ -1174,15 +1224,24 @@ Catch: needs a player in the game. Until there is one, it reports an error.
 
 ### `menu`
 
-Usage: `menu open | menu close`
+Usage: `menu open | menu close | menu tab <id> | menu expand <setting> [off]`
 
-Opens or shuts the Esc menu, as the Esc key does.
+Opens or shuts the Esc menu, as the Esc key does. `menu tab` shows a settings tab (`general`, `graphics`, `sound`,
+`qol`, `cheats`, `wip`). `menu expand` opens the arrow of a setting that has settings under it, as clicking the arrow
+does, and `off` shuts it again. The row is scrolled into view. The setting is named as for `get` and `set`.
 
 ```
 menu open
+menu tab graphics
+menu expand ground_displacement
+screenshot ui
+menu expand ground_displacement off
 menupos 150 0
 menu close
 ```
+
+Catch: `menu tab` and `menu expand` need the Esc menu to have been made, which happens on its first opening. `menu
+expand` refuses a setting with nothing under it.
 
 ### `menupos`
 
@@ -1875,13 +1934,24 @@ Catch: `save backup` needs a save file already on disk. Without one it reports "
 
 ### `sweep`
 
-Usage: `sweep [start|stop]`
+Usage: `sweep [start|fast|more|stop]`
 
 `sweep start` sets the Texture dump option to "Sweep all maps" and starts the texture sweep without the menu prompt. It
 prints that the sweep takes about 40 minutes. `sweep stop` sets the Texture dump option to off. With no argument, it
 prints whether a sweep is running.
 
+`sweep fast` is a quicker first pass: entrance 0 of every map only, no camera turn, shorter waits, and the game runs at
+twice its speed meanwhile (the `timescale` command's, multiplied). `sweep more` is the second pass: the other entrances,
+only of the maps that gave new textures at entrance 0 in the fast pass (sweep.txt in texture_dump/ lists the count on
+each `done`/`same` line). Run `sweep fast` first; `sweep more` adds to its sweep.txt. Both resume after a restart in the
+same mode, like `sweep start`. A start from the console or the menu (`start`, `fast`) always begins anew; only `more` keeps
+the record. When a sweep finishes, the Texture dump option goes back to Off and is saved.
+
+Every texture also gets a `<hash>.json` beside its PNG (map, entrance, frame) for `tools/organize_textures.py`.
+
 ```
+sweep fast
+sweep more
 sweep start
 sweep stop
 ```

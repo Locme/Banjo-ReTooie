@@ -34,6 +34,7 @@
 #include "recomp.h"
 #include "recompui/config.h"
 #include "tooie_window_beams.h"
+#include "tooie_texture_context.h"
 
 namespace {
     using Outline = std::vector<std::array<float, 2>>;
@@ -548,6 +549,8 @@ std::vector<uint8_t> tooie::window_beams::model_for(uint32_t id, std::vector<uin
 extern "C" void tooie_window_beams_map_entry(uint8_t* rdram, recomp_context* ctx) {
     const uint16_t map = uint16_t(ctx->r4);
     tooie::window_beams::note_map(map);
+    // The map's own models, before the stand-in id below, for sorting dumped textures (texture_context.cpp).
+    tooie::texture_context::note_map_models(map, uint16_t(MEM_H(2, ctx->r3)), uint16_t(MEM_H(4, ctx->r3)));
     for (const Room& room : rooms) {
         if (!room.stand_in || !has_map(room, map)) {
             continue;

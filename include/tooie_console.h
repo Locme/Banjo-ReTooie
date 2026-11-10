@@ -19,6 +19,9 @@ namespace tooie::console {
     void frame(uint8_t* rdram, recomp_context* ctx);
 
     // On every read of player 1's pad: a `press` holds buttons and the stick. Returns whether the pad has input.
+    // The texture sweep's quick passes ask for a faster game (1 for normal); it multiplies the `timescale` command's.
+    void set_sweep_timescale(double scale);
+
     bool apply_input(int controller, uint16_t* buttons, float* x, float* y, bool got);
 }
 

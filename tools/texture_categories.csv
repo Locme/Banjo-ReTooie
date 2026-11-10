@@ -1,0 +1,766 @@
+# Asset id (models, sprites and other assets) -> name and category, for tools/organize_textures.py. Edit freely: the organiser reads it each time.
+# Categories are folder paths ("Characters", "Objects", "Pickups", "Characters/Enemies", ...); a texture of a model
+# goes to <category>/<name>. The names are from ScriptHawk's Banjo-Tooie model list (games/bt.lua, object_model1
+# models), https://github.com/Isotarge/ScriptHawk; the categories were set by keyword and may need fixing.
+# ScriptHawk's licence:
+#   MIT License
+#
+#   Copyright (c) 2022 Isaac Miell
+#
+#   Permission is hereby granted, free of charge, to any person obtaining a copy
+#   of this software and associated documentation files (the "Software"), to deal
+#   in the Software without restriction, including without limitation the rights
+#   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#   copies of the Software, and to permit persons to whom the Software is
+#   furnished to do so, subject to the following conditions:
+#
+#   The above copyright notice and this permission notice shall be included in all
+#   copies or substantial portions of the Software.
+#
+#   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+#   SOFTWARE.
+id,name,category
+0x5DD,"Pay Here Sign",Objects
+0x5DE,"Path to Nest Sign",Pickups
+0x5DF,"Well Done Display",Objects
+0x5E0,"Dog Food Bowl",Objects
+0x5E1,"Lantern",Objects
+0x5E2,"Brown Cushion",Objects
+0x5E3,"Wooden Barrel",Objects
+0x5E4,"Metal Barrel",Objects
+0x5E5,"Mushroom",Objects
+0x5E6,"Mushroom",Objects
+0x5E7,"1st Floor Sign",Objects
+0x5E8,"2nd Floor Sign",Objects
+0x5E9,"3rd Floor Sign",Objects
+0x5EA,"4th Floor Sign",Objects
+0x5EB,"5th Floor Sign",Objects
+0x5EC,"Floating Barrel",Objects
+0x5ED,"Hanging Lantern",Objects
+0x5EE,"Boggy's Sled",Objects
+0x5EF,"Candle",Objects
+0x5F0,"JRL Water Sign",Objects
+0x5F1,"Mine Entry 1 Sign",Objects
+0x5F2,"Mine Entry 2 Sign",Objects
+0x5F3,"Mine Entry 3 Sign",Objects
+0x5F4,"Train Station Sign",Objects
+0x5F5,"Fuel Storage Sign",Objects
+0x5F6,"Brass Lights",Objects
+0x5F7,"Wall Lantern",Objects
+0x5F8,"Slice of Cake",Objects
+0x5F9,"Bed",Objects
+0x5FA,"Kitchen Unit",Objects
+0x5FB,"Lardy's Pizza Box",Objects
+0x5FC,"Lardy's Pizza Box",Objects
+0x5FD,"Door",Objects
+0x5FE,"Pizza Slice",Objects
+0x5FF,"Red Chair",Objects
+0x609,"Baby T-Rex",Characters
+0x60A,"Banjo's Backpack",Objects
+0x60B,"Snowball",Objects
+0x60C,"Washing Machine",Objects
+0x60D,"Daddy T-Rex",Characters
+0x60E,"Clockwork Kazooie",Characters
+0x60F,"Small Jiggy",Pickups
+0x610,"Jiggy",Pickups
+0x611,"Blue Egg Fragment",Pickups
+0x612,"Empty Honeycomb",Pickups
+0x613,"Bee",Characters
+0x614,"Honeycomb",Pickups
+0x615,"Beehive",Objects
+0x616,"Wading Boots",Objects
+0x617,"Turbo Trainers",Objects
+0x618,"Red Feather",Pickups
+0x619,"Green Feather",Pickups
+0x61B,"Shack Pack",Characters
+0x61C,"Kazooie",Characters
+0x61D,"Stony",Characters
+0x61F,"Banjo-Kazooie",Characters
+0x621,"Banjo's Backpack",Objects
+0x622,"Banjo's Backpack",Objects
+0x623,"Detonator",Objects
+0x624,"Van",Objects
+0x625,"Banjo's Backpack",Objects
+0x626,"Submarine",Objects
+0x627,"Missiles",FX
+0x628,"Bottles eating Corn",Characters
+0x629,"Molehill",Objects
+0x62A,"Banjo-Kazooie",Characters
+0x62B,"Banjo-Kazooie",Characters
+0x62C,"Cheese Wedge",Objects
+0x62D,"Jelly",Characters
+0x62E,"Dragon Kazooie",Characters
+0x631,"N64 Logo",HUD/Menus
+0x632,"Rareware Logo",HUD/Menus
+0x634,"Snowball",Objects
+0x635,"Shock Spring Pad",Objects
+0x636,"Fly Pad",Objects
+0x637,"Shadow",FX
+0x63A,"Wasp Sprite",Characters
+0x63B,"Ice Key",Objects
+0x63C,"Yellow Mystery Egg",Pickups
+0x63D,"Wooden Plank",Objects
+0x63E,"Loggo",Characters
+0x63F,"Magic Bag",Objects
+0x640,"Game Over Sign",Objects
+0x641,"Warp Pad",Objects
+0x642,"The End Sign",Objects
+0x643,"Jinjo",Pickups
+0x644,"Star Pad",Objects
+0x645,"Moon Pad",Objects
+0x646,"Sun Pad",Objects
+0x647,"Door",Objects
+0x648,"Mumbo's Skull",Objects
+0x649,"Column",Objects
+0x64A,"Column",Objects
+0x64B,"Dynamite",Objects
+0x64C,"Right Arm",Objects
+0x64D,"Left Arm",Objects
+0x64F,"Torso",Objects
+0x650,"Old King Coal",Characters
+0x651,"Breakable Door",Objects
+0x652,"Metal Chunk",Objects
+0x653,"Door",Objects
+0x654,"Mayan Door (Left)",Objects
+0x655,"Mayan Door (Right",Objects
+0x656,"Breakable Stone",Objects
+0x657,"Door",Objects
+0x658,"Snake Head",Characters
+0x659,"Ground Chunk",Objects
+0x65A,"Gold Chunk",Objects
+0x65B,"Gold Chunk",Objects
+0x65C,"Gold Chunk",Objects
+0x65D,"Door",Objects
+0x65E,"Gruntydactyl",Characters
+0x65F,"Ssslumber",Characters
+0x660,"Bovina",Characters
+0x661,"Officer Unogopaz",Characters
+0x662,"Globble",Characters
+0x663,"Sput Sput",Characters
+0x664,"Blowdart",FX
+0x665,"Mumbo",Characters
+0x666,"Snapdragon",Characters
+0x667,"Moggy",Characters
+0x668,"Boulder",Objects
+0x669,"Minjo (Beta)",Characters
+0x66A,"Enemy Kickball Player",Objects
+0x66B,"Chief Bloatazin",Characters
+0x66C,"Generator",Objects
+0x66D,"Dilberta",Characters
+0x66E,"Dragunda",Characters
+0x66F,"Diggit",Characters
+0x670,"Yellow Ball",Objects
+0x671,"Ugger",Characters
+0x672,"Red Ball",Objects
+0x673,"Golden Goliath",Characters
+0x674,"Torch Enemy",Objects
+0x675,"Humba Wumba",Characters
+0x676,"Stony",Characters
+0x677,"Bomb Ball",Objects
+0x678,"Fire Egg Fragment",Pickups
+0x679,"Fire Egg Fragment",Pickups
+0x67A,"Fire Egg Fragment",Pickups
+0x67B,"Canary Mary",Characters
+0x67C,"Minecart",Objects
+0x67D,"Cage",Objects
+0x680,"Waterfall Grate Switch",Objects
+0x681,"Waterfall Grate",Objects
+0x682,"Boulder",Objects
+0x683,"Crusher",Objects
+0x684,"Conveyor",Objects
+0x685,"Button (Wall)",Objects
+0x686,"Grinder",Objects
+0x687,"Jiggy Rock",Pickups
+0x688,"Stone Pellet",Objects
+0x68B,"Minecart",Objects
+0x68C,"Gas",FX
+0x68E,"Wooden Chip",Objects
+0x68F,"Bang Box",Objects
+0x690,"Saucer of Peril",Objects
+0x691,"Saucer of Peril",Objects
+0x692,"Pile of Rocks",Objects
+0x693,"Conga",Characters
+0x694,"Target",Objects
+0x695,"Glow",FX
+0x696,"Lantern",Objects
+0x697,"Remains",FX
+0x698,"Fish",Characters
+0x699,"Rockfish",Characters
+0x69A,"Salmon",Characters
+0x69D,"Spell",FX
+0x69E,"Spell",FX
+0x6A0,"Stone Fragment",Objects
+0x6A1,"TNT",Objects
+0x6A2,"Rareware Box",Objects
+0x6A3,"Brown Cloth",Objects
+0x6A4,"Wooden Chunk",Objects
+0x6A5,"Jiggy Chunk",Pickups
+0x6A6,"Invisibility Honey",Objects
+0x6A7,"Button (Floor)",Objects
+0x6A8,"Wooden Hut",Objects
+0x6A9,"Chuffy",Characters
+0x6AA,"Gun Powder",Objects
+0x6AB,"Breakable Door",Objects
+0x6AC,"Shadow",FX
+0x6AD,"Salty Joe",Characters
+0x6AE,"Big Al",Characters
+0x6AF,"Burger",Objects
+0x6B0,"Fries",Objects
+0x6B1,"Jippo Jim",Characters
+0x6B2,"Jippo Jim",Characters
+0x6B3,"Jippo Jim",Characters
+0x6B4,"Jippo Jim",Characters
+0x6B6,"Particles",FX
+0x6B7,"Mrs. Boggy",Characters
+0x6B8,"Hothead",Characters
+0x6B9,"Pole Electricity",Objects
+0x6BA,"Enemy Dodgem Car",Objects
+0x6BB,"Electric Glow",FX
+0x6BC,"Exposed Electrics",Objects
+0x6BD,"Bouncy Castle",Objects
+0x6BE,"Ghost",Characters
+0x6BF,"Stony",Characters
+0x6C0,"Detonator",Objects
+0x6C1,"Van",Objects
+0x6C2,"Submarine",Objects
+0x6C3,"Pawno",Characters
+0x6C4,"Cash Register",Objects
+0x6C5,"Big Fish",Characters
+0x6C6,"Egg",Pickups
+0x6C7,"Tiptup Jr.",Characters
+0x6C8,"Tiptup",Characters
+0x6C9,"Fruity",Characters
+0x6CA,"Coin",Objects
+0x6CB,"Frazzle",Characters
+0x6CC,"Scrut",Characters
+0x6CD,"Alien",Characters
+0x6CE,"Whirlweed",Characters
+0x6CF,"Plant",Objects
+0x6D0,"Inky",Characters
+0x6D1,"Chris P. Bacon",Characters
+0x6D2,"Blubbul",Characters
+0x6D3,"Stomponadon",Characters
+0x6D4,"Captain Blackeye",Characters
+0x6D5,"Chompasaurus",Characters
+0x6D6,"Jolly Roger",Characters
+0x6D7,"Soarasaurs",Characters
+0x6D8,"Merry Maggie Malpass",Characters
+0x6D9,"Seemee Fish",Characters
+0x6DA,"Terry",Characters
+0x6DB,"Captain Blubber",Characters
+0x6DC,"Mucoid",Characters
+0x6DD,"Mucoid",Characters
+0x6DE,"Fish",Characters
+0x6DF,"Green Orb",Objects
+0x6E0,"Blood Spike",Characters
+0x6E1,"Red and Blue Chunk",Objects
+0x6E2,"Red and Blue Chunk",Objects
+0x6E3,"Red and Blue Chunk",Objects
+0x6E4,"Eye",Objects
+0x6E6,"Swellbelly",Characters
+0x6E7,"Blood Spike",Characters
+0x6E8,"Stepping Stone",Objects
+0x6E9,"Code Statues",Objects
+0x6EA,"Nest (Eggs)",Pickups
+0x6EC,"Nest (Note)",Pickups
+0x6ED,"Nest (Treble Clef)",Pickups
+0x6EF,"Nest (Feathers)",Pickups
+0x6F0,"Swellbelly Fragment",Objects
+0x6F1,"Fan",Objects
+0x6F2,"Wumba's Wigwam",Objects
+0x6F3,"Cage",Objects
+0x6F4,"Wooden Beam",Objects
+0x6F5,"Wooden Platform",Objects
+0x6F9,"White",FX
+0x6FA,"Roysten",Characters
+0x6FB,"Interactive Object",Objects
+0x6FC,"UFO",Objects
+0x6FE,"Rareware Box",Objects
+0x6FF,"Door",Objects
+0x700,"Rareware Box",Objects
+0x701,"Door",Objects
+0x702,"Terry's Egg",Pickups
+0x703,"Small Pterodactyl",Characters
+0x704,"Honeycomb",Pickups
+0x705,"Honeycomb (Skill/Random)",Pickups
+0x706,"Stegosaurus",Characters
+0x707,"Klungo",Characters
+0x708,"Potion",Objects
+0x709,"Toxi-Gag",Characters
+0x70A,"Electomagnet",Objects
+0x70B,"Door",Objects
+0x70C,"Door",Objects
+0x70D,"Door",Objects
+0x70E,"Breakable Window",Objects
+0x710,"Breakable Plate",Objects
+0x73F,"Fish",Characters
+0x743,"Spinning Light",Objects
+0x744,"Industrial Fan",Objects
+0x745,"Spinning Pipe",Objects
+0x746,"Crusher",Objects
+0x747,"Crusher Arm",Objects
+0x748,"Door",Objects
+0x749,"Button (Wall)",Objects
+0x74A,"Crusher",Objects
+0x74B,"Bridge",Objects
+0x752,"Button (Floor)",Objects
+0x753,"Breakable Dirt",Objects
+0x754,"Button (Floor)",Objects
+0x755,"Stadium Light",Objects
+0x756,"Shattered Shock Spring Pad",Objects
+0x757,"Glass Box",Objects
+0x759,"Moggy",Characters
+0x75A,"Soggy",Characters
+0x75B,"Groggy",Characters
+0x75D,"Ice",Objects
+0x75F,"Breakable Gate",Objects
+0x760,"Button (Floor)",Objects
+0x761,"Breakable Gate",Objects
+0x762,"Breakable Plate",Objects
+0x763,"Door",Objects
+0x764,"Pile of Dirt",Objects
+0x765,"Breakable Chest",Objects
+0x766,"Glowbo",Pickups
+0x767,"Door",Objects
+0x768,"Door",Objects
+0x769,"Door",Objects
+0x76A,"Door",Objects
+0x76B,"Zubba (Red)",Characters
+0x76C,"Zubba (Green)",Characters
+0x76D,"Zubba (Blue)",Characters
+0x76E,"Red Mine",Objects
+0x76F,"Green Mine",Objects
+0x770,"Blue Mine",Objects
+0x774,"Big Al's (Top)",Characters
+0x775,"Salty Joe's (Top)",Characters
+0x776,"Boxing Glove",Objects
+0x777,"Planet",FX
+0x778,"Ring",Objects
+0x779,"Spinning Star",FX
+0x77A,"Breakable Circuit",Objects
+0x77B,"Door",Objects
+0x77C,"Bell",Objects
+0x77D,"Cable Car",Objects
+0x77E,"Inferno Door",Objects
+0x77F,"Cable Car Button",Objects
+0x780,"Electric Gates",Objects
+0x781,"Gate",Objects
+0x782,"Doors",Objects
+0x783,"Doors",Objects
+0x784,"Button (Giant T-Rex)",Objects
+0x786,"Breakable Box",Objects
+0x787,"Cheato",Characters
+0x788,"Gobi",Characters
+0x789,"Billy Bob",Characters
+0x78A,"Billy Bob (Inactive)",Characters
+0x78B,"Breakable Door",Objects
+0x78C,"Blue Balloon",Objects
+0x78D,"Green Balloon",Objects
+0x78E,"Cactus of Strength Bar",Objects
+0x790,"Bullion Bill",Objects
+0x791,"Box",Objects
+0x793,"Breakable Rock",Objects
+0x794,"Mr. Patch",Characters
+0x795,"Feet",Objects
+0x796,"Red Balloon",Objects
+0x79D,"Electric Field",FX
+0x79F,"Screw",Objects
+0x7A0,"Door",Objects
+0x7A1,"Red Hoop",Objects
+0x7A2,"Signpost",Objects
+0x7A3,"Door",Objects
+0x7A4,"Fries",Objects
+0x7A5,"Van Door",Objects
+0x7A6,"Burger",Objects
+0x7A7,"Dingpot",Characters
+0x7A8,"Falling Box",Objects
+0x7A9,"Falling Platform",Objects
+0x7AA,"Springy Step Shoes",Objects
+0x7AB,"Service Elevator",Objects
+0x7AC,"Ice Cube",Objects
+0x7AD,"Screw Seal",Objects
+0x7AE,"Gate",Objects
+0x7AF,"Breakable Door",Objects
+0x7B1,"Icicle",Objects
+0x7B2,"Icicle",Objects
+0x7B3,"Icicle",Objects
+0x7B4,"Icicle",Objects
+0x7B5,"Icicle",Objects
+0x7B6,"Icicle",Objects
+0x7B7,"Icicle",Objects
+0x7B8,"Button (Floor)",Objects
+0x7B9,"Button (Floor)",Objects
+0x7BA,"Button (Floor)",Objects
+0x7BB,"Fireball",FX
+0x7BF,"Ticket",Pickups
+0x7C0,"Doubloon",Pickups
+0x7C1,"Button (Floor)",Objects
+0x7C2,"Barrier",Objects
+0x7C3,"Targitzan Base",Characters
+0x7C4,"Gate",Objects
+0x7C5,"Twinkly (Blue)",FX
+0x7C6,"Twinkly (Green)",FX
+0x7C7,"Twinkly (Red)",FX
+0x7C8,"Targitzan (part)",Characters
+0x7C9,"Targitzan (part)",Characters
+0x7CA,"Targitzan (part)",Characters
+0x7CB,"Targitzan (part)",Characters
+0x7CC,"Targitzan (top)",Characters
+0x7CD,"Button (Floor)",Objects
+0x7CE,"Button (Wall)",Objects
+0x7CF,"Toxi-Klang",Characters
+0x7D0,"Klang",Characters
+0x7D1,"Tintup",Characters
+0x7D2,"Silver Coin",Objects
+0x7D3,"Toll Box",Objects
+0x7D4,"Piggles",Characters
+0x7D5,"Trotty",Characters
+0x7D6,"Jamjars",Characters
+0x7D7,"Silo",Objects
+0x7D8,"Green Mumbo Pad",Objects
+0x7D9,"Blue Mumbo Pad",Objects
+0x7DA,"Purple Mumbo Pad",Objects
+0x7DB,"Yellow Mumbo pad",Objects
+0x7DC,"Cyan Mumbo Pad",Objects
+0x7DD,"Red Mumbo Pad",Objects
+0x7DE,"Orange Mumbo Pad",Objects
+0x7DF,"Grey Mumbo Pad",Objects
+0x7E0,"Purple Mumbo Pad",Objects
+0x7E1,"Kazooie Split Pad",Objects
+0x7E2,"Banjo Split Pad",Objects
+0x7E3,"Spy-I-Cam",Characters
+0x7E4,"Bazza",Characters
+0x7E5,"Oogle Boogle",Characters
+0x7E9,"Dippy",Characters
+0x7EA,"Nutta",Characters
+0x7EB,"Washup",Characters
+0x7EC,"Boltoid",Characters
+0x7ED,"Ice",Objects
+0x7EE,"Unga Bunga",Characters
+0x7EF,"Sabreman",Characters
+0x7F3,"Cheato Page",Pickups
+0x7F4,"Targitzan",Characters
+0x7F5,"Betette",Characters
+0x7F6,"Alphette",Characters
+0x7F7,"Gamette",Characters
+0x7F8,"Ice",Objects
+0x7F9,"Lord Woo Fak Fak",Characters
+0x7FA,"Baby T. Rex",Characters
+0x7FB,"Glowing Light",Objects
+0x7FC,"Chilli Billi",Characters
+0x7FD,"Chilly Willy",Characters
+0x7FE,"Keelhaul",Characters
+0x7FF,"Guvnor",Characters
+0x800,"Washing Machine",Objects
+0x801,"Cannon",Objects
+0x802,"Skivvy",Characters
+0x803,"Skivvy",Characters
+0x804,"Germ",Characters
+0x805,"Germ",Characters
+0x806,"Germ",Characters
+0x807,"Alien Dad",Characters
+0x808,"Guffo",Characters
+0x809,"Big T. Rex",Characters
+0x80A,"Clockwork Kazooie",Characters
+0x80C,"File Select (1)",HUD/Menus
+0x80D,"File Select (2)",HUD/Menus
+0x80E,"File Select (3)",HUD/Menus
+0x80F,"Camera",Objects
+0x810,"Video Player",Objects
+0x811,"Honeycomb Television",Pickups
+0x812,"N64 Console",Objects
+0x813,"Dustbin",Objects
+0x814,"Ice Ball",Objects
+0x815,"Fire Ball",Objects
+0x816,"Mingy Jongo",Characters
+0x817,"Weldar",Characters
+0x818,"Flatso",Characters
+0x819,"Flatso",Characters
+0x81A,"Flatso",Characters
+0x81B,"Energy Beam",FX
+0x81C,"Bigfoot",Characters
+0x81E,"Biggafoot",Characters
+0x822,"Klungo Shield",Objects
+0x823,"Floor",Objects
+0x824,"Invisible Wall",Objects
+0x825,"Red Target",Objects
+0x826,"Green Target",Objects
+0x827,"Blue Target",Objects
+0x828,"Blue Dodgem Car",Objects
+0x82C,"Dirt",Objects
+0x82D,"Pot O' Gold Button",Objects
+0x82E,"Door",Objects
+0x82F,"Platform",Objects
+0x830,"Protection Screen",FX
+0x832,"Claw Clamber Boots",Objects
+0x837,"Dart",FX
+0x83B,"Skivvy",Characters
+0x83C,"Overalls",Objects
+0x83D,"Overalls",Objects
+0x83E,"Golden Goliath",Characters
+0x83F,"Door",Objects
+0x840,"Door",Objects
+0x841,"Door",Objects
+0x842,"Door",Objects
+0x843,"Door",Objects
+0x844,"Door",Objects
+0x845,"Door",Objects
+0x846,"Door",Objects
+0x847,"Door",Objects
+0x848,"Door",Objects
+0x849,"Door",Objects
+0x84B,"Dynamite Ticker",Objects
+0x84C,"Dynamite Remains",FX
+0x84D,"Clinker",Characters
+0x84F,"Door",Objects
+0x850,"Door",Objects
+0x854,"Mumbo Jumbo",Characters
+0x85A,"Press Start",HUD/Menus
+0x85D,"Big Tent",Objects
+0x85F,"Zubba",Characters
+0x862,"Banjo's Hand",Objects
+0x863,"Puzzle",HUD/Menus
+0x864,"Empty Puzzle",HUD/Menus
+0x867,"Red Skull",Objects
+0x869,"Door (Left)",Objects
+0x86A,"Door (Right)",Objects
+0x86B,"Weldar Head",Characters
+0x86C,"Electricity Box",Objects
+0x86D,"Train Station Switch",Objects
+0x86E,"Weldar Part",Characters
+0x86F,"Weldar",Characters
+0x870,"Weldar Head",Characters
+0x871,"Electrical Component",Objects
+0x872,"Doors",Objects
+0x873,"Doors",Objects
+0x874,"Tintups Spawner",FX
+0x876,"Goop",FX
+0x877,"Green Hoop",Objects
+0x878,"Blue Hoop",Objects
+0x87B,"Door",Objects
+0x87C,"Metal Door",Objects
+0x87D,"Travelator",Objects
+0x87E,"Button (Floor)",Objects
+0x87F,"Toxic Waste Hatch",Objects
+0x880,"Door",Objects
+0x881,"Breakable Grate",Objects
+0x883,"Button (Floor)",Objects
+0x884,"Toxic Barrel",Objects
+0x885,"Rareware Barrel",Objects
+0x886,"Fan",Objects
+0x887,"Door",Objects
+0x888,"Roar Door",Objects
+0x889,"Button (Floor)",Objects
+0x88F,"S'Hard",Characters
+0x892,"Cannon Flower",Objects
+0x893,"Eyeballus Jiggium Plant",Objects
+0x895,"Pansie",Characters
+0x896,"King Jingaling",Characters
+0x897,"King Jingaling",Characters
+0x898,"Throne",Objects
+0x899,"Scrotty",Characters
+0x89A,"Scrit",Characters
+0x89B,"Scrat",Characters
+0x89C,"Weldar Fireball",FX
+0x89E,"Mr. Fit",Characters
+0x89F,"Onion",Objects
+0x8A0,"Mouse",Characters
+0x8A1,"Mouse",Characters
+0x8A5,"Sky",FX
+0x8A8,"Logo",HUD/Menus
+0x8A9,"Rock",Objects
+0x8AE,"Mumbo Jumbo",Characters
+0x8AF,"Playing Cards",HUD/Menus
+0x8B0,"Banjo-Kazooie",Characters
+0x8B1,"Curtains",Objects
+0x8B3,"Rocks",Objects
+0x8B4,"Drill (Hag 1)",Objects
+0x8B5,"Bottles",Characters
+0x8B7,"Clock",Objects
+0x8BA,"Hag 1",Characters
+0x8BB,"Mingella",Characters
+0x8BD,"Blobbelda",Characters
+0x8BE,"Gruntilda",Characters
+0x8BF,"Partcle Spawner",FX
+0x8C3,"Bottles (Burnt)",Characters
+0x8C5,"Pile of Money",Objects
+0x8C6,"Power Beam",FX
+0x8C7,"Power Beam",FX
+0x8C8,"BOB Control Panel",HUD/Menus
+0x8C9,"Power Beam",FX
+0x8CA,"Power Beam",FX
+0x8CC,"Door",Objects
+0x8CD,"Door",Objects
+0x8CE,"Rainbow",FX
+0x8CF,"Bean",Objects
+0x8D0,"Zubba's Target",Objects
+0x8D1,"Door",Objects
+0x8D2,"Glass Bottle",Objects
+0x8D4,"Panel",HUD/Menus
+0x8D5,"Button (Floor)",Objects
+0x8D6,"Button (Floor)",Objects
+0x8D8,"Gate",Objects
+0x8DA,"Door",Objects
+0x8DB,"Button (Floor)",Objects
+0x8DC,"No Food Sign",Objects
+0x8DD,"Beanstalk",Objects
+0x8E0,"Mumbo's Skull",Objects
+0x8E1,"Blue Skull",Objects
+0x8E2,"Breakable Stone",Objects
+0x8E3,"Panel",HUD/Menus
+0x8E4,"Locker Door",Objects
+0x8E5,"Locker Door",Objects
+0x8E6,"Locker Door",Objects
+0x8E7,"Locker Door",Objects
+0x8E8,"Locker Door",Objects
+0x8E9,"Locker Door",Objects
+0x8EA,"Locker Door",Objects
+0x8EB,"Locker Door",Objects
+0x8EC,"Locker Door",Objects
+0x8ED,"Electricity",FX
+0x8EE,"Drawbridge",Objects
+0x8EF,"Breakable Stone",Objects
+0x8F0,"Breakable Temple",Objects
+0x8F1,"Boggy",Characters
+0x8F2,"Glass Box",Objects
+0x8F6,"Door",Objects
+0x8F9,"Breakable Wall",Objects
+0x8FA,"Fish",Characters
+0x8FC,"Stick of Dynamite",Objects
+0x8FE,"HAG 1",Characters
+0x8FF,"Rocknut",Characters
+0x900,"Gobgoyle",Characters
+0x901,"Gruntilda (HAG 1)",Characters
+0x902,"Gobgoyle",Characters
+0x903,"Chuffy Pad",Objects
+0x904,"Mortar",FX
+0x905,"Mortar Fragment",Objects
+0x906,"Mortar Fragment",Objects
+0x907,"Mortar Fragment",Objects
+0x908,"Mortar Fragment",Objects
+0x909,"Bigga-Bazza",Characters
+0x90A,"Bigga-Bazza",Characters
+0x90B,"Mrs. Bottles",Characters
+0x90C,"Klungo",Characters
+0x90D,"Klungo",Characters
+0x90E,"Bottles (Angel)",Characters
+0x90F,"Bottles (Devil)",Characters
+0x910,"B-K Cartridge",Objects
+0x911,"Gold Idol",Objects
+0x912,"Water",Objects
+0x913,"Jade Idol",Objects
+0x914,"Heggy",Characters
+0x915,"George",Characters
+0x916,"Mildred",Characters
+0x917,"Warp Silo",Objects
+0x918,"Honey B.",Characters
+0x919,"Speccy",Characters
+0x91A,"Goggles",Objects
+0x91B,"Buzzer",Objects
+0x91C,"Pieces of HAG 1",Characters
+0x91D,"Buzzer",Objects
+0x91E,"Buzzer",Objects
+0x91F,"Drill",Objects
+0x923,"Floatus Floatsum Egg",Pickups
+0x924,"Floatus Floatsum",Characters
+0x925,"Hothand",Characters
+0x926,"Flame",Objects
+0x927,"Flame",Objects
+0x92A,"Breakable Rock",Objects
+0x92B,"Jelly",Characters
+0x92C,"Hothand",Characters
+0x92D,"Jelly Castle",Objects
+0x92E,"Jelly",Characters
+0x930,"Superstash",Characters
+0x931,"Chuffy Sign",Objects
+0x932,"Button (Floor)",Objects
+0x933,"Buzzer",Objects
+0x934,"Buzzer",Objects
+0x935,"Master Jiggywiggy",Characters
+0x936,"Gruntilda",Characters
+0x937,"Disciple of Jiggywiggy",Characters
+0x939,"Particle Spawner",FX
+0x93B,"Burnt Food",Objects
+0x93C,"Breakable Door",Objects
+0x93D,"Fries Button",Objects
+0x93E,"Beach Ball",Objects
+0x942,"Button (Floor)",Objects
+0x943,"Door",Objects
+0x944,"Gate",Objects
+0x945,"Button (Floor)",Objects
+0x946,"Hot Waterfall",FX
+0x947,"Door",Objects
+0x948,"Button (Talon Torpedo)",Objects
+0x949,"Doors",Objects
+0x94A,"Doors",Objects
+0x94B,"Button (Wall)",Objects
+0x94C,"Electricity",FX
+0x94D,"Electricity",FX
+0x94E,"Electricity",FX
+0x94F,"Doors",Objects
+0x950,"Doors",Objects
+0x951,"Breakable Door",Objects
+0x952,"Breakable Grate",Objects
+0x956,"Red Hoop",Objects
+0x957,"Green Hoop",Objects
+0x958,"Blue Hoop",Objects
+0x95A,"Gate",Objects
+0x95B,"Button (Floor)",Objects
+0x965,"Door",Objects
+0x966,"Energy Beam",FX
+0x967,"Door",Objects
+0x968,"Door",Objects
+0x969,"Grate",Objects
+0x96A,"Gate",Objects
+0x96B,"Gate",Objects
+0x96C,"Gate (Left)",Objects
+0x96D,"Gate (Right)",Objects
+0x96E,"Gate",Objects
+0x96F,"Gate",Objects
+0x970,"Rock Teeth",Objects
+0x971,"Gate (Left)",Objects
+0x972,"Gate (Right)",Objects
+0x973,"No Entry Sign",Objects
+0x974,"Purple Mystery Egg",Pickups
+0x975,"Blue Mystery Egg",Pickups
+0x976,"Yellow Egg",Pickups
+0x977,"Jiggywiggy's Altar of Knowledge",Objects
+0x978,"Electricty",FX
+0x999,"Cracked Ice",Objects
+0x99A,"1 Ton Weight",Objects
+0x99B,"Button (Wall)",Objects
+0x99C,"Jukebox",Objects
+0x99D,"Red Germ",Characters
+0x99E,"Green Germ",Characters
+0x99F,"Blue Germ",Characters
+0x9A0,"Overlay",HUD/Menus
+0x9A2,"Applause Sign",Objects
+0x9A3,"Bed",Objects
+0x9AF,"Pointer",HUD/Menus
+0x9B4,"Klungo",Characters
+0x9BE,"Red Feather Particles",Pickups
+0x9BF,"Gold Feath Particles",FX
+0x9C0,"Ice Egg",Pickups
+0x9C1,"Fire Egg",Pickups
+0x9C2,"Grenade Egg",Pickups
+0x9C3,"Golden Egg",Pickups
+0x9C4,"Clockwork Kazooie Egg",Pickups
+0x9C5,"Proximity Egg",Pickups
+0x9C7,"Light (Wall)",Objects
+0x9D1,"Underwear",Objects
+0x9D7,"Blue Egg",Pickups
+0xFFFF,"Player Model",Objects
+# Sprites and other assets, named by looking at their textures (this port's own; not from ScriptHawk).
+0x9C9,"Dust puff",FX
+0x9CE,"Fire",FX
+0xB43,"Jigsaw transition",HUD/Menus
+0xB58,"A button",HUD/Buttons
+0xB89,"Banjo icon",HUD/Menus
+0xB8B,"Kazooie icon",HUD/Menus
+0xC21,"Small font",HUD/Fonts
+0xC22,"Large font (area names)",HUD/Fonts

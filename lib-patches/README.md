@@ -169,13 +169,18 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 * **Android** (`recompui/CMakeLists.txt`, `recompinput/CMakeLists.txt`): the SDL include folders are added on
   Android too (the game's CMakeLists builds SDL there).
 
+* **Banjo quit prompt** (`recompui/src/composites/ui_prompt.cpp`, `recompui.h`, `ui_state.cpp`, `ui_button.h`): the
+  prompt context holds two panels, the plain one and one styled like the sidebar layout (brown, gold border, a Jiggy from `assets/icons/JiggyBadge.svg`, whose orange rim shows on brown,
+  Luckiest Guy lettering, buttons that turn gold when picked); `open_choice_prompt`'s new `banjo_look` argument picks
+  it, and the quit prompt is the only caller that does. `Button::get_label` lets the label's font be set.
+
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.
 
 * **Menu layers** (`recompui/src/config/ui_config_option.*`, `ui_config.cpp`, `ui_config_page_options_menu.cpp`,
   `assets/icons/CaretUp.svg`): a row with children gets a down/up arrow that opens its children on a darker,
-  indented panel; a number option with children is shown as an on/off switch (off is 0, on the last non-zero
-  value); a button option shows a Button instead of the switch; Search rows ignore all of it.
+  indented panel; a number option with children shows an on/off switch (off is 0, on the last non-zero value)
+  and, while open, its slider on a "Strength" line above its children; a button option shows a Button instead of the switch; Search rows ignore all of it.
 
 ## rt64.patch
 
@@ -332,6 +337,15 @@ RT64's `CMakeLists.txt` includes `rt64-ext/rt64_ext.cmake` at its end, which bui
   the swap chain and its surface between presents (`threadSyncSurface`) and waits for it; presents and repaints are
   dropped until `SetWindowSurfaceAvailable(true)`, after which the next present makes them again. The first swap
   chain waits for a surface (`waitForWindowSurface`). An Android app's window loses its surface in the background.
+
+* **Display list command of each load** (`src/common/rt64_load_types.h`, `src/hle/rt64_state.h`, `src/hle/rt64_interpreter.cpp`,
+  `src/hle/rt64_rdp.cpp`, `src/hle/rt64_rdp_tmem.cpp`): the command loop stores the RDRAM address of the command it is
+  running in `State::currentCommandAddress` (one store per command; a command split across two buffers keeps the address
+  where it started). Each `LoadOperation` copies it into `dlCommandAddress`, and the display list's start address
+  into `dlListAddress`. The texture dump writes them as decimal `dl_command` and `dl_list` in `.rice.json` (and
+  `.rice.palette.json`). They are RDRAM addresses of the command that loaded the texture and of the start of its display
+  list, and are 0 for loads the game did not make through a display list. They change no pixel and no hash. The
+  game-side consumer is the texture dump's per-texture context (`src/game/texture_context.cpp`).
 
 To change it: edit the files in `lib/rt64`, then
 `git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`. New files

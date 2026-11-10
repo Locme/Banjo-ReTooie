@@ -310,6 +310,14 @@ F12 screenshots are taken before these filters, so they don't show them.
   part is. Off,
   only texture pack textures that come with a height map get parallax.
   Default: on.
+- **Parallax smoothness** (under Parallax): 0 to 100. Each parallax texture's
+  height is worked out once as it loads, from the texture that is drawn (the
+  game's own, its upscale or a texture pack's, which takes its own brightness
+  range), and blurred by up to two of the game's texels at 100. Higher stops the
+  specks and fine detail of a texture, an HD pack's most of all, from standing
+  up as thin spikes that streak like hairs as the camera moves; lower keeps
+  sharper edges between stones. Displaced ground uses the same height.
+  Default: 25.
 
 ### Displaced ground
 

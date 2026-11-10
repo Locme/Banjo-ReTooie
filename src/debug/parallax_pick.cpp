@@ -1276,6 +1276,17 @@ namespace {
                             }
                         }
                         snprintf(text, sizeof(text), "Copied %016llx's pick", (unsigned long long)key);
+                        // In a texture pick mode the hash also goes to picked_texture.txt in the Dev Files folder, which
+                        // tools/texture_forge.py watches to upscale that texture in the texture pack.
+                        if (!interp_on) {
+                            const std::filesystem::path picked = tooie::dev_files::path("picked_texture.txt");
+                            std::error_code ec;
+                            std::filesystem::create_directories(picked.parent_path(), ec);
+                            char line[32];
+                            snprintf(line, sizeof(line), "%016llx\n", (unsigned long long)key);
+                            std::ofstream(picked, std::ios::trunc) << line;
+                            fprintf(stderr, "[pick] %016llx written to Dev Files/picked_texture.txt\n", (unsigned long long)key);
+                        }
                     }
                 } else if (press_paste) {
                     if (key == 0) {

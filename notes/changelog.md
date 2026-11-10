@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-10
 
+- The quit prompt (closing the window or Alt+F4) is in the look of the game's menus: a brown panel with a gold border, a Jiggy, "Leaving so soon?" in gold lettering, and Quit and Keep Playing buttons that turn gold when picked. Console: `quitprompt [open | close]` shows or shuts it.
 - Above 30 FPS, the underwater camera sway (Jolly Roger's Lagoon's Sea Bottom and Atlantis, and other deep water) moves at the 30 FPS pace instead of shaking the whole picture, and it stands still while the game is paused.
 - Above 30 FPS, the Talon Torpedo and the Sub-Aqua transformation speed up and swing round to a new heading at the 30 FPS pace instead of snapping to it many times faster: the torpedo's wind-up, its kick as it shoots off and its cruising speed now match 30 FPS.
 - Free camera: on a long fall the camera follows Banjo down smoothly instead of jumping after him every tenth of a second or so (Smooth height let its height fall behind and then snapped it to him); a warp or respawn still snaps it at once.
@@ -15,6 +16,10 @@ regenerated code, CI, notes and tooling are left out.
 
 - Above 30 FPS, flickering map lights flicker at the 30 FPS pace again instead of flashing: the green light in the mouth of Grunty's Lair in Spiral Mountain and inside it, and every other map light the game flickers the same way.
 - Above 30 FPS, torch fires burn as tall as at 30 FPS again instead of short and flat (Witchyworld's Haunted Cavern, Terrydactyland's Bonfire Cavern and every other fire of that kind), and they light up and go out at the 30 FPS pace.
+- Esc menu: a setting with settings under it (Parallax, Displaced Ground, Fog, the fur and feather settings, Sun Shadows, Water Waves, Toon Outlines, Underwater Tint) keeps its on/off switch, and opening its arrow now shows a Strength slider above the settings under it, so its strength can be set and not only switched on or off. Console: `menu tab <id>` and `menu expand <setting> [off]`.
+- Parallax: each parallax texture's height is now worked out once as the texture loads (from the texture drawn: the game's own, its upscale or a texture pack's) instead of at every step of every pixel. A texture pack's textures take their own brightness range, so HD textures brighter or darker than the game's no longer lose their parallax or sink too deep.
+- New Graphics > Parallax > Parallax Smoothness (0-100, default 25): blurs that height, which stops a texture's specks standing up as thin spikes that streaked like hairs as the camera moved.
+- Texture packs: a pack's replacement for an intensity texture (the water's ripples and splash drops, some clouds) is see-through where it is dark, as the N64 draws it, so packs made from opaque dumps no longer draw those as solid squares. The texture dump now writes these textures with that transparency.
 
 ## 2026-11-07
 

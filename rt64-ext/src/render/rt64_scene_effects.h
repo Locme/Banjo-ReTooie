@@ -507,6 +507,15 @@ namespace RT64 {
     // original on, the game's own textures listed (RT64 hashes), by their brightness; all lets it on every textured
     // draw of the 3D world instead, to look for textures that suit it.
     void SetSceneParallax(float depth, bool original, bool all);
+    // Banjo-Tooie: Parallax smoothness (0 to 1): how much the parallax textures' baked height maps are blurred, in up to
+    // two of the game's texels, so specks in a texture don't become thin steep pillars (drawn as hairs along the view).
+    void SetSceneParallaxSmoothness(float amount);
+    float SceneParallaxSmoothness();
+    // Banjo-Tooie: the texture cache bakes the listed textures' height maps (TextureCache::refreshHeights) while
+    // parallax or displaced ground is on; the generation changes whenever what a bake depends on does (the list, a
+    // texture's shape, smoothness, parallax turned on), so they are baked again.
+    bool SceneHeightBakeWanted();
+    uint32_t SceneHeightBakeGeneration();
     // Banjo-Tooie: blends the seams of clamped textures, such as the lines between the pieces of the title's logo (DEV
     // option, on by default).
     void SetSceneTextureSeams(bool blend);

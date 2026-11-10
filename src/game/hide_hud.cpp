@@ -34,6 +34,7 @@
 #include "tooie_hotkeys.h"
 #include "tooie_toast.h"
 #include "tooie_transform_menu.h"
+#include "tooie_texture_context.h"
 
 namespace {
     using namespace std::chrono_literals;
@@ -95,6 +96,8 @@ extern "C" void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index
         tooie::gfx_budget::note_tags(1, added);
         MEM_W(0, gfx_ctx) = (int32_t)(end + added);
         tooie::dl_dump::frame_end(rdram, marks[0], end + added);
+        // The frame's 2D part, for sorting dumped textures into the HUD (texture_context.cpp).
+        tooie::texture_context::note_2d(marks[0], end + added);
         tooie::gfx_budget::frame_end(rdram);
     }
     marks[index] = (uint32_t)MEM_W(0, gfx_ctx);

@@ -34,6 +34,9 @@ namespace tooie::asset_mods {
     std::vector<uint8_t> rom_asset_bytes(uint32_t id);
     // Asset `id` from the given ROM image (such as the stored ROM read before the game has started).
     std::vector<uint8_t> rom_asset_bytes(std::span<const uint8_t> rom, uint32_t id);
+    // Asset `id`'s kind in the ROM's table (the low 4 bits of its word: 0 a model), or -1 for no such asset. The
+    // ROM must be loaded (the game started).
+    int asset_kind(uint32_t id);
 }
 
 #endif

@@ -342,6 +342,12 @@ std::vector<uint8_t> tooie::asset_mods::rom_asset_bytes(uint32_t id) {
     return rom_asset(rom, read_table(rom), id);
 }
 
+int tooie::asset_mods::asset_kind(uint32_t id) {
+    // The ROM's table read once (the texture dump asks for every texture it saves).
+    static const std::vector<Entry> table = read_table(recomp::get_rom());
+    return id < table.size() ? (int)table[id].kind : -1;
+}
+
 std::vector<uint8_t> tooie::asset_mods::rom_asset_bytes(std::span<const uint8_t> rom, uint32_t id) {
     return rom_asset(rom, read_table(rom), id);
 }

@@ -297,6 +297,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/debug/warp.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/spawn_log.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/host_profiler.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/write_watch.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/enemy_respawn.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/distance_probe.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/watchdog.cpp
@@ -406,6 +407,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/save_backup.cpp
     ${CMAKE_SOURCE_DIR}/src/game/screenshot.cpp
     ${CMAKE_SOURCE_DIR}/src/game/texture_sweep.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/texture_context.cpp
     ${CMAKE_SOURCE_DIR}/src/game/memory_guard.cpp
     ${CMAKE_SOURCE_DIR}/src/game/asset_mods.cpp
     ${CMAKE_SOURCE_DIR}/src/game/sound_dump.cpp

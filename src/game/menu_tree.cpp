@@ -27,9 +27,8 @@ namespace {
         return s;
     }
 
-    // Options with options under them. A parent number option shows as an on/off switch (off is 0, on is the
-    // last non-zero value; the first "on" is the default, or half the range when the default is 0) with an
-    // arrow that opens its children, which are hidden until then.
+    // Options with options under them. A parent number option shows an on/off switch (off is 0, on is the last
+    // non-zero value) with an arrow that opens its slider (a "Strength" line) and its children, hidden until then.
     struct Family {
         const char* parent;
         std::vector<const char*> children;
@@ -46,7 +45,7 @@ namespace {
         { "NPC feathers", { "NPC feather size", "NPC feather length", "NPC feather density",
             "NPC feather noisiness", "NPC feather transparency" } },
         { "Sun shadows", { "Sun Shadow On Banjo", "Sun shadow softness", "Sun shadow distance" } },
-        { "Parallax", { "Parallax On Original Textures" } },
+        { "Parallax", { "Parallax On Original Textures", "Parallax Smoothness" } },
         { "Fog", { "Fog start distance", "Fog colour" } },
     };
 

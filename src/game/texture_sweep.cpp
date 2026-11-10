@@ -16,6 +16,17 @@
 // load and fade in, holds C-right to turn the camera around, and moves on. Progress is written
 // to texture_dump/sweep.txt as it goes; what it passes over also goes to logs/PassedOver.txt.
 //
+// Two quicker passes (console: sweep fast, sweep more) make a dump in a fraction of the time. "Fast" goes
+// to entrance 0 of every map only, does not turn the camera and waits less. "More" then goes to the other
+// entrances, but only of the maps that gave new textures at entrance 0 in the fast pass (sweep.txt says which:
+// its "done"/"same" lines carry the count). Both raise the game's speed (the console's timescale) while they run.
+// The mode is written to sweep.txt ("mode fast"), so a restart carries on in the same mode.
+//
+// Every texture saved as texture_dump/png/<hash>.png also gets <hash>.json beside it: the map, entrance and
+// sweep frame it was first seen in (while playing: the map the game is in and entrance -1), and what it belongs to
+// (texture_context.cpp: drawn in the HUD, the asset it is in and that asset's kind, the map whose own model that
+// asset is), for tools/organize_textures.py. rt64.json and the PNG names are not touched by this.
+//
 // Picking it asks first ("Start the texture sweep?"); the warning says it carries on after a
 // restart: with the option still on, the next start resumes from the entrance after the one the
 // game stopped in. When the sweep is done it warps back to where it started and stops dumping;
@@ -36,6 +47,7 @@
 // Everything written is ROM-derived: it stays in the app-data folder, never in the repo.
 //
 // Headless: TOOIE_TEXTURE_DUMP=play|sweep sets the option whatever the menu says,
+// TOOIE_TEXTURE_SWEEP_MODE=fast|more picks a quick pass for a sweep started by the environment,
 // TOOIE_TEXTURE_SWEEP_MAPS=AF,B8,... sweeps only those maps (hex), and
 // TOOIE_TEXTURE_DUMP_DIR=<dir> writes there instead of the app-data folder,
 // TOOIE_SWEEP_CRASH_TEST=<map>:<exit> (hex map) crashes on purpose there to check the pass-over.
@@ -51,6 +63,7 @@
 #include <deque>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <functional>
 #include <mutex>
 #include <map>
@@ -67,6 +80,7 @@
 
 #include "common/rt64_load_types.h"
 
+#include "tooie_console.h"
 #include "tooie_debug.h"
 #include "tooie_game.h"
 #include "tooie_texture_sweep.h"
@@ -74,6 +88,7 @@
 #include "tooie_vram_log.h"
 #include "tooie_api_restart.h"
 #include "tooie_memory_guard.h"
+#include "tooie_texture_context.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_STATIC
@@ -127,7 +142,12 @@ namespace {
 
     Rgba gray(uint32_t i, uint32_t a = 255) { return {(uint8_t)i, (uint8_t)i, (uint8_t)i, (uint8_t)a}; }
 
-    Rgba from_i4(uint32_t v) { return gray((v << 4) | v); }
+    // An intensity texel's alpha is its intensity, as RT64's decoder (I4ToFloat4, I8ToFloat4) and the RDP read it. With
+    // alpha 255 the dumps of the water's ripples, splash drops and the like were opaque, and texture packs made from
+    // them drew their black surround as solid squares.
+    Rgba intensity(uint32_t i) { return gray(i, i); }
+
+    Rgba from_i4(uint32_t v) { return intensity((v << 4) | v); }
 
     Rgba from_ia4(uint32_t v) {
         uint32_t i = v & 0b1110;
@@ -203,7 +223,7 @@ namespace {
         switch (siz) {
             case siz_4b:
                 switch (fmt) {
-                    case fmt_ci: return gray((palette << 4) | v4);
+                    case fmt_ci: return intensity((palette << 4) | v4);
                     case fmt_ia: return from_ia4(v4);
                     case fmt_i:
                     case fmt_rgba: return from_i4(v4);
@@ -214,7 +234,7 @@ namespace {
                     case fmt_ia: return from_ia8(v0);
                     case fmt_i:
                     case fmt_rgba:
-                    case fmt_ci: return gray(v0);
+                    case fmt_ci: return intensity(v0);
                     default: return {0, 0, 0, 255};
                 }
             case siz_16b:
@@ -250,19 +270,94 @@ namespace {
         uint16_t width;
         uint16_t height;
         uint32_t tlut;
+        // Where it was first seen, filled in on the sweep's side when it is queued (the writer thread must not
+        // read the sweep's own variables).
+        uint16_t map;
+        int exit;
+        uint32_t frame;
+        // What it belongs to (texture_context.cpp), from RT64's <hash>.rice.json: where in the game's memory it was
+        // loaded from and by which display-list command.
+        uint32_t address = 0;
+        uint32_t dl_command = 0;
+        tooie::texture_context::Context owner;
     };
+
+    // The context for textures dumped now. Written by the game thread once per frame (tick), read by RT64's
+    // renderer thread when it reports a texture; atomics, as neither waits for the other.
+    std::atomic<uint32_t> ctx_map{0};
+    std::atomic<int> ctx_exit{-1};
+    std::atomic<uint32_t> ctx_frame{0};
+
+    std::string tile_format_name(const RT64::LoadTile& tile) {
+        static const char* const fmts[] = {"RGBA", "YUV", "CI", "IA", "I"};
+        static const int bits[] = {4, 8, 16, 32};
+        const char* f = tile.fmt < 5 ? fmts[tile.fmt] : "?";
+        return std::string(f) + (tile.siz < 4 ? std::to_string(bits[tile.siz]) : "?");
+    }
+
+    std::string map_name_of(uint16_t map) {
+        for (const MapName& m : map_names) {
+            if (m.id == map) return m.name;
+        }
+        return "?";
+    }
+
+    std::string json_escape(const std::string& in) {
+        std::string out;
+        for (char c : in) {
+            if (c == '"' || c == '\\') { out += '\\'; out += c; }
+            else if ((unsigned char)c < 0x20) out += ' ';
+            else out += c;
+        }
+        return out;
+    }
+
+    // <hash>.json beside the PNG: where the texture was first seen. Written after the PNG, so a half-written
+    // dump leaves a PNG without context (it counts as Unknown in the organiser) and never context without a PNG.
+    void write_context_json(const DumpedTexture& t, const fs::path& folder) {
+        char map_text[16];
+        std::snprintf(map_text, sizeof(map_text), "0x%03X", t.map);
+        // Written to a temporary name and renamed, so a stop halfway leaves no broken json.
+        const fs::path path = folder / (t.name + ".json");
+        fs::path temp = path;
+        temp += ".part";
+        {
+        std::ofstream out(temp, std::ios::trunc);
+        out << "{\"hash\": \"" << json_escape(t.name) << "\", \"width\": " << t.width << ", \"height\": " << t.height
+            << ", \"format\": \"" << tile_format_name(t.tile) << "\", \"map\": \"" << map_text
+            << "\", \"map_name\": \"" << json_escape(map_name_of(t.map)) << "\", \"exit\": " << t.exit
+            << ", \"frame\": " << t.frame << ", \"tmem_bytes\": " << (uint32_t(t.tile.line) << 3) * t.height
+            << ", \"palette\": " << (t.tlut > 0 ? "true" : "false")
+            << ", \"address\": " << t.address << ", \"dl_command\": " << t.dl_command
+            << ", \"drawn_2d\": " << (t.owner.drawn_2d ? "true" : "false") << ", \"asset\": " << t.owner.asset
+            << ", \"asset_kind\": " << t.owner.asset_kind << ", \"asset_offset\": " << t.owner.asset_offset
+            << ", \"level_of\": " << t.owner.level_of << "}\n";
+        }
+        std::error_code ec;
+        fs::rename(temp, path, ec);
+        if (ec) {
+            fs::remove(temp, ec);
+        }
+    }
 
     std::mutex queue_mutex;
     std::condition_variable queue_cv;
     std::deque<DumpedTexture> queue;
     fs::path png_folder;
-    std::atomic<uint32_t> new_pngs{0};
+    // Textures RT64 has reported in this run, counted when it reports them and not when the PNG is written, so a
+    // busy writer or a folder that already holds the PNG changes nothing. The sweep counts per entrance and map
+    // from this.
+    std::atomic<uint32_t> textures_reported{0};
     std::once_flag writer_flag;
 
     void write_png(const DumpedTexture& t, const fs::path& folder) {
         fs::path path = folder / (t.name + ".png");
         std::error_code ec;
         if (fs::exists(path, ec)) {
+            // A PNG from an older dump, or from a run that stopped between the PNG and its json, gets its context now.
+            if (!fs::exists(folder / (t.name + ".json"), ec)) {
+                write_context_json(t, folder);
+            }
             return;
         }
         const uint32_t address = uint32_t(t.tile.tmem) << 3;
@@ -297,7 +392,7 @@ namespace {
         if (written) {
             fs::rename(temp, path, ec);
             if (!ec) {
-                new_pngs++;
+                write_context_json(t, folder);
             }
         } else {
             fs::remove(temp, ec);
@@ -321,13 +416,41 @@ namespace {
         }
     }
 
+    // "address" and "dl_command" from RT64's <base>.rice.json (a few hundred bytes, written just before it reports the
+    // texture). Left at 0 when the file or a field is missing.
+    void read_rice_info(const fs::path& base_path, uint32_t& address, uint32_t& dl_command) {
+        fs::path path = base_path;
+        path += ".rice.json";
+        std::ifstream in(path);
+        if (!in) return;
+        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        auto number_after = [&](const char* key, size_t from) -> uint32_t {
+            const size_t at = text.find(key, from);
+            if (at == std::string::npos) return 0;
+            const size_t colon = text.find(':', at);
+            if (colon == std::string::npos) return 0;
+            return (uint32_t)std::strtoull(text.c_str() + colon + 1, nullptr, 10);
+        };
+        // The texture's own "address" sits inside its "texture" object.
+        const size_t texture_at = text.find("\"texture\"");
+        address = texture_at == std::string::npos ? 0 : number_after("\"address\"", texture_at);
+        dl_command = number_after("\"dl_command\"", 0);
+    }
+
     // Called by RT64 on its renderer thread for each texture it dumps the first time.
     void on_texture_dumped(const fs::path& base_path, const uint8_t* tmem, const RT64::LoadTile& tile, uint16_t width, uint16_t height, uint32_t tlut) {
         // u8string, here and below: string() throws on Windows for a name outside the ANSI code page.
         const std::u8string file_name = base_path.filename().u8string();
         std::string name(file_name.begin(), file_name.end());
         name = name.substr(0, name.find('.'));
-        DumpedTexture t{name, std::vector<uint8_t>(tmem, tmem + tmem_bytes), tile, width, height, tlut};
+        textures_reported++;
+        DumpedTexture t{name, std::vector<uint8_t>(tmem, tmem + tmem_bytes), tile, width, height, tlut,
+            (uint16_t)ctx_map.load(), ctx_exit.load(), ctx_frame.load()};
+        // RT64 has just written <hash>.rice.json beside the raw dump: the texture's address in the game's memory and
+        // the display-list command that loaded it. What the texture belongs to is worked out now, while the frame
+        // that drew it is the one in memory.
+        read_rice_info(base_path, t.address, t.dl_command);
+        t.owner = tooie::texture_context::classify(t.address, t.dl_command);
         {
             std::lock_guard lock{queue_mutex};
             queue.push_back(std::move(t));
@@ -435,9 +558,23 @@ namespace {
     // At least this long per warp; if the game's map change was never seen, this long.
     constexpr auto min_load_time = 1s;
     constexpr auto no_load_seen_time = 10s;
+    // The quick passes wait less: the same checks (the map change seen and finished, control back, Banjo's
+    // position read), only the fixed waits on top of them are shorter. They run the game at fast_timescale.
+    constexpr auto fast_min_load_time = 500ms;
+    constexpr auto fast_no_load_seen_time = 5s;
+    constexpr auto fast_settle_time = 1500ms;
+    constexpr double fast_timescale = 2.0;
     bool load_seen = false;
     constexpr uint32_t player_table = 0x80135490;
     constexpr uint32_t player_pos_ptr = 0xE4;
+
+    using Mode = tooie::texture_sweep::Mode;
+    Mode sweep_mode = Mode::Full;
+    // What confirm_start asked for; read when the sweep begins (not at a restart, which reads sweep.txt).
+    std::atomic<int> requested_mode{(int)Mode::Full};
+
+    bool quick() { return sweep_mode != Mode::Full; }
+    const char* mode_word(Mode m) { return m == Mode::Fast ? "fast" : m == Mode::More ? "more" : "full"; }
 
     struct Target {
         uint16_t map;
@@ -550,7 +687,25 @@ namespace {
         std::map<uint16_t, unsigned> last_exit;
         std::vector<std::string> major;
         bool resumed_after_pass_over = false;
+        Mode mode = Mode::Full;
     };
+
+    // Maps that gave new textures at entrance 0 in an earlier pass (sweep.txt, all passes in it): the ones
+    // "sweep more" goes back to. A "done" or "same" line reads "done 0xMAP:EXIT N new textures".
+    std::set<uint16_t> maps_with_gains(const fs::path& file) {
+        std::set<uint16_t> maps;
+        std::ifstream in(file);
+        std::string line;
+        while (std::getline(in, line)) {
+            unsigned map = 0, exit = 0, count = 0;
+            char word[16] = {};
+            if (std::sscanf(line.c_str(), "%15s %x:%u %u new", word, &map, &exit, &count) == 4 && exit == 0 && count > 0 &&
+                (std::strcmp(word, "done") == 0 || std::strcmp(word, "same") == 0)) {
+                maps.insert((uint16_t)map);
+            }
+        }
+        return maps;
+    }
 
     // Reads sweep.txt. Lines name an entrance as 0xMAP:EXIT; "leave" ends a map.
     Progress read_progress(SweepRecord& record) {
@@ -589,6 +744,8 @@ namespace {
                 record.complete.insert((uint16_t)map);
             } else if (w == "finished") {
                 finished = true;
+            } else if (w == "mode") {
+                record.mode = line.find("fast") != std::string::npos ? Mode::Fast : line.find("more") != std::string::npos ? Mode::More : Mode::Full;
             } else if (w == "begin") {
                 record = SweepRecord{};
                 finished = false;
@@ -622,10 +779,37 @@ namespace {
         targets = all_targets();
         next_target = 0;
         SweepRecord record;
-        const Progress progress = read_progress(record);
+        Progress progress = read_progress(record);
         if (progress == Progress::Finished && at_startup) {
             phase = Phase::Done;
             return;
+        }
+        // A restart carries on in the mode sweep.txt says. A sweep started now (menu, sweep start, sweep fast) begins
+        // anew; only "more" carries on an unfinished "more" record, as it adds to the fast pass's file anyway.
+        Mode wanted = (Mode)requested_mode.load();
+        if (const char* env = std::getenv("TOOIE_TEXTURE_SWEEP_MODE"); env != nullptr && at_startup) {
+            wanted = std::strcmp(env, "fast") == 0 ? Mode::Fast : std::strcmp(env, "more") == 0 ? Mode::More : Mode::Full;
+        }
+        if (!at_startup && (progress != Progress::Unfinished || record.mode != wanted || wanted != Mode::More)) {
+            progress = Progress::None;
+        }
+        sweep_mode = progress == Progress::Unfinished ? record.mode : wanted;
+        if (sweep_mode == Mode::More) {
+            // Only the maps that gave textures at entrance 0, from entrance 1 on.
+            const std::set<uint16_t> gained = maps_with_gains(progress_file());
+            std::vector<Target> list;
+            for (Target t : targets) {
+                if (gained.contains(t.map) && !is_cutscene(t.name.c_str())) {
+                    t.first_exit = 1;
+                    list.push_back(t);
+                }
+            }
+            targets = std::move(list);
+            if (targets.empty() && progress != Progress::Unfinished) {
+                tooie::toast::show("Texture sweep: no map gave new textures in sweep.txt yet; run sweep fast first");
+                phase = Phase::Done;
+                return;
+            }
         }
         majors.clear();
         auto_start = false;
@@ -637,7 +821,7 @@ namespace {
                 }
                 if (auto it = record.last_exit.find(t.map); it != record.last_exit.end()) {
                     t.first_exit = (uint8_t)std::min<unsigned>(it->second + 1, max_exits);
-                    if (t.first_exit >= max_exits || is_cutscene(t.name.c_str())) {
+                    if (t.first_exit >= max_exits || is_cutscene(t.name.c_str()) || sweep_mode == Mode::Fast) {
                         continue;
                     }
                 }
@@ -651,8 +835,12 @@ namespace {
         } else {
             std::error_code ec;
             fs::create_directories(progress_file().parent_path(), ec);
-            fs::remove(progress_file(), ec);
+            // "More" adds to the fast pass's record, which says where to go; the others start the file anew.
+            if (sweep_mode != Mode::More) {
+                fs::remove(progress_file(), ec);
+            }
             log_line("begin, " + std::to_string(targets.size()) + " maps");
+            log_line(std::string("mode ") + mode_word(sweep_mode));
         }
         {
             // native(): wide on Windows (path::string() throws for a name outside the ANSI code page), UTF-8 elsewhere.
@@ -695,7 +883,7 @@ namespace {
     void warp_exit() {
         const Target& t = targets[next_target];
         log_line("start " + where() + " " + t.name);
-        pngs_at_exit_start = new_pngs.load();
+        pngs_at_exit_start = textures_reported.load();
         load_seen = false;
         std::snprintf(entry_now, sizeof(entry_now), "%s %s", where().c_str(), t.name.c_str());
         // Headless check of the pass-over restart: TOOIE_SWEEP_CRASH_TEST=0B8:1 crashes there.
@@ -709,10 +897,13 @@ namespace {
         }
         tooie::toast::show("Texture sweep " + std::to_string(next_target + 1) + "/" + std::to_string(targets.size()) + ": " + t.name +
             (exit_now > 0 ? " (entrance " + std::to_string(exit_now) + ")" : ""));
-        pngs_at_map_start = new_pngs.load();
+        pngs_at_map_start = textures_reported.load();
         tooie::debug::request_warp(t.map, exit_now, true);
         enter(Phase::Warping);
     }
+
+    // Set when the sweep has just finished; the tick then switches the Texture dump option off, so it is not left on.
+    bool finished_now = false;
 
     void warp_next(uint8_t* rdram) {
         if (next_target >= targets.size()) {
@@ -725,6 +916,7 @@ namespace {
                 log_line("  " + m);
             }
             log_line("finished");
+            finished_now = true;
             tooie::toast::show(majors.empty() ? std::string("Texture sweep finished") :
                 "Texture sweep finished, " + std::to_string(majors.size()) + " passed over: see logs/PassedOver.txt");
             if (start_map != 0 && start_map != tooie::debug::current_map(rdram)) {
@@ -744,13 +936,13 @@ namespace {
 
     void finish_exit(uint8_t* rdram, const char* word, bool repeat) {
         const std::string vram = tooie::vram_log::summary();
-        log_line(std::string(word) + " " + where() + " " + std::to_string(new_pngs.load() - pngs_at_map_start) + " new textures" + spawn_note + (vram.empty() ? "" : ", " + vram));
+        log_line(std::string(word) + " " + where() + " " + std::to_string(textures_reported.load() - pngs_at_map_start) + " new textures" + spawn_note + (vram.empty() ? "" : ", " + vram));
         spawn_note.clear();
         repeats = repeat ? repeats + 1 : 0;
         // A map that can't be reached at all has no other entrances to try.
         // A cutscene plays the same from any exit.
         const bool missed = std::strcmp(word, "missed") == 0;
-        if (!missed && !is_cutscene(targets[next_target].name.c_str()) && repeats < max_repeats && exit_now + 1 < max_exits) {
+        if (sweep_mode != Mode::Fast && !missed && !is_cutscene(targets[next_target].name.c_str()) && repeats < max_repeats && exit_now + 1 < max_exits) {
             exit_now++;
             warp_exit();
             return;
@@ -780,7 +972,8 @@ namespace {
                     load_seen = true;
                 }
                 if (!tooie::debug::warp_pending() && !tooie::debug::map_change_busy(rdram) &&
-                    (load_seen || elapsed > no_load_seen_time) && elapsed > min_load_time &&
+                    (load_seen || elapsed > (quick() ? fast_no_load_seen_time : no_load_seen_time)) &&
+                    elapsed > (quick() ? fast_min_load_time : min_load_time) &&
                     tooie::debug::current_map(rdram) == targets[next_target].map && tooie::debug::can_warp()) {
                     enter(Phase::Settling);
                 } else if (elapsed > load_timeout) {
@@ -788,7 +981,7 @@ namespace {
                 }
                 break;
             case Phase::Settling:
-                if (elapsed > settle_time) {
+                if (elapsed > (quick() ? fast_settle_time : settle_time)) {
                     std::array<float, 3> pos{};
                     if (player_position(rdram, pos)) {
                         char buf[96];
@@ -812,6 +1005,11 @@ namespace {
                         finish_exit(rdram, "same", true);
                         return;
                     }
+                    if (quick()) {
+                        // No camera turn: what is in view after the fade-in is what this pass takes.
+                        finish_exit(rdram, textures_reported.load() == pngs_at_exit_start ? "same" : "done", textures_reported.load() == pngs_at_exit_start);
+                        return;
+                    }
                     turn_start_ns = steady::now().time_since_epoch().count();
                     turning = true;
                     enter(Phase::Turning);
@@ -821,7 +1019,7 @@ namespace {
                 if (elapsed > turn_time) {
                     turning = false;
                     // Nothing new from here: it showed what an earlier entrance showed.
-                    if (new_pngs.load() == pngs_at_exit_start) {
+                    if (textures_reported.load() == pngs_at_exit_start) {
                         finish_exit(rdram, "same", true);
                     } else {
                         finish_exit(rdram, "done", false);
@@ -843,14 +1041,24 @@ namespace {
 }
 
 void tooie::texture_sweep::tick(uint8_t* rdram) {
+    tooie::texture_context::tick(rdram);
     tooie::TextureDump value = option_value();
     const tooie::TextureDump picked = value;
     if (value != tooie::TextureDump::SweepAllMaps) {
         armed = false;
         confirmed = false;
-    } else if (first_tick || confirmed.exchange(false)) {
+    } else if (first_tick) {
         // On at start-up: it was confirmed in an earlier run (or set from the environment).
         armed = true;
+        confirmed = false;
+    } else if (confirmed.exchange(false)) {
+        armed = true;
+        // A new start (sweep fast, more or start from the console) must begin again, whether the last sweep is
+        // finished or one is still running (also one carried on from start-up), as picking the option in the menu does.
+        if (phase != Phase::Idle) {
+            turning = false;
+            phase = Phase::Idle;
+        }
     }
     if (value == tooie::TextureDump::SweepAllMaps && (!armed || phase == Phase::Done)) {
         // Waiting for the prompt, or finished: nothing runs, not even dumping.
@@ -880,6 +1088,27 @@ void tooie::texture_sweep::tick(uint8_t* rdram) {
         }
         if (picked != tooie::TextureDump::SweepAllMaps) {
             phase = Phase::Idle;
+        }
+    }
+
+    // The context for textures RT64 reports from here on (read on its thread; see ctx_map).
+    {
+        const bool in_map = value == tooie::TextureDump::SweepAllMaps && next_target < targets.size() &&
+            (phase == Phase::Warping || phase == Phase::Settling || phase == Phase::Turning);
+        ctx_map = in_map ? targets[next_target].map : tooie::debug::current_map(rdram);
+        ctx_exit = in_map ? (int)exit_now : -1;
+        ctx_frame++;
+        tooie::console::set_sweep_timescale(in_map && quick() ? fast_timescale : 1.0);
+    }
+
+    if (finished_now) {
+        // The sweep is over: put the option back to Off and save it. sweep.txt keeps the record for "sweep more".
+        finished_now = false;
+        try {
+            recomp::config::Config& wip = recompui::config::get_config(tooie::wip_tab_id);
+            wip.update_option_value(tooie::texture_dump_option, (uint32_t)tooie::TextureDump::Off);
+            wip.save_config();
+        } catch (...) {
         }
     }
 
@@ -922,6 +1151,7 @@ void tooie::texture_sweep::add_prompt(recomp::config::Config& config) {
                 "Start sweep",
                 "Cancel",
                 [&config]() {
+                    requested_mode = (int)Mode::Full;
                     confirmed = true;
                     config.save_config();
                 },
@@ -980,6 +1210,7 @@ bool tooie::texture_sweep::sweeping() {
     return phase != Phase::Idle && phase != Phase::Done && phase != Phase::WaitForFile;
 }
 
-void tooie::texture_sweep::confirm_start() {
+void tooie::texture_sweep::confirm_start(Mode mode) {
+    requested_mode = (int)mode;
     confirmed = true;
 }

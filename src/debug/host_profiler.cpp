@@ -61,13 +61,7 @@ public:
         counts_.clear();
         chains_.clear();
         total_ = 0;
-        if (!sym_proc_) {
-            HANDLE dup = nullptr;
-            DuplicateHandle(GetCurrentProcess(), GetCurrentProcess(), GetCurrentProcess(), &dup, 0, FALSE, DUPLICATE_SAME_ACCESS);
-            sym_proc_ = dup;
-            SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_NO_PROMPTS);
-            sym_ready_ = SymInitialize(sym_proc_, nullptr, TRUE) != FALSE;
-        }
+        init_symbols();
         if (cycles_per_look_ == 0) {
             // Thread cycle counts run at the time stamp counter's rate; measure it against the clock once.
             LARGE_INTEGER f0, c0, c1;
@@ -101,12 +95,30 @@ public:
     }
 
     bool running() const { return running_.load(); }
+
+    // A code address's function name through the PDB (or module+offset).
+    std::string function_name(uintptr_t addr) {
+        std::lock_guard lock{ mutex_ };
+        init_symbols();
+        return named(addr).second;
+    }
     std::string path() {
         std::lock_guard lock{ mutex_ };
         return path_;
     }
 
 private:
+    // Called with mutex_ held.
+    void init_symbols() {
+        if (!sym_proc_) {
+            HANDLE dup = nullptr;
+            DuplicateHandle(GetCurrentProcess(), GetCurrentProcess(), GetCurrentProcess(), &dup, 0, FALSE, DUPLICATE_SAME_ACCESS);
+            sym_proc_ = dup;
+            SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_NO_PROMPTS);
+            sym_ready_ = SymInitialize(sym_proc_, nullptr, TRUE) != FALSE;
+        }
+    }
+
     void refresh_threads() {
         const DWORD pid = GetCurrentProcessId(), self = GetCurrentThreadId();
         HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
@@ -151,14 +163,20 @@ private:
             // Weighted by the cycles the thread used since the last look, so a thread that was busy a tenth of the
             // time counts a tenth as much as one that ran the whole time.
             ctx.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-            if (GetThreadContext(t.handle, &ctx)) {
-                by_thread[t.name][(uintptr_t)ctx.Rip] += used;
+            // Nothing is allocated while the thread is held: if it held the heap's lock, an allocation here would wait
+            // for it forever and hang the program (a report shot, allocating every frame, hit that). The address and
+            // its two callers are read while it is held, and counted once it runs again.
+            const bool got = GetThreadContext(t.handle, &ctx) != FALSE;
+            Chain chain{ got ? (uintptr_t)ctx.Rip : 0, 0, 0 };
+            if (got) {
                 // The two functions above it, while the thread is still held, for the .callers.tsv file.
-                Chain chain{ (uintptr_t)ctx.Rip, 0, 0 };
                 unwind_callers(ctx, chain);
-                chains_[label_][t.name][chain] += used;
             }
             ResumeThread(t.handle);
+            if (got) {
+                by_thread[t.name][chain.leaf] += used;
+                chains_[label_][t.name][chain] += used;
+            }
             total_ += used;
         }
     }
@@ -344,6 +362,7 @@ uint64_t tooie::host_profiler::stop() { return profiler().stop(); }
 void tooie::host_profiler::label(const std::string& text) { profiler().set_label(text); }
 bool tooie::host_profiler::running() { return profiler().running(); }
 std::string tooie::host_profiler::path() { return profiler().path(); }
+std::string tooie::host_profiler::function_name(uintptr_t addr) { return profiler().function_name(addr); }
 #else
 #include "tooie_host_profiler.h"
 bool tooie::host_profiler::start(const std::string&) { return false; }
@@ -351,4 +370,5 @@ uint64_t tooie::host_profiler::stop() { return 0; }
 void tooie::host_profiler::label(const std::string&) {}
 bool tooie::host_profiler::running() { return false; }
 std::string tooie::host_profiler::path() { return {}; }
+std::string tooie::host_profiler::function_name(uintptr_t) { return {}; }
 #endif

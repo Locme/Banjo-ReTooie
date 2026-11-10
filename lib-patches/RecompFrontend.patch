@@ -1096,7 +1096,7 @@ index 38b84f5..1437185 100644
          // Will throw an error if it hasn't been created yet.
          recompui::TabbedModal *get_config_modal();
 diff --git a/recompui/include/recompui/recompui.h b/recompui/include/recompui/recompui.h
-index 30c463b..52bbd4c 100644
+index 30c463b..5efbb30 100644
 --- a/recompui/include/recompui/recompui.h
 +++ b/recompui/include/recompui/recompui.h
 @@ -1,5 +1,6 @@
@@ -1118,6 +1118,18 @@ index 30c463b..52bbd4c 100644
      bool is_context_capturing_input();
      bool is_context_capturing_mouse();
      bool is_any_context_shown();
+@@ -74,7 +80,10 @@ namespace recompui {
+         std::function<void()> cancel_action,
+         ButtonStyle confirm_variant = ButtonStyle::Success,
+         ButtonStyle cancel_variant = ButtonStyle::Danger,
+-        bool focus_on_cancel = true
++        bool focus_on_cancel = true,
++        // Shows the prompt in the look of Banjo-Tooie's own menus (brown panel, gold lettering, a Jiggy) instead of
++        // the plain one; the button styles are then not used.
++        bool banjo_look = false
+     );
+     void open_info_prompt(
+         const std::string& header_text,
 diff --git a/recompui/src/base/ui_game_option.cpp b/recompui/src/base/ui_game_option.cpp
 index 13f3f5c..6cac348 100644
 --- a/recompui/src/base/ui_game_option.cpp
@@ -1322,10 +1334,31 @@ index eb8833e..8388dc1 100644
          Element *default_title_wrapper;
          GameOptionsMenu *game_options_menu = nullptr;
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..cabadda 100644
+index 277a421..1c74954 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
-@@ -202,6 +202,18 @@ struct ContextDetails {
+@@ -37,16 +37,17 @@ static std::atomic_bool cursor_enabled = true;
+ 
+ void recompui::open_quit_game_prompt() {
+     recompui::open_choice_prompt(
+-        "Are you sure you want to quit?",
+-        "Any progress since your last save will be lost.",
++        "Leaving so soon?",
++        "Grunty and her sisters won't stop themselves! Any progress since your last save will be lost.",
+         "Quit",
+-        "Cancel",
++        "Keep Playing",
+         []() {
+             ultramodern::quit();
+         },
+         []() {},
+         recompui::ButtonStyle::Danger,
+         recompui::ButtonStyle::Tertiary,
++        true,
+         true
+     );
+ }
+@@ -202,6 +203,18 @@ struct ContextDetails {
      Rml::ElementDocument* document;
  };
  
@@ -1344,7 +1377,7 @@ index 277a421..cabadda 100644
  class UIState {
      bool mouse_is_active_changed = false;
      std::vector<ContextDetails> shown_contexts{};
-@@ -224,7 +236,7 @@ public:
+@@ -224,7 +237,7 @@ public:
  
      UIState(SDL_Window* window, plume::RenderInterface* interface, plume::RenderDevice* device) {
  
@@ -1353,7 +1386,7 @@ index 277a421..cabadda 100644
          system_interface->SetWindow(window);
          render_interface.init(interface, device);
  
-@@ -244,7 +256,8 @@ public:
+@@ -244,7 +257,8 @@ public:
          
          context = Rml::CreateContext("main", Rml::Vector2i(width, height));
  
@@ -1363,7 +1396,7 @@ index 277a421..cabadda 100644
          {
              struct FontFace {
                  const char* filename;
-@@ -311,6 +324,14 @@ public:
+@@ -311,6 +325,14 @@ public:
              recompui::set_cursor_visible(mouse_is_active);
          }
  
@@ -1378,7 +1411,7 @@ index 277a421..cabadda 100644
          Rml::ElementDocument* current_document = top_mouse_document();
          if (current_document == nullptr) {
              return;
-@@ -346,6 +367,13 @@ public:
+@@ -346,6 +368,13 @@ public:
                  // Check if not focused or focused element is not focusable.
                  if (focused_el == nullptr || focused_el->is_focusable() != recompui::Element::CanFocus::Yes) {
                      auto recompui_doc = top_context.get_root_element();
@@ -1392,7 +1425,7 @@ index 277a421..cabadda 100644
                      auto last_hovered = recompui_doc->get_last_focusable_hovered_element();
                      if (last_hovered && last_hovered->is_focusable() == recompui::Element::CanFocus::Yes) {
                          last_hovered->focus();
-@@ -493,6 +521,7 @@ public:
+@@ -493,6 +522,7 @@ public:
  };
  
  std::unique_ptr<UIState> ui_state;
@@ -1400,7 +1433,7 @@ index 277a421..cabadda 100644
  std::recursive_mutex ui_state_mutex{};
  
  // TODO make this not be global
-@@ -570,6 +599,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
+@@ -570,6 +600,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
      return identifier;
  }
  
@@ -1441,7 +1474,7 @@ index 277a421..cabadda 100644
  bool check_menu_button_pressed(int profile_index, recompinput::GameInput input, int32_t event_button) {
      auto menuBinding0 = recompinput::profiles::get_input_binding(profile_index, input, 0);
      auto menuBinding1 = recompinput::profiles::get_input_binding(profile_index, input, 1);
-@@ -696,6 +759,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -696,6 +760,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
          if (!all_input_is_disabled) {
              bool is_mouse_input = false;
@@ -1452,7 +1485,7 @@ index 277a421..cabadda 100644
              // Implement some additional behavior for specific events on top of what RmlUi normally does with them.
              switch (cur_event.type) {
              case SDL_EventType::SDL_MOUSEMOTION: {
-@@ -705,6 +772,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -705,6 +773,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                      float xD = cur_event.motion.x - last_mouse_pos[0];
                      float yD = cur_event.motion.y - last_mouse_pos[1];
                      if (sqrt(xD * xD + yD * yD) < 100) {
@@ -1460,7 +1493,7 @@ index 277a421..cabadda 100644
                          break;
                      }
                  }
-@@ -713,6 +781,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -713,6 +782,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                  // if controller is the primary input, don't use mouse movement to allow cursor to reactivate
                  if (recompui::get_cont_active()) {
@@ -1468,7 +1501,7 @@ index 277a421..cabadda 100644
                      break;
                  }
              }
-@@ -731,7 +800,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -731,7 +801,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              case SDL_EventType::SDL_CONTROLLERBUTTONDOWN: {
                  int sdl_key = cont_button_to_key(cur_event.cbutton);
                  if (context_capturing_input && sdl_key) {
@@ -1477,7 +1510,7 @@ index 277a421..cabadda 100644
                      latest_controller_key_pressed = sdl_key;
                      next_repeat_time = clock::now() + start_repeat_delay;
                  }
-@@ -747,6 +816,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -747,6 +817,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                      if (cur_event.key.keysym.scancode == SDL_Scancode::SDL_SCANCODE_F8) {
                          if (recompui::config::general::get_debug_mode_enabled()) {
@@ -1487,7 +1520,7 @@ index 277a421..cabadda 100644
                              Rml::Debugger::SetVisible(!Rml::Debugger::IsVisible());
                          }
                      }
-@@ -776,7 +848,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -776,7 +849,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                          non_mouse_interacted = true;
                          int sdl_key = cont_axis_to_key(cur_event.caxis, axis_value);
                          if (context_capturing_input && sdl_key) {
@@ -1496,7 +1529,7 @@ index 277a421..cabadda 100644
                              latest_controller_key_pressed = sdl_key;
                              next_repeat_time = clock::now() + start_repeat_delay;
                          }
-@@ -796,14 +868,30 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -796,14 +869,30 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
  
              // Send the event to RmlUi if this type of event is being captured.
@@ -1529,7 +1562,7 @@ index 277a421..cabadda 100644
                  }
              }
          }
-@@ -837,7 +925,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -837,7 +926,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
              }
  
@@ -1538,7 +1571,7 @@ index 277a421..cabadda 100644
                  recompui::config::open();
              }
          }
-@@ -847,7 +935,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -847,7 +936,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      if (latest_controller_key_pressed != SDLK_UNKNOWN) {
          clock::time_point now = clock::now();
          if (now >= next_repeat_time) {
@@ -1547,7 +1580,7 @@ index 277a421..cabadda 100644
              next_repeat_time += repeat_rate;
          }
      }
-@@ -893,7 +981,10 @@ void deinit_hook() {
+@@ -893,7 +982,10 @@ void deinit_hook() {
      recompui::destroy_all_contexts();
  
      std::lock_guard lock {ui_state_mutex};
@@ -1559,6 +1592,265 @@ index 277a421..cabadda 100644
      Rml::Shutdown();
      ui_state->unload();
      ui_state.reset();
+diff --git a/recompui/src/composites/ui_prompt.cpp b/recompui/src/composites/ui_prompt.cpp
+index 56a0b70..bec287f 100644
+--- a/recompui/src/composites/ui_prompt.cpp
++++ b/recompui/src/composites/ui_prompt.cpp
+@@ -6,6 +6,8 @@
+ #include "elements/ui_document.h"
+ #include "elements/ui_label.h"
+ #include "elements/ui_button.h"
++#include "elements/ui_svg.h"
++#include "elements/ui_sidebar_style.h"
+ 
+ struct {
+     recompui::ContextId ui_context;
+@@ -46,6 +48,148 @@ void run_cancel_callback() {
+     // or just remove it as the usage of the prompt can change now
+ }
+ 
++namespace {
++    namespace banjo = recompui::sidebar_style;
++
++    // One prompt panel: header, text and the two buttons. The prompt context holds a plain panel and one in the look
++    // of Banjo-Tooie's own menus, and each open shows one of them; prompt_state points at the one shown.
++    struct PromptPanel {
++        recompui::Element* content = nullptr;
++        recompui::Label* header = nullptr;
++        recompui::Label* label = nullptr;
++        recompui::Element* controls = nullptr;
++        recompui::Button* confirm = nullptr;
++        recompui::Button* cancel = nullptr;
++    };
++    PromptPanel plain_panel;
++    PromptPanel banjo_panel;
++
++    // Brown with cream lettering, and gold with brown lettering under the mouse or the controller's selection, as
++    // the picked tab of the sidebar menu.
++    void style_banjo_button(recompui::Button* button) {
++        using namespace recompui;
++        button->set_background_color(banjo::sidebar);
++        button->set_border_color(banjo::gold_soft);
++        button->set_color(banjo::cream);
++        button->set_font_family(banjo::font);
++        button->set_letter_spacing(1);
++        Element* label = button->get_label();
++        label->set_font_weight(400);
++        label->set_font_size(26);
++        label->set_padding_top(4);
++        for (Style* style : { button->get_hover_style(), button->get_focus_style() }) {
++            style->set_background_color(banjo::gold);
++            style->set_border_color(banjo::orange);
++            style->set_color(banjo::brown_text);
++        }
++        button->apply_styles();
++    }
++
++    PromptPanel build_panel(recompui::ContextId context, recompui::Element* parent, bool banjo_look) {
++        using namespace recompui;
++        PromptPanel p;
++
++        p.content = context.create_element<Element>(parent);
++        p.content->set_display(Display::Flex);
++        p.content->set_position(Position::Relative);
++        p.content->set_flex(1.0f, 1.0f);
++        p.content->set_flex_basis(100, Unit::Percent);
++        p.content->set_flex_direction(FlexDirection::Column);
++        p.content->set_width(100, Unit::Percent);
++        p.content->set_max_width(700, Unit::Dp);
++        p.content->set_height_auto();
++        p.content->set_margin_auto();
++        p.content->set_border_radius(theme::border::radius_lg, Unit::Dp);
++        if (banjo_look) {
++            p.content->set_border_width(3, Unit::Dp);
++            p.content->set_border_color(banjo::gold);
++            // Solid, so the menu behind does not show through the lettering.
++            p.content->set_background_color(recompui::Color{ banjo::panel.r, banjo::panel.g, banjo::panel.b, 255 });
++        } else {
++            p.content->set_border_width(theme::border::width, Unit::Dp);
++            p.content->set_border_color(theme::color::WhiteA20);
++            p.content->set_background_color(theme::color::ModalOverlay);
++        }
++
++        if (banjo_look) {
++            // A Jiggy beside the header, in gold Luckiest Guy lettering.
++            Element* header_row = context.create_element<Element>(p.content);
++            header_row->set_display(Display::Flex);
++            header_row->set_flex_direction(FlexDirection::Row);
++            header_row->set_align_items(AlignItems::Center);
++            header_row->set_margin(24, Unit::Dp);
++            header_row->set_margin_bottom(16, Unit::Dp);
++            // JiggyBadge.svg has an orange rim that shows on the brown panel (Jiggy.svg's dark rim is drawn for the
++            // gold sidebar tab). It must not shrink: the row would squeeze it to well under its size.
++            Svg* jiggy = context.create_element<Svg>(header_row, "icons/JiggyBadge.svg");
++            jiggy->set_width(60, Unit::Dp);
++            jiggy->set_height(60, Unit::Dp);
++            jiggy->set_min_width(60, Unit::Dp);
++            jiggy->set_min_height(60, Unit::Dp);
++            jiggy->set_flex_shrink(0);
++            jiggy->set_margin_right(16, Unit::Dp);
++            p.header = context.create_element<Label>(header_row, "", LabelStyle::Large);
++            p.header->set_font_family(banjo::font);
++            p.header->set_font_weight(400);
++            p.header->set_font_size(44);
++            p.header->set_letter_spacing(2);
++            p.header->set_color(banjo::gold);
++            p.header->set_padding_top(6, Unit::Dp);
++        } else {
++            p.header = context.create_element<Label>(p.content, "", LabelStyle::Large);
++            p.header->set_margin(24, Unit::Dp);
++        }
++
++        p.label = context.create_element<Label>(p.content, "", banjo_look ? LabelStyle::Normal : LabelStyle::Small);
++        p.label->set_margin(24, Unit::Dp);
++        p.label->set_margin_top(0);
++        if (banjo_look) {
++            p.label->set_color(banjo::cream);
++        }
++
++        p.controls = context.create_element<Element>(p.content);
++        p.controls->set_display(Display::Flex);
++        p.controls->set_flex_direction(FlexDirection::Row);
++        p.controls->set_as_navigation_container(NavigationType::Horizontal);
++        p.controls->set_justify_content(JustifyContent::SpaceBetween);
++        p.controls->set_align_items(AlignItems::Center);
++        p.controls->set_padding(24, Unit::Dp);
++        p.controls->set_border_top_width(theme::border::width, Unit::Dp);
++        if (banjo_look) {
++            p.controls->set_border_top_color(banjo::gold_soft);
++        } else {
++            p.controls->set_border_top_color(theme::color::BorderSoft);
++        }
++
++        p.confirm = context.create_element<Button>(p.controls, "", ButtonStyle::Success);
++        p.confirm->set_min_width(185.0f, Unit::Dp);
++        p.confirm->add_pressed_callback(run_confirm_callback);
++
++        p.cancel = context.create_element<Button>(p.controls, "", ButtonStyle::Danger);
++        p.cancel->set_min_width(185.0f, Unit::Dp);
++        p.cancel->add_pressed_callback(run_cancel_callback);
++
++        if (banjo_look) {
++            style_banjo_button(p.confirm);
++            style_banjo_button(p.cancel);
++        }
++        return p;
++    }
++
++    // Must be called while prompt_state.mutex is locked and the prompt context is open.
++    void use_panel(bool banjo_look) {
++        const PromptPanel& shown = banjo_look ? banjo_panel : plain_panel;
++        const PromptPanel& hidden = banjo_look ? plain_panel : banjo_panel;
++        hidden.content->set_display(recompui::Display::None);
++        shown.content->set_display(recompui::Display::Flex);
++        prompt_state.prompt_header = shown.header;
++        prompt_state.prompt_label = shown.label;
++        prompt_state.prompt_controls = shown.controls;
++        prompt_state.confirm_button = shown.confirm;
++        prompt_state.cancel_button = shown.cancel;
++    }
++}
++
+ void recompui::init_prompt_context() {
+     ContextId context = create_context();
+ 
+@@ -78,46 +222,9 @@ void recompui::init_prompt_context() {
+     prompt_content_wrapper->set_align_items(AlignItems::Center);
+     prompt_content_wrapper->set_justify_content(JustifyContent::Center);
+ 
+-    Element* prompt_content = context.create_element<Element>(prompt_content_wrapper);
+-    prompt_content->set_display(Display::Flex);
+-    prompt_content->set_position(Position::Relative);
+-    prompt_content->set_flex(1.0f, 1.0f);
+-    prompt_content->set_flex_basis(100, Unit::Percent);
+-    prompt_content->set_flex_direction(FlexDirection::Column);
+-    prompt_content->set_width(100, Unit::Percent);
+-    prompt_content->set_max_width(700, Unit::Dp);
+-    prompt_content->set_height_auto();
+-    prompt_content->set_margin_auto();
+-    prompt_content->set_border_width(theme::border::width, Unit::Dp);
+-    prompt_content->set_border_radius(theme::border::radius_lg, Unit::Dp);
+-    prompt_content->set_border_color(theme::color::WhiteA20);
+-    prompt_content->set_background_color(theme::color::ModalOverlay);
+-    
+-    prompt_state.prompt_header = context.create_element<Label>(prompt_content, "", LabelStyle::Large);
+-    prompt_state.prompt_header->set_margin(24, Unit::Dp);
+-
+-    prompt_state.prompt_label = context.create_element<Label>(prompt_content, "", LabelStyle::Small);
+-    prompt_state.prompt_label->set_margin(24, Unit::Dp);
+-    prompt_state.prompt_label->set_margin_top(0);
+-    
+-    prompt_state.prompt_controls = context.create_element<Element>(prompt_content);
+-    
+-    prompt_state.prompt_controls->set_display(Display::Flex);
+-    prompt_state.prompt_controls->set_flex_direction(FlexDirection::Row);
+-    prompt_state.prompt_controls->set_as_navigation_container(NavigationType::Horizontal);
+-    prompt_state.prompt_controls->set_justify_content(JustifyContent::SpaceBetween);
+-    prompt_state.prompt_controls->set_align_items(AlignItems::Center);
+-    prompt_state.prompt_controls->set_padding(24, Unit::Dp);
+-    prompt_state.prompt_controls->set_border_top_width(theme::border::width, Unit::Dp);
+-    prompt_state.prompt_controls->set_border_top_color(theme::color::BorderSoft);
+-
+-    prompt_state.confirm_button = context.create_element<Button>(prompt_state.prompt_controls, "", ButtonStyle::Success);
+-    prompt_state.confirm_button->set_min_width(185.0f, Unit::Dp);
+-    prompt_state.confirm_button->add_pressed_callback(run_confirm_callback);
+-
+-    prompt_state.cancel_button = context.create_element<Button>(prompt_state.prompt_controls, "", ButtonStyle::Danger);
+-    prompt_state.cancel_button->set_min_width(185.0f, Unit::Dp);
+-    prompt_state.cancel_button->add_pressed_callback(run_cancel_callback);
++    plain_panel = build_panel(context, prompt_content_wrapper, false);
++    banjo_panel = build_panel(context, prompt_content_wrapper, true);
++    use_panel(false);
+ 
+     context.close();
+ }
+@@ -151,7 +258,8 @@ void recompui::open_choice_prompt(
+     std::function<void()> cancel_action,
+     ButtonStyle confirm_variant,
+     ButtonStyle cancel_variant,
+-    bool focus_on_cancel
++    bool focus_on_cancel,
++    bool banjo_look
+ ) {
+     std::lock_guard lock{ prompt_state.mutex };
+ 
+@@ -160,6 +268,7 @@ void recompui::open_choice_prompt(
+     ContextId prev_context = try_close_current_context();
+ 
+     prompt_state.ui_context.open();
++    use_panel(banjo_look);
+ 
+     prompt_state.prompt_header->set_text(header_text);
+     prompt_state.prompt_label->set_text(content_text);
+@@ -170,8 +279,10 @@ void recompui::open_choice_prompt(
+     prompt_state.cancel_button->set_text(cancel_label_text);
+     prompt_state.confirm_action = confirm_action;
+     prompt_state.cancel_action = cancel_action;
+-    prompt_state.confirm_button->apply_button_style(confirm_variant);
+-    prompt_state.cancel_button->apply_button_style(cancel_variant);
++    if (!banjo_look) {
++        prompt_state.confirm_button->apply_button_style(confirm_variant);
++        prompt_state.cancel_button->apply_button_style(cancel_variant);
++    }
+ 
+     prompt_state.ui_context.close();
+ 
+@@ -196,6 +307,7 @@ void recompui::open_info_prompt(
+     ContextId prev_context = try_close_current_context();
+ 
+     prompt_state.ui_context.open();
++    use_panel(false);
+ 
+     prompt_state.prompt_header->set_text(header_text);
+     prompt_state.prompt_label->set_text(content_text);
+@@ -228,6 +340,7 @@ void recompui::open_notification(
+     ContextId prev_context = try_close_current_context();
+ 
+     prompt_state.ui_context.open();
++    use_panel(false);
+ 
+     prompt_state.prompt_header->set_text(header_text);
+     prompt_state.prompt_label->set_text(content_text);
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
 index 6c84c05..9982a62 100644
 --- a/recompui/src/config/ui_config.cpp
@@ -1846,7 +2138,7 @@ index 6c84c05..9982a62 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("Config modal has not been initialized.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..67bb4e9 100644
+index 86428c9..27e620b 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
 @@ -1,4 +1,7 @@
@@ -2103,25 +2395,73 @@ index 86428c9..67bb4e9 100644
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
          auto opt_element = radio->get_option_element(i);
-@@ -199,6 +330,7 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -198,9 +329,60 @@ ConfigOptionNumber::ConfigOptionNumber(
+     ContextId context = recompui::get_current_context();
      auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
  
-     slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
-+    control_root = slider;
-     slider->set_width(100.0f, Unit::Percent);
-     slider->set_max_width(512.0f, Unit::Dp);
- 
-@@ -214,14 +346,29 @@ ConfigOptionNumber::ConfigOptionNumber(
-             this->on_hover(this->option_id);
-         }
-     });
-+    last_on_value = num_opt.default_value != 0.0 ? num_opt.default_value : (num_opt.min + num_opt.max) / 2.0;
-+
+-    slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
++    // An effect with options under it (Parallax, Displaced ground, Fog) shows a switch in its row (off is 0, on is
++    // the last non-zero value) and its slider on a "Strength" line of its own under the arrow, shown while the row is
++    // open, above the options under it (L, 2026-11-09). The switch comes first so the line wraps below the row.
++    const bool hasChildren = config->has_option_children(option_index);
 +    simple_toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
 +    simple_toggle->set_display(Display::None);
 +    simple_toggle->add_checked_callback([this](bool checked){
 +        this->set_option_value(this->option_id, checked ? last_on_value : 0.0);
 +    });
++
++    Element *sliderParent = this;
++    if (hasChildren) {
++        // Drawn as a row of its own under the switch, as the options under it are (set_compact, set_highlighted): it
++        // reaches out over this row's padding to its edges, on the darker panel with the thin gold edge and the line
++        // between rows, indented one step, with the same hidden arrow and name width, so its slider lines up with theirs.
++        strength_row = context.create_element<Element>(this, 0, "div", false);
++        strength_row->set_display(Display::Flex);
++        strength_row->set_flex_direction(FlexDirection::Row);
++        strength_row->set_align_items(AlignItems::Center);
++        strength_row->set_flex_basis(100.0f, Unit::Percent);
++        strength_row->set_gap(16.0f);
++        strength_row->set_margin_top(6.0f);
++        strength_row->set_margin_left(-(12.0f + 20.0f * config->get_option_depth(option_index)));
++        strength_row->set_margin_right(-12.0f);
++        strength_row->set_margin_bottom(-6.0f);
++        strength_row->set_padding_top(6.0f);
++        strength_row->set_padding_bottom(6.0f);
++        strength_row->set_padding_left(8.0f + 20.0f * (config->get_option_depth(option_index) + 1));
++        strength_row->set_padding_right(12.0f);
++        strength_row->set_border_left_width(4.0f);
++        strength_row->set_border_left_color(sidebar_style::gold_soft);
++        strength_row->set_border_top_width(theme::border::width);
++        strength_row->set_border_top_color(sidebar_style::gold_faint);
++        strength_row->set_background_color(Color{ 30, 14, 4, 235 });
++        IconButton *spacer = context.create_element<IconButton>(strength_row, "icons/Caret.svg", ButtonStyle::Basic, IconButtonSize::Small);
++        spacer->set_flex_shrink(0.0f);
++        spacer->set_visibility(Visibility::Hidden);
++        Label *strengthLabel = context.create_element<Label>(strength_row, "Strength", theme::Typography::LabelSM);
++        strengthLabel->set_flex_shrink(0.0f);
++        strengthLabel->set_width(38.0f, Unit::Percent);
++        strengthLabel->set_color(sidebar_style::cream);
++        sliderParent = strength_row;
++    }
++
++    slider = context.create_element<Slider>(sliderParent, num_opt.percent ? SliderType::Percent : SliderType::Double);
++    control_root = hasChildren ? nullptr : slider;
+     slider->set_width(100.0f, Unit::Percent);
+     slider->set_max_width(512.0f, Unit::Dp);
++    if (hasChildren) {
++        // As a compact row's control (set_compact): taking the room left beside the name.
++        slider->set_flex_grow(1.0f);
++        slider->set_flex_shrink(1.0f);
++        slider->set_flex_basis(0.0f);
++    }
+ 
+     slider->set_min_value(num_opt.min);
+     slider->set_max_value(num_opt.max);
+@@ -214,14 +396,23 @@ ConfigOptionNumber::ConfigOptionNumber(
+             this->on_hover(this->option_id);
+         }
+     });
++    last_on_value = num_opt.default_value != 0.0 ? num_opt.default_value : (num_opt.min + num_opt.max) / 2.0;
 +
      update_value();
      update_disabled();
@@ -2141,7 +2481,7 @@ index 86428c9..67bb4e9 100644
  };
  
  void ConfigOptionNumber::update_disabled() {
-@@ -229,6 +376,15 @@ void ConfigOptionNumber::update_disabled() {
+@@ -229,6 +420,18 @@ void ConfigOptionNumber::update_disabled() {
      set_enabled(!disabled);
  };
  
@@ -2149,15 +2489,18 @@ index 86428c9..67bb4e9 100644
 +    if (simple_toggle == nullptr) {
 +        return;
 +    }
-+    const bool as_toggle = !ignore_simple && config->has_option_children(option_index);
-+    slider->set_display(as_toggle ? Display::None : Display::Block);
++    // The switch in the row, and the Strength line while the row is open (Search shows the slider alone, always).
++    const bool as_toggle = !ignore_simple && (strength_row != nullptr);
 +    simple_toggle->set_display(as_toggle ? Display::Flex : Display::None);
++    if (strength_row != nullptr) {
++        strength_row->set_display((!as_toggle || config->is_option_expanded(option_index)) ? Display::Flex : Display::None);
++    }
 +};
 +
  // ConfigOptionString
  ConfigOptionString::ConfigOptionString(
      ResourceId rid,
-@@ -245,6 +401,7 @@ ConfigOptionString::ConfigOptionString(
+@@ -245,6 +448,7 @@ ConfigOptionString::ConfigOptionString(
  
      ContextId context = recompui::get_current_context();
      text_input = context.create_element<TextInput>(this);
@@ -2165,7 +2508,7 @@ index 86428c9..67bb4e9 100644
      text_input->set_width(100.0f, Unit::Percent);
      text_input->set_max_width(100.0f, Unit::Percent);
      update_value();
-@@ -284,16 +441,41 @@ ConfigOptionBool::ConfigOptionBool(
+@@ -284,16 +488,41 @@ ConfigOptionBool::ConfigOptionBool(
  
      ContextId context = recompui::get_current_context();
      toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
@@ -2208,7 +2551,7 @@ index 86428c9..67bb4e9 100644
  
  void ConfigOptionBool::update_disabled() {
 diff --git a/recompui/src/config/ui_config_option.h b/recompui/src/config/ui_config_option.h
-index 0561657..7be3ec2 100644
+index 0561657..01b1c2e 100644
 --- a/recompui/src/config/ui_config_option.h
 +++ b/recompui/src/config/ui_config_option.h
 @@ -4,9 +4,12 @@
@@ -2271,20 +2614,21 @@ index 0561657..7be3ec2 100644
      Label *details_label = nullptr;
  
      std::string_view get_type_name() override { return "ConfigOptionEnum"; }
-@@ -72,7 +98,12 @@ public:
+@@ -72,7 +98,13 @@ public:
  class ConfigOptionNumber : public ConfigOptionElement {
  protected:
      Slider *slider = nullptr;
-+    // An effect with options under it (Fog and its start distance) shows a switch instead of its slider
-+    // (off is 0, on is the last non-zero value); its sliders are under the arrow.
++    // An effect with options under it (Fog and its start distance) shows a switch in its row (off is 0, on is the
++    // last non-zero value), and its slider on a "Strength" line under it while the row is open (strength_row).
 +    Toggle *simple_toggle = nullptr;
++    Element *strength_row = nullptr;
 +    double last_on_value = 0.0;
  
 +    void update_simple_control() override;
      std::string_view get_type_name() override { return "ConfigOptionNumber"; }
  public:
      ConfigOptionNumber(
-@@ -87,6 +118,7 @@ public:
+@@ -87,6 +119,7 @@ public:
  
      void update_value() override;
      void update_disabled() override;
@@ -2292,7 +2636,7 @@ index 0561657..7be3ec2 100644
  };
  
  class ConfigOptionString : public ConfigOptionElement {
-@@ -112,7 +144,10 @@ public:
+@@ -112,7 +145,10 @@ public:
  class ConfigOptionBool : public ConfigOptionElement {
  protected:
      Toggle *toggle = nullptr;
@@ -2303,7 +2647,7 @@ index 0561657..7be3ec2 100644
      std::string_view get_type_name() override { return "ConfigOptionBool"; }
  public:
      ConfigOptionBool(
-@@ -127,6 +162,7 @@ public:
+@@ -127,6 +163,7 @@ public:
  
      void update_value() override;
      void update_disabled() override;
@@ -3036,6 +3380,18 @@ index cf2a311..486e08d 100644
              break;
          case EventType::Update:
              break;
+diff --git a/recompui/src/elements/ui_button.h b/recompui/src/elements/ui_button.h
+index d8a5e1e..4119357 100644
+--- a/recompui/src/elements/ui_button.h
++++ b/recompui/src/elements/ui_button.h
+@@ -42,6 +42,7 @@ namespace recompui {
+         Style* get_focus_style() { return &focus_style; }
+         Style* get_disabled_style() { return &disabled_style; }
+         Style* get_hover_disabled_style() { return &hover_disabled_style; }
++        Element* get_label() { return label; }
+         void apply_button_style(ButtonStyle new_style);
+         virtual void set_text(std::string_view text) override;
+     private:
 diff --git a/recompui/src/elements/ui_document.cpp b/recompui/src/elements/ui_document.cpp
 index a60c585..cae83dd 100644
 --- a/recompui/src/elements/ui_document.cpp
@@ -3089,7 +3445,7 @@ index a60c585..cae83dd 100644
              if (next_top_element == nullptr) {
                  return false;
 diff --git a/recompui/src/elements/ui_element.cpp b/recompui/src/elements/ui_element.cpp
-index 4517152..3bae9b1 100644
+index 4517152..984f1ae 100644
 --- a/recompui/src/elements/ui_element.cpp
 +++ b/recompui/src/elements/ui_element.cpp
 @@ -5,10 +5,30 @@
@@ -3206,7 +3562,7 @@ index 4517152..3bae9b1 100644
  void Element::set_as_primary_focus(bool is_primary_focus) {
      this->is_primary_focus = is_primary_focus;
  }
-@@ -762,4 +835,83 @@ void Element::build_navigation(Element *nav_parent, Element *cur_focus_element)
+@@ -762,4 +835,97 @@ void Element::build_navigation(Element *nav_parent, Element *cur_focus_element)
      }
  }
  
@@ -3287,11 +3643,25 @@ index 4517152..3bae9b1 100644
 +    return layout_kept;
 +}
 +
++bool scroll_into_view(const std::string &name) {
++    Element *element = nullptr;
++    {
++        std::lock_guard<std::mutex> lock(layout_mutex);
++        auto it = layout_live.find(name);
++        if ((it == layout_live.end()) || it->second.empty()) {
++            return false;
++        }
++        element = *it->second.begin();
++    }
++    element->scroll_into_view();
++    return true;
++}
++
 +} // namespace layout_offsets
 +
  } // namespace recompui
 diff --git a/recompui/src/elements/ui_element.h b/recompui/src/elements/ui_element.h
-index 34eec3f..e12460f 100644
+index 34eec3f..d9f0aa0 100644
 --- a/recompui/src/elements/ui_element.h
 +++ b/recompui/src/elements/ui_element.h
 @@ -6,8 +6,11 @@
@@ -3359,7 +3729,7 @@ index 34eec3f..e12460f 100644
  
      Element *select_add_option(std::string_view text, std::string_view value);
      void select_set_selection(std::string_view option_value);
-@@ -187,4 +208,26 @@ public:
+@@ -187,4 +208,28 @@ public:
  
  void queue_ui_callback(recompui::ResourceId resource, const Event& e, const UICallback& callback);
  
@@ -3383,6 +3753,8 @@ index 34eec3f..e12460f 100644
 +    void reset_all();
 +    bool is_live(const std::string &name);
 +    std::map<std::string, std::pair<float, float>> offsets();
++    // Scrolls the first live element under the name into view (the console's menu expand); false when none is live.
++    bool scroll_into_view(const std::string &name);
 +}
 +
  } // namespace recompui
