@@ -238,7 +238,12 @@ RT64's `CMakeLists.txt` includes `rt64-ext/rt64_ext.cmake` at its end, which bui
   texture dumper (normally only in the debugger window) in that folder, or stops
   it with an empty path. Each texture dumped the first time is also handed to the
   callback with TMEM and its tile, so the game can save it as a PNG
-  (`src/game/texture_sweep.cpp`).
+  (`src/game/texture_sweep.cpp`), and with the address and display-list command that
+  its `.rice.json` holds. The files' bytes are copied on the renderer thread and written
+  by a worker thread (`rt64-ext/src/hle/rt64_texture_dump_writer.cpp`): one `fclose` there
+  once held the renderer, and with it the game, for 21 s (L's sweep, 2026-11-07).
+  `RT64::FlushTextureDumps()` waits for the queue; the game calls it when dumping stops,
+  and the writer waits for it at exit (`atexit` and `at_quick_exit`).
 * **Screenshots** (`src/hle/rt64_present_queue.cpp`, `.h`, with the state and read-back in
   `rt64-ext/src/hle/rt64_present_queue_ext.cpp`): adds
   `RT64::RequestScreenshot(callback)`. The next presented frame's game image is

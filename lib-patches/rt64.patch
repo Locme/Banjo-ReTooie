@@ -1502,19 +1502,22 @@ index 84f4e7c..d6ef175 100644
  
          // The expected size and order for the elements in each array are:
 diff --git a/src/hle/rt64_rdp_tmem.cpp b/src/hle/rt64_rdp_tmem.cpp
-index 6051f4e..aa494f2 100644
+index 6051f4e..e67ea6f 100644
 --- a/src/hle/rt64_rdp_tmem.cpp
 +++ b/src/hle/rt64_rdp_tmem.cpp
-@@ -6,6 +6,7 @@
+@@ -6,24 +6,72 @@
  
  #include <cassert>
  #include <cinttypes>
 +#include <mutex>
++#include <sstream>
  
  #include "xxHash/xxh3.h"
  
-@@ -14,16 +15,59 @@
+ #include "common/rt64_tmem_hasher.h"
+ 
  #include "rt64_state.h"
++#include "hle/rt64_texture_dump_writer.h"
  
  namespace RT64 {
 +    // Banjo-Tooie texture dumps.
@@ -1528,6 +1531,12 @@ index 6051f4e..aa494f2 100644
 +    };
 +
 +    void SetTextureDumpDirectory(const std::filesystem::path &directory, TextureDumpCallback callback) {
++        // Made here, on the caller's thread, so the renderer thread does no file work when it picks the request up.
++        if (!directory.empty()) {
++            std::error_code ec;
++            std::filesystem::create_directories(directory, ec);
++        }
++
 +        std::scoped_lock lock(dumpRequestMutex);
 +        dumpRequestDirectory = directory;
 +        dumpRequestCallback = std::move(callback);
@@ -1552,10 +1561,6 @@ index 6051f4e..aa494f2 100644
 +        state->dumpingTexturesDirectory = dumpRequestDirectory;
 +        dumpCallback = dumpRequestCallback;
 +        dumpedSet.clear();
-+        if (!dumpRequestDirectory.empty()) {
-+            std::error_code ec;
-+            std::filesystem::create_directories(dumpRequestDirectory, ec);
-+        }
 +    }
 +
      void TextureManager::uploadEmpty(State *state, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint64_t replacementHash) {
@@ -1573,7 +1578,7 @@ index 6051f4e..aa494f2 100644
          XXH3_state_t xxh3;
          XXH3_64bits_reset(&xxh3);
          const uint8_t *TMEM = reinterpret_cast<const uint8_t *>(state->rdp->TMEM);
-@@ -35,6 +79,9 @@ namespace RT64 {
+@@ -35,6 +83,9 @@ namespace RT64 {
              hashSet.insert(hash);
              textureCache->queueGPUUploadTMEM(hash, creationFrame, TMEM, RDP_TMEM_BYTES, width, height, 0, LoadTile(), false);
          }
@@ -1583,7 +1588,7 @@ index 6051f4e..aa494f2 100644
          
          // Dump memory contents into a file if the process is active.
          if (!state->dumpingTexturesDirectory.empty()) {
-@@ -50,12 +97,16 @@ namespace RT64 {
+@@ -50,12 +101,16 @@ namespace RT64 {
      }
  
      uint64_t TextureManager::uploadTexture(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint32_t tlut) {
@@ -1600,38 +1605,139 @@ index 6051f4e..aa494f2 100644
  
          // Dump memory contents into a file if the process is active.
          if (!state->dumpingTexturesDirectory.empty()) {
-@@ -126,6 +177,8 @@ namespace RT64 {
-                 jroot["tile"] = loadOp.tile;
-                 jroot["type"] = loadOp.type;
-                 jroot["texture"] = loadOp.texture;
-+                jroot["dl_command"] = loadOp.dlCommandAddress;
-+                jroot["dl_list"] = loadOp.dlListAddress;
-                 dumpRdramInfoStream << std::setw(4) << jroot << std::endl;
-                 dumpRdramInfoStream.close();
-             }
-@@ -159,6 +212,8 @@ namespace RT64 {
-                 jroot["tile"] = paletteLoadOp.tile;
-                 jroot["type"] = paletteLoadOp.type;
-                 jroot["texture"] = paletteLoadOp.texture;
-+                jroot["dl_command"] = paletteLoadOp.dlCommandAddress;
-+                jroot["dl_list"] = paletteLoadOp.dlListAddress;
-                 dumpPaletteRdramInfoStream << std::setw(4) << jroot << std::endl;
-                 dumpPaletteRdramInfoStream.close();
-             }
-@@ -187,6 +242,11 @@ namespace RT64 {
-             dumpTileStream << std::setw(4) << jroot << std::endl;
-             dumpTileStream.close();
+@@ -72,17 +127,26 @@ namespace RT64 {
+ 
+         // Insert into set regardless of whether the dump is successful or not.
+         dumpedSet.insert(hash);
+-        
++
++        // Banjo-Tooie: the bytes of each file are copied here and the files are written by a worker thread
++        // (rt64-ext/src/hle/rt64_texture_dump_writer.cpp), so a slow disk never holds up the frame. Names and
++        // contents are the same as when they were written here.
++        std::vector<TextureDumpFile> dumpFiles;
++        auto queueBinary = [&](const std::filesystem::path &path, const char *bytes, size_t count) {
++            dumpFiles.push_back({ path, std::string(bytes, count), true });
++        };
++
++        auto queueJson = [&](const std::filesystem::path &path, const json &jroot) {
++            std::ostringstream text;
++            text << std::setw(4) << jroot << std::endl;
++            dumpFiles.push_back({ path, text.str(), false });
++        };
++
+         // Dump the entirety of TMEM.
+         char baseName[64];
+         snprintf(baseName, sizeof(baseName), "%016" PRIx64 ".v%u", hash, TMEMHasher::CurrentHashVersion);
+         std::filesystem::path dumpTmemPath = state->dumpingTexturesDirectory / (std::string(baseName) + ".tmem");
+-        std::ofstream dumpTmemStream(dumpTmemPath, std::ios::binary);
+-        if (dumpTmemStream.is_open()) {
+-            const char *TMEM = reinterpret_cast<const char *>(state->rdp->TMEM);
+-            dumpTmemStream.write(TMEM, RDP_TMEM_BYTES);
+-            dumpTmemStream.close();
+-        }
++        queueBinary(dumpTmemPath, reinterpret_cast<const char *>(state->rdp->TMEM), RDP_TMEM_BYTES);
+ 
+         // Dump the RDRAM last loaded into the TMEM address pointed to by the tile. Required for generating hashes used by Rice.
+         const LoadOperation &loadOp = state->rdp->rice.lastLoadOpByTMEM[loadTile.tmem];
+@@ -110,25 +174,23 @@ namespace RT64 {
+         uint32_t loadTileBpr = width << loadTile.siz >> 1;
+         rdramCount = std::max(rdramCount, std::max(loadTileBpr, commonBytesPerRow) * height);
+ 
++        uint32_t riceAddress = 0;
++        uint32_t riceDlCommand = 0;
+         if (rdramCount > 0) {
+             std::filesystem::path dumpRdramPath = state->dumpingTexturesDirectory / (std::string(baseName) + ".rice.rdram");
+-            std::ofstream dumpRdramStream(dumpRdramPath, std::ios::binary);
+-            if (dumpRdramStream.is_open()) {
+-                const char *RDRAM = reinterpret_cast<const char *>(state->RDRAM);
+-                dumpRdramStream.write(&RDRAM[rdramStart], rdramCount);
+-                dumpRdramStream.close();
+-            }
++            const char *RDRAM = reinterpret_cast<const char *>(state->RDRAM);
++            queueBinary(dumpRdramPath, &RDRAM[rdramStart], rdramCount);
+ 
+             std::filesystem::path dumpRdramInfoPath = state->dumpingTexturesDirectory / (std::string(baseName) + ".rice.json");
+-            std::ofstream dumpRdramInfoStream(dumpRdramInfoPath);
+-            if (dumpRdramInfoStream.is_open()) {
+-                json jroot;
+-                jroot["tile"] = loadOp.tile;
+-                jroot["type"] = loadOp.type;
+-                jroot["texture"] = loadOp.texture;
+-                dumpRdramInfoStream << std::setw(4) << jroot << std::endl;
+-                dumpRdramInfoStream.close();
+-            }
++            json jroot;
++            jroot["tile"] = loadOp.tile;
++            jroot["type"] = loadOp.type;
++            jroot["texture"] = loadOp.texture;
++            jroot["dl_command"] = loadOp.dlCommandAddress;
++            jroot["dl_list"] = loadOp.dlListAddress;
++            queueJson(dumpRdramInfoPath, jroot);
++            riceAddress = loadOp.texture.address;
++            riceDlCommand = loadOp.dlCommandAddress;
          }
+         
+         // Repeat a similar process for dumping the palette.
+@@ -144,30 +206,23 @@ namespace RT64 {
+             uint32_t paletteRdramCount = (rowCount - 1) * paletteBytesPerRow + (wordsPerRow << 3);
+             if (paletteRdramCount > 0) {
+                 std::filesystem::path dumpPaletteRdramPath = state->dumpingTexturesDirectory / (std::string(baseName) + ".rice.palette.rdram");
+-                std::ofstream dumpPaletteRdramStream(dumpPaletteRdramPath, std::ios::binary);
+-                if (dumpPaletteRdramStream.is_open()) {
+-                    const char *RDRAM = reinterpret_cast<const char *>(state->RDRAM);
+-                    dumpPaletteRdramStream.write(&RDRAM[paletteRdramStart], paletteRdramCount);
+-                    dumpPaletteRdramStream.close();
+-                }
++                const char *RDRAM = reinterpret_cast<const char *>(state->RDRAM);
++                queueBinary(dumpPaletteRdramPath, &RDRAM[paletteRdramStart], paletteRdramCount);
+             }
+ 
+             std::filesystem::path dumpPaletteRdramInfoPath = state->dumpingTexturesDirectory / (std::string(baseName) + ".rice.palette.json");
+-            std::ofstream dumpPaletteRdramInfoStream(dumpPaletteRdramInfoPath);
+-            if (dumpPaletteRdramInfoStream.is_open()) {
+-                json jroot;
+-                jroot["tile"] = paletteLoadOp.tile;
+-                jroot["type"] = paletteLoadOp.type;
+-                jroot["texture"] = paletteLoadOp.texture;
+-                dumpPaletteRdramInfoStream << std::setw(4) << jroot << std::endl;
+-                dumpPaletteRdramInfoStream.close();
+-            }
++            json jroot;
++            jroot["tile"] = paletteLoadOp.tile;
++            jroot["type"] = paletteLoadOp.type;
++            jroot["texture"] = paletteLoadOp.texture;
++            jroot["dl_command"] = paletteLoadOp.dlCommandAddress;
++            jroot["dl_list"] = paletteLoadOp.dlListAddress;
++            queueJson(dumpPaletteRdramInfoPath, jroot);
+         }
+ 
+         // Dump the parameters of the tile into a JSON file.
+         std::filesystem::path dumpTilePath = state->dumpingTexturesDirectory / (std::string(baseName) + ".tile.json");
+-        std::ofstream dumpTileStream(dumpTilePath);
+-        if (dumpTileStream.is_open()) {
++        {
+             json jroot;
+             jroot["tile"] = loadTile;
+             jroot["width"] = width;
+@@ -184,8 +239,14 @@ namespace RT64 {
+                 jroot["tlut"] = LoadTLUT::None;
+             }
+ 
+-            dumpTileStream << std::setw(4) << jroot << std::endl;
+-            dumpTileStream.close();
++            queueJson(dumpTilePath, jroot);
++        }
++
++        QueueTextureDumpFiles(std::move(dumpFiles));
 +
 +        dumpCount++;
 +        if (dumpCallback) {
-+            dumpCallback(state->dumpingTexturesDirectory / std::string(baseName), reinterpret_cast<const uint8_t *>(state->rdp->TMEM), loadTile, width, height, tlut);
-+        }
++            dumpCallback(state->dumpingTexturesDirectory / std::string(baseName), reinterpret_cast<const uint8_t *>(state->rdp->TMEM), loadTile, width, height, tlut, riceAddress, riceDlCommand);
+         }
      }
  
-     void TextureManager::removeHashes(const std::vector<uint64_t> &hashes) {
 diff --git a/src/hle/rt64_rdp_tmem.h b/src/hle/rt64_rdp_tmem.h
-index 3708220..f2206f7 100644
+index 3708220..8039083 100644
 --- a/src/hle/rt64_rdp_tmem.h
 +++ b/src/hle/rt64_rdp_tmem.h
 @@ -4,6 +4,9 @@
@@ -1644,7 +1750,7 @@ index 3708220..f2206f7 100644
  #include <set>
  
  #include "hle/rt64_draw_call.h"
-@@ -12,9 +15,22 @@
+@@ -12,9 +15,27 @@
  namespace RT64 {
      struct State;
  
@@ -1652,10 +1758,15 @@ index 3708220..f2206f7 100644
 +    // debugger window (an empty path stops it). Each texture dumped for the first time
 +    // is also handed to the callback, on the renderer thread, with the whole of TMEM
 +    // (4 KB) and the tile it is drawn from. basePath is the dump's path without its
-+    // ".tmem" ending. TextureDumpCount() is how many textures were dumped since the last start.
-+    typedef std::function<void(const std::filesystem::path &basePath, const uint8_t *tmem, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut)> TextureDumpCallback;
++    // ".tmem" ending. riceAddress and riceDlCommand are the "address" (in "texture") and
++    // "dl_command" of <basePath>.rice.json, 0 when there is none: the dump's files are written
++    // by a worker thread, so they may not be on disk yet when the callback runs.
++    // TextureDumpCount() is how many textures were dumped since the last start.
++    // FlushTextureDumps() waits until every dumped file is written (on stop; quitting waits too).
++    typedef std::function<void(const std::filesystem::path &basePath, const uint8_t *tmem, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, uint32_t riceAddress, uint32_t riceDlCommand)> TextureDumpCallback;
 +    void SetTextureDumpDirectory(const std::filesystem::path &directory, TextureDumpCallback callback);
 +    uint32_t TextureDumpCount();
++    void FlushTextureDumps();
 +
      struct TextureManager {
          std::set<uint64_t> hashSet;

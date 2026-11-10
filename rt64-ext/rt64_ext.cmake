@@ -26,6 +26,7 @@ target_sources(rt64 PRIVATE
     ${RT64_EXT_DIR}/src/render/rt64_ffx_upscaler.cpp
     ${RT64_EXT_DIR}/src/render/rt64_photo_grade.cpp
     ${RT64_EXT_DIR}/src/hle/rt64_present_queue_ext.cpp
+    ${RT64_EXT_DIR}/src/hle/rt64_texture_dump_writer.cpp
     ${RT64_EXT_DIR}/src/render/rt64_texture_cache_ext.cpp
     ${RT64_EXT_DIR}/src/render/rt64_raster_shader_cache_ext.cpp)
 

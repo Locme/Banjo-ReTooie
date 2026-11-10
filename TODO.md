@@ -63,8 +63,6 @@ reports now give the map. Still to do:
   when that happens, and the `[heap]` line gives the link's address and the map; `writewatch` on that address in a
   long warp run could catch the writer. The port's own hooks that write floats into game objects (size cheats,
   jiggle, transform menu, free camera) are the first suspects.
-- The 21 s hang at 03:56:16: RT64's texture dump writes its files on the graphics thread, and one `fclose` stalled
-  (disk or virus scan). Writing the dumps on a worker thread (`lib-patches/rt64.patch`) would keep the game going.
 
 ## Presets and default controls, keyboard and controller (asked by L, 2026-11-07)
 

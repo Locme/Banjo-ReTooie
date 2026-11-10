@@ -96,8 +96,9 @@
 
 namespace RT64 {
     // lib/rt64/src/hle/rt64_rdp_tmem.h (from lib-patches/rt64.patch).
-    typedef std::function<void(const std::filesystem::path &basePath, const uint8_t *tmem, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut)> TextureDumpCallback;
+    typedef std::function<void(const std::filesystem::path &basePath, const uint8_t *tmem, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, uint32_t riceAddress, uint32_t riceDlCommand)> TextureDumpCallback;
     void SetTextureDumpDirectory(const std::filesystem::path &directory, TextureDumpCallback callback);
+    void FlushTextureDumps();
     // lib/rt64/src/render/rt64_texture_cache.h (from lib-patches/rt64.patch).
     void SetReplacementPoolLimit(uint64_t bytes);
 }
@@ -416,29 +417,9 @@ namespace {
         }
     }
 
-    // "address" and "dl_command" from RT64's <base>.rice.json (a few hundred bytes, written just before it reports the
-    // texture). Left at 0 when the file or a field is missing.
-    void read_rice_info(const fs::path& base_path, uint32_t& address, uint32_t& dl_command) {
-        fs::path path = base_path;
-        path += ".rice.json";
-        std::ifstream in(path);
-        if (!in) return;
-        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        auto number_after = [&](const char* key, size_t from) -> uint32_t {
-            const size_t at = text.find(key, from);
-            if (at == std::string::npos) return 0;
-            const size_t colon = text.find(':', at);
-            if (colon == std::string::npos) return 0;
-            return (uint32_t)std::strtoull(text.c_str() + colon + 1, nullptr, 10);
-        };
-        // The texture's own "address" sits inside its "texture" object.
-        const size_t texture_at = text.find("\"texture\"");
-        address = texture_at == std::string::npos ? 0 : number_after("\"address\"", texture_at);
-        dl_command = number_after("\"dl_command\"", 0);
-    }
-
     // Called by RT64 on its renderer thread for each texture it dumps the first time.
-    void on_texture_dumped(const fs::path& base_path, const uint8_t* tmem, const RT64::LoadTile& tile, uint16_t width, uint16_t height, uint32_t tlut) {
+    void on_texture_dumped(const fs::path& base_path, const uint8_t* tmem, const RT64::LoadTile& tile, uint16_t width, uint16_t height, uint32_t tlut,
+        uint32_t rice_address, uint32_t rice_dl_command) {
         // u8string, here and below: string() throws on Windows for a name outside the ANSI code page.
         const std::u8string file_name = base_path.filename().u8string();
         std::string name(file_name.begin(), file_name.end());
@@ -446,10 +427,12 @@ namespace {
         textures_reported++;
         DumpedTexture t{name, std::vector<uint8_t>(tmem, tmem + tmem_bytes), tile, width, height, tlut,
             (uint16_t)ctx_map.load(), ctx_exit.load(), ctx_frame.load()};
-        // RT64 has just written <hash>.rice.json beside the raw dump: the texture's address in the game's memory and
-        // the display-list command that loaded it. What the texture belongs to is worked out now, while the frame
-        // that drew it is the one in memory.
-        read_rice_info(base_path, t.address, t.dl_command);
+        // The texture's address in the game's memory and the display-list command that loaded it, as RT64 puts them in
+        // <hash>.rice.json (0 without one). RT64 writes its files on a thread of its own, so they are passed here
+        // rather than read back. What the texture belongs to is worked out now, while the frame that drew it is the
+        // one in memory.
+        t.address = rice_address;
+        t.dl_command = rice_dl_command;
         t.owner = tooie::texture_context::classify(t.address, t.dl_command);
         {
             std::lock_guard lock{queue_mutex};
@@ -519,6 +502,8 @@ namespace {
 
     void stop_dumping(const fs::path& root) {
         RT64::SetTextureDumpDirectory({}, nullptr);
+        // RT64's raw files are written by its own worker thread; wait for the ones already queued.
+        RT64::FlushTextureDumps();
         // Let the PNGs already queued finish before listing them.
         for (int i = 0; i < 200; i++) {
             {
