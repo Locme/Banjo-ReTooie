@@ -1682,6 +1682,7 @@ RECOMP_FUNC void func_808004C4_bsswim(uint8_t* rdram, recomp_context* ctx) {
     // 0x808004E4: addiu       $a0, $zero, 0x7
     ctx->r4 = ADD32(0, 0X7);
     after_1:
+    ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 0);
     // 0x808004E8: bne         $v0, $zero, L_8080051C
     if (ctx->r2 != 0) {
         // 0x808004EC: nop
@@ -1735,6 +1736,7 @@ L_8080051C:
     // 0x80800520: addiu       $a0, $zero, 0x7
     ctx->r4 = ADD32(0, 0X7);
     after_4:
+    ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 0);
     // 0x80800524: bnel        $v0, $zero, L_8080055C
     if (ctx->r2 != 0) {
         // 0x80800528: lui         $a1, 0x3C23

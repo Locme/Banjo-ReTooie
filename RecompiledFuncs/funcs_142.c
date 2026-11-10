@@ -1780,6 +1780,7 @@ RECOMP_FUNC void func_8080070C_bskazpaddle(uint8_t* rdram, recomp_context* ctx) 
     // 0x80800728: addiu       $a0, $zero, 0x7
     ctx->r4 = ADD32(0, 0X7);
     after_0:
+    ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 4);
     // 0x8080072C: bne         $v0, $zero, L_80800760
     if (ctx->r2 != 0) {
         // 0x80800730: nop

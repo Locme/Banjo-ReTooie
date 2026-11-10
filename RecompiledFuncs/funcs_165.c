@@ -3718,7 +3718,7 @@ L_808005AC:
 RECOMP_FUNC void func_800BBCB8(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
-    if (tooie_particle_spawn_skip(rdram, ctx)) { ctx->r2 = 0; return; }
+    tooie_emit_log(rdram, ctx, 1); if (tooie_particle_spawn_skip(rdram, ctx)) { ctx->r2 = 0; return; }
     // 0x800BBCB8: addiu       $sp, $sp, -0x28
     ctx->r29 = ADD32(ctx->r29, -0X28);
     // 0x800BBCBC: sw          $ra, 0x1C($sp)

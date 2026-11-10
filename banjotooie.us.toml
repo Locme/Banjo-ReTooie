@@ -1121,11 +1121,81 @@ text = "if (tooie_storm_spawn_skip(rdram, ctx)) { return; }"
 # never stop and the particles never age, so the frame's display list grew until it overflowed
 # (L's 2026-10-22 Icy Side Photo Mode crash, Uncapped, after the storm hook above). func_800BBCB8
 # makes an emitter and returns it. While time is frozen and the last frame's list was over 60%
-# full it makes none and returns null (src/game/game_frame_rate.cpp).
+# full it makes none and returns null (src/game/game_frame_rate.cpp). tooie_emit_log counts the
+# emitters made for TOOIE_EMIT_LOG.
 [[patches.hook]]
 func = "func_800BBCB8"
 before_vram = 0x800BBCB8
-text = "if (tooie_particle_spawn_skip(rdram, ctx)) { ctx->r2 = 0; return; }"
+text = "tooie_emit_log(rdram, ctx, 1); if (tooie_particle_spawn_skip(rdram, ctx)) { ctx->r2 = 0; return; }"
+
+# func_800BA22C makes $a1 particles from the emitter in $a0: counted for TOOIE_EMIT_LOG
+# (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_800BA22C"
+before_vram = 0x800BA22C
+text = "tooie_emit_log(rdram, ctx, 0);"
+
+# Swimming bubbles and ripples. Floating on the surface (bsswim for Banjo, and bsvanswim, bstntswim,
+# bsmumswim and bskazpaddle for the van, the T-Rex, Mumbo and Kazooie) makes a ripple and a bubble
+# on a coin flip when the game's frame count & 7 is 0 (func_8001210C), and under water bsbswim
+# bubbles when it & 1 is 0, so above 30 FPS there were many times more (L, 2026-11-10). After each
+# of those calls, above 30 FPS, the count is one that steps once per 1/30 s of game time, and the
+# spawn is skipped on the frames in between (src/game/game_frame_rate.cpp). The last number names
+# the spot.
+[[patches.hook]]
+func = "func_808004C4_bsswim"
+before_vram = 0x808004E8
+text = "ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 0);"
+
+[[patches.hook]]
+func = "func_808004C4_bsswim"
+before_vram = 0x80800524
+text = "ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 0);"
+
+[[patches.hook]]
+func = "func_8080049C_bsvanswim"
+before_vram = 0x808004C0
+text = "ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 1);"
+
+[[patches.hook]]
+func = "func_8080049C_bsvanswim"
+before_vram = 0x808004FC
+text = "ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 1);"
+
+[[patches.hook]]
+func = "func_8080049C_bstntswim"
+before_vram = 0x808004C0
+text = "ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 2);"
+
+[[patches.hook]]
+func = "func_8080049C_bstntswim"
+before_vram = 0x808004FC
+text = "ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 2);"
+
+[[patches.hook]]
+func = "func_8080056C_bsmumswim"
+before_vram = 0x8080058C
+text = "ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 3);"
+
+[[patches.hook]]
+func = "func_8080056C_bsmumswim"
+before_vram = 0x808005C8
+text = "ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 3);"
+
+[[patches.hook]]
+func = "func_8080070C_bskazpaddle"
+before_vram = 0x8080072C
+text = "ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 4);"
+
+[[patches.hook]]
+func = "func_808006DC_bsbswim"
+before_vram = 0x80800734
+text = "ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 1, 5);"
+
+[[patches.hook]]
+func = "func_808011C0_bsbswim"
+before_vram = 0x80801280
+text = "ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 1, 6);"
 
 # Particles age by the frame's time step (func_800B4790 reads it at 0x800B47C0), so with time frozen
 # they never die. While time is frozen and the last frame's list was over 60% full the step they

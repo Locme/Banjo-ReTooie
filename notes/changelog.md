@@ -14,6 +14,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-09
 
+- Above 30 FPS, floating on the water makes bubbles and ripples at the 30 FPS rate instead of many times as many (about 40 bubbles a second at Unlocked against 4). The same goes for the van, the T-Rex, Mumbo and Kazooie on the surface, and for bubbles under water.
 - Above 30 FPS, flickering map lights flicker at the 30 FPS pace again instead of flashing: the green light in the mouth of Grunty's Lair in Spiral Mountain and inside it, and every other map light the game flickers the same way.
 - Above 30 FPS, torch fires burn as tall as at 30 FPS again instead of short and flat (Witchyworld's Haunted Cavern, Terrydactyland's Bonfire Cavern and every other fire of that kind), and they light up and go out at the 30 FPS pace.
 - Esc menu: a setting with settings under it (Parallax, Displaced Ground, Fog, the fur and feather settings, Sun Shadows, Water Waves, Toon Outlines, Underwater Tint) keeps its on/off switch, and opening its arrow now shows a Strength slider above the settings under it, so its strength can be set and not only switched on or off. Console: `menu tab <id>` and `menu expand <setting> [off]`.

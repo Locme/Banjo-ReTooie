@@ -1585,3 +1585,80 @@ void tooie::game_frame_rate::add_option(recomp::config::Config& graphics) {
 
 
 
+
+// Swimming on the surface (Banjo's bsswim, and the same states for the van, the T-Rex, Mumbo and
+// Kazooie's paddle) makes a ripple and a bubble, each on a coin flip, every 8th game frame, and under
+// water (bsbswim) bubbles come every other game frame: the game's frame count at 0x800459C8 & 7 (or
+// & 1) must be 0 (func_8001210C). Above 30 FPS there are many more game frames, so floating still made
+// about ten times the bubbles (L, 2026-11-10; about 40 a second at Unlocked against 4 at 30 FPS).
+// `value` is what func_8001210C gave at one of those spots and `site` names the spot. Above 30 FPS the
+// frame count is swapped for a count that goes up once per 1/30 s of game time and is seen only on the
+// first game frame of each step; on the other frames the mask comes back, which skips the spawn.
+// Original and 30 FPS are unchanged.
+namespace {
+    struct PacedCount {
+        uint32_t frame = UINT32_MAX;   // the game frame (game_frames_stepped) last seen
+        float time = 0.0f;             // game time towards the next 1/30 s step
+        bool stepped = false;          // this game frame starts a new step
+        uint32_t steps = 0;
+    };
+    std::mutex paced_count_mutex;
+    PacedCount paced_counts[8];
+}
+
+extern "C" uint32_t tooie_paced_frame_mask(uint8_t* rdram, uint32_t value, uint32_t mask, int site) {
+    if (!above_30() || site < 0 || site >= 8) {
+        return value;
+    }
+    constexpr float step = 1.0f / 30.0f;
+    std::lock_guard lock{ paced_count_mutex };
+    PacedCount& c = paced_counts[site];
+    const uint32_t frame = game_frames_stepped.load();
+    if (c.frame != frame) {
+        c.frame = frame;
+        c.time += read_float(rdram, delta_time_addr);
+        c.stepped = c.time >= step - 0.001f;
+        if (c.stepped) {
+            c.time = std::min(c.time - step, step);
+            c.steps++;
+        }
+    }
+    return c.stepped ? (c.steps & mask) : mask;
+}
+
+// TOOIE_EMIT_LOG=1 prints once a second how many particles each emitter made (func_800BA22C: $a0 the
+// emitter, $a1 how many) with the emitter's first three words (the low half of the first is the
+// sprite), and how many emitters were made (func_800BBCB8). For comparing particle counts between
+// frame rates.
+namespace {
+    std::mutex emit_mutex;
+    std::unordered_map<uint32_t, uint32_t> emit_counts;
+    uint32_t emitters_made = 0;
+}
+
+extern "C" void tooie_emit_log(uint8_t* rdram, recomp_context* ctx, int made) {
+    static const bool on = std::getenv("TOOIE_EMIT_LOG") != nullptr;
+    if (!on) {
+        return;
+    }
+    std::lock_guard lock{ emit_mutex };
+    static auto start = std::chrono::steady_clock::now();
+    if (made) {
+        emitters_made++;
+    } else {
+        emit_counts[(uint32_t)ctx->r4] += (uint32_t)ctx->r5;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (now - start < std::chrono::seconds(1)) {
+        return;
+    }
+    start = now;
+    std::printf("[emit] %u emitters made in the last second\n", emitters_made);
+    for (auto& [e, n] : emit_counts) {
+        std::printf("[emit]   %08X made %u, words %08X %08X %08X\n", e, n, (uint32_t)MEM_W(0x0, (int32_t)e),
+            (uint32_t)MEM_W(0x4, (int32_t)e), (uint32_t)MEM_W(0x8, (int32_t)e));
+    }
+    std::fflush(stdout);
+    emit_counts.clear();
+    emitters_made = 0;
+}

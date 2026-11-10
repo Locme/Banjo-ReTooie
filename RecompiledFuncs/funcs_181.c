@@ -3880,6 +3880,7 @@ RECOMP_FUNC void func_8080049C_bsvanswim(uint8_t* rdram, recomp_context* ctx) {
     // 0x808004BC: addiu       $a0, $zero, 0x7
     ctx->r4 = ADD32(0, 0X7);
     after_1:
+    ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 1);
     // 0x808004C0: bne         $v0, $zero, L_808004F4
     if (ctx->r2 != 0) {
         // 0x808004C4: nop
@@ -3933,6 +3934,7 @@ L_808004F4:
     // 0x808004F8: addiu       $a0, $zero, 0x7
     ctx->r4 = ADD32(0, 0X7);
     after_4:
+    ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 7, 1);
     // 0x808004FC: bnel        $v0, $zero, L_80800534
     if (ctx->r2 != 0) {
         // 0x80800500: lui         $a1, 0x3C23

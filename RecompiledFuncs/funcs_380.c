@@ -2604,6 +2604,7 @@ L_8080072C:
     // 0x80800730: addiu       $a0, $zero, 0x1
     ctx->r4 = ADD32(0, 0X1);
     after_5:
+    ctx->r2 = tooie_paced_frame_mask(rdram, (uint32_t)ctx->r2, 1, 5);
     // 0x80800734: bne         $v0, $zero, L_808007A4
     if (ctx->r2 != 0) {
         // 0x80800738: or          $a0, $s0, $zero

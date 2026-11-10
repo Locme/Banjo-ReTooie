@@ -2203,6 +2203,7 @@ L_8080073C:
 RECOMP_FUNC void func_800BA22C(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_emit_log(rdram, ctx, 0);
     // 0x800BA22C: addiu       $sp, $sp, -0x20
     ctx->r29 = ADD32(ctx->r29, -0X20);
     // 0x800BA230: sw          $s1, 0x18($sp)
