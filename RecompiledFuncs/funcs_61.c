@@ -2158,6 +2158,7 @@ L_808011E4:
     MEM_W(0X0, ctx->r16) = ctx->f8.u32l;
     // 0x808011F0: lwc1        $f10, 0x4464($at)
     ctx->f10.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(1632, 0X4464));
+    tooie_frame_factor(rdram, &ctx->f10.fl, 0);
     // 0x808011F4: mul.s       $f20, $f20, $f10
     CHECK_FR(ctx, 20);
     CHECK_FR(ctx, 20);
@@ -2232,6 +2233,7 @@ L_80801240:
     MEM_W(0X0, ctx->r16) = ctx->f4.u32l;
     // 0x8080124C: lwc1        $f6, 0x446C($at)
     ctx->f6.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(1632, 0X446C));
+    tooie_frame_factor(rdram, &ctx->f6.fl, 0);
     // 0x80801250: mul.s       $f20, $f20, $f6
     CHECK_FR(ctx, 20);
     CHECK_FR(ctx, 20);

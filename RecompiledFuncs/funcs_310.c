@@ -4262,6 +4262,7 @@ L_8080257C:
 RECOMP_FUNC void func_800DF744(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_face_slot_log(rdram, ctx);
     // 0x800DF744: sll         $t6, $a0, 2
     ctx->r14 = S32(ctx->r4 << 2);
     // 0x800DF748: lui         $at, 0x8013

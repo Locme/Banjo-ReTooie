@@ -4416,6 +4416,7 @@ RECOMP_FUNC void func_80801508_chclockworkmouse(uint8_t* rdram, recomp_context* 
     ctx->f14.u32l = MEM_W(ctx->r4, 0X44);
     // 0x80801520: mtc1        $zero, $f12
     ctx->f12.u32l = 0;
+    tooie_frame_factor(rdram, &ctx->f6.fl, 0);
     // 0x80801524: mul.s       $f8, $f4, $f6
     CHECK_FR(ctx, 8);
     CHECK_FR(ctx, 4);
@@ -4440,6 +4441,7 @@ RECOMP_FUNC void func_80801508_chclockworkmouse(uint8_t* rdram, recomp_context* 
     ctx->r4 = MEM_W(ctx->r29, 0X18);
     // 0x80801540: mtc1        $zero, $f12
     ctx->f12.u32l = 0;
+    tooie_frame_factor(rdram, &ctx->f16.fl, 1);
     // 0x80801544: mul.s       $f18, $f0, $f16
     CHECK_FR(ctx, 18);
     CHECK_FR(ctx, 0);
@@ -4470,6 +4472,7 @@ RECOMP_FUNC void func_80801508_chclockworkmouse(uint8_t* rdram, recomp_context* 
     ctx->f8.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(1564, 0X3738));
     // 0x80801564: lw          $a0, 0x18($sp)
     ctx->r4 = MEM_W(ctx->r29, 0X18);
+    tooie_frame_factor(rdram, &ctx->f8.fl, 1);
     // 0x80801568: mul.s       $f16, $f0, $f8
     CHECK_FR(ctx, 16);
     CHECK_FR(ctx, 0);

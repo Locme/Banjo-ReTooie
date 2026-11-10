@@ -51,6 +51,7 @@
 #include <cstring>
 #include <deque>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <variant>
@@ -65,8 +66,16 @@
 #include "tooie_game_frame_rate.h"
 #include "tooie_gfx_budget.h"
 #include "tooie_hooks.h"
+#include "tooie_host_profiler.h"
 #include "ultramodern/config.hpp"
 #include "ultramodern/ultramodern.hpp"
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace RT64 {
     // lib/rt64/src/hle/rt64_vi.h (from lib-patches/rt64.patch).
@@ -1160,6 +1169,350 @@ extern "C" void tooie_shooter_follow(uint8_t* rdram, recomp_context* ctx, int wh
 // frame jumps there, so the eyes still show.
 extern "C" int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx) {
     return blink_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
+}
+
+// Talking mouths (the suexpress overlays, which about 50 characters share: Bottles, Jamjars, Mumbo and
+// the rest). While a character speaks, the dialogue gives a mouth shape for each letter
+// (func_800D52A4, 0x8012B430) and the speaker's id (func_800D52F4); each game frame the character's
+// expression moves its face toward that shape. Both ways of doing it step once per game frame with no
+// frame time, so above 30 FPS mouths snapped from shape to shape many times faster than at 30 FPS
+// (L, 2026-11-10: "facial animations on every NPC run too fast", and should be smooth, not 30 FPS).
+//
+// - suexpressjoint_entrypoint_3 ($a3 = the expression): a talk weight (the byte at +0x8, 0 to 100)
+//   steps toward 100 by max((100 - w) x K, 2) while the character speaks and falls by w x K otherwise;
+//   then each pose channel (bytes from +0x20) moves a fixed part K of the way to the shape's value.
+//   Both are whole numbers that lose their fraction each frame, and the channels give the pose
+//   weights (floats from +0xC) that bend the jaw.
+// - func_808000EC_suexpressmorph: each morph weight moves a part K (in $f20) of the way to its target.
+//
+// Above 30 FPS the morph's part K becomes 1 - (1 - K)^share for this frame's share of 1/30 s. The
+// joint's values are kept here as floats for each byte's address: each frame works out where one 30
+// FPS step would take the value, cut-off included, and moves this frame's share of the way there, so
+// it keeps the 30 FPS pace. The pose weights are made from the float, so the jaw moves a little every
+// frame instead of in whole steps. A kept float is dropped when its byte no longer matches it (the game set the byte
+// itself). TOOIE_NO_MOUTH_FIX=1 turns this off for A/B tests. 30 FPS and Original are unchanged.
+namespace {
+    std::mutex mouth_mutex;
+    std::unordered_map<uint32_t, float> mouth_values;
+
+    bool mouth_fix_on() {
+        static const bool off = std::getenv("TOOIE_NO_MOUTH_FIX") != nullptr;
+        if (off || !above_30()) {
+            std::lock_guard lock{ mouth_mutex };
+            mouth_values.clear();
+            return false;
+        }
+        return true;
+    }
+
+    // This frame's share of a 1/30 s game frame, 0 while paused.
+    float mouth_share(uint8_t* rdram) {
+        const float dt = read_float(rdram, delta_time_addr);
+        return std::clamp(dt * 30.0f, 0.0f, 1.0f);
+    }
+
+    // The kept float for the byte at this address, or the byte itself when the two no longer match.
+    float& mouth_value(uint32_t address, uint8_t byte) {
+        if (mouth_values.size() > 4096) {
+            mouth_values.clear();
+        }
+        auto [it, added] = mouth_values.try_emplace(address, (float)byte);
+        if (!added && (uint8_t)std::trunc(it->second) != byte) {
+            it->second = (float)byte;
+        }
+        return it->second;
+    }
+
+    // TOOIE_MOUTH_LOG=1: every 2 s of real time, for each kind of mouth value (0 talk weight while
+    // talking, 1 talk weight while not, 2 pose channel weights, 3 morph weights), how many times a
+    // second of game time the hooks ran, how far the values moved per second of game time and on how
+    // many frames they moved, fix on or off.
+    void mouth_log(uint8_t* rdram, int kind, uint32_t key, float value) {
+        (void)rdram;
+        static const bool log = std::getenv("TOOIE_MOUTH_LOG") != nullptr;
+        if (!log) {
+            return;
+        }
+        struct Kind { double moved = 0.0; uint32_t calls = 0, moving_frames = 0, last_frame = 0; };
+        static std::mutex log_mutex;
+        static std::unordered_map<uint32_t, float> last;
+        static Kind kinds[4];
+        static double game_start = game_seconds_total.load();
+        static auto shown = std::chrono::steady_clock::now();
+        std::lock_guard lock{ log_mutex };
+        Kind& k = kinds[kind & 3];
+        k.calls++;
+        auto [it, added] = last.try_emplace(key ^ ((uint32_t)kind << 28), value);
+        const float step = std::fabs(value - it->second);
+        it->second = value;
+        if (!added && step > 0.0f) {
+            k.moved += step;
+            if (k.last_frame != game_frames_stepped.load()) {
+                k.last_frame = game_frames_stepped.load();
+                k.moving_frames++;
+            }
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (now - shown < std::chrono::seconds(2)) {
+            return;
+        }
+        const double game = game_seconds_total.load() - game_start;
+        for (int i = 0; i < 4 && game > 0.0; i++) {
+            if (kinds[i].calls > 0) {
+                std::printf("[mouth] kind %d: %.0f calls/s, %.2f moved per s, moving on %.1f frames per s\n",
+                    i, kinds[i].calls / game, kinds[i].moved / game, kinds[i].moving_frames / game);
+            }
+            kinds[i] = Kind{};
+        }
+        std::fflush(stdout);
+        game_start = game_seconds_total.load();
+        shown = now;
+    }
+}
+
+// Before 0x8080034C: $f0 = the step toward 100 (at least 2), $v0 = the talk weight byte, $a3 = the
+// expression. The game then moves the byte toward 100 by $f0 and cuts off the fraction, so $f0 is made
+// the distance from the byte to the kept weight after this frame's share of the step.
+extern "C" void tooie_mouth_open_step(uint8_t* rdram, recomp_context* ctx) {
+    const uint8_t byte = (uint8_t)ctx->r2;
+    if (mouth_fix_on()) {
+        std::lock_guard lock{ mouth_mutex };
+        float& weight = mouth_value((uint32_t)ctx->r7 + 0x8, byte);
+        weight += (std::trunc(std::min(weight + ctx->f0.fl, 100.0f)) - weight) * mouth_share(rdram);
+        ctx->f0.fl = std::max(weight - (float)byte, 0.0f);
+    }
+    mouth_log(rdram, 0, (uint32_t)ctx->r7 + 0x8, std::min((float)byte + ctx->f0.fl, 100.0f));
+}
+
+// Before 0x80800448: $f0 = the talk weight byte as a float, $f8 = the part it falls by, $f10 = $f0 x $f8,
+// $a3 = the expression. The game keeps $f0 - $f10, so $f10 is made what takes it to the kept weight.
+extern "C" void tooie_mouth_close_step(uint8_t* rdram, recomp_context* ctx) {
+    if (mouth_fix_on()) {
+        const uint8_t byte = (uint8_t)std::trunc(ctx->f0.fl);
+        std::lock_guard lock{ mouth_mutex };
+        float& weight = mouth_value((uint32_t)ctx->r7 + 0x8, byte);
+        weight += (std::trunc(weight - weight * ctx->f8.fl) - weight) * mouth_share(rdram);
+        ctx->f10.fl = ctx->f0.fl - weight;
+    }
+    mouth_log(rdram, 1, (uint32_t)ctx->r7 + 0x8, ctx->f0.fl - ctx->f10.fl);
+}
+
+// Before 0x8080056C: $f0 = a pose channel's byte as a float, $f6 = the shape's value for it, $f2 = the
+// part of the way it moves, $f8 = ($f6 - $f0) x $f2, $t0 = the byte. The game keeps $f0 + $f8.
+extern "C" void tooie_mouth_channel_step(uint8_t* rdram, recomp_context* ctx) {
+    if (!mouth_fix_on()) {
+        return;
+    }
+    const uint8_t byte = (uint8_t)std::trunc(ctx->f0.fl);
+    std::lock_guard lock{ mouth_mutex };
+    float& value = mouth_value((uint32_t)ctx->r8, byte);
+    value += (std::trunc(value + (ctx->f6.fl - value) * ctx->f2.fl) - value) * mouth_share(rdram);
+    ctx->f8.fl = value - ctx->f0.fl;
+}
+
+// Before 0x80800610: $f10 = the channel's new byte as a float, about to become its pose weight; $t0 =
+// the byte. The kept float is used instead, so the weight changes smoothly.
+extern "C" void tooie_mouth_channel_weight(uint8_t* rdram, recomp_context* ctx) {
+    if (mouth_fix_on()) {
+        std::lock_guard lock{ mouth_mutex };
+        auto it = mouth_values.find((uint32_t)ctx->r8);
+        if (it != mouth_values.end() && (uint8_t)std::trunc(it->second) == (uint8_t)std::trunc(ctx->f10.fl)) {
+            ctx->f10.fl = it->second;
+        }
+    }
+    mouth_log(rdram, 2, (uint32_t)ctx->r8, ctx->f10.fl);
+}
+
+// Before 0x80800180 in func_808000EC_suexpressmorph: $f20 = the part of the way each morph weight moves.
+extern "C" void tooie_morph_follow(uint8_t* rdram, recomp_context* ctx) {
+    const float part = ctx->f20.fl;
+    if (mouth_fix_on() && part > 0.0f && part < 1.0f) {
+        ctx->f20.fl = 1.0f - std::pow(1.0f - part, mouth_share(rdram));
+    }
+    // The weights as they were before this frame's move ($s0 = the first one; the log only).
+    for (int i = 0; i < 4; i++) {
+        mouth_log(rdram, 3, (uint32_t)ctx->r16 + 4 * i, read_float(rdram, (int32_t)((uint32_t)ctx->r16 + 4 * i)));
+    }
+}
+
+// A factor the game applies once per game frame with no frame time: a multiplier (speed *= 0.98) when
+// kind is 0, or the part of the way something eases to its target (x += (target - x) * 0.05) when kind
+// is 1. Above 30 FPS it is made the one that does the same in this frame's share of 1/30 s:
+// factor^share, or 1 - (1 - part)^share. 30 FPS and Original are unchanged.
+extern "C" void tooie_frame_factor(uint8_t* rdram, float* factor, int kind) {
+    static const bool off = std::getenv("TOOIE_NO_FRAME_FACTOR_FIX") != nullptr;   // A/B for tests
+    if (off || !above_30() || !(*factor > 0.0f) || *factor >= 1.0f) {
+        return;
+    }
+    const float share = std::clamp(read_float(rdram, delta_time_addr) * 30.0f, 0.0f, 1.0f);
+    *factor = kind == 0 ? std::pow(*factor, share) : 1.0f - std::pow(1.0f - *factor, share);
+}
+
+// Characters turning their heads to look at Banjo (the suexpression overlay, shared by most
+// characters). suexpression_entrypoint_15 ($a3 = the expression) moves the head's turn (s16 at +0x4,
+// limit at +0x6) and tilt (s16 at +0x8, limit at +0xA) a fixed part of the way toward Banjo once per
+// game frame, and back toward 0 by a fixed factor when he is out of reach; suexpression_entrypoint_16
+// ($a0) lets both go back the same way. All of it with no frame time, on whole numbers that lose their
+// fraction each frame, so above 30 FPS heads stalled and then snapped round. Above 30 FPS each frame
+// works out where one 30 FPS step would take the angle, cut-off included, and moves this frame's share
+// of 1/30 s of the way there. The angles are kept as floats here so they turn smoothly at the 30 FPS
+// pace; the game's whole number is what the float cuts down to. which: 0 and 1 the turn toward
+// Banjo (before the trunc at 0x8080085C, 0x808008BC), 2 and 3 the tilt (0x8080097C, 0x808009D4),
+// 4 the tilt going back (0x80800A3C), 5 both going back (0x80800ABC), 6 entrypoint_16 (0x80800B18).
+// TOOIE_NO_LOOK_FIX=1 turns it off for A/B tests.
+namespace {
+    std::mutex look_mutex;
+    std::unordered_map<uint32_t, float> look_values;
+
+    float& look_value(uint32_t address, float whole) {
+        if (look_values.size() > 4096) {
+            look_values.clear();
+        }
+        auto [it, added] = look_values.try_emplace(address, whole);
+        if (!added && std::trunc(it->second) != whole) {
+            it->second = whole;
+        }
+        return it->second;
+    }
+}
+
+extern "C" void tooie_look_step(uint8_t* rdram, recomp_context* ctx, int which) {
+    // TOOIE_LOOK_LOG=1: each head's turn and tilt as the game left them last frame, about every 1/30 s
+    // of game time, fix on or off.
+    static const bool log = std::getenv("TOOIE_LOOK_LOG") != nullptr;
+    if (log && which != 6) {
+        static std::unordered_map<uint32_t, double> last_shown;
+        const uint32_t a3 = (uint32_t)ctx->r7;
+        const double now = game_seconds_total.load();
+        double& shown = last_shown[a3];
+        if (now - shown >= 1.0 / 30.0 - 0.0005 || now < shown) {
+            shown = now;
+            std::printf("[look] t %.3f %08X turn %d tilt %d\n", now, a3,
+                (int)(int16_t)MEM_H(0x4, (gpr)(int32_t)a3), (int)(int16_t)MEM_H(0x8, (gpr)(int32_t)a3));
+        }
+    }
+    static const bool off = std::getenv("TOOIE_NO_LOOK_FIX") != nullptr;
+    if (off || !above_30()) {
+        std::lock_guard lock{ look_mutex };
+        look_values.clear();
+        return;
+    }
+    const float share = std::clamp(read_float(rdram, delta_time_addr) * 30.0f, 0.0f, 1.0f);
+    // Where one 30 FPS step would take the angle, cut-off included, and this frame's share of the way
+    // there: at 1/30 s it is the game's own step, and between it the angle moves smoothly.
+    auto toward = [share](float& v, float step_result) {
+        v += (std::trunc(step_result) - v) * share;
+        return v;
+    };
+    const uint32_t a3 = (uint32_t)ctx->r7;
+    std::lock_guard lock{ look_mutex };
+    switch (which) {
+        case 0: {   // turn += (target - turn) * K; $f2 = turn, $f8 = the way to go, $f10 = K, keeps $f18
+            float& v = look_value(a3 + 0x4, ctx->f2.fl);
+            ctx->f18.fl = toward(v, v + (ctx->f8.fl - (v - ctx->f2.fl)) * ctx->f10.fl);
+            break;
+        }
+        case 1: {   // turn -= (turn - target) * K; $f10 = the way back, $f16 = K, keeps $f4
+            float& v = look_value(a3 + 0x4, ctx->f2.fl);
+            ctx->f4.fl = toward(v, v - (ctx->f10.fl + (v - ctx->f2.fl)) * ctx->f16.fl);
+            break;
+        }
+        case 2: {   // tilt toward Banjo; $f4 = the way to go, $f6 = K, keeps $f10
+            float& v = look_value(a3 + 0x8, ctx->f2.fl);
+            ctx->f10.fl = toward(v, v + (ctx->f4.fl - (v - ctx->f2.fl)) * ctx->f6.fl);
+            break;
+        }
+        case 3: {   // tilt back toward Banjo; $f4 = the way back, $f6 = K, keeps $f10
+            float& v = look_value(a3 + 0x8, ctx->f2.fl);
+            ctx->f10.fl = toward(v, v - (ctx->f4.fl + (v - ctx->f2.fl)) * ctx->f6.fl);
+            break;
+        }
+        case 4: {   // tilt going back to 0: $f18 = tilt, $f2 = K, keeps $f4
+            float& v = look_value(a3 + 0x8, ctx->f18.fl);
+            ctx->f4.fl = toward(v, v * ctx->f2.fl);
+            break;
+        }
+        case 5: {   // both going back to 0: $f10 = turn, $f18 = tilt, $f2 = K, keeps $f16 and $f8
+            float& turn = look_value(a3 + 0x4, ctx->f10.fl);
+            float& tilt = look_value(a3 + 0x8, ctx->f18.fl);
+            ctx->f16.fl = toward(turn, turn * ctx->f2.fl);
+            ctx->f8.fl = toward(tilt, tilt * ctx->f2.fl);
+            break;
+        }
+        case 6: {   // entrypoint_16 ($a0): $f6 = turn, $f18 = tilt, $f0 = K, keeps $f8 and $f4
+            const uint32_t a0 = (uint32_t)ctx->r4;
+            float& turn = look_value(a0 + 0x4, ctx->f6.fl);
+            float& tilt = look_value(a0 + 0x8, ctx->f18.fl);
+            ctx->f8.fl = toward(turn, turn * ctx->f0.fl);
+            ctx->f4.fl = toward(tilt, tilt * ctx->f0.fl);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+// TOOIE_FACE_LOG=1: a log of the model texture slots (func_800DF744, $a0 = the slot, $a1 = the
+// picture), which the game sets for eyes, mouths and other face pictures before a model is drawn.
+// Every 2 s of real time it prints, for each calling function and slot, how many times the
+// picture changed per second of game time, so a face that changes faster above 30 FPS shows up.
+// Recompiled code does not set $ra, so the caller is taken from the host stack and named from
+// BanjoReTooie.pdb. Windows only.
+extern "C" void tooie_face_slot_log(uint8_t* rdram, recomp_context* ctx) {
+    (void)rdram;
+    static const bool log = std::getenv("TOOIE_FACE_LOG") != nullptr;
+    if (!log) {
+        return;
+    }
+#ifdef _WIN32
+    void* frames[2] = { nullptr, nullptr };
+    if (RtlCaptureStackBackTrace(1, 2, frames, nullptr) < 2) {
+        return;
+    }
+    const uintptr_t caller = (uintptr_t)frames[1];
+    struct Entry { uint32_t value = 0xFFFFFFFFu; uint32_t changes = 0; uint32_t calls = 0; };
+    static std::mutex mutex;
+    static std::unordered_map<uint64_t, Entry> entries;
+    static std::unordered_map<uintptr_t, std::string> names;
+    static auto last = std::chrono::steady_clock::now();
+    static double game_start = game_seconds_total.load();
+    static uint32_t frames_start = game_frames_stepped.load();
+    std::lock_guard lock{ mutex };
+    const uint64_t key = ((uint64_t)caller << 8) | ((uint32_t)ctx->r4 & 0xFF);
+    Entry& e = entries[key];
+    e.calls++;
+    if (e.value != (uint32_t)ctx->r5) {
+        e.value = (uint32_t)ctx->r5;
+        e.changes++;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last < std::chrono::seconds(2)) {
+        return;
+    }
+    const double game = game_seconds_total.load() - game_start;
+    const uint32_t frames_now = game_frames_stepped.load() - frames_start;
+    std::printf("[face] %.2f s game time, %u game frames, map %X\n", game, frames_now,
+        (unsigned)tooie::debug::current_map(rdram));
+    for (auto& [k, v] : entries) {
+        if (v.changes > 1 && game > 0.0) {
+            const uintptr_t at = (uintptr_t)(k >> 8);
+            auto found = names.find(at);
+            if (found == names.end()) {
+                found = names.emplace(at, tooie::host_profiler::function_name(at)).first;
+            }
+            std::printf("[face]   %s slot %u: %.1f changes/s, %.1f calls/s, now %u\n",
+                found->second.c_str(), (uint32_t)(k & 0xFF), v.changes / game, v.calls / game, v.value);
+        }
+        v.changes = 0;
+        v.calls = 0;
+    }
+    std::fflush(stdout);
+    last = now;
+    game_start = game_seconds_total.load();
+    frames_start = game_frames_stepped.load();
+#else
+    (void)ctx;
+#endif
 }
 
 // Fires (the chfirefx actor: the torches in Witchyworld's Haunted Cavern and others). chfirefx_entrypoint_3

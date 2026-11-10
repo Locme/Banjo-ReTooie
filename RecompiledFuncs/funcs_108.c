@@ -319,6 +319,7 @@ RECOMP_FUNC void suexpression_entrypoint_16(uint8_t* rdram, recomp_context* ctx)
     CHECK_FR(ctx, 0);
     NAN_CHECK(ctx->f18.fl); NAN_CHECK(ctx->f0.fl); 
     ctx->f4.fl = MUL_S(ctx->f18.fl, ctx->f0.fl);
+    tooie_look_step(rdram, ctx, 6);
     // 0x80800B18: trunc.w.s   $f10, $f8
     CHECK_FR(ctx, 10);
     CHECK_FR(ctx, 8);

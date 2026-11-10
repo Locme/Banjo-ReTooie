@@ -3114,6 +3114,7 @@ L_8080030C:
     CHECK_FR(ctx, 2);
     ctx->f0.fl = ctx->f2.fl;
 L_8080034C:
+    tooie_mouth_open_step(rdram, ctx);
     // 0x8080034C: bgez        $v0, L_80800360
     if (SIGNED(ctx->r2) >= 0) {
         // 0x80800350: cvt.s.w     $f12, $f8
@@ -3307,6 +3308,7 @@ L_80800434:
     CHECK_FR(ctx, 8);
     NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f8.fl); 
     ctx->f10.fl = MUL_S(ctx->f0.fl, ctx->f8.fl);
+    tooie_mouth_close_step(rdram, ctx);
     // 0x80800448: sub.s       $f18, $f0, $f10
     CHECK_FR(ctx, 18);
     CHECK_FR(ctx, 0);
@@ -3528,6 +3530,7 @@ L_80800558:
     CHECK_FR(ctx, 2);
     NAN_CHECK(ctx->f10.fl); NAN_CHECK(ctx->f2.fl); 
     ctx->f8.fl = MUL_S(ctx->f10.fl, ctx->f2.fl);
+    tooie_mouth_channel_step(rdram, ctx);
     // 0x8080056C: add.s       $f18, $f0, $f8
     CHECK_FR(ctx, 18);
     CHECK_FR(ctx, 0);
@@ -3656,6 +3659,7 @@ L_808005E8:
     NAN_CHECK(ctx->f10.fl); NAN_CHECK(ctx->f8.fl); 
     ctx->f10.fl = ctx->f10.fl + ctx->f8.fl;
 L_80800610:
+    tooie_mouth_channel_weight(rdram, ctx);
     // 0x80800610: mul.s       $f18, $f10, $f12
     CHECK_FR(ctx, 18);
     CHECK_FR(ctx, 10);

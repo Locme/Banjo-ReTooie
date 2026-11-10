@@ -3937,6 +3937,7 @@ L_808007A0:
     CHECK_FR(ctx, 16);
     NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f16.fl); 
     ctx->f18.fl = ctx->f2.fl + ctx->f16.fl;
+    tooie_look_step(rdram, ctx, 0);
     // 0x8080085C: trunc.w.s   $f4, $f18
     CHECK_FR(ctx, 4);
     CHECK_FR(ctx, 18);
@@ -4020,6 +4021,7 @@ L_80800884:
     CHECK_FR(ctx, 18);
     NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f18.fl); 
     ctx->f4.fl = ctx->f2.fl - ctx->f18.fl;
+    tooie_look_step(rdram, ctx, 1);
     // 0x808008BC: trunc.w.s   $f6, $f4
     CHECK_FR(ctx, 6);
     CHECK_FR(ctx, 4);
@@ -4213,6 +4215,7 @@ L_808008D0:
     CHECK_FR(ctx, 8);
     NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f8.fl); 
     ctx->f10.fl = ctx->f2.fl + ctx->f8.fl;
+    tooie_look_step(rdram, ctx, 2);
     // 0x8080097C: trunc.w.s   $f16, $f10
     CHECK_FR(ctx, 16);
     CHECK_FR(ctx, 10);
@@ -4292,6 +4295,7 @@ L_808009A4:
     CHECK_FR(ctx, 8);
     NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f8.fl); 
     ctx->f10.fl = ctx->f2.fl - ctx->f8.fl;
+    tooie_look_step(rdram, ctx, 3);
     // 0x808009D4: trunc.w.s   $f16, $f10
     CHECK_FR(ctx, 16);
     CHECK_FR(ctx, 10);
@@ -4384,6 +4388,7 @@ L_80800A24:
     CHECK_FR(ctx, 2);
     NAN_CHECK(ctx->f18.fl); NAN_CHECK(ctx->f2.fl); 
     ctx->f4.fl = MUL_S(ctx->f18.fl, ctx->f2.fl);
+    tooie_look_step(rdram, ctx, 4);
     // 0x80800A3C: trunc.w.s   $f6, $f4
     CHECK_FR(ctx, 6);
     CHECK_FR(ctx, 4);
@@ -4495,6 +4500,7 @@ L_80800A9C:
     CHECK_FR(ctx, 2);
     NAN_CHECK(ctx->f18.fl); NAN_CHECK(ctx->f2.fl); 
     ctx->f8.fl = MUL_S(ctx->f18.fl, ctx->f2.fl);
+    tooie_look_step(rdram, ctx, 5);
     // 0x80800ABC: trunc.w.s   $f4, $f16
     CHECK_FR(ctx, 4);
     CHECK_FR(ctx, 16);

@@ -961,6 +961,131 @@ func = "func_80101A50"
 before_vram = 0x80101A58
 text = "if (tooie_blink_step_skip(rdram, ctx)) { ctx->r6 = ctx->r4; goto L_80101B58; }"
 
+# Talking mouths (suexpressjoint and suexpressmorph, shared by most characters) move toward the
+# dialogue's mouth shape once per game frame with no frame time, so above 30 FPS they ran too fast.
+# Above 30 FPS each step covers this frame's share of 1/30 s, and the joint's whole-number values are
+# kept as floats so the jaw moves smoothly (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "suexpressjoint_entrypoint_3"
+before_vram = 0x8080034C
+text = "tooie_mouth_open_step(rdram, ctx);"
+
+[[patches.hook]]
+func = "suexpressjoint_entrypoint_3"
+before_vram = 0x80800448
+text = "tooie_mouth_close_step(rdram, ctx);"
+
+[[patches.hook]]
+func = "suexpressjoint_entrypoint_3"
+before_vram = 0x8080056C
+text = "tooie_mouth_channel_step(rdram, ctx);"
+
+[[patches.hook]]
+func = "suexpressjoint_entrypoint_3"
+before_vram = 0x80800610
+text = "tooie_mouth_channel_weight(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_808000EC_suexpressmorph"
+before_vram = 0x80800180
+text = "tooie_morph_follow(rdram, ctx);"
+
+# Heads turning to look at Banjo (suexpression, shared by most characters) and Canary Mary's races
+# (chclockworkmouse, chhandcart: your speed between presses, and the cart settling after the race) step
+# once per game frame with no frame time, so above 30 FPS they ran too fast. Above 30 FPS each step is
+# the one for this frame's share of 1/30 s (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "suexpression_entrypoint_15"
+before_vram = 0x8080085C
+text = "tooie_look_step(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "suexpression_entrypoint_15"
+before_vram = 0x808008BC
+text = "tooie_look_step(rdram, ctx, 1);"
+
+[[patches.hook]]
+func = "suexpression_entrypoint_15"
+before_vram = 0x8080097C
+text = "tooie_look_step(rdram, ctx, 2);"
+
+[[patches.hook]]
+func = "suexpression_entrypoint_15"
+before_vram = 0x808009D4
+text = "tooie_look_step(rdram, ctx, 3);"
+
+[[patches.hook]]
+func = "suexpression_entrypoint_15"
+before_vram = 0x80800A3C
+text = "tooie_look_step(rdram, ctx, 4);"
+
+[[patches.hook]]
+func = "suexpression_entrypoint_15"
+before_vram = 0x80800ABC
+text = "tooie_look_step(rdram, ctx, 5);"
+
+[[patches.hook]]
+func = "suexpression_entrypoint_16"
+before_vram = 0x80800B18
+text = "tooie_look_step(rdram, ctx, 6);"
+
+[[patches.hook]]
+func = "func_80800F10_chclockworkmouse"
+before_vram = 0x80800FA8
+text = "tooie_frame_factor(rdram, &ctx->f10.fl, 0);"
+
+[[patches.hook]]
+func = "func_80800F10_chclockworkmouse"
+before_vram = 0x80801004
+text = "tooie_frame_factor(rdram, &ctx->f6.fl, 0);"
+
+[[patches.hook]]
+func = "func_8080115C_chhandcart"
+before_vram = 0x808011F4
+text = "tooie_frame_factor(rdram, &ctx->f10.fl, 0);"
+
+[[patches.hook]]
+func = "func_8080115C_chhandcart"
+before_vram = 0x80801250
+text = "tooie_frame_factor(rdram, &ctx->f6.fl, 0);"
+
+[[patches.hook]]
+func = "func_80801508_chclockworkmouse"
+before_vram = 0x80801524
+text = "tooie_frame_factor(rdram, &ctx->f6.fl, 0);"
+
+[[patches.hook]]
+func = "func_80801508_chclockworkmouse"
+before_vram = 0x80801544
+text = "tooie_frame_factor(rdram, &ctx->f16.fl, 1);"
+
+[[patches.hook]]
+func = "func_80801508_chclockworkmouse"
+before_vram = 0x80801568
+text = "tooie_frame_factor(rdram, &ctx->f8.fl, 1);"
+
+[[patches.hook]]
+func = "func_80801CBC_chhandcart"
+before_vram = 0x80801CEC
+text = "tooie_frame_factor(rdram, &ctx->f6.fl, 0);"
+
+[[patches.hook]]
+func = "func_80801CBC_chhandcart"
+before_vram = 0x80801D08
+text = "tooie_frame_factor(rdram, &ctx->f16.fl, 1);"
+
+[[patches.hook]]
+func = "func_80801CBC_chhandcart"
+before_vram = 0x80801D30
+text = "tooie_frame_factor(rdram, &ctx->f8.fl, 1);"
+
+# func_800DF744 sets one of the model texture slots (eyes, mouths and other face pictures).
+# TOOIE_FACE_LOG=1 logs how often each caller changes them (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_800DF744"
+before_vram = 0x800DF744
+text = "tooie_face_slot_log(rdram, ctx);"
+
 # chfirefx_entrypoint_3 updates a fire's puffs ($s3 = the fire's data, $s0 = the puff). A puff's height,
 # size and sideways place are whole numbers that get the frame's move and lose the fraction each game frame,
 # so above 30 FPS the puffs hardly rose and torches burned short and flat. Above 30 FPS the lost fraction is

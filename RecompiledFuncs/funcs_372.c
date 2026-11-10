@@ -2444,6 +2444,7 @@ RECOMP_FUNC void func_808000EC_suexpressmorph(uint8_t* rdram, recomp_context* ct
     ctx->f22.u32l = 0;
     // 0x8080017C: lwc1        $f20, 0x7D0($at)
     ctx->f20.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(3170, 0X7D0));
+    tooie_morph_follow(rdram, ctx);
     // 0x80800180: lwc1        $f4, 0x0($s2)
     ctx->f4.u32l = MEM_W(ctx->r18, 0X0);
 L_80800184:
