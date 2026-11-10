@@ -3,6 +3,10 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-10
+
+- The Esc menu slides in from the left and out again, its tabs following one after another, with the sounds the Start menu makes as its rows slide in and out. QOL > Menu > Menu Slide (on by default) turns it off.
+
 ## 2026-11-07
 
 - Android: leaving the app while the game runs (Home, another app, the screen turning off, a call, the notification shade) pauses the game where it is, and it carries on from there when you come back. The save is written out on the way. Console: `background [seconds]` does the same on any system, for testing.

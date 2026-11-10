@@ -1007,6 +1007,13 @@ void tooie::init_config() {
         "While this menu is open during play, the game is paused as if you pressed Start, without the pause menu drawn over it. The pause menu's music plays and the picture's effects keep moving. Cutscenes and the title screen carry on as before.",
         true);
     qol.add_bool_option(
+        tooie::menu_pause::slide_option,
+        "Menu Slide",
+        "This menu slides in from the left as it opens and out again as it closes, its tabs following one after another, with the sounds the Start menu makes as its rows slide in and out. Off opens and closes it at once, without sounds.",
+        true);
+    recompui::config::set_slide_enabled_callback(tooie::menu_pause::slide_enabled);
+    recompui::config::set_slide_callback(tooie::menu_pause::slide_sound);
+    qol.add_bool_option(
         tooie::totals_checklist::option,
         "Totals Checklist",
         "The pause menu's Totals pages also say how many of each item are left in a world and how many you can get with the moves you have now.",

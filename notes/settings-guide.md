@@ -117,6 +117,12 @@ framework, not from this port's code, so it is not described here.
   or anything else drawn over it, and the pause menu's music plays and the picture's effects keep moving. Cutscenes, map
   changes, the title screen and the file select carry on as before.
   Default: On (L, 2026-10-19).
+- **Menu Slide** (Menu section): this menu (Esc) slides in from the left as it
+  opens, past its place and back, its tabs following one after another, and slides
+  out to the left as it closes, as the Start menu's rows do. It plays the Start
+  menu's sounds for a row sliding in and out (the game's own, so none in the
+  launcher). Esc while it slides out brings it back. Off opens and closes it at
+  once, without sounds. Default: On (2026-11-10).
 - **Mouse in the game's menus** (Menu section; was in WIP until 2026-10-23): the pause menu
   and the save select follow the mouse; the row under the cursor is picked and a left click
   presses A, a right click B. Default: on.

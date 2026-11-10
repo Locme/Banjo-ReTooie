@@ -18,7 +18,13 @@
 // While Start can't open the pause menu (a cutscene, a map change) Esc doesn't open the ESC menu either
 // (open_allowed, asked by the frontend); the title screen and file select still open it.
 //
-// Headless: TOOIE_MENU_PAUSE_LOG=1 logs `[menu-pause]` when the pause starts and ends.
+// Menu Slide (QOL > Menu, 2026-11-10, on by default): the Esc menu slides in from the left and out again
+// (RecompFrontend's Modal, lib-patches/RecompFrontend.patch), and plays the sounds the Start menu's rows make
+// as they slide in and out. Those rows are gczoombox boxes, which play their sounds through
+// gcaudiolist_entrypoint_1(sound, 0x4650): 2 as a box slides in, 3 as it slides out. The menu asks for the
+// sound on the main thread; tick() plays it on the game thread, through the overlay's thunk as the game does.
+//
+// Headless: TOOIE_MENU_PAUSE_LOG=1 logs `[menu-pause]` when the pause starts and ends, and each slide sound.
 
 #include <atomic>
 #include <cstdio>
@@ -27,6 +33,7 @@
 
 #include "librecomp/config.hpp"
 #include "recompui/config.h"
+#include "ultramodern/ultramodern.hpp"
 
 #include "funcs.h"
 #include "tooie_debug.h"
@@ -48,7 +55,14 @@ namespace {
     constexpr uint32_t slot_size = 0x50;
     constexpr uint32_t slot_count = 6;
 
+    // gcaudiolist's sounds for a Start menu row sliding in and out, at the volume the pause menu gives them.
+    constexpr int32_t slide_in_sound = 2;
+    constexpr int32_t slide_out_sound = 3;
+    constexpr uint32_t slide_sound_volume = 0x4650;
+
     std::atomic<bool> menu_open{false};
+    // The slide sound to play next game frame, or -1.
+    std::atomic<int32_t> pending_sound{-1};
     std::atomic<bool> allowed{true};
     bool paused = false;
     // The tracks the pause faded out, to fade back in.
@@ -83,6 +97,22 @@ namespace {
     }
 }
 
+bool tooie::menu_pause::slide_enabled() {
+    try {
+        return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::menu_pause::slide_option));
+    } catch (...) {
+        return true;
+    }
+}
+
+void tooie::menu_pause::slide_sound(bool opening) {
+    // The menu also opens from the launcher, before the game runs: no sound then, and none left over for later.
+    if (!ultramodern::is_game_started()) {
+        return;
+    }
+    pending_sound = opening ? slide_in_sound : slide_out_sound;
+}
+
 void tooie::menu_pause::set_menu_open(bool open) {
     menu_open = open;
 }
@@ -96,6 +126,13 @@ bool tooie::menu_pause::pausing() {
 }
 
 void tooie::menu_pause::tick(uint8_t* rdram, recomp_context* ctx) {
+    const int32_t sound = pending_sound.exchange(-1);
+    if (sound >= 0) {
+        call_game(rdram, ctx, _gcaudiolist_entrypoint_1, (uint32_t)sound, slide_sound_volume);
+        if (log_on()) {
+            std::fprintf(stderr, "[menu-pause] slide sound %d\n", sound);
+        }
+    }
     // Start can't open the pause menu in a cutscene or while a map loads, so the ESC menu stays shut too.
     const bool now_allowed = !(enabled() && tooie::debug::can_warp() &&
         (tooie::in_letterboxed_scene() || tooie::debug::map_change_busy(rdram)));
