@@ -1534,6 +1534,9 @@ float4 TracedRoughReflection(int2 pixel, float3 center, float3 normal, float rou
 // Whether a spot is shut in (a room, a cave): straight up and four ways up at a slant all meet something. The sun
 // doesn't reach in there, and the game's own lighting is already right, so the traced sun shadows leave it alone
 // (otherwise the roof shadowed the whole room, and its walls facing away from the sun darkened too).
+// The rays reach as far as the sun's shadow rays (20000). At 6000 a big cave's roof was out of reach: Terrydactyland's
+// Inside the Mountain pool, with its roof far overhead, counted as open, so it took the sun's shadow, and only the
+// spots under a nearby ledge counted as shut in and kept the game's lighting, in hard ledge-shaped patches (L, 2026-11-10).
 bool Enclosed(float3 worldStart) {
     const float3 directions[5] = { float3(0.0f, 1.0f, 0.0f), float3(0.82f, 0.57f, 0.0f), float3(-0.82f, 0.57f, 0.0f), float3(0.0f, 0.57f, 0.82f), float3(0.0f, 0.57f, -0.82f) };
     [loop] for (int k = 0; k < 5; k++) {
@@ -1541,7 +1544,7 @@ bool Enclosed(float3 worldStart) {
         ray.Origin = worldStart;
         ray.Direction = directions[k];
         ray.TMin = 0.0f;
-        ray.TMax = 6000.0f;
+        ray.TMax = 20000.0f;
         // Only the level makes a room: Banjo standing over the spot doesn't, nor a model beside it (a note pedestal
         // closed the one way out for the floor round it, so its shadow there came out lit and the rest dark: a
         // reversed shadow, L 2026-10-22).
