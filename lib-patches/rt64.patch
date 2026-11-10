@@ -2623,7 +2623,7 @@ index 69a82ac..ff7cedb 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..21f154a 100644
+index 9fae0d4..7081185 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,23 @@
@@ -3854,8 +3854,8 @@ index 9fae0d4..21f154a 100644
 +                        SceneRayTextures rayTextures;
 +                        rayTextures.indices = indexBufferView.buffer.ref;
 +                        rayTextures.texcoords = rayTexcoordBufferRef;
-+                        rayTextures.rdpTiles = rayRDPTilesBufferRef;
-+                        rayTextures.gpuTiles = rayGPUTilesBufferRef;
++                        rayTextures.rdpTiles = (rayRDPTilesPair != nullptr) ? rayRDPTilesPair->get() : nullptr;
++                        rayTextures.gpuTiles = (rayGPUTilesPair != nullptr) ? rayGPUTilesPair->get() : nullptr;
 +                        rayTextures.textureSet = (descTextureSet != nullptr) ? descTextureSet->get() : nullptr;
 +                        SetSceneLampLights(targetDrawCall.lampLights.data(), uint32_t(targetDrawCall.lampLights.size() / 4));
 +                        if (getenv("TOOIE_LIGHT_LOG") != nullptr) {
@@ -4009,8 +4009,8 @@ index 9fae0d4..21f154a 100644
 +        worldPosBufferRef = worldPosRes;
 +        worldVelBufferRef = worldVelRes;
 +        rayTexcoordBufferRef = tcRes;
-+        rayRDPTilesBufferRef = drawBuffers.rdpTilesBuffer.get();
-+        rayGPUTilesBufferRef = drawBuffers.gpuTilesBuffer.get();
++        rayRDPTilesPair = &drawBuffers.rdpTilesBuffer;
++        rayGPUTilesPair = &drawBuffers.gpuTilesBuffer;
 +        worldPosVertexCount = vertexCount;
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
@@ -5686,7 +5686,7 @@ index 9fae0d4..21f154a 100644
  
      void FramebufferRenderer::advanceFrame(bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..fea7802 100644
+index 3add9c3..9f6bdcf 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,13 @@
@@ -5926,7 +5926,7 @@ index 3add9c3..fea7802 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +280,14 @@ namespace RT64 {
+@@ -77,6 +280,17 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
@@ -5935,13 +5935,16 @@ index 3add9c3..fea7802 100644
 +        const RenderBuffer *worldVelBufferRef = nullptr;
 +        // Banjo-Tooie: what the traced effects read the textures of what they meet from (SceneRayTextures).
 +        const RenderBuffer *rayTexcoordBufferRef = nullptr;
-+        const RenderBuffer *rayRDPTilesBufferRef = nullptr;
-+        const RenderBuffer *rayGPUTilesBufferRef = nullptr;
++        // The tiles' buffer pairs, read when the pass is recorded: the GPU tiles are uploaded after addFramebuffer, and an
++        // upload that needs more room makes a new buffer and frees the old one. A buffer taken in addFramebuffer was then a
++        // freed one ("[rt] the driver faulted writing ray texture buffer 5", and the GPU lost when it was read).
++        const BufferPair *rayRDPTilesPair = nullptr;
++        const BufferPair *rayGPUTilesPair = nullptr;
 +        uint32_t worldPosVertexCount = 0;
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +298,14 @@ namespace RT64 {
+@@ -87,6 +301,14 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -5956,7 +5959,7 @@ index 3add9c3..fea7802 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +319,7 @@ namespace RT64 {
+@@ -100,6 +322,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -5964,7 +5967,7 @@ index 3add9c3..fea7802 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +343,10 @@ namespace RT64 {
+@@ -123,6 +346,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -5975,7 +5978,7 @@ index 3add9c3..fea7802 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +388,15 @@ namespace RT64 {
+@@ -164,7 +391,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
