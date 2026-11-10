@@ -1298,6 +1298,22 @@ cam
 
 Catch: needs the game running.
 
+### `playerfade`
+
+Usage: `playerfade <0 to 1> | playerfade off`
+
+Holds Banjo (and Kazooie) at a fade, the one the free camera's Smooth Walls gives him when the camera is pulled in
+close: 0 is gone, 1 is whole. `playerfade off` gives the fade back to the camera. For checking how he, his fur and
+Kazooie's feathers look while faded, without steering the camera into him.
+
+```
+playerfade 0.5
+screenshot
+playerfade off
+```
+
+Catch: the game's own fades (a cutscene's) are scaled by it too while it is held.
+
 ### `kill`
 
 Usage: `kill [radius] [model hex]`

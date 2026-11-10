@@ -298,6 +298,8 @@ namespace {
 
     // Scales the players' draw alpha (tooie_free_camera_player_alpha), 1 for whole.
     std::atomic<float> player_fade{1.0f};
+    // The console's playerfade: Banjo held at this fade (0 to 1), below 0 when not forced.
+    std::atomic<float> forced_player_fade{-1.0f};
 }
 
 bool tooie::free_camera::enabled() {
@@ -731,8 +733,13 @@ bool tooie::free_camera::sweep_line(uint8_t* rdram, recomp_context* ctx, const f
     return sweep(rdram, ctx, from, to, normal);
 }
 
+void tooie::free_camera::force_player_fade(float fade) {
+    forced_player_fade = fade;
+}
+
 extern "C" int tooie_free_camera_player_alpha(int alpha) {
-    const float fade = player_fade.load();
+    const float forced = forced_player_fade.load();
+    const float fade = forced >= 0.0f ? forced : player_fade.load();
     return fade >= 1.0f ? alpha : (int)((float)alpha * fade);
 }
 

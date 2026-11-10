@@ -2512,7 +2512,7 @@ index 69a82ac..ff7cedb 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..aa2e216 100644
+index 9fae0d4..de22b6f 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,23 @@
@@ -4182,7 +4182,7 @@ index 9fae0d4..aa2e216 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +3151,1369 @@ namespace RT64 {
+@@ -1747,24 +3151,1376 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4278,8 +4278,8 @@ index 9fae0d4..aa2e216 100644
 +                    {
 +                        targetDrawCall.characterInstances.push_back(instanceIndex);
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -4516,6 +4516,12 @@ index 9fae0d4..aa2e216 100644
 +                }
 +
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
++                // Faded (the free camera pulled in close, or the game fading him), his and Kazooie's opaque parts are drawn
++                // blended without an alpha test, still writing depth; they keep their fur and feathers, faded with them.
++                // (Her wings and crest are blended with an alpha test: those stay cut out by their textures.)
++                auto fadedSolid = [](const interop::OtherMode &m) {
++                    return interop::Blender::usesAlphaBlend(m) && (m.alphaCompare() == G_AC_NONE) && m.zUpd();
++                };
 +                bool fur = false;
 +                // (3: a furry enemy's white fur, the yeti.)
 +                const bool enemyFur = (call.callDesc.extendedFlags.furShells == 3);
@@ -4524,7 +4530,7 @@ index 9fae0d4..aa2e216 100644
 +                    !instanceDrawCall.triangles.vertexTestZ && ((furDrawData == nullptr) || (furDrawData == &drawData)))
 +                {
 +                    const interop::OtherMode fm = call.shaderDesc.otherMode;
-+                    fur = fm.zCmp() && fm.zUpd() && (fm.zMode() != ZMODE_DEC) && (fm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(fm);
++                    fur = fm.zCmp() && fm.zUpd() && (fm.zMode() != ZMODE_DEC) && (fm.cycleType() != G_CYC_COPY) && (!interop::Blender::usesAlphaBlend(fm) || fadedSolid(fm));
 +                    if (fur) {
 +                        furDrawData = &drawData;
 +                        addFurNormals(drawData, call.meshDesc.faceIndicesStart, call.callDesc.triangleCount);
@@ -4555,7 +4561,7 @@ index 9fae0d4..aa2e216 100644
 +                    ((call.callDesc.extendedFlags.furShells == 1) || (call.callDesc.extendedFlags.furShells == 2) || (call.callDesc.extendedFlags.furShells == 5)) &&
 +                    (fur || (call.callDesc.extendedFlags.furShells == 2) || (call.callDesc.extendedFlags.furShells == 5)) && ((furDrawData == nullptr) || (furDrawData == &drawData)) &&
 +                    call.shaderDesc.otherMode.zCmp() && call.shaderDesc.otherMode.zUpd() && (call.shaderDesc.otherMode.zMode() != ZMODE_DEC) &&
-+                    (call.shaderDesc.otherMode.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode);
++                    (call.shaderDesc.otherMode.cycleType() != G_CYC_COPY) && (!interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode) || fadedSolid(call.shaderDesc.otherMode));
 +                if (charDraw) {
 +                    if (!fur) {
 +                        furDrawData = &drawData;
@@ -4565,8 +4571,9 @@ index 9fae0d4..aa2e216 100644
 +                }
 +                instanceFurVector.resize(instanceIndex, 0);
 +                // (3: a part cut out by its texture, seen from both sides, RASTER_FEATHER_TWO_SIDED in FeatherGS.hlsl; 4: a furry
-+                // enemy's white fur; 5 and 6: as 2 and 3 on a feathered NPC.)
-+                const uint32_t featherKind = feathers ? ((interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode) ? 3 : 2) + (npcFeathers ? 3 : 0)) : 0;
++                // enemy's white fur; 5 and 6: as 2 and 3 on a feathered NPC.) Kazooie faded keeps 2 on her opaque parts.
++                const bool cutOut = interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode) && (npcFeathers || !fadedSolid(call.shaderDesc.otherMode));
++                const uint32_t featherKind = feathers ? ((cutOut ? 3 : 2) + (npcFeathers ? 3 : 0)) : 0;
 +                instanceFurVector.push_back(fur ? (enemyFur ? 4 : 1) : featherKind);
 +                if (fur && (furShells > 0) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
 +                    instanceDrawCall.triangles.shellPipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_SHELLS);
@@ -4949,7 +4956,7 @@ index 9fae0d4..aa2e216 100644
 +                    call.shaderDesc.otherMode.zCmp() && (call.shaderDesc.otherMode.cycleType() != G_CYC_COPY) && (call.shaderDesc.otherMode.cycleType() != G_CYC_FILL))
 +                {
 +                    groundLayerRanges.push_back({ &drawData, { call.meshDesc.faceIndicesStart, call.callDesc.triangleCount } });
-                 }
++                }
 +                instanceGroundVector.resize(instanceIndex, 0);
 +                instanceGroundVector.push_back(groundValue);
 +                // (Its material's own shaders with the ground's hull and domain shaders, asked for the first time it is
@@ -4969,7 +4976,7 @@ index 9fae0d4..aa2e216 100644
 +                instanceGroundPipelineVector.resize(instanceIndex, nullptr);
 +                instanceGroundPipelineVector.push_back(groundPipeline);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
- 
++
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
@@ -5553,7 +5560,7 @@ index 9fae0d4..aa2e216 100644
          };
  
  #   if RT_ENABLED
-@@ -1816,8 +4565,12 @@ namespace RT64 {
+@@ -1816,8 +4572,12 @@ namespace RT64 {
          }
  #   endif
  
@@ -8293,7 +8300,7 @@ index bc250a2..c965950 100644
 +
 +#endif // RT64_FBRENDERERCOMMON_HLSLI
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..41fe5ba 100644
+index e7895c3..fe56cbd 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -8495,14 +8502,16 @@ index e7895c3..41fe5ba 100644
      // Preserve the value in the destination.
      if (otherMode.cvgDst() == CVG_DST_SAVE) {
          resultColor.a = 0.0f;
-@@ -254,6 +387,126 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +387,132 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
 +    // Banjo-Tooie: a shell of deep snow keeps only where the snow reaches it, on snowy ground facing up.
 +    if (featherCard) {
-+        // Grown from a part cut out by its texture's alpha: only on its solid parts, drawn solid.
-+        if (alphaBlend) {
++        // Grown from a part cut out by its texture's alpha: only on its solid parts, drawn solid. (Her opaque parts drawn
++        // blended while she is faded aren't cut out: their feathers keep the draw's alpha and fade with her.)
++        const bool wingFeathers = (gConstants.grassShells & RASTER_FEATHER_TWO_SIDED) != 0;
++        if (alphaBlend && wingFeathers) {
 +            if (featherRootColor.a < 0.5f) {
 +                return false;
 +            }
@@ -8531,7 +8540,6 @@ index e7895c3..41fe5ba 100644
 +        }
 +        // (A feathered NPC's, Canary Mary's: her lemon beak and her tan skin.)
 +        const bool npcFeathers = (gConstants.grassShells & RASTER_FEATHER_NPC) != 0;
-+        const bool wingFeathers = (gConstants.grassShells & RASTER_FEATHER_TWO_SIDED) != 0;
 +        const bool beak = wingFeathers ? false : npcFeathers ? (((underHue > 51.0f) && (underHue <= 70.0f) && (underHigh > 0.25f)) || ((underSaturation < 0.72f) && (underHigh > 0.25f))) :
 +            ((underHue >= 30.0f) && (underHue <= 70.0f) && (underSaturation < 0.88f) && (underHigh > 0.25f));
 +        const bool eye = ((underHigh > 0.55f) && (underSaturation < 0.25f)) || ((underHue > 70.0f) && (underHue < 180.0f) && (underSaturation > 0.3f));
@@ -8580,6 +8588,11 @@ index e7895c3..41fe5ba 100644
 +        {
 +            return false;
 +        }
++        // Faded (drawn blended), a strand crosses about four shells where it shows, over his body: each shell gets the
++        // share of the fade that leaves the four together as see-through as he is, not near solid.
++        if (alphaBlend) {
++            resultAlpha.a = 1.0f - pow(saturate(1.0f - resultAlpha.a), 0.25f);
++        }
 +    }
 +
 +    // Banjo-Tooie: parallax mapping's shading: darker deep down and in the stones' shadows.
@@ -8622,7 +8635,7 @@ index e7895c3..41fe5ba 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +514,29 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +520,29 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -8652,7 +8665,7 @@ index e7895c3..41fe5ba 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +563,7 @@ void PSMain(
+@@ -287,6 +569,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -8660,7 +8673,7 @@ index e7895c3..41fe5ba 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +580,7 @@ void PSMain(
+@@ -303,7 +586,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;

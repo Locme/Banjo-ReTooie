@@ -43,6 +43,10 @@ namespace tooie::free_camera {
     // The game's camera line test (func_800FAB50, 45-unit radius): moves `to` back to where the line
     // from `from` first hits, and gives that surface's normal. Returns whether it hit.
     bool sweep_line(uint8_t* rdram, recomp_context* ctx, const float from[3], float to[3], float normal[3]);
+
+    // The console's playerfade: holds Banjo's draw alpha at this share (0 to 1) whatever the camera does; below 0
+    // gives it back to the camera.
+    void force_player_fade(float fade);
 }
 
 #endif

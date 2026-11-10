@@ -2338,6 +2338,21 @@ void cmd_cam(Ctx& c) {
         (int)(int16_t)read_ram(c.rdram, ctl + 0x16, 2)));
 }
 
+// playerfade: holds Banjo at a fade (the one the free camera gives him when it is pulled in close), to check how he
+// and his fur and feathers look faded.
+void cmd_playerfade(Ctx& c) {
+    if (c.w.size() < 2 || lower(c.w[1]) == "off") {
+        tooie::free_camera::force_player_fade(-1.0f);
+        print("Banjo's fade is the camera's again");
+        return;
+    }
+    char* end = nullptr;
+    const float fade = std::strtof(c.w[1].c_str(), &end);
+    if (end == c.w[1].c_str() || fade < 0.0f || fade > 1.0f) { error("give a fade from 0 (gone) to 1 (whole), or off"); return; }
+    tooie::free_camera::force_player_fade(fade);
+    print(format("Banjo held at fade %.2f", fade));
+}
+
 // anim: the animation Banjo's animation controller plays now (its asset id, as anctrl_getIndex gives it), with the
 // form and the player state, to find a form's idle animation.
 void cmd_anim(Ctx& c) {
@@ -4137,6 +4152,7 @@ const std::vector<Command>& commands() {
         { "uimove", {}, false, "uimove list | <entry> <x> <y> | <entry> reset | reset | save", "move single tabs, rows and buttons of the Esc menu by x, y (dp), at once; save writes assets/ui_layout.json", cmd_uimove },
         { "cam", {}, true, "cam", "the camera's position and angles as drawn, and its mode", cmd_cam },
         { "kill", {}, true, "kill [radius] [model hex]", "remove the nearest object (or the nearest with that model) as a beaten enemy is removed", cmd_kill },
+        { "playerfade", {}, false, "playerfade <0 to 1> | playerfade off", "hold Banjo at a fade, as the free camera fades him when pulled in close (0 gone, 1 whole)", cmd_playerfade },
         { "anim", {}, true, "anim", "the animation Banjo plays now, with his form and state", cmd_anim },
         { "objects", {}, true, "objects [radius]", "the live objects near Banjo, nearest first (address, marker, model, actor entry, position)", cmd_objects },
         { "face", {}, true, "face <x> <z>", "turn Banjo to face a point", cmd_face },
