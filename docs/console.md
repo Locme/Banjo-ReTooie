@@ -251,7 +251,8 @@ Catch: a list name other than `place` or `map` (or their aliases) is an error.
 ## Settings
 
 The settings commands reach the options of the settings tabs (`general`, `graphics`, `sound`, `qol`, `cheats` and
-`wip`) that the menu shows. The `debug` tab has no settings in this build. Options the menu hides cannot be reached.
+`wip`) that the menu shows. The `debug` tab has no settings in this build. Options the menu hides cannot be reached,
+except `graphics.hpfb_option` (High Precision Framebuffer: `Auto`, `On` or `Off`), which the menu never shows.
 A setting is changed the way the settings menu changes it. The option's change callbacks run and the tab is saved
 straight away. A tab that waits for Apply in the menu, like Graphics, is applied at once here.
 
@@ -301,6 +302,7 @@ Changes the value and saves the config.
 ```
 set day_night off
 set force_scene_interpolation on
+set hpfb_option on
 ```
 
 Catch: the value is checked against the setting. A value the setting does not take is an error, and `get` shows what

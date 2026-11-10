@@ -1599,7 +1599,7 @@ namespace RT64 {
         full++;
         const auto now = std::chrono::steady_clock::now();
         if (!said || (fxLog && (now - lastLog > std::chrono::seconds(1)))) {
-            fprintf(stderr, "[parallax] all 8 camera slots taken: %llu draws drawn without parallax or displaced ground%s\n",
+            fprintf(stderr, "[parallax] all 16 camera slots taken: %llu draws drawn without parallax or displaced ground%s\n",
                 (unsigned long long)(full), said ? " in the last second" : " (said once; TOOIE_FX_LOG for a line a second)");
             said = true;
             full = 0;

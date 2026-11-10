@@ -548,7 +548,9 @@ std::vector<SettingRef> all_settings() {
         if (config == nullptr) continue;
         const auto& options = config->get_config_schema().options;
         for (size_t i = 0; i < options.size(); i++) {
-            if (options[i].hidden) continue; // not in the menu either
+            // A setting hidden in the menu is left out too, apart from High Precision Framebuffer: the menu never shows
+            // it, and the console is the only way to change it without editing graphics.json.
+            if (options[i].hidden && options[i].id != recompui::config::graphics::options::hpfb_option) continue;
             SettingRef ref;
             ref.tab = tab;
             ref.config = config;

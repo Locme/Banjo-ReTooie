@@ -2512,7 +2512,7 @@ index 69a82ac..ff7cedb 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..de22b6f 100644
+index 9fae0d4..21f154a 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,23 @@
@@ -4182,7 +4182,7 @@ index 9fae0d4..de22b6f 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +3151,1376 @@ namespace RT64 {
+@@ -1747,24 +3151,1377 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4631,7 +4631,7 @@ index 9fae0d4..de22b6f 100644
 +                    }
 +                    // Drawn with its material's shader built with parallax mapping.
 +                    if (parallax != 0) {
-+                        // This framebuffer's camera for it: the same as an earlier one's, else a new one; once all four are taken,
++                        // This framebuffer's camera for it: the same as an earlier one's, else a new one; once all sixteen are taken,
 +                        // none (another camera's terms put the floor's parallax and displaced ground wrong: black, or culled).
 +                        interop::float4 depthTerms, projectionTerms;
 +                        if ((proj.transformsIndex < drawData.modProjTransforms.size()) && (proj.transformsIndex < drawData.rspViewports.size()) &&
@@ -4670,7 +4670,7 @@ index 9fae0d4..de22b6f 100644
 +                            while ((slot < parallaxCameraCount) && !sameCamera(slot)) {
 +                                slot++;
 +                            }
-+                            if (slot == 8) {
++                            if (slot == 16) {
 +                                parallax = 0;
 +                                NoteSceneCamerasFull();
 +                            }
@@ -4920,7 +4920,8 @@ index 9fae0d4..de22b6f 100644
 +                        NoteSnapDraw(fromFramebuffer, wrapS && wrapT, snapVertices != 0u);
 +                    }
 +                    instanceSeeThroughVector.resize(instanceIndex, 0);
-+                    instanceSeeThroughVector.push_back((seeThrough ? RASTER_SEE_THROUGH_DEPTH : 0) | (((instanceIndex < instanceCharVector.size()) && instanceCharVector[instanceIndex]) ? RASTER_CHAR_SURFACE : 0) | snapVertices);
++                    instanceSeeThroughVector.push_back((seeThrough ? RASTER_SEE_THROUGH_DEPTH : 0) | (((instanceIndex < instanceCharVector.size()) && instanceCharVector[instanceIndex]) ? RASTER_CHAR_SURFACE : 0) | snapVertices |
++                        (((parallax != 0) && ((parallaxCamera & 8u) != 0u)) ? RASTER_PARALLAX_CAMERA_TOP : 0u));
 +                }
 +                // Banjo-Tooie: level ground whose parallax texture has a floor-like shape is drawn as a tessellated surface,
 +                // its darkest parts pushed down (GroundTess.hlsl), in place of its own draw. Not the sand or the snow
@@ -5560,7 +5561,7 @@ index 9fae0d4..de22b6f 100644
          };
  
  #   if RT_ENABLED
-@@ -1816,8 +4572,12 @@ namespace RT64 {
+@@ -1816,8 +4573,12 @@ namespace RT64 {
          }
  #   endif
  
@@ -8300,7 +8301,7 @@ index bc250a2..c965950 100644
 +
 +#endif // RT64_FBRENDERERCOMMON_HLSLI
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..fe56cbd 100644
+index e7895c3..99bd80e 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -8423,7 +8424,7 @@ index e7895c3..fe56cbd 100644
 +            rdpTile.nativeSampler = renderFlagNativeSampler0(rp.flags);
 +        }
 +        const float2 range = float2((gConstants.nightLight >> 8) & 0xFF, (gConstants.nightLight >> 16) & 0xFF) / 255.0f;
-+        const float3 parallax = ParallaxOffset(otherMode, rp.flags, vertexPosition, vertexUV, ddxVertexUV, ddyVertexUV, rdpTile, GPUTiles[globalTileIndex], range, gConstants.nightLight);
++        const float3 parallax = ParallaxOffset(otherMode, rp.flags, vertexPosition, vertexUV, ddxVertexUV, ddyVertexUV, rdpTile, GPUTiles[globalTileIndex], range, gConstants.nightLight, ParallaxCameraIndex(gConstants.nightLight, gConstants.seeThrough));
 +        vertexUV += parallax.xy;
 +        parallaxLight = parallax.z;
 +    }
@@ -9148,7 +9149,7 @@ index 3f33475..f471fd1 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..f9a5917 100644
+index 2e62aaf..fddb7fd 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
 @@ -13,6 +13,119 @@ namespace interop {
@@ -9250,15 +9251,15 @@ index 2e62aaf..f9a5917 100644
 +        // vector in units at the fur's full length (the shells move by the square of their height), 0 when off.
 +        float4 furSway;
 +        // Banjo-Tooie: parallax mapping's camera for each part of the frame that draws the 3D world (Parallax.hlsli), up to
-+        // eight, picked per draw by RASTER_PARALLAX_CAMERA: the depth terms (as grassWorldZ), then the projection's x and
++        // sixteen, picked per draw by RASTER_PARALLAX_CAMERA: the depth terms (as grassWorldZ), then the projection's x and
 +        // y scale and the framebuffer's width and height (as grassProjection). The world can be drawn in several
 +        // framebuffers a frame (after an HD shadow, or in two passes) of different sizes, and one set of terms for all of
 +        // them put the pixels of the others in the wrong place: their parallax flattened out and came back (L).
-+        float4 parallaxCameras[16];
++        float4 parallaxCameras[32];
 +        // Banjo-Tooie: displaced ground's camera (GroundTess.hlsl) for each of parallaxCameras' framebuffers, picked the same
 +        // way (RASTER_PARALLAX_CAMERA): the map from world space to clip space as RasterVS places the vertices (four rows),
 +        // then the camera's world x, y and z. Each framebuffer's own, as parallax's (its size changes the map).
-+        float4 groundCameras[40];
++        float4 groundCameras[80];
 +        // Banjo-Tooie: deep snow's and tessellated sand's camera, from the frame's first 3D world (where the snow was
 +        // worked out): its world position, and its projection's y scale (as grassProjection.y). The grass terms it came
 +        // from are worked out again for a later world (after an HD shadow), and the snow's reach and cuts must not follow.
@@ -9307,10 +9308,10 @@ index 4548f15..784123d 100644
  #ifdef HLSL_CPU
  };
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..fac4f50 100644
+index 0a5c332..20c9afb 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,99 @@
+@@ -9,11 +9,102 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -9354,8 +9355,9 @@ index 0a5c332..fac4f50 100644
 +// Banjo-Tooie: a texture's depth in 10% steps (1 to 31), when not 0.
 +#define RASTER_PARALLAX_FINE_DEPTH 0xF8u
 +#define RASTER_PARALLAX_FINE_DEPTH_SHIFT 3
-+// Banjo-Tooie: which of FrameParams.parallaxCameras the draw's framebuffer has (0 to 7): its bits 0 and 1 in 29 and 30, its bit 2 in
-+// RASTER_PARALLAX_CAMERA_HIGH (bit 24, where the CPU's parallax value has RASTER_PARALLAX_HEIGHT_MAP, which no shader reads).
++// Banjo-Tooie: which of FrameParams.parallaxCameras the draw's framebuffer has (0 to 15): its bits 0 and 1 in 29 and 30, its bit 2 in
++// RASTER_PARALLAX_CAMERA_HIGH (bit 24, where the CPU's parallax value has RASTER_PARALLAX_HEIGHT_MAP, which no shader reads), and
++// its bit 3 in RASTER_PARALLAX_CAMERA_TOP in RasterParams.seeThrough (nightLight has no bit left).
 +#define RASTER_PARALLAX_CAMERA 0x60000000u
 +#define RASTER_PARALLAX_CAMERA_SHIFT 29
 +#define RASTER_PARALLAX_CAMERA_HIGH 0x1000000u
@@ -9378,6 +9380,8 @@ index 0a5c332..fac4f50 100644
 +    // wrapping with a period of exactly its tile: Jiggywiggy's puzzle board), whose screen corners RasterVS snaps to a quarter of a
 +    // game pixel as the N64 does, so pieces placed through different matrices meet without cracks between them.
 +#define RASTER_SNAP_VERTICES 0x10u
++    // Banjo-Tooie: also in RasterParams.seeThrough: bit 3 of the draw's parallax camera (RASTER_PARALLAX_CAMERA).
++#define RASTER_PARALLAX_CAMERA_TOP 0x20u
 +
      struct RasterParams {
          uint renderIndex;

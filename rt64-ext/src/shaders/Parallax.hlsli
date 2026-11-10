@@ -21,10 +21,15 @@
 
 // The view space position at a pixel (the camera at the origin, looking down -z), from its depth, as
 // ScenePixelWorldPosition finds it before it goes to world space.
-// With the camera of the draw's own framebuffer (RASTER_PARALLAX_CAMERA, FrameParams.parallaxCameras).
-float3 ParallaxViewPosition(float4 pixelPosition, uint bits) {
-    // (Eight cameras: bits 0 and 1 in RASTER_PARALLAX_CAMERA, bit 2 in RASTER_PARALLAX_CAMERA_HIGH.)
-    const uint camera = ((bits & RASTER_PARALLAX_CAMERA) >> RASTER_PARALLAX_CAMERA_SHIFT) | (((bits & RASTER_PARALLAX_CAMERA_HIGH) != 0u) ? 4u : 0u);
+// Which of FrameParams.parallaxCameras (0 to 15) the draw's framebuffer has, from RasterParams.nightLight and seeThrough:
+// bits 0 and 1 in RASTER_PARALLAX_CAMERA, bit 2 in RASTER_PARALLAX_CAMERA_HIGH, bit 3 in RASTER_PARALLAX_CAMERA_TOP.
+uint ParallaxCameraIndex(uint nightLightBits, uint seeThroughBits) {
+    return ((nightLightBits & RASTER_PARALLAX_CAMERA) >> RASTER_PARALLAX_CAMERA_SHIFT) | (((nightLightBits & RASTER_PARALLAX_CAMERA_HIGH) != 0u) ? 4u : 0u) |
+        (((seeThroughBits & RASTER_PARALLAX_CAMERA_TOP) != 0u) ? 8u : 0u);
+}
+
+// With the camera of the draw's own framebuffer (ParallaxCameraIndex, FrameParams.parallaxCameras).
+float3 ParallaxViewPosition(float4 pixelPosition, uint camera) {
     const float4 t = FrParams.parallaxCameras[camera * 2];
     const float ndcZ = pixelPosition.z * 2.0f - 1.0f;
     const float z = (t.y - ndcZ * t.w) / (ndcZ * t.z - t.x);
@@ -73,14 +78,14 @@ float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, f
 // How far to move the texture coordinates at this pixel so the textures show the place the view ray meets the height
 // field (xy), and how lit that place is (z): darker deep down and in the shadow the stones above it cast, with the
 // light from straight up in the world. No change where it is flat: seen edge on, or far away.
-float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixelPosition, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, uint bits) {
+float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixelPosition, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, uint bits, uint camera) {
     // The texture's own shape, depth and shadows (RasterParams.nightLight, rt64_raster_params.h).
     const uint shape = ((bits >> 25) & 0x7u) | (((bits & RASTER_PARALLAX_SHAPE_HIGH) != 0) ? 8u : 0u) | (((bits & RASTER_PARALLAX_SHAPE_TOP) != 0) ? 16u : 0u);
     float4 params = FrParams.parallaxParams;
     const uint fineDepth = (bits & RASTER_PARALLAX_FINE_DEPTH) >> RASTER_PARALLAX_FINE_DEPTH_SHIFT;
     params.x *= (fineDepth != 0) ? (float(fineDepth) * 0.1f) : 1.0f;
     const float4 shading = ((bits & RASTER_PARALLAX_NO_SHADOWS) != 0) ? float4(0.0f, 0.0f, 0.0f, 0.0f) : FrParams.parallaxShading;
-    const float3 p = ParallaxViewPosition(pixelPosition, bits);
+    const float3 p = ParallaxViewPosition(pixelPosition, camera);
     const float3 dp1 = ddx(p);
     const float3 dp2 = ddy(p);
     const float distance = length(p);

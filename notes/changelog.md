@@ -5,6 +5,8 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-10
 
+- Console: `set hpfb_option <Auto | On | Off>` changes High Precision Framebuffer, which the menu does not show; `settings` and `get` list it too.
+- Parallax and Displaced Ground: a frame can now draw the world through up to 16 cameras (was 8) before the later draws lose their depth and are drawn flat.
 - Banjo's fur and Kazooie's feathers stay on when Banjo fades out as the camera gets close to him, fading with him, instead of vanishing (the fur at once, the feathers below half). Console: `playerfade <0 to 1> | off` holds him at a fade to check it.
 - Free camera under water: swinging the camera down below Banjo no longer pushes it back up while nothing is in the way. Floor Clearance kept it a wide margin off the bottom, so it rose well before it reached the floor; under water it now only lifts the camera right at the floor.
 - Above 30 FPS, characters turn their heads to look at Banjo and back at the 30 FPS pace, smoothly, instead of stalling and then snapping round (most characters share this, Bottles and his family among them).

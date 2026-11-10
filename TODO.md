@@ -258,10 +258,7 @@ game draws it.
 
 - Settings: `session_log` reads settings once every 2 s; the settings store is now locked (N64ModernRuntime patch), so
   this is only a note if new threads start reading settings.
-- Parallax / Displaced ground: with more than 8 cameras in a frame, the later draws are drawn flat (`[parallax]` line
-  with `TOOIE_FX_LOG=1`). Never seen so far.
 - Effect Debug View and Effect Compare: the menu rows don't follow the F6 / F8 keys any more (the keys no longer write
   the settings from their own thread).
 - Not yet played through in the game since the bug review fixes: boss rush (a fight over two maps would now end the
   rush), Dive with transformations, Cheato flags per save file, photo mode exit, the pause menu highlight.
-- The console can't change High-precision framebuffer (`hpfb_option` isn't in its setting list).
