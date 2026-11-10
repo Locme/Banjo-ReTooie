@@ -11,10 +11,21 @@
 // does point back (the link with its top bit restored, or else the first header found after this block
 // whose previous link is this block). Each repair is logged as [heap], with the bad value, to help find
 // the writer, and shown in game as a "HEAP error" notice. A list that can't be repaired is left as it was.
+//
+// Free blocks are also on a free list, smallest first, through prev_free and next_free at +0x10 and
+// +0x14: the first 8 bytes of what the block held while in use, so a write to an object after it was
+// freed lands there. In L's sweep of 2026-11-07, arriving in GI Floor 3 (0x109), a link held
+// 0xC4961900 (the float -1200.8); heap_alloc_sided and heap_merge_free_block followed it and the game
+// hung. The free list is now checked at the start of every heap_alloc_sided and after the block list
+// above; a link outside the heap, to a block that isn't free, or that doesn't link back gets the
+// whole free list rebuilt from the block list, logged as [heap] with the map.
 
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <algorithm>
+#include <utility>
+#include <vector>
 
 #include "recomp.h"
 #include "tooie_hooks.h"
@@ -37,14 +48,127 @@ namespace {
         }
         return (next == end) || (read_word(rdram, next) == cur);
     }
+
+    // A block's state: bits 7-6 of its header's fourth word (0 free, 1 used, 2 fixed).
+    uint32_t block_state(uint8_t* rdram, uint32_t block) {
+        return (read_word(rdram, block + 0xC) >> 6) & 3;
+    }
+
+    bool heap_bounds(uint8_t* rdram, uint32_t& start, uint32_t& end) {
+        start = read_word(rdram, heap_start_address);
+        const uint32_t size = read_word(rdram, heap_size_address);
+        end = start + size;
+        return start >= 0x80000000u && size != 0 && end <= 0x81000000u && end > start;
+    }
+
+    // Walks the free list from the first block's next_free to the last block. Returns 0 when every link
+    // is a free block in the heap that links back, else the address of the link that is not.
+    uint32_t free_list_damage(uint8_t* rdram, uint32_t start, uint32_t end, uint32_t& bad_value) {
+        const uint32_t last = end - 0x20;
+        uint32_t prev = start;
+        uint32_t cur = read_word(rdram, start + 0x14);
+        for (int steps = 0; steps < 200000; steps++) {
+            if (cur == last) {
+                return (read_word(rdram, last + 0x10) == prev) ? 0 : last + 0x10;
+            }
+            if ((cur & 0xF) != (start & 0xF) || cur <= start || cur >= last || block_state(rdram, cur) != 0 ||
+                read_word(rdram, cur + 0x10) != prev) {
+                bad_value = cur;
+                return prev + 0x14;
+            }
+            prev = cur;
+            cur = read_word(rdram, cur + 0x14);
+        }
+        bad_value = cur;
+        return prev + 0x14;
+    }
+
+    // Links every free block of the block list into a new free list, smallest first (the order
+    // heap_merge_free_block keeps it in), between the fixed first and last blocks. Needs a good block list.
+    bool rebuild_free_list(uint8_t* rdram, uint32_t start, uint32_t end) {
+        const uint32_t last = end - 0x20;
+        static std::vector<std::pair<uint32_t, uint32_t>> blocks; // (size, address)
+        blocks.clear();
+        uint32_t cur = read_word(rdram, start + 4);
+        for (int steps = 0; steps < 200000 && cur != last; steps++) {
+            const uint32_t next = read_word(rdram, cur + 4);
+            if (!good_link(rdram, cur, next, start, end)) {
+                return false;
+            }
+            if (block_state(rdram, cur) == 0) {
+                blocks.emplace_back(next - cur, cur);
+            }
+            cur = next;
+        }
+        if (cur != last) {
+            return false;
+        }
+        std::stable_sort(blocks.begin(), blocks.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+        uint32_t prev = start;
+        for (const auto& b : blocks) {
+            MEM_W(0, (int32_t)(prev + 0x14)) = (int32_t)b.second;
+            MEM_W(0, (int32_t)(b.second + 0x10)) = (int32_t)prev;
+            prev = b.second;
+        }
+        MEM_W(0, (int32_t)(prev + 0x14)) = (int32_t)last;
+        MEM_W(0, (int32_t)(last + 0x10)) = (int32_t)prev;
+        return true;
+    }
+
+    // Checks the free list and rebuilds it when a link is bad (L's sweep hang of 2026-11-07: a free
+    // block's link held 0xC4961900, the float -1200.8, written into the block after it was freed).
+    void guard_free_list(uint8_t* rdram, uint32_t start, uint32_t end) {
+        uint32_t bad_value = 0;
+        const uint32_t at = free_list_damage(rdram, start, end, bad_value);
+        if (at == 0) {
+            return;
+        }
+        const unsigned map = (unsigned)(uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
+        if (!rebuild_free_list(rdram, start, end)) {
+            std::printf("[heap] free list link at %08X holds %08X (map %03X); the block list is broken too, left as it was\n",
+                at, bad_value, map);
+            std::fflush(stdout);
+            tooie::toast::show("HEAP error: could not repair it, the game may crash");
+            return;
+        }
+        std::printf("[heap] free list link at %08X held %08X (map %03X); free list rebuilt from the block list\n",
+            at, bad_value, map);
+        std::fflush(stdout);
+        tooie::toast::show("HEAP error repaired (details in console.log)");
+    }
+}
+
+// At the start of heap_alloc_sided: the free list only, which is short, so it costs little on every allocation.
+extern "C" void tooie_heap_free_list_guard(uint8_t* rdram, recomp_context* ctx) {
+    (void)ctx;
+    uint32_t start = 0, end = 0;
+    if (!heap_bounds(rdram, start, end)) {
+        return;
+    }
+    // Headless test: TOOIE_HEAP_BREAK_FREE=<n> writes the float -1200.8 (0xC4961900) over the first free
+    // block's next_free at the nth allocation, as in L's sweep hang. TOOIE_HEAP_FREE_GUARD=0 leaves the
+    // free list unrepaired, to see the hang again.
+    static const long break_at = std::getenv("TOOIE_HEAP_BREAK_FREE") ? std::atol(std::getenv("TOOIE_HEAP_BREAK_FREE")) : 0;
+    static const bool repair = !(std::getenv("TOOIE_HEAP_FREE_GUARD") && std::atol(std::getenv("TOOIE_HEAP_FREE_GUARD")) == 0);
+    static long calls = 0;
+    if (++calls == break_at) {
+        const uint32_t first_free = read_word(rdram, start + 0x14);
+        if (first_free != end - 0x20) {
+            MEM_W(0, (int32_t)(first_free + 0x14)) = (int32_t)0xC4961900u;
+            std::printf("[heap] test: wrote C4961900 over free block %08X's next_free\n", first_free);
+            std::fflush(stdout);
+        }
+    }
+    if (repair) {
+        guard_free_list(rdram, start, end);
+    }
 }
 
 extern "C" void tooie_heap_guard(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
-    const uint32_t start = read_word(rdram, heap_start_address);
-    const uint32_t size = read_word(rdram, heap_size_address);
-    const uint32_t end = start + size;
-    if (start < 0x80000000u || size == 0 || end > 0x81000000u || end <= start) {
+    uint32_t start = 0, end = 0;
+    if (!heap_bounds(rdram, start, end)) {
         return;
     }
     // Headless test: TOOIE_HEAP_BREAK=<n> clears the top bit of a link on the nth call, as in L's crash.
@@ -65,7 +189,7 @@ extern "C" void tooie_heap_guard(uint8_t* rdram, recomp_context* ctx) {
     for (int steps = 0; steps < 200000 && cur < end; steps++) {
         const uint32_t next = read_word(rdram, cur + 4);
         if (next == end) {
-            return;
+            break;
         }
         if (good_link(rdram, cur, next, start, end)) {
             cur = next;
@@ -96,4 +220,5 @@ extern "C" void tooie_heap_guard(uint8_t* rdram, recomp_context* ctx) {
         tooie::toast::show("HEAP error repaired (details in console.log)");
         cur = fixed;
     }
+    guard_free_list(rdram, start, end);
 }

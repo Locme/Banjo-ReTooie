@@ -27,6 +27,8 @@ namespace tooie::debug {
     // same_map: also when that map is the one loaded now (another entrance of it; the texture sweep).
     void request_warp(uint16_t map, uint8_t exit, bool same_map = false);
     uint16_t current_map(uint8_t* rdram);
+    // True when the map the game is in was entered by a warp (console, sweeps, TOOIE_WARP), not by play.
+    bool entered_by_warp();
     // True while a save file is being played, so a warp can be issued.
     bool can_warp();
     // A warp asked for with request_warp that the game hasn't been told about yet.

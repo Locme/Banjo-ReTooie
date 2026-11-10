@@ -377,6 +377,7 @@ L_808006B0:
     // 0x808006B4: or          $a0, $a2, $zero
     ctx->r4 = ctx->r6 | 0;
     after_2:
+    if (tooie_null_slot(rdram, ctx->r16, "func_80800648_chintrochar")) { ctx->r31 = MEM_W(0X1C, ctx->r29); ctx->r16 = MEM_W(0X18, ctx->r29); ctx->r29 = ADD32(ctx->r29, 0X20); return; }
     // 0x808006B8: lh          $a0, 0xC0($s0)
     ctx->r4 = MEM_H(ctx->r16, 0XC0);
     // 0x808006BC: beql        $a0, $zero, L_808006D0

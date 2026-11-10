@@ -625,12 +625,29 @@ func = "func_8001C0A0"
 before_vram = 0x8001C0A0
 text = "tooie_heap_guard(rdram, ctx);"
 
+# The free list (each free block's prev_free and next_free, +0x10 and +0x14, the first bytes of what the
+# block held) is checked at every allocation and rebuilt from the block list when a link is bad: L's sweep
+# hang of 2026-11-07 in GI Floor 3 (0x109) was a free block's link holding a float written after the free.
+[[patches.hook]]
+func = "heap_alloc_sided"
+before_vram = 0x8001ACEC
+text = "tooie_heap_free_list_guard(rdram, ctx);"
+
 # chanim_entrypoint_6 frees an actor's animation; the intro characters of 0xAC and 0x199 call it
 # with none when the cutscene is entered straight from another map (src/game/cutscene_guards.cpp).
 [[patches.hook]]
 func = "chanim_entrypoint_6"
 before_vram = 0x808001C4
 text = "if (tooie_chanim_missing(rdram, ctx)) { ctx->r29 = ADD32(ctx->r29, 0X20); return; }"
+
+# The same intro characters then free their animation sequences and blinks, held in the actor's data
+# slot 2 ($s0, from func_80100094), which is null when they were never set up: the intro scenes
+# (0xA3, 0xAC) and Mayahem Temple's character parade (0x167) entered by a warp read 0xC0-0xC6 through
+# null (L's sweeps of 2026-11-07). With no slot there is nothing to free.
+[[patches.hook]]
+func = "func_80800648_chintrochar"
+before_vram = 0x808006B8
+text = "if (tooie_null_slot(rdram, ctx->r16, \"func_80800648_chintrochar\")) { ctx->r31 = MEM_W(0X1C, ctx->r29); ctx->r16 = MEM_W(0X18, ctx->r29); ctx->r29 = ADD32(ctx->r29, 0X20); return; }"
 
 # The intro cutscenes wait here for the intro music's cue; skipped while a texture sweep runs.
 [[patches.hook]]

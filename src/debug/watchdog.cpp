@@ -20,6 +20,7 @@
 #include "recompui/recompui.h"
 
 #include "tooie_frame_overlay.h"
+#include "tooie_debug.h"
 #include "tooie_game.h"
 #include "tooie_watchdog.h"
 #include "tooie_texture_sweep.h"
@@ -83,6 +84,17 @@ namespace {
     std::atomic<uint32_t> reported_rate{0};
     std::once_flag start_once;
     std::atomic<uint8_t*> game_rdram{nullptr};
+
+    // The map the game is in, for the hang reports (the sweeps' hangs of 2026-11-07 did not say).
+    std::string map_text() {
+        uint8_t* rdram = game_rdram.load();
+        if (rdram == nullptr) {
+            return "";
+        }
+        char text[24];
+        std::snprintf(text, sizeof(text), ", map 0x%03X", (unsigned)tooie::debug::current_map(rdram));
+        return text;
+    }
     // The game's memory below 0x81000000, which More game memory uses up to (heap, audio, buffers).
     constexpr size_t rdram_dump_size = 0x1000000;
     clock_type::time_point process_start = clock_type::now();
@@ -356,7 +368,7 @@ namespace {
             if (!started.empty()) {
                 std::string text = started;
                 text += "    counters: game frames " + std::to_string(game_part.count.load()) + ", screen frames " + std::to_string(screen_part.count.load())
-                    + ", window updates " + std::to_string(window_part.count.load()) + "\n";
+                    + ", window updates " + std::to_string(window_part.count.load()) + map_text() + "\n";
                 if (!episode && reports < max_reports) {
                     reports++;
                     text += stacks_text();

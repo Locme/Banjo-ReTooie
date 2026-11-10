@@ -23,6 +23,7 @@ int tooie_sound_event_full(uint8_t* rdram, recomp_context* ctx);
 int tooie_seq_delta_guard(uint8_t* rdram, recomp_context* ctx);
 // Heap guard (src/game/heap_guard.cpp): repairs a broken heap block link before func_8001C0A0 walks the list.
 void tooie_heap_guard(uint8_t* rdram, recomp_context* ctx);
+void tooie_heap_free_list_guard(uint8_t* rdram, recomp_context* ctx);
 // Sun shadows: func_800E3E8C's and func_800E3D0C's cull answers, kept visible within the Sun shadow distance
 // (src/game/widescreen.cpp).
 void tooie_sun_shadow_cull(uint8_t* rdram, recomp_context* ctx);
@@ -33,6 +34,8 @@ int tooie_intro_sync_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_quiz_no_player(uint8_t* rdram, recomp_context* ctx);
 // 1 (and logs once per place) when $v0 is null where the game is about to read through it.
 int tooie_null_guard(uint8_t* rdram, recomp_context* ctx, const char* where);
+// 1 (and logs once per place) when an actor's data slot is null where the game is about to free what it holds.
+int tooie_null_slot(uint8_t* rdram, gpr slot, const char* where);
 
 // Volumetric dust (src/gameplay/dust.cpp): at the entry of badust_entrypoint_2; 1 takes the textured puff'"'"'s place.
 int tooie_dust_spawn(uint8_t* rdram, recomp_context* ctx);

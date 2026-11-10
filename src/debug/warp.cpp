@@ -87,6 +87,12 @@ namespace {
     constexpr uint16_t game_select_map = 0x158;
     std::atomic<bool> ticked{false};
     std::atomic<uint16_t> last_map{0};
+    // The map the last warp went to, until the game arrives there, and whether the map the game is in
+    // now was entered by a warp (game thread only).
+    constexpr uint16_t no_map = 0xFFFF;
+    uint16_t warp_target = no_map;
+    uint16_t seen_map = no_map;
+    bool arrived_by_warp = false;
 
     struct Request {
         uint16_t map;
@@ -149,6 +155,10 @@ bool tooie::debug::map_change_busy(uint8_t* rdram) {
     return MEM_B(0x12, game_state_addr) != 0;
 }
 
+bool tooie::debug::entered_by_warp() {
+    return arrived_by_warp;
+}
+
 uint16_t tooie::debug::current_map(uint8_t* rdram) {
     return (uint16_t)MEM_H(0x0, current_map_addr);
 }
@@ -163,6 +173,12 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     // The developer console's queue, on the game thread between frames.
     tooie::console::frame(rdram, ctx);
     last_map = tooie::debug::current_map(rdram);
+    // On each change of map, note whether a warp asked for it (entered_by_warp).
+    if (last_map != seen_map) {
+        seen_map = last_map;
+        arrived_by_warp = (seen_map == warp_target);
+        warp_target = no_map;
+    }
     tooie::quick_start_tick(rdram);
     tooie::timer_save_tick(rdram, ctx);
     tooie::cutscene_skip_tick(rdram);
@@ -254,6 +270,10 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     }
 
     fprintf(stderr, "[warp] map 0x%X exit %u (from map 0x%X)\n", request->map, request->exit, from);
+    warp_target = request->map;
+    if (request->map == from) {
+        arrived_by_warp = true;
+    }
 
     // Banjo riding a cart (Canary Mary's in a race): the halfword at 0x8012707C holds the ridden
     // actor's id (set on mounting, func_80099B54, cleared on getting off, func_808000F0_bsride).

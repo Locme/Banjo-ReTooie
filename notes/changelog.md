@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-10
 
+- Crash fixes from the map sweeps: warping straight into Tower of Tragedy's quiz, the intro scenes or Mayahem Temple's character parade no longer reads through missing characters (on a phone, with no Pass Over Crashes, that ended the game), and an intro scene entered by a warp no longer waits for its music cue. A damaged list of free memory in the game's heap (seen once in GI Floor 3) is now repaired instead of hanging the game, with a HEAP notice. The watchdog's hang reports give the map.
 - Above 30 FPS, the Talon Torpedo (and Banjo pulling himself up a ledge) waits 1/30 s before it starts to move, as at 30 FPS, instead of a few thousandths of a second.
 - Console: `set hpfb_option <Auto | On | Off>` changes High Precision Framebuffer, which the menu does not show; `settings` and `get` list it too.
 - Parallax and Displaced Ground: a frame can now draw the world through up to 16 cameras (was 8) before the later draws lose their depth and are drawn flat.
