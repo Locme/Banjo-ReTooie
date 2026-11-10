@@ -70,6 +70,7 @@ void tooie_mouth_channel_weight(uint8_t* rdram, recomp_context* ctx);
 void tooie_morph_follow(uint8_t* rdram, recomp_context* ctx);
 void tooie_frame_factor(uint8_t* rdram, float* factor, int kind);
 void tooie_look_step(uint8_t* rdram, recomp_context* ctx, int which);
+int tooie_translate_wait_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_light_flicker_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_vertex_flicker_skip(uint8_t* rdram, recomp_context* ctx);
 void tooie_underwater_wobble_step(uint8_t* rdram, recomp_context* ctx);

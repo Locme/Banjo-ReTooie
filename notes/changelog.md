@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-10
 
+- Above 30 FPS, the Talon Torpedo (and Banjo pulling himself up a ledge) waits 1/30 s before it starts to move, as at 30 FPS, instead of a few thousandths of a second.
 - Console: `set hpfb_option <Auto | On | Off>` changes High Precision Framebuffer, which the menu does not show; `settings` and `get` list it too.
 - Parallax and Displaced Ground: a frame can now draw the world through up to 16 cameras (was 8) before the later draws lose their depth and are drawn flat.
 - Banjo's fur and Kazooie's feathers stay on when Banjo fades out as the camera gets close to him, fading with him, instead of vanishing (the fur at once, the feathers below half). Console: `playerfade <0 to 1> | off` holds him at a fade to check it.

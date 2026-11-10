@@ -2040,6 +2040,7 @@ RECOMP_FUNC void batranslate_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
     }
     // 0x8080018C: addiu       $t7, $v1, -0x1
     ctx->r15 = ADD32(ctx->r3, -0X1);
+    if (tooie_translate_wait_skip(rdram, ctx)) { ctx->r31 = MEM_W(0X1C, ctx->r29); goto L_80800208; }
     // 0x80800190: sb          $t7, 0x0($v0)
     MEM_B(0X0, ctx->r2) = ctx->r15;
     // 0x80800194: lw          $t8, 0x140($a0)

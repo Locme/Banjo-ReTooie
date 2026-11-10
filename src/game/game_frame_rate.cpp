@@ -1452,6 +1452,31 @@ extern "C" void tooie_look_step(uint8_t* rdram, recomp_context* ctx, int which) 
     }
 }
 
+// A move's root motion (batranslate_entrypoint_4, $a0 = the PlayerState) waits 2 game frames (the byte at
+// +0x0 of the PlayerState's +0x140 block) before it starts: the Talon Torpedo and Banjo pulling himself up
+// a ledge. Counted in game frames, so above 30 FPS the wait was a few milliseconds instead of 1/15 s. Above
+// 30 FPS it counts down once per 1/30 s of game time (StepGate). TOOIE_NO_STEP_FIX=1 turns it off for A/B
+// tests, and TOOIE_STEP_LOG=1 prints each count with the game time.
+// (Checked and left alone, 2026-11-10: bsledge's scuffle-sound countdown is called at two points of the
+// ledge shimmy animation, so it counts animation steps, not frames; anseq's frame wait is only ever 1, used
+// by the intro's characters, which runs on the next call at any frame rate.)
+namespace {
+    StepGate translate_wait_gate;
+}
+
+// Before 0x80800190: $v0 = the root motion block, $v1 = its wait (not 0). 1 skips this frame's count.
+extern "C" int tooie_translate_wait_skip(uint8_t* rdram, recomp_context* ctx) {
+    static const bool off = std::getenv("TOOIE_NO_STEP_FIX") != nullptr;
+    const bool skip = !off && translate_wait_gate.skip(rdram, (uint32_t)ctx->r4);
+    static const bool log = std::getenv("TOOIE_STEP_LOG") != nullptr;
+    if (log) {
+        std::printf("[steps] t %.4f root motion wait %u%s\n", game_seconds_total.load(), (unsigned)(uint8_t)ctx->r3,
+            skip ? " (held)" : "");
+        std::fflush(stdout);
+    }
+    return skip ? 1 : 0;
+}
+
 // TOOIE_FACE_LOG=1: a log of the model texture slots (func_800DF744, $a0 = the slot, $a1 = the
 // picture), which the game sets for eyes, mouths and other face pictures before a model is drawn.
 // Every 2 s of real time it prints, for each calling function and slot, how many times the
