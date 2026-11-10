@@ -1019,7 +1019,7 @@ index 4dce8e0..15bd9e3 100644
  endif()
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..1437185 100644
+index 38b84f5..f0ceaef 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
 @@ -1,6 +1,7 @@
@@ -1039,7 +1039,7 @@ index 38b84f5..1437185 100644
              void toggle_fullscreen();
          }
  
-@@ -133,10 +136,55 @@ namespace recompui {
+@@ -133,10 +136,63 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
@@ -1091,6 +1091,14 @@ index 38b84f5..1437185 100644
 +        // Called on the main thread. Unset means always allowed.
 +        void set_open_allowed_callback(bool (*callback)());
 +        bool is_open_allowed();
++
++        // The config menu's slide in and out (Banjo-Tooie, 2026-11-10). The enabled callback is asked each time
++        // the menu opens or closes (unset means on); the slide callback is told when a slide in (true) or out
++        // (false) starts, for its sounds. Both are called on the main thread with the menu's context open.
++        void set_slide_enabled_callback(bool (*callback)());
++        void set_slide_callback(void (*callback)(bool opening));
++        bool slide_enabled();
++        void notify_slide(bool opening);
 +
          // Get the config modal instance. nullptr until created with init_modal() internally.
          // Will throw an error if it hasn't been created yet.
@@ -1334,7 +1342,7 @@ index eb8833e..8388dc1 100644
          Element *default_title_wrapper;
          GameOptionsMenu *game_options_menu = nullptr;
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..1c74954 100644
+index 277a421..4d5de99 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
 @@ -37,16 +37,17 @@ static std::atomic_bool cursor_enabled = true;
@@ -1425,7 +1433,18 @@ index 277a421..1c74954 100644
                      auto last_hovered = recompui_doc->get_last_focusable_hovered_element();
                      if (last_hovered && last_hovered->is_focusable() == recompui::Element::CanFocus::Yes) {
                          last_hovered->focus();
-@@ -493,6 +522,7 @@ public:
+@@ -484,7 +513,9 @@ public:
+     }
+ 
+     void update_contexts() {
+-        for (auto& context_details : shown_contexts) {
++        // A copy: an update can hide its own context (the config menu at the end of its slide out).
++        std::vector<ContextDetails> contexts = shown_contexts;
++        for (auto& context_details : contexts) {
+             context_details.context.open();
+             context_details.context.process_updates();
+             context_details.context.close();
+@@ -493,6 +524,7 @@ public:
  };
  
  std::unique_ptr<UIState> ui_state;
@@ -1433,7 +1452,7 @@ index 277a421..1c74954 100644
  std::recursive_mutex ui_state_mutex{};
  
  // TODO make this not be global
-@@ -570,6 +600,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
+@@ -570,6 +602,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
      return identifier;
  }
  
@@ -1474,7 +1493,7 @@ index 277a421..1c74954 100644
  bool check_menu_button_pressed(int profile_index, recompinput::GameInput input, int32_t event_button) {
      auto menuBinding0 = recompinput::profiles::get_input_binding(profile_index, input, 0);
      auto menuBinding1 = recompinput::profiles::get_input_binding(profile_index, input, 1);
-@@ -696,6 +760,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -696,6 +762,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
          if (!all_input_is_disabled) {
              bool is_mouse_input = false;
@@ -1485,7 +1504,7 @@ index 277a421..1c74954 100644
              // Implement some additional behavior for specific events on top of what RmlUi normally does with them.
              switch (cur_event.type) {
              case SDL_EventType::SDL_MOUSEMOTION: {
-@@ -705,6 +773,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -705,6 +775,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                      float xD = cur_event.motion.x - last_mouse_pos[0];
                      float yD = cur_event.motion.y - last_mouse_pos[1];
                      if (sqrt(xD * xD + yD * yD) < 100) {
@@ -1493,7 +1512,7 @@ index 277a421..1c74954 100644
                          break;
                      }
                  }
-@@ -713,6 +782,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -713,6 +784,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                  // if controller is the primary input, don't use mouse movement to allow cursor to reactivate
                  if (recompui::get_cont_active()) {
@@ -1501,7 +1520,7 @@ index 277a421..1c74954 100644
                      break;
                  }
              }
-@@ -731,7 +801,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -731,7 +803,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              case SDL_EventType::SDL_CONTROLLERBUTTONDOWN: {
                  int sdl_key = cont_button_to_key(cur_event.cbutton);
                  if (context_capturing_input && sdl_key) {
@@ -1510,7 +1529,7 @@ index 277a421..1c74954 100644
                      latest_controller_key_pressed = sdl_key;
                      next_repeat_time = clock::now() + start_repeat_delay;
                  }
-@@ -747,6 +817,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -747,6 +819,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                      if (cur_event.key.keysym.scancode == SDL_Scancode::SDL_SCANCODE_F8) {
                          if (recompui::config::general::get_debug_mode_enabled()) {
@@ -1520,7 +1539,7 @@ index 277a421..1c74954 100644
                              Rml::Debugger::SetVisible(!Rml::Debugger::IsVisible());
                          }
                      }
-@@ -776,7 +849,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -776,7 +851,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                          non_mouse_interacted = true;
                          int sdl_key = cont_axis_to_key(cur_event.caxis, axis_value);
                          if (context_capturing_input && sdl_key) {
@@ -1529,7 +1548,7 @@ index 277a421..1c74954 100644
                              latest_controller_key_pressed = sdl_key;
                              next_repeat_time = clock::now() + start_repeat_delay;
                          }
-@@ -796,14 +869,30 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -796,14 +871,30 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
  
              // Send the event to RmlUi if this type of event is being captured.
@@ -1562,7 +1581,7 @@ index 277a421..1c74954 100644
                  }
              }
          }
-@@ -837,7 +926,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -837,7 +928,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
              }
  
@@ -1571,7 +1590,7 @@ index 277a421..1c74954 100644
                  recompui::config::open();
              }
          }
-@@ -847,7 +936,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -847,7 +938,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      if (latest_controller_key_pressed != SDLK_UNKNOWN) {
          clock::time_point now = clock::now();
          if (now >= next_repeat_time) {
@@ -1580,7 +1599,7 @@ index 277a421..1c74954 100644
              next_repeat_time += repeat_rate;
          }
      }
-@@ -893,7 +982,10 @@ void deinit_hook() {
+@@ -893,7 +984,10 @@ void deinit_hook() {
      recompui::destroy_all_contexts();
  
      std::lock_guard lock {ui_state_mutex};
@@ -1852,7 +1871,7 @@ index 56a0b70..bec287f 100644
      prompt_state.prompt_header->set_text(header_text);
      prompt_state.prompt_label->set_text(content_text);
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..9982a62 100644
+index 6c84c05..d7b06a7 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
 @@ -1,7 +1,14 @@
@@ -2085,11 +2104,12 @@ index 6c84c05..9982a62 100644
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
                  if (tab.id == id) {
-@@ -152,9 +352,11 @@ namespace recompui {
+@@ -152,9 +352,12 @@ namespace recompui {
                  config_modal->set_tab_visible(tab.id, false);
              }
          }
 +        config_modal->name_layout("menu");
++        config_modal->set_animated(true);
          config_modal->set_selected_tab(0);
          auto header_right = config_modal->get_header()->get_right();
          auto quit_button = config_modal->modal_root_context.create_element<IconButton>(header_right, "icons/Quit.svg", ButtonStyle::Basic);
@@ -2097,7 +2117,7 @@ index 6c84c05..9982a62 100644
          quit_button->add_pressed_callback([]() {
              if (ultramodern::is_game_started()) {
                  recompui::open_quit_game_prompt();
-@@ -163,6 +365,7 @@ namespace recompui {
+@@ -163,6 +366,7 @@ namespace recompui {
              }
          });
          auto close_button = config_modal->modal_root_context.create_element<IconButton>(header_right, "icons/X.svg", ButtonStyle::Basic);
@@ -2105,7 +2125,7 @@ index 6c84c05..9982a62 100644
          close_button->add_pressed_callback([]() {
              config::close();
          });
-@@ -177,6 +380,14 @@ namespace recompui {
+@@ -177,6 +381,14 @@ namespace recompui {
          return config_modal->modal_root_context;
      }
  
@@ -2120,7 +2140,7 @@ index 6c84c05..9982a62 100644
      void config::set_tab(const std::string &id) {
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
-@@ -185,6 +396,16 @@ namespace recompui {
+@@ -185,6 +397,37 @@ namespace recompui {
          config_modal->set_selected_tab(id);
      }
  
@@ -2132,6 +2152,27 @@ index 6c84c05..9982a62 100644
 +
 +    bool config::is_open_allowed() {
 +        return open_allowed_callback == nullptr || open_allowed_callback();
++    }
++
++    static bool (*slide_enabled_callback)() = nullptr;
++    static void (*slide_callback)(bool opening) = nullptr;
++
++    void config::set_slide_enabled_callback(bool (*callback)()) {
++        slide_enabled_callback = callback;
++    }
++
++    void config::set_slide_callback(void (*callback)(bool opening)) {
++        slide_callback = callback;
++    }
++
++    bool config::slide_enabled() {
++        return slide_enabled_callback == nullptr || slide_enabled_callback();
++    }
++
++    void config::notify_slide(bool opening) {
++        if (slide_callback != nullptr) {
++            slide_callback(opening);
++        }
 +    }
 +
      void config::open() {
@@ -3759,21 +3800,89 @@ index 34eec3f..d9f0aa0 100644
 +
  } // namespace recompui
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..310deb0 100644
+index b057f46..697f666 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
-@@ -3,6 +3,10 @@
+@@ -3,6 +3,11 @@
  #include "ui_document.h"
  #include "recompinput/recompinput.h"
  #include "recompinput/profiles.h"
 +#include "recompui/config.h"
 +#include "ui_sidebar_style.h"
 +#include <RmlUi/Core/Input.h>
++#include <algorithm>
 +#include <cctype>
  
  namespace recompui {
  
-@@ -123,12 +127,21 @@ void Modal::open() {
+@@ -106,35 +111,102 @@ Modal::Modal(
+     body->set_width(100.0f, Unit::Percent);
+ 
+     set_menu_action_callback(MenuAction::Toggle, [this]() {
+-        this->close();
++        // Esc or the menu button while the menu slides out brings it back.
++        if (is_closing()) {
++            this->open();
++        } else {
++            this->close();
++        }
+     }, "Close");
+ }
+ 
+ Modal::~Modal() {
+ }
+ 
++// The slide (Banjo-Tooie, 2026-11-10), timed like the rows of the game's Start menu: the box comes in from
++// the left past its place and settles back, the tabs following one after another, and leaves to the left,
++// speeding up. The dark backdrop fades with it.
++namespace {
++    constexpr float slide_in_time = 0.34f;
++    constexpr float slide_out_time = 0.2f;
++    constexpr float tab_gap = 0.03f;
++    constexpr float tab_time = 0.26f;
++
++    float slide_seconds(std::chrono::steady_clock::time_point since) {
++        return std::chrono::duration<float>(std::chrono::steady_clock::now() - since).count();
++    }
++
++    // Goes about 5% past 1 and comes back (ease out back, gentler than the usual 1.70158).
++    float overshoot(float t) {
++        t = std::clamp(t, 0.0f, 1.0f);
++        constexpr float c1 = 1.2f;
++        constexpr float c3 = c1 + 1.0f;
++        const float u = t - 1.0f;
++        return 1.0f + c3 * u * u * u + c1 * u * u;
++    }
++}
++
+ void Modal::open() {
+-    if (!recompui::is_context_shown(modal_root_context)) {
++    const bool was_shown = recompui::is_context_shown(modal_root_context);
++    // Hidden from outside half way out (hide_all_contexts) counts as shut.
++    const bool was_closing = is_closing() && was_shown;
++    const bool was_open = is_open && was_shown;
++    if (!was_shown) {
+         recompui::show_context(modal_root_context, "");
+     }
+ 
+     is_open = true;
+     set_display(Display::Block);
++
++    if (was_open) {
++        // Open already: stays where it is.
++    } else if (animated && recompui::config::slide_enabled()) {
++        start_slide(Slide::In);
++        // Turned round half way out: start from where the box is, and leave the tabs where they are.
++        slide_tabs = !was_closing;
++        if (!was_closing) {
++            slide_from = 1.0f;
++        }
++        recompui::config::notify_slide(true);
++        update_slide();
++    } else {
++        slide = Slide::None;
++        set_slide_position(0.0f, 1.0f, -1.0f);
++    }
  }
  
  void TabbedModal::open() {
@@ -3795,7 +3904,108 @@ index b057f46..310deb0 100644
  }
  
  bool Modal::close() {
-@@ -155,6 +168,9 @@ bool TabbedModal::close() {
+-    if (recompui::is_context_shown(modal_root_context)) {
+-        set_display(Display::None);
+-        recompui::hide_context(modal_root_context);
++    if (is_closing()) {
++        return true;
++    }
++    const bool shown = recompui::is_context_shown(modal_root_context);
++    if (shown && is_open && animated && recompui::config::slide_enabled()) {
++        // Hidden when the slide ends (update_slide); still shown, and still taking the input, until then.
++        start_slide(Slide::Out);
++        recompui::config::notify_slide(false);
++    } else {
++        slide = Slide::None;
++        if (shown) {
++            finish_close();
++        }
+     }
+ 
+     is_open = false;
+@@ -146,7 +218,81 @@ bool Modal::close() {
+     return true;
+ }
+ 
++void Modal::finish_close() {
++    slide = Slide::None;
++    set_slide_position(0.0f, 1.0f, -1.0f);
++    set_display(Display::None);
++    if (recompui::is_context_shown(modal_root_context)) {
++        recompui::hide_context(modal_root_context);
++    }
++}
++
++void Modal::start_slide(Slide to) {
++    slide_from = slide_out_now;
++    slide = to;
++    slide_start = std::chrono::steady_clock::now();
++}
++
++void Modal::update_slide() {
++    if (slide == Slide::None) {
++        return;
++    }
++    const float t = slide_seconds(slide_start);
++    if (slide == Slide::In) {
++        const float k = overshoot(t / slide_in_time);
++        const float out = slide_from * (1.0f - k);
++        const bool done = t >= slide_in_time + tab_gap * slide_tab_count() + tab_time;
++        set_slide_position(out, std::clamp(1.0f - out, 0.0f, 1.0f), done ? -1.0f : t);
++        if (done) {
++            slide = Slide::None;
++        }
++    } else {
++        const float k = std::clamp(t / slide_out_time, 0.0f, 1.0f);
++        const float out = slide_from + (1.0f - slide_from) * k * k;
++        set_slide_position(out, 1.0f - out, -1.0f);
++        if (k >= 1.0f) {
++            finish_close();
++        }
++    }
++}
++
++// out: 0 the box in its place, 1 just off the window's left edge. tabs_t: seconds into the slide in, for the
++// tabs' own slide, or below 0 for the tabs in place.
++void Modal::set_slide_position(float out, float overlay_opacity, float tabs_t) {
++    slide_out_now = out;
++    if (modal_element == nullptr) {
++        return;
++    }
++    // In the box's own widths: from its place to just past the window's left edge.
++    const float width = modal_element->get_client_width();
++    const float left = modal_element->get_absolute_left();
++    const float distance = width > 0.0f ? 100.0f * (left + width) / width + 5.0f : 150.0f;
++    modal_element->set_translate_2D(-distance * out, 0.0f, Unit::Percent);
++    if (modal_overlay != nullptr) {
++        // Only the backdrop's colour fades: the overlay holds the box too.
++        const int alpha = get_theme_color(theme::color::BGOverlay).a;
++        modal_overlay->set_background_color(theme::color::BGOverlay,
++            static_cast<int>(alpha * std::clamp(overlay_opacity, 0.0f, 1.0f) + 0.5f));
++    }
++    const int tab_count = slide_tab_count();
++    for (int i = 0; i < tab_count; i++) {
++        Element *tab = slide_tab(i);
++        if (tab == nullptr) {
++            continue;
++        }
++        float tab_out = 0.0f;
++        if (tabs_t >= 0.0f && slide_tabs) {
++            tab_out = 1.0f - overshoot((tabs_t - 0.08f - tab_gap * i) / tab_time);
++        }
++        tab->set_translate_2D(-120.0f * tab_out, 0.0f, Unit::Percent);
++        tab->set_opacity(std::clamp(1.0f - tab_out, 0.0f, 1.0f));
++    }
++}
++
+ bool TabbedModal::close() {
++    if (is_closing()) {
++        return true;
++    }
+     if (current_tab_index < tab_contexts.size() && current_tab_index >= 0) {
+         if (tab_contexts[current_tab_index].can_close(TabCloseContext::ModalClose)) {
+             tab_contexts[current_tab_index].on_close(TabCloseContext::ModalClose);
+@@ -155,6 +301,9 @@ bool TabbedModal::close() {
          }
      }
  
@@ -3805,7 +4015,15 @@ index b057f46..310deb0 100644
      return Modal::close();
  }
  
-@@ -283,6 +299,13 @@ void Modal::render_menu_actions() {
+@@ -178,6 +327,7 @@ static std::pair<recompinput::InputDevice, int> get_last_input_info() {
+ void Modal::process_event(const Event &e) {
+     switch (e.type) {
+         case EventType::Update: {
++            update_slide();
+             if (is_open) {
+                 bool update_action_labels = false;
+                 auto [current_device, current_profile] = get_last_input_info();
+@@ -283,6 +433,13 @@ void Modal::render_menu_actions() {
          }
  
          auto action_wrapper = context.create_element<Element>(menu_actions_wrapper, 0, "span", false);
@@ -3819,7 +4037,7 @@ index b057f46..310deb0 100644
          action_wrapper->set_display(Display::Flex);
          action_wrapper->set_flex_direction(FlexDirection::Row);
          action_wrapper->set_align_items(AlignItems::Center);
-@@ -299,6 +322,24 @@ void Modal::render_menu_actions() {
+@@ -299,6 +456,24 @@ void Modal::render_menu_actions() {
      }
  }
  
@@ -3844,7 +4062,7 @@ index b057f46..310deb0 100644
  void Modal::set_on_close_callback(std::function<void()> callback) {
      on_close_callback = callback;
  }
-@@ -311,6 +352,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
+@@ -311,6 +486,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
      return modal;
  }
  
@@ -3933,7 +4151,7 @@ index b057f46..310deb0 100644
  TabbedModal::TabbedModal(
      ResourceId rid,
      Document *parent,
-@@ -319,6 +442,12 @@ TabbedModal::TabbedModal(
+@@ -319,6 +576,12 @@ TabbedModal::TabbedModal(
  ) : Modal(rid, parent, modal_root_context, modal_type)
  {
      set_menu_action_callback(MenuAction::Back, [this]() {
@@ -3946,7 +4164,7 @@ index b057f46..310deb0 100644
          if (this->tabs != nullptr) {
              this->tabs->focus_on_active_tab();
          }
-@@ -331,9 +460,124 @@ TabbedModal::TabbedModal(
+@@ -331,9 +594,124 @@ TabbedModal::TabbedModal(
      }, "Next Tab");
  }
  
@@ -4071,7 +4289,7 @@ index b057f46..310deb0 100644
              if (previous_tab_index != current_tab_index) {
                  body->clear_children();
                  if (current_tab_index >= 0 && current_tab_index < tab_contexts.size()) {
-@@ -341,6 +585,9 @@ void TabbedModal::process_event(const Event &e) {
+@@ -341,6 +719,9 @@ void TabbedModal::process_event(const Event &e) {
                  }
                  previous_tab_index = current_tab_index;
              }
@@ -4081,7 +4299,7 @@ index b057f46..310deb0 100644
              queue_update();
              break;
          }
-@@ -362,7 +609,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
+@@ -362,7 +743,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
          return;
      }
      int next_index = tabs->get_next_tab_in_direction(tabs->get_active_tab(), direction);
@@ -4102,7 +4320,7 @@ index b057f46..310deb0 100644
      // Only focus if the tab changed to the intended tab, otherwise the tab change was cancelled.
      if (current_tab_index == next_index) {
          tabs->focus_on_active_tab();
-@@ -404,12 +664,21 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+@@ -404,12 +798,21 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
      ContextId context = get_current_context();
      if (tabs == nullptr) {
          header->set_padding_left(0.0f); // tabs hug to left side
@@ -4126,11 +4344,52 @@ index b057f46..310deb0 100644
  
  void TabbedModal::add_tab(TabContext &&tab_context) {
 diff --git a/recompui/src/elements/ui_modal.h b/recompui/src/elements/ui_modal.h
-index d065a14..1b4e7fc 100644
+index d065a14..a426a16 100644
 --- a/recompui/src/elements/ui_modal.h
 +++ b/recompui/src/elements/ui_modal.h
-@@ -87,6 +87,12 @@ namespace recompui {
+@@ -8,6 +8,8 @@
+ 
+ #include "recompinput/recompinput.h"
+ 
++#include <chrono>
++
+ namespace recompui {
+ 
+     class Modal;
+@@ -74,6 +76,25 @@ namespace recompui {
+         recompinput::InputDevice last_input_device = recompinput::InputDevice::COUNT;
+         int last_input_profile = -1;
+ 
++        // The Esc menu's slide (Banjo-Tooie, 2026-11-10): in from the left as it opens and out to the left
++        // as it closes, like the rows of the game's Start menu. Only modals made animated slide.
++        enum class Slide { None, In, Out };
++        bool animated = false;
++        Slide slide = Slide::None;
++        std::chrono::steady_clock::time_point slide_start;
++        // How far out the box was when the slide started (0 in place, 1 off the left edge), so a slide turned
++        // round half way starts where the last one was.
++        float slide_from = 0.0f;
++        float slide_out_now = 0.0f;
++        bool slide_tabs = true;
++        void start_slide(Slide to);
++        void update_slide();
++        void set_slide_position(float out, float overlay_opacity, float tabs_t);
++        void finish_close();
++        // The tab buttons, which follow the box in one after another (TabbedModal's).
++        virtual int slide_tab_count() { return 0; }
++        virtual Element *slide_tab(int index) { return nullptr; }
++
+         virtual void process_event(const Event &e) override;
+         std::string_view get_type_name() override { return "Modal"; }
+ 
+@@ -85,8 +106,18 @@ namespace recompui {
+         virtual void open();
+         virtual bool close();
          bool is_open_now() const { return is_open; }
++        // Makes the modal slide in and out (the Esc menu). Its close then hides it once the slide ends.
++        void set_animated(bool animated) { this->animated = animated; }
++        // Sliding out: closed already (is_open_now() is false) but still shown until the slide ends.
++        bool is_closing() const { return slide == Slide::Out; }
  
          ConfigHeaderFooter *get_header() { return header; }
 +        // Moves the modal's box from where it is laid out (centred) by x, y in dp, right and down positive.
@@ -4142,7 +4401,7 @@ index d065a14..1b4e7fc 100644
          Element *get_body() { return body; }
  
          void set_on_close_callback(std::function<void()> callback);
-@@ -102,6 +108,16 @@ namespace recompui {
+@@ -102,11 +133,23 @@ namespace recompui {
          TabSet *tabs = nullptr;
          int previous_tab_index = -1;
          int current_tab_index = -1;
@@ -4159,6 +4418,13 @@ index d065a14..1b4e7fc 100644
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "TabbedModal"; }
          void on_tab_change(int tab_index);
+         void navigate_tab_direction(int direction);
+         void initialize_tab(TabContext &tab_context);
++        int slide_tab_count() override { return static_cast<int>(tab_contexts.size()); }
++        Element *slide_tab(int index) override { return tabs != nullptr ? tabs->get_tab(index) : nullptr; }
+     public:
+         virtual void open() override;
+         virtual bool close() override;
 diff --git a/recompui/src/elements/ui_select.cpp b/recompui/src/elements/ui_select.cpp
 index e289e9e..4676f73 100644
 --- a/recompui/src/elements/ui_select.cpp

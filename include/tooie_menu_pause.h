@@ -11,6 +11,15 @@
 // menu or any HUD of its own, the shader effects keep running, and the pause menu's music plays.
 namespace tooie::menu_pause {
     inline const std::string option = "pause_special_menu";
+    // QOL > Menu > Menu Slide (2026-11-10, on by default): the Esc menu slides in and out like the rows of the
+    // Start menu, with the Start menu's sounds.
+    inline const std::string slide_option = "esc_menu_slide";
+
+    // Whether Menu Slide is on (any thread).
+    bool slide_enabled();
+    // The Esc menu started sliding in (true) or out (false): queues the Start menu's slide sound, played on the
+    // game thread by tick(). Called by the menu on the main thread.
+    void slide_sound(bool opening);
 
     // Called by the main thread's event loop with whether a menu takes the input (update_gfx in main.cpp).
     void set_menu_open(bool open);
