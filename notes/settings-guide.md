@@ -419,6 +419,15 @@ then light it again. Sunlit ground comes out brighter, and the side turned away
 and what is in shadow come out darker. Traced shadows no longer land on top of
 painted ones. Rooms and caves, the sky and water keep the game's shading.
 
+**Ray traced denoising** (Graphics > Ray Tracing, off by default, experimental)
+keeps the traced light from frame to frame: the sun's and lamps' shadows, the
+bounce light and the occlusion. Each new frame's rays are blended into what the
+same spot of the world had, followed as the camera moves. A spot is taken only
+from where it was the same surface, so newly seen ground and whatever moves
+across it start from their new rays. Round the player less is kept, as his own
+shadow moves with him. With it on, the shadows and lamps are traced at half
+size, as at Ray tracing resolution Half: a quarter of the rays, with softer edges.
+
 **Shader Effects Pick Mode** (Controls, Pick Modes, no default) works the
 same way for the texture effects. A texture can have several effects at once.
 The label lists the texture's effects ("yours" or "built-in") and the effect

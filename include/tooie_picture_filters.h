@@ -88,6 +88,8 @@ namespace tooie::picture_filters {
     // Traced relighting: the game's own shading is taken out of each surface and the traced sun, sky and bounce light
     // light it again, 0 (the game's shading) to 100 (all traced).
     inline const std::string ray_tracing_relighting_option = "ray_tracing_relighting";
+    // Ray traced denoising: the traced light, shadows and lamps kept from frame to frame and blended with each new frame's rays.
+    inline const std::string ray_tracing_denoise_option = "ray_tracing_denoise";
     inline const std::string path_tracing_option = "path_tracing";
     inline const std::string path_tracing_bounces_option = "path_tracing_bounces";
     inline const std::string traced_beams_option = "traced_light_beams";

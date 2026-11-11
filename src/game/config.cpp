@@ -468,7 +468,7 @@ namespace {
                  &pf::ray_tracing_smooth_option, &pf::ray_tracing_hit_colours_option, &pf::ray_tracing_resolution_option,
                  &pf::ray_tracing_parallax_option, &pf::ray_detail_half_option, &pf::ray_detail_quarter_option,
                  &pf::ray_tracing_player_shadows_option, &pf::ray_tracing_smoothing_option, &pf::ray_tracing_brdf_option,
-                 &pf::ray_tracing_subsurface_option, &pf::ray_tracing_relighting_option, &pf::path_tracing_option, &pf::path_tracing_bounces_option, &pf::traced_beams_option }) {
+                 &pf::ray_tracing_subsurface_option, &pf::ray_tracing_relighting_option, &pf::ray_tracing_denoise_option, &pf::path_tracing_option, &pf::path_tracing_bounces_option, &pf::traced_beams_option }) {
             hide(graphics, *id);
         }
         if (graphics.has_option(pf::ray_tracing_option)) {
@@ -1303,7 +1303,7 @@ void tooie::init_config() {
                                        &tooie::picture_filters::ray_tracing_metal_option, &tooie::picture_filters::ray_tracing_tiles_option,
                                        &tooie::picture_filters::ray_tracing_smooth_option, &tooie::picture_filters::ray_tracing_smoothing_option,
                                        &tooie::picture_filters::ray_tracing_brdf_option, &tooie::picture_filters::ray_tracing_subsurface_option,
-                                       &tooie::picture_filters::ray_tracing_relighting_option,
+                                       &tooie::picture_filters::ray_tracing_relighting_option, &tooie::picture_filters::ray_tracing_denoise_option,
                                        &tooie::picture_filters::path_tracing_option, &tooie::picture_filters::path_tracing_bounces_option,
                                        &tooie::picture_filters::traced_beams_option, &tooie::picture_filters::ray_tracing_player_shadows_option,
                                        &tooie::picture_filters::ray_tracing_hit_colours_option, &tooie::picture_filters::ray_tracing_resolution_option,

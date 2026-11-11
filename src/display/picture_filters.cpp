@@ -79,6 +79,7 @@ namespace RT64 {
     void SetSceneRayOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneRayTracingBrdfSubsurface(float brdfRoughness, float subsurface);
     void SetSceneRayTracingRelighting(float amount);
+    void SetSceneRayTracingDenoise(bool enabled);
     void SetSceneRayMaterials(const uint64_t *hashes, const uint32_t *albedoRoughness, const uint32_t *metalnessEmissive, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
@@ -4596,6 +4597,7 @@ void tooie::picture_filters::apply() {
     // Ray traced BRDF takes over the glossy reflections: with it on, the screen-space Stochastic reflections are off.
     const float traced_brdf = ray_tracing ? (float)(value<double>(ray_tracing_brdf_option, 0.0) / 100.0) : 0.0f;
     RT64::SetSceneRayTracingBrdfSubsurface(traced_brdf, ray_tracing ? (float)(value<double>(ray_tracing_subsurface_option, 0.0) / 100.0) : 0.0f);
+    RT64::SetSceneRayTracingDenoise(ray_tracing && value<bool>(ray_tracing_denoise_option, false));
     RT64::SetSceneRayTracingRelighting(ray_tracing ? (float)(value<double>(ray_tracing_relighting_option, 0.0) / 100.0) : 0.0f);
     RT64::SetScenePathTracing(value<bool>(path_tracing_option, false) ? (uint32_t)value<double>(path_tracing_bounces_option, 2.0) : 0u);
     ray_tracing_on.store(ray_tracing);
@@ -5528,6 +5530,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Experimental. Lights the level again with the traced light instead of only darkening the game's picture: the game's own painted shading is taken out of each surface (its texture is read where the camera's ray meets it) and the sun, the sky and the bounce light light it again, so sunlit ground is brighter, the side turned from the sun and what is in shadow darker, and traced shadows no longer land on top of painted ones. 0 keeps the game's shading (the default); 100 is all traced. Needs Ray tracing on.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
+        ray_tracing_denoise_option,
+        "Ray Traced Denoising",
+        "Experimental. Calms the grain of the traced light: the sun's and lamps' shadows, the bounce light and the occlusion are kept from frame to frame and each new frame's rays are blended in, following the world as the camera moves (newly seen ground, and whatever moves across it, start afresh). The shadows and lamps are then traced at half size (as Ray tracing resolution Half), a quarter of their rays, so it is lighter on the graphics card too; their edges are a little softer. Off by default. Needs Ray tracing on.",
+        false);
+    graphics.add_bool_option(
         path_tracing_option,
         "Path Tracing",
         "The traced bounce light goes on bouncing: a ray that lands on a surface turns off it and carries on, picking up the colours along the way, so light reaches round corners and deeper into rooms and caves. Needs Ray tracing on and the bounce light showing (Ray tracing strength above 0 or Screen-space GI on). Heavy on the graphics card: each bounce traces three more rays a pixel.",
@@ -5818,7 +5825,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &parallax_smoothness_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &parallax_smoothness_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5878,6 +5885,7 @@ std::vector<tooie::picture_filters::CostEffect> tooie::picture_filters::cost_eff
         add(&ray_tracing_brdf_option, 0.0);
         add(&ray_tracing_subsurface_option, 0.0);
         add(&ray_tracing_relighting_option, 0.0);
+        add(&ray_tracing_denoise_option, false);
         add(&ray_tracing_hit_colours_option, false);
     }
     return effects;

@@ -6,6 +6,8 @@ regenerated code, CI, notes and tooling are left out.
 ## 2026-11-11
 
 - Graphics > Ray Tracing: new **Traced relighting** (experimental, off by default). The traced sun and sky light the outdoor levels again in place of the game's painted shading: sunlit ground is brighter, the side turned from the sun and what stands in shadow darker, and traced shadows no longer land on top of painted ones. Rooms, caves, the sky and water are left as they were.
+- Graphics > Ray Tracing: new **Ray traced denoising** (experimental, off by default). The traced shadows, lamps, bounce light and occlusion are kept from frame to frame and each frame's new rays blended in, following the world as the camera moves, so they no longer crawl. The shadows and lamps are then traced at half size, which is lighter on the graphics card.
+- A frame reaches the screen at least every twentieth of a second, even when the graphics card falls far behind the game. Before, a renderer slower than the game's wait for it could skip every frame, so nothing was shown and screenshots were never saved.
 
 ## 2026-11-10
 

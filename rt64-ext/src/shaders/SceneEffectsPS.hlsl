@@ -47,6 +47,9 @@ Texture2D<float4> gIndirect : register(t12);
 // Banjo-Tooie: the volumetric settings' extras (VolExtra): four floats in the first 16 bytes (SetSceneVolumetricExtra in
 // rt64_scene_effects.cpp). Bound whether or not the device has ray queries.
 ByteAddressBuffer gDust : register(t16);
+// Ray traced denoising: the indirect pass's target of the pass before (its four bands, the last each texel's distance), which
+// the indirect pass blends its new rays into (DenoiseBlend). Something else is bound when denoising is off; it is never read then.
+Texture2D<float4> gHistory : register(t17);
 #ifdef RAY_TRACED
 // Banjo-Tooie: the 3D world's solid triangles in world space (Graphics > Ray tracing), rebuilt each frame; only in
 // the RAY_TRACED variant of the pass, which is used while the device has ray queries and the structure is built.
@@ -612,6 +615,18 @@ float NoiseFrameOffset() {
     return asfloat(gDust.Load(12u));
 }
 
+// Ray traced denoising: after Point Lights' lamps in the dust buffer, the camera the history was drawn from (its view's rows
+// into the world, then its projection) and a word: denoising on (x) and the history to be used (y). See rt64_scene_effects.cpp.
+static const uint DustDenoiseOffset = 32u + 32u * 16u;
+
+float4 DenoiseRow(uint row) {
+    return asfloat(gDust.Load4(DustDenoiseOffset + row * 16u));
+}
+
+bool DenoiseOn() {
+    return DenoiseRow(4u).x > 0.5f;
+}
+
 // Interleaved gradient noise (Jimenez 2014): 0 to 1, different from each pixel to the next.
 float InterleavedNoise(int2 pixel) {
     return frac(52.9829189f * frac(0.06711056f * float(pixel.x) + 0.00583715f * float(pixel.y)) + NoiseFrameOffset());
@@ -622,7 +637,9 @@ float InterleavedNoise(int2 pixel) {
 uint IndirectCell(int2 pixel) {
     const uint x = uint(pixel.x) & 3u, y = uint(pixel.y) & 3u;
     const uint row = (y == 0u) ? 0xA280u : (y == 1u) ? 0x6E4Cu : (y == 2u) ? 0x91B3u : 0x5D7Fu;
-    return (row >> (x * 4u)) & 15u;
+    // Denoising: the whole pattern turns a step each frame, so the frames a pixel blends traced different directions.
+    const uint turn = DenoiseOn() ? uint(NoiseFrameOffset() * 16.0f) : 0u;
+    return ((row >> (x * 4u)) + turn) & 15u;
 }
 
 static const float IndirectPi = 3.14159265f;
@@ -5134,10 +5151,84 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     return (pixel.y == 0) ? place : float4(weight, 0.0f, 0.0f, 0.0f);
 }
 #elif defined(INDIRECT_PASS)
+#ifdef RAY_TRACED
+// Ray traced denoising: where a world position was in the view the history was drawn from (view space).
+float3 HistoryView(float3 world) {
+    const float4 x = DenoiseRow(0u), y = DenoiseRow(1u), z = DenoiseRow(2u);
+    const float3 d = world - float3(x.w, y.w, z.w);
+    return float3(x.x * d.x + y.x * d.y + z.x * d.z, x.y * d.x + y.y * d.y + z.y * d.z, x.z * d.x + y.z * d.y + z.z * d.z);
+}
+
+// Ray traced denoising: a band's new rays (raw) blended into what the same spot of the world held in the pass before. The spot
+// is followed as the camera moves (into the history's view, then its texels), and the history is used only from texels that
+// were the same surface (their distance then, the fourth band, as far as this spot is now): newly seen ground, and whatever
+// moved across it, start from their new rays. Each frame keeps most of the past (bounce light and occlusion the most, lamps
+// the least, as their fires flicker), less round the player, whose own shadow moves with him.
+float4 DenoiseBlend(int2 halfPixel, int band, float4 raw) {
+    if (DenoiseRow(4u).y < 0.5f) {
+        return raw;
+    }
+    const int2 halfSize = TracedHalfSize();
+    const int2 pixel = halfPixel * 2;
+    const float depth = LoadDepth(pixel);
+    if (depth >= 0.99999f) {
+        return raw;
+    }
+    const float3 world = ViewToWorldPoint(ViewPosition(pixel, depth));
+    const float3 before = HistoryView(world);
+    if (before.z > -1.0f) {
+        return raw;
+    }
+    const float4 projection = DenoiseRow(3u);
+    const float2 ndc = before.xy * projection.xy / -before.z;
+    const float2 beforePixel = float2((ndc.x + 1.0f) * 0.5f * projection.z, (1.0f - ndc.y) * 0.5f * projection.w);
+    // A texel stands for the pixel at twice its place (that pixel's centre at 2q + 0.5).
+    const float2 at = (beforePixel - 0.5f) * 0.5f;
+    const int2 corner = int2(floor(at));
+    const float2 f = at - float2(corner);
+    const float expected = -before.z;
+    const float tolerance = max(expected * 0.04f, 4.0f);
+    float4 sum = 0.0f;
+    float weight = 0.0f;
+    [unroll] for (int k = 0; k < 4; k++) {
+        const int2 step = int2(k & 1, k >> 1);
+        const int2 q = corner + step;
+        if (any(q < 0) || any(q >= halfSize)) {
+            continue;
+        }
+        const float then = gHistory.Load(int3(q.x, q.y + halfSize.y * 3, 0)).r;
+        if (abs(then - expected) > tolerance) {
+            continue;
+        }
+        const float2 b = lerp(1.0f - f, f, float2(step));
+        const float w = b.x * b.y;
+        sum += gHistory.Load(int3(q.x, q.y + halfSize.y * band, 0)) * w;
+        weight += w;
+    }
+    if (weight < 0.25f) {
+        return raw;
+    }
+    const float4 history = sum / weight;
+    float keepNew = (band == 0) ? 0.1f : ((band == 1) ? 0.15f : 0.25f);
+    if (gConstants.rippleAge.w > -1e8f) {
+        const float2 across = world.xz - float2(gConstants.rippleX.w, gConstants.rippleZ.w);
+        if ((dot(across, across) < 300.0f * 300.0f) && (abs(world.y - gConstants.rippleAge.w - 60.0f) < 300.0f)) {
+            keepNew = max(keepNew, 0.5f);
+        }
+    }
+    float4 result = lerp(history, raw, keepNew);
+    // The sun band's 2 (enclosed: in shade whatever the rays say) is a mark, not a share of rays: it is never blended.
+    if ((band == 1) && ((raw.a > 1.5f) || (history.a > 1.0f))) {
+        result.a = raw.a;
+    }
+    return result;
+}
+#endif
+
 // The indirect pass, at half size: GTAO's visibility (a) and SSGI's light (rgb) for the scene pixel at twice its
 // own, one GTAO slice and two SSGI rays a pixel, turned through each 4x4 block (IndirectCell) for IndirectAt to
 // gather.
-float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
+float4 IndirectRaw(float4 pos) {
 #ifdef RAY_TRACED
     // The lower bands (drawn only with Half-resolution ray tracing): the light beams and the sun shadow, then the
     // lamps' traced light (TracedHalfShadow, TracedHalfBeams, TracedHalfLamp).
@@ -5202,6 +5293,23 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     }
 #endif
     return result;
+}
+
+float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
+#ifdef RAY_TRACED
+    // Ray traced denoising: each band blended into the pass before's, and the fourth band each texel's distance for the next.
+    if (DenoiseOn()) {
+        const int2 halfSize = TracedHalfSize();
+        const int band = min(int(pos.y) / halfSize.y, 3);
+        const int2 halfPixel = int2(int(pos.x), int(pos.y) - band * halfSize.y);
+        if (band == 3) {
+            const float depth = LoadDepth(halfPixel * 2);
+            return float4((depth < 0.99999f) ? -ViewPosition(halfPixel * 2, depth).z : -1.0f, 0.0f, 0.0f, 0.0f);
+        }
+        return DenoiseBlend(halfPixel, band, IndirectRaw(pos));
+    }
+#endif
+    return IndirectRaw(pos);
 }
 #else
 float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {

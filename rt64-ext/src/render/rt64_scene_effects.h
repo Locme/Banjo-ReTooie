@@ -348,6 +348,9 @@ namespace RT64 {
     void SetSceneRayTracingPlayerShadows(bool enabled);
     // Graphics > Half-resolution ray tracing: the sun's traced shadows and the traced light beams at half size.
     void SetSceneRayTracingResolution(uint32_t resolution);
+    // Banjo-Tooie: Graphics > Ray Tracing > Ray traced denoising: the traced light, shadows and lamps are worked out at half size
+    // and kept from frame to frame, each new frame's rays blended into what the pixel had (followed as the camera moves).
+    void SetSceneRayTracingDenoise(bool enabled);
     void SetSceneRayTracingParallax(bool enabled);
     // Graphics > Ray detail distances: past the first, half the traced rays a pixel; past the second, a quarter (0 for never).
     void SetSceneRayDetailDistances(float half, float quarter);

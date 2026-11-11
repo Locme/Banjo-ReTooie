@@ -83,6 +83,7 @@ namespace RT64 {
             uint64_t fireflies = 0;
             uint64_t half = 0;
             uint64_t indirect = 0;
+            uint64_t history = 0;
             uint64_t bvh = 0;
             uint64_t dust = 0;
             uint64_t lights = 0;
@@ -90,7 +91,7 @@ namespace RT64 {
             bool operator==(const SceneSetKey &other) const {
                 return (depth == other.depth) && (bloom == other.bloom) && (color == other.color) && (adapted == other.adapted) && (water == other.water) &&
                     (waterColor == other.waterColor) && (ripples == other.ripples) && (sunMap == other.sunMap) && (fireflies == other.fireflies) &&
-                    (half == other.half) && (indirect == other.indirect) && (bvh == other.bvh) && (dust == other.dust) && (lights == other.lights);
+                    (half == other.half) && (indirect == other.indirect) && (history == other.history) && (bvh == other.bvh) && (dust == other.dust) && (lights == other.lights);
             }
         };
 
@@ -191,6 +192,15 @@ namespace RT64 {
             std::unique_ptr<RenderFramebuffer> indirectFramebuffer;
             uint32_t indirectWidth = 0;
             uint32_t indirectHeight = 0;
+            // Ray traced denoising: the indirect pass's target of the pass before, which it reads back as its history (the two
+            // take turns), whether it holds that pass's light (made by a pass that denoised, at this size), and the camera it was
+            // drawn from (the view's rows into the world and the projection), so each pixel finds where it was then.
+            std::unique_ptr<RenderTexture> indirectHistoryTexture;
+            std::unique_ptr<RenderFramebuffer> indirectHistoryFramebuffer;
+            bool indirectHistoryValid = false;
+            interop::float4 historyWorld[3] = {};
+            interop::float4 historyProjection = {};
+            uint32_t historyFrame = 0;
             // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
             // framebuffer renderer into this target, at the scene's size and sample count.
             std::unique_ptr<RenderTexture> waterTexture;
@@ -508,6 +518,14 @@ namespace RT64 {
     // Ray tracing resolution: 0 half, 1 medium, 2 high.
     static std::atomic<uint32_t> rayTracingResolution{ 1u };
     static std::atomic<bool> rayTracingHalf{ false };
+    // Graphics > Ray Tracing > Ray traced denoising: the half-size traced light is kept from pass to pass and blended with each
+    // new one (it also turns on the half-size path for the shadows and lamps, which it is kept in).
+    static std::atomic<bool> rayTracingDenoise{ false };
+
+    // The traced shadows and lamps are worked out at half size (the indirect pass's bands): Half resolution, or denoising.
+    static bool RayTracingHalfPath() {
+        return rayTracingHalf.load() || rayTracingDenoise.load();
+    }
     // Graphics > Ray Tracing uses Parallax materials: off, the traced pass ignores the Parallax shapes (metal, tiles, smooth,
     // leaves and grass) its geometries carry.
     static std::atomic<bool> rayTracingParallax{ false };
@@ -751,6 +769,10 @@ namespace RT64 {
     void SetSceneRayTracingResolution(uint32_t resolution) {
         rayTracingResolution.store(std::min(resolution, 2u));
         rayTracingHalf.store(resolution == 0u);
+    }
+
+    void SetSceneRayTracingDenoise(bool enabled) {
+        rayTracingDenoise.store(enabled);
     }
 
     void SetSceneRayDetailDistances(float half, float quarter) {
@@ -2856,7 +2878,7 @@ namespace RT64 {
             // scene has a draw with a ray tracing material (Ray Tracing Material Pick Mode), plus the Ray traced BRDF roughness in
             // percent times 8, the subsurface scattering strength in percent times 1024 and Traced relighting in percent times
             // 131072 (seven bits each, so the whole word stays below 2^24 and exact as a float).
-            mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayTracingHalf.load() ? 2.0f : 0.0f) + (rayScenesPbr.load() ? 4.0f : 0.0f) +
+            mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (RayTracingHalfPath() ? 2.0f : 0.0f) + (rayScenesPbr.load() ? 4.0f : 0.0f) +
                 float(rayTracingBrdfPercent.load() * 8u + rayTracingSubsurfacePercent.load() * 1024u + rayTracingRelightPercent.load() * 131072u);
             // 1 when the last traced scene had leaves or grass (Parallax materials 13 and 7) and the rays use Parallax's materials: only then can
             // traced subsurface scattering find a surface to light without a Ray Tracing Material (RaySubsurfaceScene).
@@ -3787,31 +3809,57 @@ namespace RT64 {
         }
 
         // The indirect pass's target, at half size (made again after a resize) and cleared to no occlusion and no
-        // light, so the pass can always read it. Three times as tall: the bands below hold the half-size traced sun
+        // light, so the pass can always read it. Four times as tall: the bands below hold the half-size traced sun
         // shadows and light beams, then the lamps' light (Half-resolution ray tracing), which the same pass draws when
-        // that is on.
+        // that is on, then (denoising) each texel's distance, which the next pass checks its history against.
         const uint32_t indirectWidth = std::max(colorTarget->width / 2, 1U);
         const uint32_t indirectHeight = std::max(colorTarget->height / 2, 1U);
         if ((tr.indirectTexture != nullptr) && ((tr.indirectWidth != indirectWidth) || (tr.indirectHeight != indirectHeight))) {
             res.retireLater(std::move(tr.indirectFramebuffer));
             res.retireLater(std::move(tr.indirectTexture));
+            if (tr.indirectHistoryTexture != nullptr) {
+                res.retireLater(std::move(tr.indirectHistoryFramebuffer));
+                res.retireLater(std::move(tr.indirectHistoryTexture));
+            }
+            tr.indirectHistoryValid = false;
         }
-        if (tr.indirectTexture == nullptr) {
-            tr.indirectTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(indirectWidth, indirectHeight * 3, RenderFormat::R16G16B16A16_FLOAT));
-            tr.indirectTexture->setName("Scene Effects Indirect");
-            const RenderTexture *texture = tr.indirectTexture.get();
-            tr.indirectFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
-            tr.indirectWidth = indirectWidth;
-            tr.indirectHeight = indirectHeight;
-            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(tr.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
-            commandList->setFramebuffer(tr.indirectFramebuffer.get());
+        const bool denoise = rayTracingDenoise.load();
+        if (!denoise && (tr.indirectHistoryTexture != nullptr)) {
+            res.retireLater(std::move(tr.indirectHistoryFramebuffer));
+            res.retireLater(std::move(tr.indirectHistoryTexture));
+            tr.indirectHistoryValid = false;
+        }
+        for (int made = 0; made < (denoise ? 2 : 1); made++) {
+            std::unique_ptr<RenderTexture> &target = (made == 0) ? tr.indirectTexture : tr.indirectHistoryTexture;
+            std::unique_ptr<RenderFramebuffer> &framebuffer = (made == 0) ? tr.indirectFramebuffer : tr.indirectHistoryFramebuffer;
+            if (target != nullptr) {
+                continue;
+            }
+            target = worker->device->createTexture(RenderTextureDesc::ColorTarget(indirectWidth, indirectHeight * 4, RenderFormat::R16G16B16A16_FLOAT));
+            target->setName((made == 0) ? "Scene Effects Indirect" : "Scene Effects Indirect History");
+            const RenderTexture *texture = target.get();
+            framebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
+            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(target.get(), RenderTextureLayout::COLOR_WRITE) });
+            commandList->setFramebuffer(framebuffer.get());
             commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 1.0f));
-            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(tr.indirectTexture.get(), RenderTextureLayout::SHADER_READ) });
+            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(target.get(), RenderTextureLayout::SHADER_READ) });
+            if (made == 1) {
+                tr.indirectHistoryValid = false;
+            }
         }
+        // Denoising, the two targets take turns: this pass draws into the one the pass before read, and reads the other.
+        if (denoise) {
+            std::swap(tr.indirectTexture, tr.indirectHistoryTexture);
+            std::swap(tr.indirectFramebuffer, tr.indirectHistoryFramebuffer);
+        }
+        tr.indirectWidth = indirectWidth;
+        tr.indirectHeight = indirectHeight;
 
         // The dust buffer: the volumetric extras and the noise turn (16 bytes), then Point Lights' lamps (16 bytes for the
-        // count, 32 a lamp).
-        constexpr uint32_t DustBufferSize = 32 + 32 * ScenePointLightMax;
+        // count, 32 a lamp), then for denoising the camera the history was drawn from (its view's three rows into the world
+        // and its projection) and a word: denoising on (x), the history to be used (y).
+        constexpr uint32_t DustDenoiseOffset = 32 + 32 * ScenePointLightMax;
+        constexpr uint32_t DustBufferSize = DustDenoiseOffset + 16 * 5;
         // This pass's upload slot: its own dust buffer and scene set (one command list can record the pass more than once).
         std::unique_ptr<RenderBuffer> &dustBuffer = res.dustBuffer[res.uploadSlot];
         if (dustBuffer == nullptr) {
@@ -3827,6 +3875,28 @@ namespace RT64 {
                 dust[2] = volExtra[1];
             }
             dust[3] = UpscalerNoiseOffset();
+            if (denoise) {
+                // Denoising needs the rays to change from pass to pass, or there is nothing to average: golden-ratio steps of
+                // the noise when no upscaler turns it.
+                if (dust[3] == 0.0f) {
+                    tr.historyFrame = (tr.historyFrame + 1) % 1024U;
+                    const float offset = float(tr.historyFrame) * 0.618034f;
+                    dust[3] = offset - std::floor(offset);
+                }
+                float *camera = dust + DustDenoiseOffset / 4;
+                for (int row = 0; row < 3; row++) {
+                    camera[row * 4 + 0] = tr.historyWorld[row].x;
+                    camera[row * 4 + 1] = tr.historyWorld[row].y;
+                    camera[row * 4 + 2] = tr.historyWorld[row].z;
+                    camera[row * 4 + 3] = tr.historyWorld[row].w;
+                }
+                camera[12] = tr.historyProjection.x;
+                camera[13] = tr.historyProjection.y;
+                camera[14] = tr.historyProjection.z;
+                camera[15] = tr.historyProjection.w;
+                camera[16] = 1.0f;
+                camera[17] = tr.indirectHistoryValid ? 1.0f : 0.0f;
+            }
             // Point Lights (rt64_scene_lights.h): the count, then each lamp's x, y, z, radius and its colour.
             ScenePointLamp lamps[ScenePointLightMax];
             const uint32_t lampCount = ScenePointLampsForFrame(lamps);
@@ -3859,6 +3929,8 @@ namespace RT64 {
         sceneKey.fireflies = IdOf(res.fireflyTexture.get());
         sceneKey.half = IdOf(tr.halfTexture.get());
         sceneKey.indirect = IdOf(tr.indirectTexture.get());
+        const RenderTexture *historyTexture = denoise ? tr.indirectHistoryTexture.get() : tr.halfTexture.get();
+        sceneKey.history = IdOf(historyTexture);
         sceneKey.bvh = IdOf(bindBvh ? res.bvhTlas.get() : nullptr);
         sceneKey.dust = IdOf(dustBuffer.get());
         sceneKey.lights = IdOf(bindBvh ? slotLights : nullptr);
@@ -3880,6 +3952,7 @@ namespace RT64 {
             set->setTexture(set->gFireflies, res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ);
             set->setTexture(set->gColorHalf, tr.halfTexture.get(), RenderTextureLayout::SHADER_READ);
             set->setTexture(set->gIndirect, tr.indirectTexture.get(), RenderTextureLayout::SHADER_READ);
+            set->setTexture(set->gHistory, historyTexture, RenderTextureLayout::SHADER_READ);
             if (bindBvh) {
                 set->setAccelerationStructure(set->gSceneBVH, res.bvhTlas.get());
                 set->setBuffer(set->gLights, slotLights, 16 * (SceneMaxLights + 4));
@@ -3937,16 +4010,17 @@ namespace RT64 {
         // for Half-resolution ray tracing: its lower half, the traced sun shadows and light beams for the pass to read.
         const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (sceneSetBvh != nullptr) &&
             (res.rayTexturesSet != nullptr) && (res.rayTextureCacheSet != nullptr);
-        const bool tracedHalf = tracedIndirect && rayTracingHalf.load();
+        const bool tracedHalf = tracedIndirect && RayTracingHalfPath();
         // The traced light beams are a soft haze: below Ray tracing resolution High they come from the indirect pass's
         // second band at half size too (a quarter of their rays), whatever the shadows do (SceneEffectsPS BeamsHalf).
         const bool tracedBeamsHalf = tracedIndirect && (tracedBeams[0] > 0.0f) && (rayTracingResolution.load() < 2u);
         const bool indirectBand = ((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi));
+        bool indirectDrawn = false;
         if (indirectBand || tracedHalf || tracedBeamsHalf) {
             commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(tr.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
             commandList->setFramebuffer(tr.indirectFramebuffer.get());
             GpuSectionScope timedIndirect(WorkloadGpuSections(), GpuSection::IndirectLight, commandList);
-            const uint32_t drawnHeight = tracedHalf ? indirectHeight * 3 : (tracedBeamsHalf ? indirectHeight * 2 : indirectHeight);
+            const uint32_t drawnHeight = denoise ? indirectHeight * 4 : (tracedHalf ? indirectHeight * 3 : (tracedBeamsHalf ? indirectHeight * 2 : indirectHeight));
             // The viewport stays the whole of it (the shader tells the bands apart by the pixel's row); with neither GTAO nor
             // SSGI on, the scissor leaves out the top band, whose pixels the pass then never reads.
             commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(drawnHeight)));
@@ -3964,6 +4038,16 @@ namespace RT64 {
             commandList->setVertexBuffers(0, nullptr, 0, nullptr);
             commandList->drawInstanced(3, 1, 0, 0);
             commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(tr.indirectTexture.get(), RenderTextureLayout::SHADER_READ) });
+            indirectDrawn = true;
+        }
+        // Denoising: what this pass drew is the next one's history, seen from this pass's camera. A pass that drew nothing
+        // leaves none to use.
+        if (denoise) {
+            tr.indirectHistoryValid = indirectDrawn;
+            tr.historyWorld[0] = constants.worldX;
+            tr.historyWorld[1] = constants.worldY;
+            tr.historyWorld[2] = constants.worldZ;
+            tr.historyProjection = constants.projection;
         }
 
         commandList->setFramebuffer(colorTarget->textureFramebuffer.get());
