@@ -1348,6 +1348,13 @@ namespace RT64 {
         rayTracingRelightPercent.store(uint32_t(std::round(std::clamp(amount, 0.0f, 1.0f) * 100.0f)));
     }
 
+    // Relighting without ray tracing (Graphics > Relighting), in percent: the pass without rays reads it from the dust buffer.
+    static std::atomic<uint32_t> relightPercent{ 0 };
+
+    void SetSceneRelighting(float amount) {
+        relightPercent.store(uint32_t(std::round(std::clamp(amount, 0.0f, 1.0f) * 100.0f)));
+    }
+
     void SetSceneRayMaterials(const uint64_t *hashes, const uint32_t *albedoRoughness, const uint32_t *metalnessEmissive, size_t count) {
         count = std::min<size_t>(count, SceneMaxRayMaterials);
         std::unordered_map<uint64_t, uint32_t> indices;
@@ -3354,7 +3361,7 @@ namespace RT64 {
         // The set that reads source (null without one).
         SmaaDescriptorSet *sourceSet = nullptr;
         if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0) ||
-            ScenePointLights()) {
+            ScenePointLights() || (relightPercent.load() > 0)) {
             // The scene so far, without multisampling (Point Lights redraws the scene too: without this copy it drew black).: the target's resolve, or a copy of the target.
             const RenderTextureView *sourceView = nullptr;
             if (colorTarget->usesResolve()) {
@@ -3857,9 +3864,11 @@ namespace RT64 {
 
         // The dust buffer: the volumetric extras and the noise turn (16 bytes), then Point Lights' lamps (16 bytes for the
         // count, 32 a lamp), then for denoising the camera the history was drawn from (its view's three rows into the world
-        // and its projection) and a word: denoising on (x), the history to be used (y).
+        // and its projection) and a word: denoising on (x), the history to be used (y). Then Relighting's amount for the pass
+        // without ray tracing (the traced one has it in the lights' header), which lights the scene again by the sun shadow map.
         constexpr uint32_t DustDenoiseOffset = 32 + 32 * ScenePointLightMax;
-        constexpr uint32_t DustBufferSize = DustDenoiseOffset + 16 * 5;
+        constexpr uint32_t DustRelightOffset = DustDenoiseOffset + 16 * 5;
+        constexpr uint32_t DustBufferSize = DustRelightOffset + 16;
         // This pass's upload slot: its own dust buffer and scene set (one command list can record the pass more than once).
         std::unique_ptr<RenderBuffer> &dustBuffer = res.dustBuffer[res.uploadSlot];
         if (dustBuffer == nullptr) {
@@ -3875,6 +3884,7 @@ namespace RT64 {
                 dust[2] = volExtra[1];
             }
             dust[3] = UpscalerNoiseOffset();
+            dust[DustRelightOffset / 4] = float(relightPercent.load()) / 100.0f;
             if (denoise) {
                 // Denoising needs the rays to change from pass to pass, or there is nothing to average: golden-ratio steps of
                 // the noise when no upscaler turns it.

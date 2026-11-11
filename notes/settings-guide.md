@@ -524,6 +524,14 @@ their texture is drawn.
   distance, whether on screen or not, so shadows don't come and go as the camera
   turns. Past 6000 shadows get a little blurrier, and higher costs more. Applies
   at once. Default: 3000.
+- **Relighting** (experimental): Traced Relighting without ray tracing, for
+  graphics cards and phones without it. The sun and the sky light the level
+  again from the sun shadow map: ground facing the sun is brighter, the side
+  turned from it and what is in shadow darker. With no rays to read each
+  texture, the game's painted shading stays under it, so it is darker and less
+  even than Traced Relighting. Needs Sun shadows on; outdoors only. With Ray
+  tracing on, Traced Relighting is used instead. 0 to 100. Applies at once.
+  Default: 0 (off).
 - **Window Light Beams** (Graphics, Vanilla Enhancements): see-through beams of light, shaped like their windows,
   fall from the windows and light a patch of the floor in Bottles' house, Banjo's house and King Jingaling's throne room,
   like the beams under the windows in Mumbo's Skull. Switching it in one of

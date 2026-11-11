@@ -138,8 +138,10 @@ float RayBrdfRoughness() {
 float RaySssStrength() {
     return 0.0f;
 }
+// Relighting without ray tracing (0 to 1): the dust buffer's word after the denoising camera (see rt64_scene_effects.cpp).
+// The sun shadow map stands in for the traced shadows (Relit).
 float RayRelight() {
-    return 0.0f;
+    return asfloat(gDust.Load(32u + 32u * 16u + 80u));
 }
 #endif
 
@@ -969,6 +971,40 @@ bool InsideBanjo(float3 world) {
     return (gConstants.rippleAge.w > -1e8f) && (dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f);
 }
 
+// Relighting: a surface's own colour (own) lit by the sun where it gets through (sunBlocked, from SunShadow), by how
+// squarely the surface faces it, and by the sky from above (the ground's bounce from below). See Relit.
+float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float sunBlocked) {
+    const float3 luma = float3(0.299f, 0.587f, 0.114f);
+    // Smoothed over a few pixels of the same surface (more at higher resolutions), so the low-poly level's faces don't
+    // show in the sun's shading, and wrapped a little round the side turned away, so a ridge between two faces turns
+    // from lit to shaded softly instead of along a line.
+    const float3 smooth = SmoothedNormal(pixel, center, normal, max(3, int(gConstants.projection.w / 270.0f)));
+    const float facing = saturate((dot(smooth, normalize(gConstants.sun.xyz)) + 0.25f) / 1.25f);
+    const float skyward = dot(smooth, normalize(gConstants.worldY.xyz)) * 0.5f + 0.5f;
+    const float3 sky = lerp(float3(0.30f, 0.27f, 0.24f), float3(0.42f, 0.47f, 0.56f), skyward);
+    const float3 sun = float3(1.0f, 0.95f, 0.86f) * 0.9f;
+    // The day and night cycle's light: its brightest channel dims the sun and the sky (its colour is already in the picture).
+    float3 tint;
+    const float daylight = DayTint(tint) ? max(tint.r, max(tint.g, tint.b)) : 1.0f;
+    const float3 lit = own * (sky + sun * (facing * (1.0f - sunBlocked))) * daylight;
+    // A soft shoulder on the brightness above three quarters, so sunlit snow and sand roll off towards white instead of
+    // clipping flat. On the brightness and not each channel, so a bright colour keeps its hue (per channel, sunlit grass
+    // went neon).
+    const float brightness = dot(lit, luma);
+    const float over = max(brightness - 0.75f, 0.0f);
+    const float rolled = min(brightness, 0.75f) + over / (1.0f + over * 4.0f);
+    return min(lit * (rolled / max(brightness, 1e-4f)), 1.0f);
+}
+
+#ifndef RAY_TRACED
+// Relighting without ray tracing: there is no ray to read the surface's texture, so the game's shading is taken as its
+// usual (0.85, what the traced version falls back on where the texture can't tell it) and the sun shadow map's shadows
+// light it again. The game's own painted shading stays under it.
+float3 Relit(int2 pixel, float3 center, float3 normal, float3 scene, float sunBlocked) {
+    return RelitLight(pixel, center, normal, scene / 0.85f, sunBlocked);
+}
+#endif
+
 #ifdef RAY_TRACED
 // The radiance cache (see gRadianceCache): on when lights word 1 says so (Graphics > Ray tracing hit colours).
 bool HitColoursOn() {
@@ -1217,26 +1253,7 @@ float3 Relit(int2 pixel, float3 center, float3 normal, float3 scene, float sunBl
     const float hueGap = length(scene / sceneLuma - albedo / albedoLuma);
     const float trust = saturate(1.0f - (hueGap - 0.15f) * 2.5f);
     const float shade = lerp(0.85f, clamp(sceneLuma / albedoLuma, 0.45f, 1.5f), trust);
-    const float3 own = scene / shade;
-    // Smoothed over a few pixels of the same surface (more at higher resolutions), so the low-poly level's faces don't
-    // show in the sun's shading, and wrapped a little round the side turned away, so a ridge between two faces turns
-    // from lit to shaded softly instead of along a line.
-    const float3 smooth = SmoothedNormal(pixel, center, normal, max(3, int(gConstants.projection.w / 270.0f)));
-    const float facing = saturate((dot(smooth, normalize(gConstants.sun.xyz)) + 0.25f) / 1.25f);
-    const float skyward = dot(smooth, normalize(gConstants.worldY.xyz)) * 0.5f + 0.5f;
-    const float3 sky = lerp(float3(0.30f, 0.27f, 0.24f), float3(0.42f, 0.47f, 0.56f), skyward);
-    const float3 sun = float3(1.0f, 0.95f, 0.86f) * 0.9f;
-    // The day and night cycle's light: its brightest channel dims the sun and the sky (its colour is already in the picture).
-    float3 tint;
-    const float daylight = DayTint(tint) ? max(tint.r, max(tint.g, tint.b)) : 1.0f;
-    const float3 lit = own * (sky + sun * (facing * (1.0f - sunBlocked))) * daylight;
-    // A soft shoulder on the brightness above three quarters, so sunlit snow and sand roll off towards white instead of
-    // clipping flat. On the brightness and not each channel, so a bright colour keeps its hue (per channel, sunlit grass
-    // went neon).
-    const float brightness = dot(lit, luma);
-    const float over = max(brightness - 0.75f, 0.0f);
-    const float rolled = min(brightness, 0.75f) + over / (1.0f + over * 4.0f);
-    return min(lit * (rolled / max(brightness, 1e-4f)), 1.0f);
+    return RelitLight(pixel, center, normal, scene / shade, sunBlocked);
 }
 
 // Whether a traced hit is Banjo (whoever is played): a model's triangle (SceneRayDrawModel) in a wide capsule round him.
@@ -5551,9 +5568,15 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // colour is the water's and not its surface's), and how much of the sun is blocked (SunShadow).
     float relight = 0.0f;
     float sunBlocked = 0.0f;
-#ifdef RAY_TRACED
     float waterAt;
+#ifdef RAY_TRACED
     if (redraw && (depth < 0.99999f) && !LoadAnyWater(pixel, waterAt)) {
+        relight = RayRelight();
+    }
+#else
+    // Without ray tracing, only with the sun shadow map (Sun shadows on, in an open level): it is what tells the sun's shadows,
+    // and with no rays to find a room, the map's shade is the only sign of one.
+    if (redraw && (depth < 0.99999f) && sunShadows && (gConstants.shadows.y < 0.0f) && !LoadAnyWater(pixel, waterAt)) {
         relight = RayRelight();
     }
 #endif
@@ -5731,11 +5754,9 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         // Ray Tracing Material Pick Mode: the albedo tints the surface before anything lights it. A metal has no diffuse
         // colour of its own, only what it reflects (below).
         scene *= DiffuseAlbedo(pbr);
-#ifdef RAY_TRACED
         if (relight > 0.0f) {
             scene = lerp(scene, Relit(pixel, center, normal, scene, sunBlocked), relight);
         }
-#endif
         if (gConstants.water.z > 0.0f) {
             // The surface's own colour lit by it, and a little of it straight on, so dark corners take on the
             // colour of what is around them.

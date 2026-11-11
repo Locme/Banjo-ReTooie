@@ -100,6 +100,8 @@ namespace tooie::picture_filters {
     inline const std::string sun_shadow_banjo_option = "sun_shadow_banjo";
     inline const std::string sun_shadow_softness_option = "sun_shadow_softness";
     inline const std::string sun_shadow_distance_option = "sun_shadow_distance";
+    // Graphics > Relighting: Traced Relighting without ray tracing, lit by the sun shadow map (0 to 100, 0 off).
+    inline const std::string relighting_option = "relighting";
     inline const std::string wave_speed_option = "water_wave_speed";
     // Graphics > Water detail: how finely Modern and Stylised water is cut into moving geometry round the player (0 = none).
     inline const std::string water_detail_option = "water_detail";
