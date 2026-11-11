@@ -4,7 +4,8 @@
 
 // Banjo-Tooie: deep snow as one tessellated surface, where the device has hull and domain shaders (D3D12, and Vulkan
 // with tessellationShader). The level's snowy ground draws are drawn again through these: the hull shader cuts each
-// triangle finer near Banjo's trail (coarser past the Snow LOD distance), and the domain shader raises every new vertex
+// triangle finer near Banjo's trail (coarser past the Snow LOD distance) and near the camera, where the snow's own drifts
+// have a shape (SnowSurfaceShape), and the domain shader raises every new vertex
 // straight up to the snow's height over the ground there, pressed down where Banjo walked and banked up beside
 // it (SnowTessShape in Snow.hlsli), so the trail is a real dent in the snow's surface rather than a stack of shells.
 // The vertex shader leaves the ground where it is (RASTER_SNOW_TESS, RasterVS.hlsl); the pixel shader asks the same
@@ -39,7 +40,8 @@ struct SnowPatch {
 };
 
 // Over the trail the surface is cut about two of its cells fine (SnowTrailSegment: coarser past the Snow LOD distance);
-// elsewhere not at all.
+// elsewhere near the camera finely enough to follow the untouched surface's own shape (SnowSurfaceSegment, about as many
+// pixels apart everywhere) out to twice the Snow LOD distance (SnowSurfaceFade), and past that not at all.
 static const float SnowTessMaxFactor = 64.0f;
 // Whether any block of the trail grid with a trail in it overlaps a box of the world (lowest and highest x and z): every
 // block the box covers is looked at, so a big triangle can't miss one between points it looked at.
@@ -88,21 +90,36 @@ float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
     return clamp(edgeLength / SnowTrailSegment(cameraDistance), 1.0f, SnowTessMaxFactor);
 }
 
-float SnowEdgeFactor(float3 a, float3 b) {
+// For the untouched surface's own shape (SnowSurfaceShape): 1 past its reach, for the ground pass
+// (RASTER_SNOW_GROUND), which lies flat on the ground under the snow, for sand (shallow, its shape is only lit,
+// SnowShellShade), and where any corner it runs between lies at the snowy ground's edge (raised, 0 to 1 of the snow's
+// height: furAnchor.w). Snow there lies on the ground itself, flat with the level's other ground beside or under
+// it, and cut finer it would round its depth a hair differently from that ground's and flicker against it in rings
+// (as tessellated sand did all over).
+float SnowSurfaceFactor(float edgeLength, float cameraDistance, float raised) {
+    if ((SnowSurfaceFade(cameraDistance) <= 0.0f) || ((gConstants.grassShells & RASTER_SNOW_GROUND) != 0) || SnowSand() || (raised < 0.5f)) {
+        return 1.0f;
+    }
+    return clamp(edgeLength / SnowSurfaceSegment(cameraDistance), 1.0f, SnowTessMaxFactor);
+}
+
+float SnowEdgeFactor(float4 anchorA, float4 anchorB) {
+    const float3 a = anchorA.xyz;
+    const float3 b = anchorB.xyz;
     const float edgeLength = distance(a, b);
     const float3 camera = FrParams.snowCamera.xyz;
     const float cameraDistance = distance((a + b) * 0.5f, camera);
     const bool trail = !SandTooFar((a + b) * 0.5f, cameraDistance) && SnowTrailInBox(min(a.xz, b.xz), max(a.xz, b.xz));
-    return SnowSegmentFactor(edgeLength, cameraDistance, trail);
+    return max(SnowSegmentFactor(edgeLength, cameraDistance, trail), SnowSurfaceFactor(edgeLength, cameraDistance, min(anchorA.w, anchorB.w)));
 }
 
 // The inside's factor: as fine as the trail anywhere over the triangle needs, and at least as fine as its edges.
-float SnowInsideFactor(float3 a, float3 b, float3 c, float edgeFactor) {
+float SnowInsideFactor(float3 a, float3 b, float3 c, float raised, float edgeFactor) {
     const float longest = max(distance(a, b), max(distance(b, c), distance(c, a)));
     const float3 camera = FrParams.snowCamera.xyz;
     const float cameraDistance = distance((a + b + c) / 3.0f, camera);
     const bool trail = !SandTooFar((a + b + c) / 3.0f, cameraDistance) && SnowTrailInBox(min(a.xz, min(b.xz, c.xz)), max(a.xz, max(b.xz, c.xz)));
-    return max(edgeFactor, SnowSegmentFactor(longest, cameraDistance, trail));
+    return max(edgeFactor, max(SnowSegmentFactor(longest, cameraDistance, trail), SnowSurfaceFactor(longest, cameraDistance, raised)));
 }
 
 // Whether a patch is out of view: all of it, from the snow's full height above the ground to as far below it, past the
@@ -141,25 +158,30 @@ SnowPatch SnowPatchConstants(InputPatch<SnowVertex, 3> patch) {
         return p;
     }
 
-    // Not cut at all on a wall, or where all of the triangle is past the snow's reach (drawn as it is: the ground's own
-    // draw is left out).
+    // Not cut inside on a wall, or where all of the triangle is past the snow's reach (drawn as it is: the ground's own
+    // draw is left out). Its edges are still cut as the patch beside them cuts them (an edge's factor depends on the
+    // edge only), or a crack would open along the foot of every wall where the floor's edge follows the surface's
+    // shape and the wall's runs straight.
     const float normalLength = length(p.normal);
     float distanceA, distanceB, distanceC;
     const bool wall = (normalLength <= 0.0f) || (abs(p.normal.y) < 0.12f * normalLength);
     const float reach = FrParams.snowLod.y;
     const bool beyond = (SnowThin(a, distanceA, reach) <= 0.02f) && (SnowThin(b, distanceB, reach) <= 0.02f) && (SnowThin(c, distanceC, reach) <= 0.02f);
     if ((wall || beyond) && (FrParams.snowGrid.w <= 3.5f)) {
-        p.edges[0] = p.edges[1] = p.edges[2] = 1.0f;
+        p.edges[0] = SnowEdgeFactor(patch[1].furAnchor, patch[2].furAnchor);
+        p.edges[1] = SnowEdgeFactor(patch[2].furAnchor, patch[0].furAnchor);
+        p.edges[2] = SnowEdgeFactor(patch[0].furAnchor, patch[1].furAnchor);
         p.inside = 1.0f;
         return p;
     }
 
     // (Edge 0 is the one across from vertex 0. An edge's factor depends on the edge only, so the triangles either side
     // of it cut it the same way and no cracks open between them.)
-    p.edges[0] = SnowEdgeFactor(b, c);
-    p.edges[1] = SnowEdgeFactor(c, a);
-    p.edges[2] = SnowEdgeFactor(a, b);
-    p.inside = SnowInsideFactor(a, b, c, max(p.edges[0], max(p.edges[1], p.edges[2])));
+    p.edges[0] = SnowEdgeFactor(patch[1].furAnchor, patch[2].furAnchor);
+    p.edges[1] = SnowEdgeFactor(patch[2].furAnchor, patch[0].furAnchor);
+    p.edges[2] = SnowEdgeFactor(patch[0].furAnchor, patch[1].furAnchor);
+    const float raised = min(patch[0].furAnchor.w, min(patch[1].furAnchor.w, patch[2].furAnchor.w));
+    p.inside = SnowInsideFactor(a, b, c, raised, max(p.edges[0], max(p.edges[1], p.edges[2])));
     return p;
 }
 

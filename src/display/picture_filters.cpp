@@ -5417,12 +5417,12 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         deep_snow_option,
         "Tessellated Snow",
-        "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and the dents stay (or fill back in, with Snow fills back in). Drawn on the picture, so nothing in the game changes.",
+        "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and the dents stay (or fill back in, with Snow fills back in). Untouched, it lies in soft drifts and wind-carved ridges, and grains of it glint in the sun as the camera moves. Drawn on the picture, so nothing in the game changes.",
         false);
     graphics.add_bool_option(
         tessellated_sand_option,
         "Tessellated Sand",
-        "Sandy ground takes footprints: Banjo, the NPCs and the enemies press shallow, detailed prints into it wherever they touch it, and the wind has left low ripples over it. As Tessellated Snow, with its detail, fills back in and distance settings. Needs a graphics card with tessellation.",
+        "Sandy ground takes footprints: Banjo, the NPCs and the enemies press shallow, detailed prints into it wherever they touch it, and the wind has left ripples over it, big and small, with grains glittering in the sun and a sheen off the ripples seen low across them. As Tessellated Snow, with its detail, fills back in and distance settings. Needs a graphics card with tessellation.",
         false);
     graphics.add_number_option(
         snow_height_option,
@@ -5442,7 +5442,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         snow_lod_option,
         "Snow LOD Distance",
-        "How far from the camera the deep snow keeps its full detail. Further away it is drawn smoother and smoother, which is cheaper. Higher shows the dents in full from further off.",
+        "How far from the camera the deep snow and sand keep their full detail. Further away they are drawn smoother and smoother, which is cheaper, and their drifts and ripples fade out by twice this far. Higher shows the dents, drifts and ripples in full from further off.",
         250, 10000, 250, 0, false, 2000);
     graphics.add_number_option(
         parallax_option,

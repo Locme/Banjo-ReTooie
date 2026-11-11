@@ -43,8 +43,7 @@ float SnowNoise(float2 p) {
     return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
 }
 
-// One set of wind ripples' slope: ridges across wind, spacing wavelength (varying from place to place), bent along
-// their length by warp.
+// One set of wind ripples' slope: ridges across wind, spacing wavelength, bent along their length by warp.
 float2 SandRippleSet(float2 xz, float2 wind, float wavelength, float warp) {
     const float theta = (dot(xz, wind) + warp) / wavelength * 6.2831853f;
     // (A ridge gentle up the windward side, steeper down the lee: sin + a quarter of its second harmonic.)
@@ -53,17 +52,19 @@ float2 SandRippleSet(float2 xz, float2 wind, float wavelength, float warp) {
 }
 
 // The slope (d height / dx, dz) of the ripples the wind leaves in sand at a world position: two sets of low ridges
-// from winds a little apart, their spacing (7 to 13 units) and strength changing from place to place, bent and with
+// from winds a little apart (10 and 8.5 units apart), their strength changing from place to place, bent and with
 // their crests broken off here and there, so no stretch repeats; fading out by distance before they are finer than the
-// pixels.
+// pixels. (Each set's spacing is the same everywhere: one that changed from place to place, worked out as the world
+// position over a varying wavelength, changed the ridges' phase faster the further from the world's middle, and far
+// out drew tight rings of moire over the sand.)
 float2 SandRippleSlope(float2 xz, float cameraDistance) {
     const float fade = saturate(1.0f - cameraDistance / 900.0f);
     if (fade <= 0.0f) {
         return 0.0f;
     }
     const float warp = 14.0f * SnowNoise(xz / 60.0f) + 5.0f * SnowNoise(xz / 19.0f + 5.0f) + 1.5f * SnowNoise(xz / 6.0f + 9.0f);
-    const float wavelengthA = lerp(7.0f, 13.0f, SnowNoise(xz / 90.0f + 3.0f));
-    const float wavelengthB = lerp(6.0f, 11.0f, SnowNoise(xz / 75.0f + 17.0f));
+    const float wavelengthA = 10.0f;
+    const float wavelengthB = 8.5f;
     // Which wind shaped which stretch, and stretches the wind left nearly smooth.
     const float mix = smoothstep(0.3f, 0.7f, SnowNoise(xz / 55.0f + 23.0f));
     const float strength = smoothstep(0.2f, 0.75f, SnowNoise(xz / 40.0f + 11.0f));
@@ -73,6 +74,132 @@ float2 SandRippleSlope(float2 xz, float cameraDistance) {
         SandRippleSet(xz, float2(0.34f, 0.94f), wavelengthB, warp * 0.7f + 3.0f) * mix;
     const float amplitude = 0.35f;
     return slope * (amplitude * lerp(0.15f, 1.0f, strength) * broken * fade);
+}
+
+// Smooth value noise as SnowNoise (x), with its slope (d / dp.x, d / dp.y in yz).
+float3 SnowNoiseSlope(float2 p) {
+    const float2 i = floor(p);
+    const float2 f = p - i;
+    const float2 u = f * f * (3.0f - 2.0f * f);
+    const float2 du = 6.0f * f * (1.0f - f);
+    const float a = SceneCellHash(i).x;
+    const float b = SceneCellHash(i + float2(1.0f, 0.0f)).x;
+    const float c = SceneCellHash(i + float2(0.0f, 1.0f)).x;
+    const float d = SceneCellHash(i + float2(1.0f, 1.0f)).x;
+    const float k = a - b - c + d;
+    return float3(a + (b - a) * u.x + (c - a) * u.y + k * u.x * u.y, du * float2((b - a) + k * u.y, (c - a) + k * u.x));
+}
+
+// The untouched snow and sand have a shape of their own over the ground (the N64's ground under them is flat between
+// its few points): the tessellated snow is cut finely enough near the camera to follow it (SnowTess.hlsl), and the
+// pixels are lit by its slope, so it shows in both outline and light. Sand's is lit only: it lies so close to the
+// level's ground that the finer cut flickered against it. Whole up to the Snow LOD distance, then faded
+// out by twice that so it never pops. (The game's camera usually watches Banjo from 1000 to 1500 units away, and the
+// snow round him lies further off still.)
+float SnowSurfaceFade(float cameraDistance) {
+    const float start = max(FrParams.snowLod.x, 1.0f);
+    return saturate(2.0f - cameraDistance / start);
+}
+
+// How far apart the tessellated surface's new vertices are for its own shape at a distance from the camera (world
+// units): about as many pixels apart everywhere (some 10 at 1080p), as in adaptive displacement tessellation, never
+// finer than a few units.
+float SnowSurfaceSegment(float cameraDistance) {
+    return max(SnowSand() ? 8.0f : 6.0f, cameraDistance * 0.008f);
+}
+
+// About how wide one pixel is at a distance from the camera (world units), at 1080p (snowCamera.w is the projection's
+// y scale): for fading out detail finer than the pixels.
+float SnowPixelSize(float cameraDistance) {
+    return cameraDistance * 2.0f / (max(FrParams.snowCamera.w, 0.1f) * 1080.0f);
+}
+
+// How much of a wave of a wavelength to keep when the points that show it are segment apart: all of it from five
+// points a wave, none below three, where it would only swim as the points slide over it with the camera.
+float SnowWaveKept(float wavelength, float segment) {
+    return saturate((wavelength / max(segment, 1e-3f) - 3.0f) * 0.5f);
+}
+
+// One layer of noise of the surface's shape, stretched along the wind (along) and across it (across, world units a
+// bump), up and down by amplitude: its height (x) and slope (d / dx, dz in yz). ridge: sharpened into crests along the
+// wind, as wind-carved snow is.
+float3 SnowShapeLayer(float2 xz, float along, float across, float2 offset, float amplitude, bool ridge) {
+    const float2 wind = float2(0.8f, 0.6f);
+    const float2 side = float2(-0.6f, 0.8f);
+    const float3 n = SnowNoiseSlope(float2(dot(xz, wind) / along, dot(xz, side) / across) + offset);
+    const float2 slope = n.y * wind / along + n.z * side / across;
+    if (ridge) {
+        // (1 - (2n - 1)^2, centred: a crest where the noise passes its middle.)
+        const float r = 2.0f * n.x - 1.0f;
+        return amplitude * float3(0.5f - r * r, -4.0f * r * slope);
+    }
+    return amplitude * float3(2.0f * n.x - 1.0f, 2.0f * slope);
+}
+
+// The untouched surface's own shape (height over its even depth, then slope) at a world position, by the spacing of
+// the points that show it (segment: SnowSurfaceSegment for the tessellated surface, a few pixels for its light).
+// Snow: broad drifts, wind-carved ridges (sastrugi) along the wind and small lumps, up to about two thirds of its
+// depth up or down. Sand: broad swells and the big ripples the wind builds (megaripples, ridges across it about 90 units apart,
+// steeper on their lee side), under the small ripples SandRippleSlope lights.
+float3 SnowSurfaceShape(float2 xz, float depth, float segment) {
+    float3 shape = 0.0f;
+    if (SnowSand()) {
+        shape += SnowShapeLayer(xz, 300.0f, 300.0f, float2(31.0f, 7.0f), 0.35f * depth * SnowWaveKept(300.0f, segment), false);
+        // (One spacing everywhere, as SandRippleSlope's; the warp bends the ridges.)
+        const float wavelength = 90.0f;
+        const float kept = SnowWaveKept(wavelength, segment);
+        if (kept > 0.0f) {
+            const float2 wind = float2(0.8f, 0.6f);
+            const float warp = 60.0f * SnowNoise(xz / 260.0f + 7.0f);
+            const float strength = smoothstep(0.25f, 0.8f, SnowNoise(xz / 180.0f + 29.0f));
+            const float theta = (dot(xz, wind) + warp) / wavelength * 6.2831853f;
+            const float amplitude = 0.15f * depth * strength * kept;
+            // (sin + a quarter of its second harmonic, as the small ripples: gentle up the windward side, steep down the lee.)
+            shape += amplitude * float3(sin(theta) + 0.25f * sin(2.0f * theta), wind * ((cos(theta) + 0.5f * cos(2.0f * theta)) * 6.2831853f / wavelength));
+        }
+        return shape;
+    }
+    shape += SnowShapeLayer(xz, 260.0f, 200.0f, float2(3.0f, 11.0f), 0.4f * depth * SnowWaveKept(200.0f, segment), false);
+    shape += SnowShapeLayer(xz, 150.0f, 45.0f, float2(17.0f, 5.0f), 0.22f * depth * SnowWaveKept(45.0f, segment), true);
+    shape += SnowShapeLayer(xz, 30.0f, 30.0f, float2(43.0f, 29.0f), 0.06f * depth * SnowWaveKept(30.0f, segment), false);
+    return shape;
+}
+
+// One size of grains for SnowSparkle: a cell of size cell holds a grain by chance (each size its own grains, seed),
+// each grain a tiny mirror tipped off the surface's normal by up to spread, flashing when it faces h.
+float SnowGrains(float2 xz, float3 normal, float3 h, float cell, float seed, float chance, float spread, float power) {
+    const float2 p = xz / cell;
+    const float2 c = floor(p);
+    const float3 g = SceneCellHash(c + seed * 1013.0f);
+    if (g.x >= chance) {
+        return 0.0f;
+    }
+    const float3 g2 = SceneCellHash(c + seed * 1013.0f + 71.0f);
+    const float3 facet = normalize(normal + float3((g.y - 0.5f) * 2.0f * spread, 0.0f, (g.z - 0.5f) * 2.0f * spread));
+    // (A round grain somewhere in its cell, not the whole square.)
+    const float2 centre = 0.5f + (g2.yz - 0.5f) * 0.4f;
+    const float grain = saturate(1.0f - length(p - c - centre) / 0.3f);
+    return pow(saturate(dot(facet, h)), power) * lerp(0.5f, 1.0f, g2.x) * grain;
+}
+
+// A sparkle off grains lying at fixed places in the world (SnowGrains): each flashes when it faces halfway between the
+// light and the eye, so as the camera moves each one fades in and out smoothly and none jumps. Further off, where a
+// grain of cell would be smaller than a pixel, bigger and sparser grains stand in, sized by the pixels (about three
+// to a cell) and blended between two sizes as mip levels are, so the sparkle neither flickers nor thins out with
+// distance. (After Zirr and Kaplanyan's multiscale glints, I3D 2016, and the glitter in Edwards' Sand Rendering in
+// Journey, GDC 2013, simplified.)
+float SnowSparkle(float2 xz, float3 normal, float3 view, float cameraDistance, float cell, float chance, float spread, float power) {
+    const float3 light = FrParams.snowLight.xyz;
+    if (light.y <= 0.05f) {
+        return 0.0f;
+    }
+    const float3 h = normalize(light + view);
+    const float level = log2(max(SnowPixelSize(cameraDistance) * 3.0f / cell, 1.0f));
+    const float first = floor(level);
+    const float t = level - first;
+    const float near = SnowGrains(xz, normal, h, cell * exp2(first), first, chance, spread, power);
+    const float far = (t > 0.0f) ? SnowGrains(xz, normal, h, cell * exp2(first + 1.0f), first + 1.0f, chance, spread, power) : 0.0f;
+    return lerp(near, far, t);
 }
 
 bool SnowColor(float3 baseColor) {
@@ -318,6 +445,15 @@ bool SnowTessShape(float3 ground, float edge, float3 normal, float blur, out Sno
     const float thin = SnowThin(ground, s.cameraDistance, FrParams.snowLod.y);
     // (None on the snowy ground's very edge, rising inward: edge, snowGroundVertices.)
     s.surface = params.x * thin * saturate(edge);
+    // The untouched snow's own shape (SnowSurfaceShape) near the camera. By the point's place only, also on a wall or
+    // a steep bank, so a point two patches share is raised the same for both and no crack opens between them; never
+    // below a quarter of the even depth, so the snow doesn't open down to the ground. (Not sand's: shallow, its shape
+    // is only lit, as a normal map would, SnowShellShade.)
+    const float surfaceFade = SnowSurfaceFade(s.cameraDistance);
+    if (!why && !SnowSand() && (surfaceFade > 0.0f) && (s.surface > 0.0f)) {
+        const float shape = SnowSurfaceShape(ground.xz, params.x, SnowSurfaceSegment(s.cameraDistance)).x;
+        s.surface = max(s.surface + shape * thin * saturate(edge) * surfaceFade, s.surface * 0.25f);
+    }
     if ((normalLength <= 0.0f) || (abs(normal.y) < 0.12f * normalLength)) {
         s.trail.x = 1.0f;
         s.height = s.shellY = why ? params.x : s.surface;
@@ -426,12 +562,40 @@ bool SnowShellShade(float3 world, float3 baseColor, float share, SnowSample s, b
     // Deeper under the snow's untouched surface (the floor and walls of the trail) it is packed down and in shade:
     // greyer and bluer. The top is a little brighter than the ground below it.
     const float under = saturate((s.surface - s.shellY) / max(s.surface, 1.0f));
+
+    // The untouched surface's own shape (SnowSurfaceShape) lights it as its trail does, finer than the tessellated
+    // surface's points follow too (as a normal map would), down to a few pixels; flattened where a foot pressed it.
+    // (The trail's slope is packed in its light only, so the grains below lie on this slope, not the trail's.)
+    const float surfaceFade = SnowSurfaceFade(s.cameraDistance) * (1.0f - under);
+    const float2 surfaceSlope = (surfaceFade > 0.0f) ?
+        SnowSurfaceShape(world.xz, FrParams.snowParams.x, SnowPixelSize(s.cameraDistance) * 4.0f).yz * surfaceFade : 0.0f;
+    lit = clamp(lit + SnowTrailLight(surfaceSlope), -1.0f, 1.0f);
+
+    // The eye's direction, for the grains' sparkle and sand's sheen. (The tessellated snow's pixels know only the
+    // ground's x and z, SnowTessUnpack: its height is taken as Banjo's, near enough for the light off grains.)
+    const float3 camera = FrParams.snowCamera.xyz;
+    const float groundY = s.litKnown ? ((FrParams.snowPlayer.w > 0.0f) ? FrParams.snowPlayer.z : camera.y - 150.0f) : world.y;
+    const float3 view = normalize(camera - float3(world.x, groundY, world.z));
+    const float brightness = saturate(dot(color, float3(0.3f, 0.59f, 0.11f)) * 1.4f);
+    // (Only on the side facing the light.)
+    const float sunny = saturate(lit * 2.0f + 1.0f);
+
     if (SnowSand()) {
         // Sand: rippled by the wind where no foot has flattened it, a footprint a little darker (packed down), and its
-        // shaded slopes warm, not blue. No glints.
-        lit = clamp(lit + SnowTrailLight(SandRippleSlope(world.xz, s.cameraDistance) * (1.0f - under)), -1.0f, 1.0f);
+        // shaded slopes warm, not blue.
+        const float2 sandSlope = surfaceSlope + SandRippleSlope(world.xz, s.cameraDistance) * (1.0f - under);
+        lit = clamp(lit + SnowTrailLight(sandSlope - surfaceSlope), -1.0f, 1.0f);
         float3 sand = color * lerp(1.03f, 0.76f, under) * (1.0f + 0.25f * max(lit, 0.0f));
         sand = lerp(sand, sand * float3(0.8f, 0.75f, 0.68f), saturate(-lit) * 0.85f);
+        // Journey's sand (Edwards, GDC 2013): a broad sheen off the swells' and big ripples' slopes toward the sun,
+        // strongest seen low across the sand ("ocean specular"), and glitter off single grains. Not on packed-down
+        // sand. (Off the broad shape only: the small ripples, about as fine as the pixels, drew bands of moire in it.)
+        const float3 normal = normalize(float3(-surfaceSlope.x, 1.0f, -surfaceSlope.y));
+        const float3 h = normalize(FrParams.snowLight.xyz + view);
+        const float grazing = 1.0f - saturate(dot(normal, view));
+        const float sheen = pow(saturate(dot(normal, h)), 16.0f) * (0.25f + 0.75f * grazing * grazing);
+        const float glitter = SnowSparkle(world.xz, normal, view, s.cameraDistance, 0.45f, 0.12f, 0.45f, 600.0f);
+        sand += (float3(1.0f, 0.95f, 0.86f) * (0.08f * sheen) + 0.7f * glitter) * (brightness * sunny * (1.0f - under));
         color = sand;
         return true;
     }
@@ -439,13 +603,11 @@ bool SnowShellShade(float3 world, float3 baseColor, float share, SnowSample s, b
     shade = lerp(shade, shade * float3(0.62f, 0.68f, 0.86f), saturate(-lit));
     shade = lerp(shade, shade * float3(0.8f, 0.84f, 0.94f), saturate(under * s.trail.x * 1.5f));
 
-    // A few glints in the sun close by, each catching the light from some places and not others.
-    if (s.cameraDistance < 700.0f) {
-        const float3 camera = FrParams.snowCamera.xyz;
-        const float3 glint = SceneCellHash(floor(world.xz * 1.6f) + floor(camera.xz * 0.04f) * 17.0f);
-        if ((glint.x > 0.992f) && (s.height - s.shellY < FrParams.snowParams.y * 0.12f)) {
-            shade += 0.35f * (1.0f - s.cameraDistance / 700.0f) * glint.y;
-        }
+    // Glints in the sun off grains of snow lying on its untouched top (SnowSparkle), each fading in and out as the
+    // camera moves.
+    if (s.height - s.shellY < FrParams.snowParams.y * 0.12f) {
+        const float3 normal = normalize(float3(-surfaceSlope.x, 1.0f, -surfaceSlope.y));
+        shade += 1.1f * SnowSparkle(world.xz, normal, view, s.cameraDistance, 0.6f, 0.1f, 0.4f, 500.0f) * brightness * sunny * (1.0f - under);
     }
 
     // Test aids (TOOIE_SNOW_DEBUG): 1 colours the shells from blue at the ground to magenta at the snow's full
