@@ -105,7 +105,12 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
         n = -n;
     }
     const float vn = dot(n, v);
-    const float fade = saturate((vn - 0.2f) / 0.35f) * (1.0f - smoothstep(params.y, params.z, distance));
+    // Also flat where a pixel covers several of the game's texels: the height's detail is finer than a pixel there, and
+    // marching through it only makes it shimmer as the camera moves (the idea of LEAN and LEADR mapping, Olano and Baker
+    // 2010, Dupuy et al. 2013: detail too fine to see is filtered out instead of drawn). The geometric mean of the two
+    // directions, so a wall seen at a slant, long in one of them, keeps its depth until the view-angle fade takes it.
+    const float footprint = sqrt(length(ddxUV) * length(ddyUV));
+    const float fade = saturate((vn - 0.2f) / 0.35f) * (1.0f - smoothstep(params.y, params.z, distance)) * (1.0f - smoothstep(2.0f, 5.0f, footprint));
     if (!(fade > 0.0f)) {
         return float3(0.0f, 0.0f, 1.0f);
     }
@@ -128,13 +133,17 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
     }
     const float depthScale = params.x * fade;
 
-    // Going down the view ray to the deepest part, the place on the surface it passes under moves this far.
-    const float3 lateral = (n - v / max(vn, 0.3f)) * depthScale;
+    // Going down the view ray to the deepest part, the place on the surface it passes under moves this far: the way to
+    // the camera along the surface over how squarely it is seen, but that no less than 0.6 (offset limiting, Welsh,
+    // "Parallax Mapping with Offset Limiting", 2004). The full 1 / (n . v) grows without end toward edge on, and a wall
+    // seen at a slant smeared into streaks; limited, a slanted wall shifts at most about one and a half times its depth.
+    const float3 lateral = -(v - n * vn) / max(vn, 0.6f) * depthScale;
     float2 uvFull = float2(dot(gu, lateral), dot(gv, lateral));
 
     // No more than a few texels across, however slanted the view: further, a wall seen at a slant smears the stones
     // sideways into streaks (L: walls looked worse than without it).
-    const float maxTexels = params.x * 0.3f;
+    // (About four and a half texels at the full depth, as it was when the full depth was 16 units.)
+    const float maxTexels = params.x * 0.2f;
     const float uvLength = length(uvFull);
     if (uvLength > maxTexels) {
         uvFull *= maxTexels / uvLength;
@@ -142,6 +151,12 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
 
     // Down the ray in even steps (more of them seen at a slant) until it goes under the surface, then halving the
     // last step to find where the two cross.
+    // The steps start a different share of a step down at each pixel (interleaved gradient noise, Jimenez, "Next
+    // Generation Post Processing in Call of Duty: Advanced Warfare", 2014), so a ridge too thin for the steps to land
+    // on is caught at some pixels and missed at their neighbours, a fine grain, instead of the same layer being missed
+    // across the whole wall, which drew as stair steps. The same at a pixel every frame, so it doesn't crawl without
+    // an upscaler to smooth it.
+    const float noise = frac(52.9829189f * frac(dot(floor(pixelPosition.xy), float2(0.06711056f, 0.00583715f))));
     const float steps = lerp(params.w, 8.0f, vn);
     const float stepSize = 1.0f / steps;
     float layer = 0.0f;
@@ -152,7 +167,7 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
     for (uint i = 0; (i < 48) && (layer < surface); i++) {
         previousLayer = layer;
         previousSurface = surface;
-        layer = min(layer + stepSize, 1.0f);
+        layer = min(layer + stepSize * ((i == 0) ? max(noise, 0.05f) : 1.0f), 1.0f);
         surface = ParallaxDepthAt(otherMode, renderFlags, uv + uvFull * layer, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape);
     }
 
@@ -182,6 +197,25 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
     const float3 up = normalize(FrParams.grassWorldY.xyz);
     const float3 l = normalize(up + v * 0.35f);
     const float nl = dot(n, l);
+
+    // And lit by the slope of the surface at that place, so a crack's edge facing the light is brighter and the one
+    // turned away from it darker, as the shape the march drew. The slope comes from the height a little to the side of
+    // the hit in each direction of the texture, turned into a surface gradient with the texture coordinates' slopes
+    // (Mikkelsen, "Bump Mapping Unparametrized Surfaces on the GPU", 2010): the tilted normal is the triangle's normal
+    // less that gradient. Only the change from the flat triangle's light is applied, so a wall the game lit stays as lit.
+    if (shading.z > 0.0f) {
+        const float e = 0.5f;
+        const float hitDepth = ParallaxDepthAt(otherMode, renderFlags, hitUV, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape);
+        const float du = ParallaxDepthAt(otherMode, renderFlags, hitUV + float2(e, 0.0f), ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape) - hitDepth;
+        const float dv = ParallaxDepthAt(otherMode, renderFlags, hitUV + float2(0.0f, e), ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape) - hitDepth;
+        // The height falls as the depth grows, so its gradient is the depth's, negated.
+        const float3 gradient = -(gu * du + gv * dv) * (depthScale / e);
+        const float3 bent = normalize(n - gradient);
+        // Brightened only a little: lit up as much as darkened, every lump got a shiny rim and the rock looked like wet
+        // plastic.
+        lit *= clamp(1.0f + shading.z * (dot(bent, l) - nl), 1.0f - shading.z, 1.0f + shading.z * 0.25f);
+    }
+
     if ((shading.y > 0.0f) && (nl > 0.05f) && (hit > 0.02f)) {
         const float3 lateralLight = (l - n * nl) / max(nl, 0.25f) * depthScale;
         float2 uvLight = float2(dot(gu, lateralLight), dot(gv, lateralLight));
@@ -189,13 +223,19 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
         if (uvLightLength > maxTexels) {
             uvLight *= maxTexels / uvLightLength;
         }
+        // Soft shadows (Tatarchuk, "Dynamic Parallax Occlusion Mapping with Approximate Soft Shadows", 2006): up the ray
+        // to the light, each place the surface rises above the ray shades by how far above it is over how far along
+        // the ray it is, so the shadow is dark and sharp right by the stone that casts it and fades out softly away
+        // from it. Eight steps, started at the pixel's own share of a step as the march is, so the shadow's edge is a
+        // fine grain instead of rings.
         float shadow = 0.0f;
         [loop]
-        for (uint k = 1; k <= 6; k++) {
-            const float rise = hit * (float(k) / 6.0f);
+        for (uint k = 0; k < 8; k++) {
+            const float along = (float(k) + 1.0f - noise) / 8.0f;
+            const float rise = hit * along;
             const float rayLayer = hit - rise;
             const float s = ParallaxDepthAt(otherMode, renderFlags, hitUV + uvLight * rise, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape);
-            shadow = max(shadow, saturate((rayLayer - s) * 3.0f) * (1.0f - float(k - 1) / 6.0f));
+            shadow = max(shadow, saturate((rayLayer - s) * 4.0f / (0.3f + along * 1.5f)));
         }
         lit *= 1.0f - shading.y * shadow;
     }

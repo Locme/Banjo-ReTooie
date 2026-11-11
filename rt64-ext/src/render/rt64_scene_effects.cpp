@@ -1308,12 +1308,14 @@ namespace RT64 {
             parallaxAllTextures = effectsSettings.parallaxAll;
             parallaxOriginalTextures = effectsSettings.parallaxOriginal;
         }
-        // At the full setting, 16 world units deep (Banjo is about 150 tall, a stone block about 60 to 120 across);
-        // flat by 2800 units away, where a few texels cover a pixel and it can't be seen. Up to 24 steps down the ray.
-        frameParams.parallaxParams = { 16.0f * depth, 1300.0f, 2800.0f, 24.0f };
-        // The deepest parts and the shadows the stones cast about a third darker, less at a lower setting.
+        // At the full setting, 22 world units deep (Banjo is about 150 tall, a stone block about 60 to 120 across; 16 left
+        // the stones of a wall only just standing out, 28 made rock and leaves bulge like melted wax); flat by 2800 units
+        // away, where a few texels cover a pixel and it can't be seen. Up to 32 steps down the ray, so it shows no layers.
+        frameParams.parallaxParams = { 22.0f * depth, 1300.0f, 2800.0f, 32.0f };
+        // The deepest parts and the shadows the stones cast about a third darker, less at a lower setting; and the slopes
+        // lit by how they face the light (z, Parallax.hlsli), up to a third darker.
         const float shade = std::min(1.0f, 0.4f + depth * 0.6f);
-        frameParams.parallaxShading = { 0.3f * shade, 0.3f * shade, 0.0f, 0.0f };
+        frameParams.parallaxShading = { 0.3f * shade, 0.3f * shade, 0.3f * shade, 0.0f };
         // On whenever it is set, as a texture pack's height maps need nothing else. (And with displaced ground, which takes
         // the list's textures and shapes.)
         return (depth > 0.0f) || (ground > 0.0f);
@@ -2380,10 +2382,11 @@ namespace RT64 {
         const float detail = settings.waterDetail;
         frameParams.waterCamera = { float(camera[0]), float(camera[1]), float(camera[2]), water ? detail : 0.0f };
 
-        // Displaced ground: the deepest part of a texture is pushed down by up to 16 units at the full setting, cut into at
-        // most 16 pieces an edge no shorter than 12 units, fading out over 1400 to 2800 units from the camera.
+        // Displaced ground: the deepest part of a texture is pushed down by up to 28 units at the full setting (16 left the
+        // ground's cracks and cobbles shallow), cut into at most 16 pieces an edge no shorter than 12 units, fading out
+        // over 1400 to 2800 units from the camera.
         if (ground) {
-            frameParams.groundParams = { 16.0f * settings.groundDisplacement, 16.0f, 12.0f, settings.groundReach };
+            frameParams.groundParams = { 28.0f * settings.groundDisplacement, 16.0f, 12.0f, settings.groundReach };
         }
         if (!water) {
             return 2;

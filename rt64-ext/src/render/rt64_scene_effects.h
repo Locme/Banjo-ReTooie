@@ -522,7 +522,7 @@ namespace RT64 {
     // draw of the 3D world instead, to look for textures that suit it.
     void SetSceneParallax(float depth, bool original, bool all);
     // Banjo-Tooie: Parallax smoothness (0 to 1): how much the parallax textures' baked height maps are blurred, in up to
-    // two of the game's texels, so specks in a texture don't become thin steep pillars (drawn as hairs along the view).
+    // one of the game's texels, so specks in a texture don't become thin steep pillars (drawn as hairs along the view).
     void SetSceneParallaxSmoothness(float amount);
     float SceneParallaxSmoothness();
     // Banjo-Tooie: the texture cache bakes the listed textures' height maps (TextureCache::refreshHeights) while

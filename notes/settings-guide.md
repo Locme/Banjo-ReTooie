@@ -306,9 +306,12 @@ F12 screenshots are taken before these filters, so they don't show them.
 
 - **Parallax** (under Shaders): 0 to 100. Stone, brick, rock, plank walls,
   roof tiles and carved panels get depth: the raised parts stand out, the gaps
-  and cracks sink in and fall into shadow (lit from above), and it all shifts
-  as the camera moves. Higher is deeper; 100 is about 16 world units (Banjo is
-  about 150 tall). Fades out on walls seen edge on and in the distance.
+  and cracks sink in and fall into soft shadow (lit from above), the edges of each
+  crack are lit by which way they slope (darker facing away from the light,
+  a little brighter facing it), and it all shifts as the camera moves. Higher is deeper; 100 is about
+  22 world units (Banjo is about 150 tall). Fades out on walls seen edge on, in
+  the distance, and where the texture is too small on screen for its detail to
+  show (where it would only shimmer).
   Default: 0 (off).
 - **Parallax on original textures**: the game's own textures (3,517 of them,
   picked by eye, each with its own shape and depth: stone, brick, metal, wood,
@@ -319,11 +322,14 @@ F12 screenshots are taken before these filters, so they don't show them.
 - **Parallax smoothness** (under Parallax): 0 to 100. Each parallax texture's
   height is worked out once as it loads, from the texture that is drawn (the
   game's own, its upscale or a texture pack's, which takes its own brightness
-  range), and blurred by up to two of the game's texels at 100. Higher stops the
-  specks and fine detail of a texture, an HD pack's most of all, from standing
-  up as thin spikes that streak like hairs as the camera moves; lower keeps
-  sharper edges between stones. Displaced ground uses the same height.
-  Default: 25.
+  range and has the light and shade painted over it taken out first, so a lit
+  or shaded patch and a painted shine don't become bumps), and its depth is blurred by up to one of the game's texels at 100.
+  Higher stops the specks and fine detail of a texture, an HD pack's most of
+  all, from standing up as thin spikes that streak like hairs as the camera
+  moves; lower keeps sharper edges between stones. Thin cracks, seams and gaps
+  keep their full depth at any smoothness (they become softer grooves, not
+  shallower ones). Displaced ground uses the same height.
+  Default: 50.
 
 ### Displaced ground
 
@@ -333,7 +339,7 @@ F12 screenshots are taken before these filters, so they don't show them.
   cobbles, bumpy dirt, brick, tiles, smooth stone) are cut into fine triangles
   (by their size, so they stay put as the camera moves) and the dark parts of the
   texture pushed straight down by up to
-  16 world units at 100 (times the texture's own Parallax depth). The ground's
+  28 world units at 100 (times the texture's own Parallax depth). The ground's
   outline and depth change, not only its shading, and the deeper parts are a
   little darker. Walls and the ground within about 24 units of each triangle's
   edge are left as they are, so no gaps open between pieces of ground, and so is

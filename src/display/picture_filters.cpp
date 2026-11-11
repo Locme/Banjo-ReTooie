@@ -4707,7 +4707,7 @@ void tooie::picture_filters::apply() {
     const char* parallax_all = std::getenv("TOOIE_PARALLAX_ALL");
     RT64::SetSceneParallax((float)(parallax / 100.0), parallax_original, (parallax_all != nullptr) && (std::atoi(parallax_all) != 0));
     // How much the parallax textures' baked height maps are blurred (0-100).
-    RT64::SetSceneParallaxSmoothness((float)(value<double>(parallax_smoothness_option, 25.0) / 100.0));
+    RT64::SetSceneParallaxSmoothness((float)(value<double>(parallax_smoothness_option, 50.0) / 100.0));
     send_parallax_textures();
     // Displaced ground (0-100); TOOIE_GROUND_DISPLACE=<0-100> sets it instead.
     double ground_displacement = shader(value<double>(ground_displacement_option, 0.0));
@@ -5457,8 +5457,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         parallax_smoothness_option,
         "Parallax Smoothness",
-        "How much the depth worked out from each texture is smoothed (blurred over up to two of the game's texels) before Parallax and Displaced Ground use it. Higher stops the specks and fine detail of a texture, an HD texture pack's most of all, from standing up as thin spikes that streak like hairs as the camera moves, at the cost of sharper edges between stones. 0 is unsmoothed.",
-        0, 100, 5, 0, false, 25);
+        "How much the depth worked out from each texture is smoothed (blurred over up to one of the game's texels) before Parallax and Displaced Ground use it. Higher stops the specks and fine detail of a texture, an HD texture pack's most of all, from standing up as thin spikes that streak like hairs as the camera moves, at the cost of sharper edges between stones. Thin cracks and gaps keep their full depth, only softer. 0 is unsmoothed.",
+        0, 100, 5, 0, false, 50);
     graphics.add_number_option(
         ground_displacement_option,
         "Displaced Ground",

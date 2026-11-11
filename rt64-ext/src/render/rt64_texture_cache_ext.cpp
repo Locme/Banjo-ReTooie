@@ -163,6 +163,8 @@ namespace RT64 {
     // Height maps no bigger than this across (a texture pack's 4K texture gives one a quarter of its size), and no more
     // than this many baked a call, so a changed setting doesn't hold the texture map for long.
     static const uint32_t HeightBakeMaxSize = 1024;
+    // The bake's histograms and its results in one row: HISTOGRAM_SIZE in HeightBakeCS.hlsl.
+    static const uint32_t HeightBakeHistogramSize = 773;
     static const size_t HeightBakeBatch = 32;
 
     bool TextureCache::refreshHeights() {
@@ -268,7 +270,7 @@ namespace RT64 {
                 const uint32_t height = std::max(job.source->height / step, 1U);
                 std::unique_ptr<RenderTexture> luma = device->createTexture(RenderTextureDesc::Texture2D(width, height, 1, RenderFormat::R32_FLOAT, storage));
                 std::unique_ptr<RenderTexture> blur = device->createTexture(RenderTextureDesc::Texture2D(width, height, 1, RenderFormat::R32_FLOAT, storage));
-                std::unique_ptr<RenderTexture> histogram = device->createTexture(RenderTextureDesc::Texture2D(260, 1, 1, RenderFormat::R32_UINT, storage));
+                std::unique_ptr<RenderTexture> histogram = device->createTexture(RenderTextureDesc::Texture2D(HeightBakeHistogramSize, 1, 1, RenderFormat::R32_UINT, storage));
                 std::unique_ptr<Texture> heightMap = std::make_unique<Texture>();
                 heightMap->texture = device->createTexture(RenderTextureDesc::Texture2D(width, height, 1, RenderFormat::R8_UNORM, storage));
                 heightMap->texture->setName("Texture Cache Baked Height");
@@ -298,28 +300,36 @@ namespace RT64 {
                 commandList->barriers(RenderBarrierStage::COMPUTE, general, uint32_t(std::size(general)));
                 commandList->setComputeDescriptorSet(descSet->get(), 0);
 
-                // The shape (as RASTER_PARALLAX_SHAPE_* from the list's bits, SetSceneParallaxTextures) and the blur: up to two
-                // of the game's texels with Parallax smoothness, and at least a little for Sand, Smooth and Ice, whose shapes
-                // were always worked out from a blurred brightness.
+                // The shape (as RASTER_PARALLAX_SHAPE_* from the list's bits, SetSceneParallaxTextures) and the blur: up to one
+                // of the game's texels with Parallax smoothness (two, before, spread a thin crack so wide that the wall looked
+                // flat), and at least a little for Sand, Smooth and Ice, whose shapes were always worked out from a blurred
+                // brightness.
                 const uint32_t shape = ((job.bits >> 17) & 0x7u) | (((job.bits >> 24) & 0x1u) << 3) | (((job.bits >> 20) & 0x1u) << 4);
-                float sigma = smoothness * 2.0f;
+                float sigma = smoothness;
                 if (shape >= 14u) {
                     sigma = std::max(sigma, 0.6f);
                 }
 
                 sigma *= float(width) / float(job.base->width);
+
+                // And for a texture pack's texture, the wide blur that finds the light and shade painted over it: about
+                // three of the game's texels (HeightBakeCS.hlsl, passes 2 to 4), in 16ths of a height map texel above
+                // the shape's 8 bits.
+                const float shadingSigma = job.ownRange ? (3.0f * float(width) / float(job.base->width)) : 0.0f;
+                const uint32_t shapeAndShading = shape | (std::min(uint32_t(shadingSigma * 16.0f), 0xFFFFFFu) << 8);
                 uint32_t sigmaBits;
                 memcpy(&sigmaBits, &sigma, sizeof(sigmaBits));
                 const uint32_t range = (job.bits & 0xFFFFu) | (job.ownRange ? 0x10000u : 0u);
                 const uint32_t groupsX = (width + 7) / 8;
                 const uint32_t groupsY = (height + 7) / 8;
-                for (uint32_t pass = 0; pass <= 4; pass++) {
-                    const uint32_t constants[8] = { job.source->width, job.source->height, width, height, pass, shape, range, sigmaBits };
+                // (The passes are listed in HeightBakeCS.hlsl.)
+                for (uint32_t pass = 0; pass <= 9; pass++) {
+                    const uint32_t constants[8] = { job.source->width, job.source->height, width, height, pass, shapeAndShading, range, sigmaBits };
                     commandList->setComputePushConstants(0, constants);
                     if (pass == 0) {
-                        commandList->dispatch(33, 1, 1);
+                        commandList->dispatch((HeightBakeHistogramSize + 7) / 8, 1, 1);
                     }
-                    else if (pass == 2) {
+                    else if ((pass == 5) || (pass == 8)) {
                         commandList->dispatch(1, 1, 1);
                     }
                     else {
