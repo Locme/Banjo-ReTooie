@@ -1003,7 +1003,7 @@ float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float su
 
 #ifndef RAY_TRACED
 // Relighting without ray tracing: there is no ray to read the surface's texture, so the game's shading is guessed from the
-// picture round the pixel: 1.5 times the square root of its brightness averaged over about a hundredth of the screen's
+// picture round the pixel: 1.3 times the square root of its brightness averaged over about a hundredth of the screen's
 // width, kept within what Traced Relighting keeps it to. Fitted to Traced Relighting's own shading in 24 views of eight
 // outdoor levels (2026-11-11), it was off by about a fifth on a typical pixel, against a third for the traced version's
 // fallback (0.85) used everywhere: the game paints dim corners and shaded sides darker, and they are darker in the picture.
@@ -1018,7 +1018,7 @@ float3 Relit(int2 pixel, float3 center, float3 normal, float3 scene, float sunBl
             around += dot(gColorHalf.SampleLevel(LinearSampler, uv + float2(x, y) * step, 0).rgb, luma);
         }
     }
-    const float shade = clamp(1.5f * sqrt(max(around / 9.0f, 1e-3f)), 0.45f, 1.5f);
+    const float shade = clamp(1.3f * sqrt(max(around / 9.0f, 1e-3f)), 0.45f, 1.5f);
     return RelitLight(pixel, center, normal, scene / shade, sunBlocked);
 }
 #endif

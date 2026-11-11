@@ -4056,6 +4056,13 @@ namespace RT64 {
         }
         // Denoising: what this pass drew is the next one's history, seen from this pass's camera. A pass that drew nothing
         // leaves none to use.
+        // Test aid: TOOIE_DENOISE_LOG=1 logs each pass the denoiser sees: its target, camera, and whether it drew and had a history.
+        static const bool denoiseLog = (getenv("TOOIE_DENOISE_LOG") != nullptr);
+        if (denoise && denoiseLog) {
+            fprintf(stderr, "[denoise] pass %llu target %p %ux%u drew %d history %d camera %.1f %.1f %.1f proj %.3f %.3f\n", (unsigned long long)res.passes,
+                (void *)&tr, indirectWidth, indirectHeight, indirectDrawn ? 1 : 0, tr.indirectHistoryValid ? 1 : 0,
+                constants.worldX.w, constants.worldY.w, constants.worldZ.w, constants.projection.x, constants.projection.y);
+        }
         if (denoise) {
             tr.indirectHistoryValid = indirectDrawn;
             tr.historyWorld[0] = constants.worldX;
