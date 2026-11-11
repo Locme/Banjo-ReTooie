@@ -5,7 +5,7 @@ Usage: py tools/sun_search.py --maps AF,1A --out D:\\sun_search [--azimuths ...]
                               [--views top,g0,g120,g240] [--exe-dir DIR] [--timeout 60] [--resume]
                               [--choices DIR]
 
-For each map it warps there, frames the top view on the level (see frame_top), and takes a baseline of each
+For each map it warps there, frames the top view on the whole level (look overview), and takes a baseline of each
 camera view with ray tracing off. Then it turns ray
 tracing on and takes the same views with the sun at each (azimuth, elevation) in the grid. Each shot is compared
 with its baseline: shadow_frac is the share of lit pixels the sun's shadow darkens, and darkening is how much
@@ -30,6 +30,8 @@ Needs Pillow and numpy.
 """
 import argparse
 import csv
+import ctypes
+import json
 import math
 import os
 import re
@@ -46,7 +48,7 @@ DEFAULT_EXE_DIR = os.path.join(REPO, "Release", "Optimized for newer CPUs (2013 
 DEFAULT_CHOICES = os.path.join(REPO, "Choices")
 MAP_NAMES = os.path.join(REPO, "src", "game", "map_names.inc")
 
-# The camera for each ground view, as console commands. The top view is framed per map (see frame_top).
+# The camera for each ground view, as console commands. The top view is TOP_CAM.
 VIEWS = {
     "g0": "look 0 -25 700",
     "g120": "look 120 -25 700",
@@ -286,99 +288,15 @@ def write_sheet(path, tiles):
 
 # ---------------------------------------------------------------- top view and choices
 
-POS_RE = re.compile(r"\[pos\]\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)")
-FOV_RE = re.compile(r"\bfov\s+([\d.]+)")
 UNSAFE_NAME_RE = re.compile(r'[\\/:*?"<>|]')
-PROBE_UP = 22000.0        # the framing probe is this far above Banjo's feet (from 30000 up the game draws nothing: past its far clip)
-PROBE_CAM = "look from %.1f %.1f %.1f 0 -89"
-BG_TOL = 12.0             # per channel, out of 255: how close every corner pixel must be to the background
-BG_PATCH = 8              # the corner patches are this many pixels square
-MIN_MASK_FRAC = 0.01      # a level covering less of the probe than this falls back
-EDGE_PX = 2               # a box this close to an edge of the probe counts as touching it
-FRAME_MARGIN = 1.1        # the camera sits this much further out than the box strictly needs
-FRAME_MIN_H = 3000.0
-FRAME_MAX_H = 22000.0
-FALLBACK_H = 9000.0
+# The top view: the game frames the whole level from above itself (look overview measures it with its collision and
+# widens the field of view when the level is too large for play's), with the shadows reaching that far out.
+TOP_CAM = "farshadows 6; look overview"
 
 
 def safe_name(text):
     """Makes text usable as a file or folder name on Windows: bad characters become '-', and trailing dots and spaces go."""
     return UNSAFE_NAME_RE.sub("-", text).rstrip(" .")
-
-
-def top_fallback(bx, by, bz, why):
-    """The top camera for a level that cannot be framed: straight above Banjo, FALLBACK_H up."""
-    say("  top framing: %s; using the fallback, %g above Banjo" % (why, FALLBACK_H))
-    return PROBE_CAM % (bx, by + FALLBACK_H, bz)
-
-
-def frame_top(run, folder, stage):
-    """Works out where the top view camera goes for this map. Returns its console command, or None when
-    Banjo's position cannot be read.
-
-    A probe shot is taken straight down from PROBE_UP above Banjo. The level's box in that picture, scaled to
-    the ground, gives the centre of the top view, and the height that fits the box gives how far up it sits.
-    The probe is kept as frame_probe.png in the map's folder.
-    """
-    game = run.game
-    bx = by = bz = None
-    for line in game.run_batch(["pos"], run.timeout):
-        m = POS_RE.search(line)
-        if m:
-            bx, by, bz = (float(v) for v in m.groups())
-    if bx is None:
-        say("  top framing: no pos line, so Banjo's position is not known")
-        return None
-
-    path, errors = take_shot(run, [PROBE_CAM % (bx, by + PROBE_UP, bz), "wait 800ms"],
-                             "frame_probe.png", stage, run.timeout)
-    if errors:
-        return top_fallback(bx, by, bz, "the probe shot failed (%s)" % errors[0])
-    probe = os.path.join(folder, "frame_probe.png")
-    move_file(path, probe)
-
-    vfov = None
-    for line in game.run_batch(["cam"], run.timeout):
-        m = FOV_RE.search(line)
-        if m:
-            vfov = float(m.group(1))
-    if vfov is None:
-        return top_fallback(bx, by, bz, "no fov in the cam line")
-
-    with Image.open(probe) as im:
-        arr = np.asarray(im.convert("RGB"), dtype=np.float32)
-    H, W = arr.shape[:2]
-
-    b = BG_PATCH
-    corners = [arr[:b, :b], arr[:b, -b:], arr[-b:, :b], arr[-b:, -b:]]
-    bg = np.median(np.concatenate([c.reshape(-1, 3) for c in corners]), axis=0)
-    if not all(np.all(np.abs(c.reshape(-1, 3) - bg) <= BG_TOL) for c in corners):
-        return top_fallback(bx, by, bz, "the corners of the probe are not one colour")
-
-    diff = np.abs(arr - bg).max(axis=2) > BG_TOL
-    ys, xs = np.nonzero(diff)
-    if len(xs) < MIN_MASK_FRAC * W * H:
-        return top_fallback(bx, by, bz, "the level covers under 1% of the probe")
-    x1, x2 = np.percentile(xs, [1, 99])
-    y1, y2 = np.percentile(ys, [1, 99])
-
-    tan_v = math.tan(math.radians(vfov) / 2)
-    s = 2 * PROBE_UP * tan_v / H              # world units per pixel, on the ground at Banjo's height
-    cx = bx + ((x1 + x2) / 2 - W / 2) * s
-    cz = bz + ((y1 + y2) / 2 - H / 2) * s
-    ew = (x2 - x1) * s
-    ed = (y2 - y1) * s
-    tan_h = tan_v * W / H
-    h = FRAME_MARGIN * max(ew / (2 * tan_h), ed / (2 * tan_v))
-    h = min(max(h, FRAME_MIN_H), FRAME_MAX_H)
-
-    if x1 <= EDGE_PX or y1 <= EDGE_PX or x2 >= W - 1 - EDGE_PX or y2 >= H - 1 - EDGE_PX:
-        say("  top framing: the level runs off the probe; centred on Banjo, %g above" % FRAME_MAX_H)
-        return PROBE_CAM % (bx, by + FRAME_MAX_H, bz)
-
-    say("  top framing: box %.0f x %.0f units, centre %.0f %.0f, camera %.0f above Banjo"
-        % (ew, ed, cx, cz, h))
-    return PROBE_CAM % (cx, by + h, cz)
 
 
 def choice_folder(run, key, name):
@@ -472,6 +390,51 @@ def backup_graphics(exe_dir):
     say("backed up %s to %s" % (GRAPHICS, BACKUP))
 
 
+# The shots are drawn at 4K, whatever the window's size. The window is moved off every screen once the game is up, so
+# it stays out of the way: minimized, or fullscreen under other windows, the game presents nothing, and a screenshot
+# is taken as a frame is presented.
+SHOT_SETTINGS = {"wm_option": "Windowed", "res_option": "2160p"}
+OFFSCREEN_SIZE = (1920, 1080)
+
+
+def apply_shot_settings(exe_dir):
+    """Writes SHOT_SETTINGS into graphics.json, after backup_graphics has kept the real one."""
+    g = os.path.join(exe_dir, GRAPHICS)
+    try:
+        with open(g, encoding="utf-8") as f:
+            settings = json.load(f)
+    except (OSError, ValueError):
+        settings = {}
+    settings.update(SHOT_SETTINGS)
+    with open(g, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=4, sort_keys=True)
+    say("graphics.json for the shots: %s" % ", ".join("%s %s" % kv for kv in SHOT_SETTINGS.items()))
+
+
+def move_offscreen(pid):
+    """Moves the visible windows of the process left of every screen, 16:9 (Windows only). Returns how many it moved."""
+    if os.name != "nt":
+        return 0
+    user32 = ctypes.windll.user32
+    found = []
+    proc_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+    def each(hwnd, _):
+        owner = ctypes.c_ulong()
+        user32.GetWindowThreadProcessId(ctypes.c_void_p(hwnd), ctypes.byref(owner))
+        if owner.value == pid and user32.IsWindowVisible(ctypes.c_void_p(hwnd)):
+            found.append(hwnd)
+        return True
+
+    user32.EnumWindows(proc_type(each), None)
+    left = user32.GetSystemMetrics(76)  # SM_XVIRTUALSCREEN: the left edge of all the screens together
+    w, h = OFFSCREEN_SIZE
+    for hwnd in found:
+        # SWP_NOZORDER | SWP_NOACTIVATE
+        user32.SetWindowPos(ctypes.c_void_p(hwnd), None, left - w - 200, 0, w, h, 0x0004 | 0x0010)
+    return len(found)
+
+
 def restore_graphics(exe_dir):
     """Puts the backup back over graphics.json, then removes the backup so a later run starts fresh."""
     g = os.path.join(exe_dir, GRAPHICS)
@@ -549,7 +512,7 @@ class Game:
         self.proc = subprocess.Popen([self.exe], cwd=self.exe_dir, stdin=subprocess.PIPE)
         say("started the game (pid %d)" % self.proc.pid)
         self.run_batch([], BOOT_TIMEOUT)
-        say("the game is up")
+        say("the game is up; moved %d window(s) off the screens" % move_offscreen(self.proc.pid))
 
     def send(self, line):
         """Writes one console command to the game's stdin."""
@@ -740,14 +703,7 @@ def run_map(run, mid, name):
     # The ground views keep the shadows' play distances; the top view, far above, has them reach out with farshadows
     # (in play they fade out 4000 to 7000 units from the camera, so a whole level from above showed none).
     cams = {v: "farshadows off; " + c for v, c in VIEWS.items()}
-    if "top" in run.views:
-        top_cmd = frame_top(run, folder, stage)
-        if top_cmd is None:
-            write_map_skip(run, mid, name, "could not read Banjo's position")
-            shutil.rmtree(folder, ignore_errors=True)
-            clean_leftovers(run)
-            return "skipped"
-        cams["top"] = "farshadows 6; " + top_cmd
+    cams["top"] = TOP_CAM
 
     # Baselines: ray tracing off, so the picture has no sun shadows at all.
     base, base_paths = {}, {}
@@ -907,6 +863,7 @@ def main():
 
     say("%d maps, views %s, %d azimuths x %d elevations" % (len(maps), ",".join(views), len(azs), len(els)))
     backup_graphics(exe_dir)
+    apply_shot_settings(exe_dir)
     try:
         for mid, name in maps:
             key = "%X" % mid

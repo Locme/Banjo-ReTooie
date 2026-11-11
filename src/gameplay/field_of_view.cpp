@@ -24,6 +24,7 @@
 
 #include "recomp.h"
 #include "recompui/config.h"
+#include "tooie_field_of_view.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_photo_mode.h"
@@ -77,6 +78,13 @@ namespace {
         static const bool on = std::getenv("TOOIE_FOV_LOG") != nullptr;
         return on;
     }
+
+    // tooie::field_of_view::set_override, in degrees; 0 when off.
+    std::atomic<float> override_fov{0.0f};
+}
+
+void tooie::field_of_view::set_override(float degrees) {
+    override_fov = degrees;
 }
 
 extern "C" void tooie_camera_controller_step(uint8_t* rdram, recomp_context* ctx) {
@@ -124,6 +132,9 @@ extern "C" void tooie_set_fov(uint8_t* rdram, recomp_context* ctx) {
     float result = fov + (float)add;
     if (gameplay) {
         result = tooie::photo_mode::adjust_fov(result);
+        if (const float held = override_fov.load(); held > 0.0f) {
+            result = held;
+        }
     }
     if (result < 8.0f) result = 8.0f;
     if (result > 150.0f) result = 150.0f;

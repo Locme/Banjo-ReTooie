@@ -34,6 +34,7 @@
 #include "tooie_rdram.h"
 #include "tooie_game.h"
 #include "tooie_game_frame_rate.h"
+#include "tooie_field_of_view.h"
 #include "tooie_free_camera.h"
 #include "tooie_level_warp.h"
 #include "tooie_mirror_mode.h"
@@ -47,6 +48,7 @@
 #include "tooie_photo_mode.h"
 #include "tooie_texture_sweep.h"
 #include "tooie_vram_log.h"
+#include "tooie_level_box.h"
 #include "tooie_sun_control.h"
 
 // rt64-ext (rt64_scene_effects.cpp), for farshadows.
@@ -2504,6 +2506,7 @@ void look_tick(uint8_t* rdram) {
     if (!g_look.on) return;
     if (tooie::debug::current_map(rdram) != g_look.map || tooie::debug::map_change_busy(rdram)) {
         g_look.on = false;
+        tooie::field_of_view::set_override(0.0f);
         {
             std::lock_guard lock{ g_mutex };
             g_current = "look";
@@ -2539,13 +2542,65 @@ constexpr double kLookDistance = 350.0;
 // put `distance` back from Banjo's head along the view and looks at him, pulled in front of any wall between (the
 // free camera's line test); with it, the camera turns where it stands.
 void cmd_look(Ctx& c) {
-    const char* usage = "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look from <x> <y> <z> <yaw> <pitch> | look off";
+    const char* usage = "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look from <x> <y> <z> <yaw> <pitch> | look overview [fov] | look off";
     if (c.w.size() < 2) { error(usage); return; }
     if (lower(c.w[1]) == "off") {
         if (!g_look.on) { print("the camera is the game's already"); return; }
         write_ram(c.rdram, g_look.dynamic + kDynFrozen, g_look.frozen_before, 1);
         g_look.on = false;
+        tooie::field_of_view::set_override(0.0f);
         print("the camera is the game's again");
+        return;
+    }
+    // Any other look gives the field of view back to the game; look overview sets it again.
+    tooie::field_of_view::set_override(0.0f);
+    // look overview [fov]: the camera straight above the middle of the whole level (as levelbox measures it), looking
+    // down, high enough that the level fills the picture. The game draws nothing about 30000 from the camera, which
+    // caps the height, so a large level gets a wider field of view than play's 40 degrees. A given fov is kept and the
+    // height worked out from it instead.
+    if (lower(c.w[1]) == "overview") {
+        double want = 0.0;
+        if (c.w.size() > 3 || (c.w.size() == 3 && (!parse_double(c.w[2], &want) || want < 10.0 || want > 120.0))) { error(usage); return; }
+        uint32_t dynamic = g_look.on ? g_look.dynamic : gameplay_camera(c.rdram);
+        if (dynamic == 0 || !tooie::debug::can_warp() || c.ctx == nullptr) { error("the gameplay camera is not running (a scene, a fixed camera, or no file loaded)"); return; }
+        float feet[3];
+        if (!tooie::player_cheats::position(c.rdram, feet)) { error("there is no player yet"); return; }
+        tooie::level_box::Box box;
+        if (!tooie::level_box::measure(c.rdram, c.ctx, feet, box)) { error("no ground found round Banjo"); return; }
+        // The picture's width over its height, from the viewport camera.
+        double aspect = 16.0 / 9.0;
+        uint32_t ctl = tooie::free_camera::last_controller();
+        uint32_t camera = tooie::rdram::valid_ptr(ctl) ? read_ram(c.rdram, ctl, 4) : 0;
+        if (tooie::rdram::valid_ptr(camera)) {
+            float a = tooie::rdram::read_float(c.rdram, camera + 0xE8);
+            if (a > 0.5f && a < 4.0f) aspect = a;
+        }
+        // The narrowest field of view, from play's 40 degrees, that keeps the lowest ground within the game's draw
+        // distance, with every point of the level's ground in the picture at its own height.
+        constexpr float margin = 1.06f, far_reach = 27000.0f, play_fov = 40.0f, widest = 120.0f;
+        float fov = (float)want;
+        if (fov == 0.0f) {
+            fov = play_fov;
+            while (fov < widest && tooie::level_box::overview_height(box, fov, (float)aspect, margin) - box.min[1] > far_reach) {
+                fov += 1.0f;
+            }
+        }
+        const float up = tooie::level_box::overview_height(box, fov, (float)aspect, margin) - box.max[1];
+        if (!g_look.on) {
+            g_look.dynamic = dynamic;
+            g_look.map = tooie::debug::current_map(c.rdram);
+            g_look.frozen_before = read_ram(c.rdram, dynamic + kDynFrozen, 1);
+        }
+        g_look.pos[0] = (box.min[0] + box.max[0]) / 2.0f;
+        g_look.pos[1] = box.max[1] + up;
+        g_look.pos[2] = (box.min[2] + box.max[2]) / 2.0f;
+        g_look.yaw = 0.0f;
+        g_look.pitch = wrap_360(-89.0);
+        g_look.on = true;
+        tooie::field_of_view::set_override((float)fov);
+        look_tick(c.rdram);
+        print(format("camera at %.0f %.0f %.0f looking down, fov %.1f, over a level %.0f x %.0f across (look off gives it back)",
+            g_look.pos[0], g_look.pos[1], g_look.pos[2], fov, box.max[0] - box.min[0], box.max[2] - box.min[2]));
         return;
     }
     // look from <x> <y> <z> <yaw> <pitch>: the camera put exactly there, with no wall test, so it can stand above a
@@ -2622,6 +2677,26 @@ void cmd_look(Ctx& c) {
     look_tick(c.rdram);
     print(format("camera at %.0f %.0f %.0f looking yaw %.1f, pitch %.1f%s (look off gives it back)", pos[0], pos[1], pos[2], wrap_360(yaw), pitch,
         pulled_in ? ", pulled in front of a wall" : ""));
+}
+
+// levelbox [save]: measures the current level with the game's collision (rays cast straight down on a grid round Banjo) and
+// prints its extent. look overview frames its camera on this box. save also writes its height grid as a picture.
+void cmd_levelbox(Ctx& c) {
+    bool save = c.w.size() == 2 && lower(c.w[1]) == "save";
+    if (c.w.size() > 2 || (c.w.size() == 2 && !save)) { error("levelbox [save]"); return; }
+    if (c.ctx == nullptr || !tooie::debug::can_warp()) { error("no game is running"); return; }
+    float feet[3];
+    if (!tooie::player_cheats::position(c.rdram, feet)) { error("there is no player yet"); return; }
+    tooie::level_box::Box box;
+    if (!tooie::level_box::measure(c.rdram, c.ctx, feet, box)) { error("no ground found round Banjo"); return; }
+    print(format("map 0x%X: x %.0f to %.0f, y %.0f to %.0f, z %.0f to %.0f (%.0f x %.0f across, %d grid points %.0f apart with ground joined to Banjo's)",
+        box.map, box.min[0], box.max[0], box.min[1], box.max[1], box.min[2], box.max[2], box.max[0] - box.min[0], box.max[2] - box.min[2],
+        box.hits, box.step));
+    if (save) {
+        std::string path = format("logs/levelbox_%X.pgm", box.map);
+        if (tooie::level_box::save_picture(box, path.c_str())) print("height grid saved to " + path);
+        else error("could not write " + path);
+    }
 }
 
 // farshadows <1 to 8 | off>: the traced and mapped shadows fade that many times further from the camera than in play
@@ -4241,9 +4316,10 @@ const std::vector<Command>& commands() {
         { "anim", {}, true, "anim", "the animation Banjo plays now, with his form and state", cmd_anim },
         { "objects", {}, true, "objects [radius]", "the live objects near Banjo, nearest first (address, marker, model, actor entry, position)", cmd_objects },
         { "face", {}, true, "face <x> <z>", "turn Banjo to face a point", cmd_face },
+        { "levelbox", {}, true, "levelbox [save]", "measure the current level with the game's collision and print its extent (look overview frames on it); save writes its height grid as logs/levelbox_<map>.pgm", cmd_levelbox },
         { "farshadows", {}, false, "farshadows <1 to 8 | off>", "the traced and mapped shadows fade that many times further from the camera than in play, for overview shots of a whole level (not saved)", cmd_farshadows },
         { "sun", {}, true, "sun [<azimuth deg> <elevation deg> | save | clear]", "this map's sun under ray tracing: print it, move it (azimuth 0 towards +z, 90 towards +x; elevation 9 to 90), save it to Dev Files/sun.txt, or drop the moved one", cmd_sun },
-        { "look", {}, true, "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look from <x> <y> <z> <yaw> <pitch> | look off", "hold the gameplay camera looking at Banjo from a direction, 350 back (here: turn it where it stands), for screenshots; a map change ends it", cmd_look },
+        { "look", {}, true, "look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look from <x> <y> <z> <yaw> <pitch> | look overview [fov] | look off", "hold the gameplay camera looking at Banjo from a direction, 350 back (here: turn it where it stands), for screenshots; a map change ends it", cmd_look },
         { "transform", {}, true, "transform [form]", "the Cheats tab's Transformation row (turns the cheats on)", cmd_transform },
         { "transformmenu", {}, true, "transformmenu [open|close]", "open or shut the Transform Anywhere Menu (WIP tab), as the Transform key does", cmd_transformmenu },
         { "repeat", {}, false, "repeat <n> <command>", "run a command n times", cmd_repeat },

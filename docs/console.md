@@ -1422,7 +1422,7 @@ him again. Needs a player in the game.
 
 ### `look`
 
-Usage: `look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look from <x> <y> <z> <yaw> <pitch> | look off`
+Usage: `look <yaw deg> [pitch deg] [distance] | look at <x> <y> <z> [distance] | look here <yaw> [pitch] | look here at <x> <y> <z> | look from <x> <y> <z> <yaw> <pitch> | look overview [fov] | look off`
 
 Holds the gameplay camera looking at Banjo, for screenshots. `look <yaw> [pitch] [distance]` puts the camera `distance`
 units back from Banjo's head (60 above his feet) against that view direction, so he is in the middle of the picture.
@@ -1436,6 +1436,12 @@ out, the camera is pulled in to just in front of it, with the line test the free
 `look from <x> <y> <z> <yaw> <pitch>` puts the camera at that point with those angles, with no wall test, so it
 can stand above a level's invisible ceiling (Spiral Mountain's is at about 4850) for a view of the whole level.
 
+`look overview [fov]` frames the whole level from straight above. It measures the level as `levelbox` does, puts
+the camera over the middle of that box looking down (yaw 0, so +x is to the right), and raises it until every point
+of the level's ground is in the picture, each at its own height (a tall level's low ground looks smaller from above). The game draws nothing about 30000 units from the camera, so a level too large for play's 40-degree
+field of view at that height gets a wider one, up to 120 degrees. With `fov` given, that field of view is kept and the
+height worked out from it. `look off`, any other `look` or a map change gives the field of view back to the game.
+
 `look here <yaw> [pitch]` and `look here at <x> <y> <z>` turn the camera where it stands instead, with no distance and
 no wall test. It prints where the camera is and the angles. `look off` gives the camera back to the game.
 
@@ -1448,6 +1454,7 @@ look 0 -20
 look 90 -20 500
 look at 1200 150 -340
 look here 180 0
+look overview
 look off
 ```
 
@@ -1551,6 +1558,33 @@ sun clear
 ```
 
 Catch: the sun is sent again on the next game frame, so wait a frame before a screenshot. Needs a file loaded.
+
+### `levelbox`
+
+Usage: `levelbox [save]`
+
+Measures the current level with the game's own collision and prints its extent. Rays are cast straight down from
+20000 above Banjo to 20000 below him, every 800 units on a grid reaching 40000 each way from him (101 x 101 rays).
+Each keeps the highest ground under it; a surface facing down, such as an invisible ceiling over the level, is
+stepped past. The level is the ground joined to the ground under Banjo, with gaps of up to three grid steps (2400
+units) allowed, so Cloud Cuckooland's floating pieces count and ground well away from them does not. The box is that
+ground, a grid step wider each way (a cliff's edge falls between rays), and is kept for the map until it changes.
+`look overview` frames on it, and the height grid it keeps (`include/tooie_level_box.h`) is there for a level map.
+
+`levelbox save` also writes the height grid as `logs/levelbox_<map>.pgm`, a greyscale picture with one pixel a grid
+point and +z down: the level's ground from dark (low) to white (high), other ground dark grey, no ground black.
+
+```
+levelbox
+levelbox save
+```
+
+It prints the box as `map 0x<map>: x <min> to <max>, y <min> to <max>, z <min> to <max>`, then how far across it is
+and how many grid points had ground joined to Banjo's.
+
+Catch: only surfaces with collision count. A skybox or a far backdrop has none and is left out, which suits an
+overview, but scenery Banjo can never touch is left out too. Banjo must stand on or near the level's ground: the
+ground point nearest him, up to six grid steps away, is where the joining starts.
 
 ### `farshadows`
 
