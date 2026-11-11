@@ -769,7 +769,7 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..542304c 100644
+index 3227ab1..b80bdcf 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,12 +4,30 @@
@@ -1250,11 +1250,13 @@ index 3227ab1..542304c 100644
      }
  
      void PresentQueue::threadLoop() {
-@@ -449,23 +748,66 @@ namespace RT64 {
+@@ -449,23 +748,68 @@ namespace RT64 {
          uint32_t displayTimingRate = UINT32_MAX;
          const bool displayTiming = ext.device->getCapabilities().displayTiming;
          bool swapChainValid = !ext.swapChain->needsResize();
 +        bool vsyncApplied = true;
++        // Banjo-Tooie: when a present last reached the screen (see longestUnshown below).
++        auto lastShownTime = std::chrono::steady_clock::now();
          while (presentThreadRunning) {
 +            // Banjo-Tooie: the window can lose its surface (an Android app in the background); presents are dropped then.
 +            const bool surfaceHeld = threadSyncSurface(swapChainValid);
@@ -1283,17 +1285,17 @@ index 3227ab1..542304c 100644
 +                    // queued (WaitForPresentBacklog) and this thread has just taken the older, so a skip on any newer one
 +                    // dropped every other frame whenever the renderer was the limit (175 FPS and up showed about 60 with the game at 146).
 +                    skipPresent = (((writeCursor - threadCursor + int(presents.size())) % int(presents.size())) >= 2);
-+                }
-+            }
-+
+                 }
+             }
+ 
 +            if (repaintDue) {
 +                if (surfaceHeld) {
 +                    std::unique_lock<std::mutex> threadLock(threadMutex);
 +                    threadRepaint(swapChainValid);
-                 }
++                }
 +                continue;
-             }
- 
++            }
++
              if (processCursor >= 0) {
                  std::unique_lock<std::mutex> threadLock(threadMutex);
 -                const bool needsResize = ext.swapChain->needsResize() || !swapChainValid;
@@ -1322,7 +1324,7 @@ index 3227ab1..542304c 100644
                  if (needsResize) {
                      ext.presentGraphicsWorker->commandList->begin();
                      ext.presentGraphicsWorker->commandList->end();
-@@ -489,7 +831,7 @@ namespace RT64 {
+@@ -489,7 +833,7 @@ namespace RT64 {
                      ext.sharedResources->setSwapChainRate(std::min(ext.appWindow->getRefreshRate(), displayTimingRate));
                  }
  
@@ -1331,11 +1333,19 @@ index 3227ab1..542304c 100644
                      uint32_t newDisplayTimingRate = ext.swapChain->getRefreshRate();
                      if (newDisplayTimingRate == 0) {
                          newDisplayTimingRate = UINT32_MAX;
-@@ -501,16 +843,19 @@ namespace RT64 {
+@@ -501,23 +845,44 @@ namespace RT64 {
                      }
                  }
  
 -                skipPresent = skipPresent || ext.swapChain->isEmpty();
++                // Banjo-Tooie: a present skipped only for the backlog is shown anyway when none has been shown for 50 ms. The game
++                // waits at most 100 ms for the backlog to go down, so a renderer slower than that (Jolly Roger's Lagoon seen whole from
++                // above at 4K with ray tracing) always had two newer presents queued: every one was skipped, and nothing reached the
++                // screen for minutes, screenshots included, which are taken as a present is shown.
++                static constexpr auto longestUnshown = std::chrono::milliseconds(50);
++                if (skipPresent && ((std::chrono::steady_clock::now() - lastShownTime) >= longestUnshown)) {
++                    skipPresent = false;
++                }
 +                skipPresent = skipPresent || !surfaceHeld || ext.swapChain->isEmpty();
  
                  Present &present = presents[processCursor];
@@ -1352,8 +1362,9 @@ index 3227ab1..542304c 100644
                      skipInterpolation();
                      notifyPresentId(present);
                  }
-@@ -518,6 +863,15 @@ namespace RT64 {
+                 else {
                      threadPresent(present, swapChainValid);
++                    lastShownTime = std::chrono::steady_clock::now();
                  }
  
 +                // Kept for repaints: the VI only (the framebuffer writes were done above, and the slot can be reused).
@@ -1368,7 +1379,7 @@ index 3227ab1..542304c 100644
                  if (!present.paused) {
                      if (!present.fbOperations.empty()) {
                          const std::scoped_lock lock(screenFbChangePoolMutex);
-@@ -528,6 +882,7 @@ namespace RT64 {
+@@ -528,6 +893,7 @@ namespace RT64 {
                      threadAdvanceBarrier();
                  }
  
