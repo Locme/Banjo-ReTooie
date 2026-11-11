@@ -4717,7 +4717,10 @@ float TracedHalfShadow(int2 pixel, float3 center, float3 normal) {
 
 float3 TracedHalfBeams(int2 pixel) {
     const int2 halfSize = TracedHalfSize();
-    const float2 textureSize = float2(halfSize.x, halfSize.y * 3);
+    // The whole target, four bands tall (the fourth each texel's distance, for Ray traced denoising): with three here the
+    // taps landed in the wrong rows once it grew, partly in the lamps' band, which showed as a glow cut off along a
+    // straight edge at Half resolution.
+    const float2 textureSize = float2(halfSize.x, halfSize.y * 4);
     // Kept inside the lower half, so the upper half's texels never blend in.
     // Four bilinear taps half a texel apart: a 3x3 tent, which weighs the Bayer pattern's alternate texels equally so it
     // smooths out instead of showing as a mesh.
