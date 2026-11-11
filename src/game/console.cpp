@@ -50,6 +50,7 @@
 #include "tooie_vram_log.h"
 #include "tooie_level_box.h"
 #include "tooie_sun_control.h"
+#include "tooie_day_night.h"
 
 // rt64-ext (rt64_scene_effects.cpp), for farshadows.
 namespace RT64 {
@@ -2718,7 +2719,8 @@ void cmd_sun(Ctx& c) {
     bool by_hand = false;
     if (c.w.size() == 1) {
         if (tooie::sun_control::get(map, az, el, by_hand)) print(format("map %X sun: azimuth %.1f, elevation %.1f (%s)", map, az, el, by_hand ? "moved, not saved" : "from sun.txt"));
-        else print(format("map %X has no sun of its own here (the built-in table's or RT64's)", map));
+        else if (tooie::day_night::built_in_sun(map, az, el)) print(format("map %X sun: azimuth %.1f, elevation %.1f (built in)", map, az, el));
+        else print(format("map %X has no sun of its own here (RT64's)", map));
         return;
     }
     const std::string word = lower(c.w[1]);

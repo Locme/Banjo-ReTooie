@@ -47,6 +47,8 @@ namespace tooie::day_night {
     // horizon. While the cycle is off or the map is not one that cycles, the sun moved with Move Sun or saved in
     // sun.txt for the map (sun_control.cpp); false when there is none: keep your own light then.
     bool sun_direction(float out[3]);
+    // The map's built-in sun (L's picks from the sun sweep) as azimuth and elevation in degrees; false for a map without one.
+    bool built_in_sun(uint16_t map, float& azimuth, float& elevation);
     // How much of the cycle's mist shows now, 0 to 1 (0 while the cycle is off in the level): the Mist setting times how
     // much of the morning or night it is. volumetric.cpp draws it as Volumetric Mist.
     float mist_amount();

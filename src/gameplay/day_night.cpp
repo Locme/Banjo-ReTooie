@@ -94,18 +94,39 @@ namespace {
         { 1.00f, { 0.38f, 0.44f, 0.68f } },
     };
 
-    // Where the sun stands in a level while the cycle is off: a unit vector towards it. The cycle's path is turned
+    // Where the sun stands in a level while the cycle is off (map_sun turns it into a unit vector towards it). The cycle's path is turned
     // so its noon sun stands the same way, as high. Maps not listed keep RT64's own sun (fairly low, to one side)
     // and the cycle's usual path (rising in the east, leaning a little to the south).
     struct MapSun {
         uint16_t map;
-        float towards[3];
+        // Compass angle (0 towards +z, 90 towards +x) and height above the horizon, in degrees, as the console's sun command.
+        float azimuth;
+        float elevation;
     };
+    // L's picks of 2026-11-11 from the sun sweep: each level shot from straight above at 4K with ray tracing and the
+    // sun in a few places, and the one that lit it best kept (Prison Compound and Glitter Gulch Mine kept none, so they
+    // keep RT64's sun).
     constexpr MapSun map_suns[] = {
-        // Spiral Mountain: high over the mountain seen from Banjo's house, so the sunlight falls on the house (L).
-        { 0xAF, { -0.56f, 0.66f, -0.50f } },
-        // Jinjo Village: high up, so the sun and its shadows reach as much of the level as possible (L).
-        { 0x142, { -0.25f, 0.90f, -0.35f } },
+        { 0xAF, 225.0f, 75.0f },   // Spiral Mountain
+        { 0xB8, 225.0f, 75.0f },   // Mayahem Temple
+        { 0xC4, 315.0f, 75.0f },   // Jade Snake Grove
+        { 0xD6, 90.0f, 75.0f },    // Witchyworld
+        { 0x100, 180.0f, 75.0f },  // Grunty Industries
+        { 0x112, 45.0f, 45.0f },   // Terrydactyland
+        { 0x11A, 315.0f, 45.0f },  // Stomping Plains
+        { 0x127, 0.0f, 45.0f },    // Hailfire Peaks, Lava Side
+        { 0x128, 225.0f, 75.0f },  // Hailfire Peaks, Icy Side
+        { 0x136, 180.0f, 75.0f },  // Cloud Cuckooland
+        { 0x142, 270.0f, 60.0f },  // Jinjo Village
+        { 0x14F, 270.0f, 60.0f },  // Wooded Hollow
+        { 0x152, 90.0f, 75.0f },   // Plateau
+        { 0x154, 270.0f, 75.0f },  // Pine Grove
+        { 0x155, 45.0f, 75.0f },   // Cliff Top
+        { 0x15A, 0.0f, 75.0f },    // Wasteland
+        { 0x15C, 90.0f, 60.0f },   // Quagmire
+        { 0x15D, 315.0f, 75.0f },  // Cauldron Keep
+        { 0x19A, 135.0f, 75.0f },  // Cauldron Keep, Hag 1
+        { 0x1A7, 0.0f, 45.0f },    // Jolly Roger's Lagoon
     };
 
     // The map's own sun, false if it has none: one moved with Move Sun or saved in sun.txt first (sun_control.cpp),
@@ -121,7 +142,12 @@ namespace {
         }
         for (const MapSun& s : map_suns) {
             if (s.map == map) {
-                std::copy(std::begin(s.towards), std::end(s.towards), out);
+                // As sun_control.cpp's to_vector.
+                const float az = s.azimuth * 3.14159265f / 180.0f;
+                const float el = s.elevation * 3.14159265f / 180.0f;
+                out[0] = std::cos(el) * std::sin(az);
+                out[1] = std::sin(el);
+                out[2] = std::cos(el) * std::cos(az);
                 return true;
             }
         }
@@ -614,6 +640,17 @@ void tooie::day_night::tick(uint8_t* rdram) {
                 sounds[0], sounds[1], sounds[2], rain, flash);
         }
     }
+}
+
+bool tooie::day_night::built_in_sun(uint16_t map, float& azimuth, float& elevation) {
+    for (const MapSun& s : map_suns) {
+        if (s.map == map) {
+            azimuth = s.azimuth;
+            elevation = s.elevation;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool tooie::day_night::sun_direction(float out[3]) {

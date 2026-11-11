@@ -1547,7 +1547,8 @@ The current map's sun under ray tracing, the one Move Sun (Controls > Ray Trace 
 <elevation>` moves it, in degrees: azimuth 0 points the sun towards +z and 90 towards +x, and the elevation is its
 height above the horizon, kept between 9 and 90. The move is not saved. `sun save` writes the map's sun to
 `Dev Files/sun.txt`, as Save Sun Location does, and `sun clear` drops the moved sun so the saved or built-in one shows
-again. With no word it prints the map's moved or saved sun.
+again. With no word it prints the map's sun: the moved or saved one, or else the built-in one (L's picks from the sun
+sweep, src/gameplay/day_night.cpp).
 
 ```
 sun 150 60
