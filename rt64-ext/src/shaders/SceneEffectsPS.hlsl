@@ -971,6 +971,11 @@ bool InsideBanjo(float3 world) {
     return (gConstants.rippleAge.w > -1e8f) && (dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f);
 }
 
+// Test aid (TOOIE_RELIGHT_SHADE_VIEW): the traced pass shows the game's shading Relit finds instead of the picture.
+bool RelightShadeView() {
+    return asfloat(gDust.Load(32u + 32u * 16u + 84u)) > 0.5f;
+}
+
 // Relighting: a surface's own colour (own) lit by the sun where it gets through (sunBlocked, from SunShadow), by how
 // squarely the surface faces it, and by the sky from above (the ground's bounce from below). See Relit.
 float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float sunBlocked) {
@@ -997,11 +1002,24 @@ float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float su
 }
 
 #ifndef RAY_TRACED
-// Relighting without ray tracing: there is no ray to read the surface's texture, so the game's shading is taken as its
-// usual (0.85, what the traced version falls back on where the texture can't tell it) and the sun shadow map's shadows
-// light it again. The game's own painted shading stays under it.
+// Relighting without ray tracing: there is no ray to read the surface's texture, so the game's shading is guessed from the
+// picture round the pixel: 1.5 times the square root of its brightness averaged over about a hundredth of the screen's
+// width, kept within what Traced Relighting keeps it to. Fitted to Traced Relighting's own shading in 24 views of eight
+// outdoor levels (2026-11-11), it was off by about a fifth on a typical pixel, against a third for the traced version's
+// fallback (0.85) used everywhere: the game paints dim corners and shaded sides darker, and they are darker in the picture.
+// The sun shadow map's shadows then light it again.
 float3 Relit(int2 pixel, float3 center, float3 normal, float3 scene, float sunBlocked) {
-    return RelitLight(pixel, center, normal, scene / 0.85f, sunBlocked);
+    const float3 luma = float3(0.299f, 0.587f, 0.114f);
+    const float2 uv = (float2(pixel) + 0.5f) / gConstants.projection.zw;
+    const float2 step = float2(0.012f, 0.012f * gConstants.projection.z / gConstants.projection.w);
+    float around = 0.0f;
+    [unroll] for (int y = -1; y <= 1; y++) {
+        [unroll] for (int x = -1; x <= 1; x++) {
+            around += dot(gColorHalf.SampleLevel(LinearSampler, uv + float2(x, y) * step, 0).rgb, luma);
+        }
+    }
+    const float shade = clamp(1.5f * sqrt(max(around / 9.0f, 1e-3f)), 0.45f, 1.5f);
+    return RelitLight(pixel, center, normal, scene / shade, sunBlocked);
 }
 #endif
 
@@ -1240,7 +1258,7 @@ float4 RayTileTexel(RDPTile tile, GPUTile gpuTile, int2 texel) {
 float3 Relit(int2 pixel, float3 center, float3 normal, float3 scene, float sunBlocked) {
     float3 albedo;
     if (!SurfaceAlbedo(center, albedo)) {
-        return scene;
+        return RelightShadeView() ? float3(0.0f, 0.0f, 0.0f) : scene;
     }
     const float3 luma = float3(0.299f, 0.587f, 0.114f);
     // The game's shading is only the brightness between the texture and the picture when both have the same colour.
@@ -1253,6 +1271,10 @@ float3 Relit(int2 pixel, float3 center, float3 normal, float3 scene, float sunBl
     const float hueGap = length(scene / sceneLuma - albedo / albedoLuma);
     const float trust = saturate(1.0f - (hueGap - 0.15f) * 2.5f);
     const float shade = lerp(0.85f, clamp(sceneLuma / albedoLuma, 0.45f, 1.5f), trust);
+    if (RelightShadeView()) {
+        // Red: the shading over 2 (unclamped, up to 2); green: how far the hue lets it be trusted; blue: read.
+        return float3(saturate(sceneLuma / albedoLuma * 0.5f), trust, 1.0f);
+    }
     return RelitLight(pixel, center, normal, scene / shade, sunBlocked);
 }
 
@@ -5754,6 +5776,12 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         // Ray Tracing Material Pick Mode: the albedo tints the surface before anything lights it. A metal has no diffuse
         // colour of its own, only what it reflects (below).
         scene *= DiffuseAlbedo(pbr);
+#ifdef RAY_TRACED
+        // At Traced Relighting under 50 the view shows the game's own picture instead, to compare the shading with.
+        if (RelightShadeView()) {
+            return float4((RayRelight() < 0.5f) ? scene : ((relight > 0.0f) ? Relit(pixel, center, normal, scene, sunBlocked) : 0.0f), 0.0f);
+        }
+#endif
         if (relight > 0.0f) {
             scene = lerp(scene, Relit(pixel, center, normal, scene, sunBlocked), relight);
         }

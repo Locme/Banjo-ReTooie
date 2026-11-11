@@ -528,8 +528,8 @@ their texture is drawn.
   graphics cards and phones without it. The sun and the sky light the level
   again from the sun shadow map: ground facing the sun is brighter, the side
   turned from it and what is in shadow darker. With no rays to read each
-  texture, the game's painted shading stays under it, so it is darker and less
-  even than Traced Relighting. Needs Sun shadows on; outdoors only. With Ray
+  texture, the game's painted shading is guessed from the brightness round each
+  spot, so it comes close to Traced Relighting but is a little darker. Needs Sun shadows on; outdoors only. With Ray
   tracing on, Traced Relighting is used instead. 0 to 100. Applies at once.
   Default: 0 (off).
 - **Window Light Beams** (Graphics, Vanilla Enhancements): see-through beams of light, shaped like their windows,

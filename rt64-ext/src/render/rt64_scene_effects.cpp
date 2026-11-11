@@ -3517,8 +3517,9 @@ namespace RT64 {
             bloomPass(tr.bloomCombineSet.get(), tr.bloomTexture[2].get(), 4, bloomWidth, bloomHeight, 6.0f);
         }
 
-        // The scene at half size for the bounce light and SSGI (BloomPS pass 8).
-        if (((settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f)) && (source != nullptr)) {
+        // The scene at half size for the bounce light and SSGI (BloomPS pass 8), and for Relighting without ray tracing, which
+        // guesses the game's shading from the brightness round each pixel.
+        if (((settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (relightPercent.load() > 0)) && (source != nullptr)) {
             GpuSectionScope timed(WorkloadGpuSections(), GpuSection::Bloom, commandList);
             const uint32_t halfWidth = std::max(colorTarget->width / 2, 1U);
             const uint32_t halfHeight = std::max(colorTarget->height / 2, 1U);
@@ -3885,6 +3886,9 @@ namespace RT64 {
             }
             dust[3] = UpscalerNoiseOffset();
             dust[DustRelightOffset / 4] = float(relightPercent.load()) / 100.0f;
+            // Test aid: TOOIE_RELIGHT_SHADE_VIEW=1 shows the game's shading Traced Relighting finds (RelightShadeView).
+            static const bool shadeView = (getenv("TOOIE_RELIGHT_SHADE_VIEW") != nullptr);
+            dust[DustRelightOffset / 4 + 1] = shadeView ? 1.0f : 0.0f;
             if (denoise) {
                 // Denoising needs the rays to change from pass to pass, or there is nothing to average: golden-ratio steps of
                 // the noise when no upscaler turns it.

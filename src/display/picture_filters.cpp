@@ -5752,7 +5752,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         relighting_option,
         "Relighting",
-        "Experimental. Traced Relighting without ray tracing, for graphics cards and phones without it: the sun and the sky light the level again from the sun shadow map, so sunlit ground facing the sun is brighter and the side turned from it and what is in shadow darker. Without rays to read each texture, the game's own painted shading stays under it. Needs Sun Shadows on, and only works outdoors. With Ray tracing on, Traced Relighting is used instead. 0 is off.",
+        "Experimental. Traced Relighting without ray tracing, for graphics cards and phones without it: the sun and the sky light the level again from the sun shadow map, so sunlit ground facing the sun is brighter and the side turned from it and what is in shadow darker. Without rays to read each texture, the game's painted shading is guessed from the picture around each spot, so it is close to Traced Relighting but not the same. Needs Sun Shadows on, and only works outdoors. With Ray tracing on, Traced Relighting is used instead. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         light_shafts_option,
