@@ -29,6 +29,7 @@
 #include "tooie_hooks.h"
 #include "tooie_photo_mode.h"
 #include "tooie_rdram.h"
+#include "tooie_water_camera.h"
 
 namespace {
     constexpr uint32_t ctl_camera = 0x00;
@@ -96,6 +97,8 @@ extern "C" void tooie_camera_controller_step(uint8_t* rdram, recomp_context* ctx
     if (!valid_ptr(camera)) {
         return;
     }
+    // The water camera's touches last step are for the picture only; the game's update starts from its own camera.
+    tooie::water_camera::give_back(rdram, camera);
     const bool gameplay = read_half(rdram, ctl + ctl_mode) == mode_dynamic;
     CameraMode* slot = nullptr;
     for (CameraMode& m : modes) {

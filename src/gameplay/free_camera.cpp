@@ -705,8 +705,26 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
         }
     }
     // The water camera's touches (src/gameplay/water_camera.cpp), on the game's camera or the free camera alike.
+    float mid[5] = { 0, 0, 0, 0, 0 };
+    if (valid_ptr(camera)) {
+        for (int i = 0; i < 3; i++) mid[i] = read_float(rdram, camera + cam_pos + 4 * i);
+        mid[3] = read_float(rdram, camera + cam_rot + 0);
+        mid[4] = read_float(rdram, camera + cam_rot + 4);
+    }
     if (gameplay && !paused) {
         tooie::water_camera::apply(rdram, ctx, camera, player_state, banjo);
+    }
+    // TOOIE_CAMTRACE=1: every step of the drawn camera to camtrace.csv: real time, game time step, Banjo, the camera
+    // as the game and the free camera left it, and as the water camera left it, to find steps that jump.
+    static FILE* trace = std::getenv("TOOIE_CAMTRACE") ? std::fopen("camtrace.csv", "w") : nullptr;
+    if (trace != nullptr && valid_ptr(camera) && camera == read_word(rdram, 0x8012D500)) {
+        static const auto t0 = now;
+        std::fprintf(trace, "%.6f,%.6f,%u,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
+            std::chrono::duration<double>(now - t0).count(), read_float(rdram, game_delta_time), player_state, state.active ? 1 : 0,
+            banjo[0], banjo[1], banjo[2], state.pivot_y, mid[0], mid[1], mid[2], mid[3], mid[4],
+            read_float(rdram, camera + cam_pos + 0), read_float(rdram, camera + cam_pos + 4), read_float(rdram, camera + cam_pos + 8),
+            read_float(rdram, camera + cam_rot + 0), read_float(rdram, camera + cam_rot + 4), pos[0], pos[1], pos[2], rot[1]);
+        std::fflush(trace);
     }
     // TOOIE_FREECAM_FADE=<0..1> caps Banjo's fade while the free camera is held, to check the faded look headless.
     static const float forced_fade = std::getenv("TOOIE_FREECAM_FADE") ? std::strtof(std::getenv("TOOIE_FREECAM_FADE"), nullptr) : 1.0f;

@@ -312,12 +312,14 @@ namespace {
 
     // Banjo's states in the water, measured headless in the Spiral Mountain pool (TOOIE_WATER_TRACE=1):
     // 45 floating on the surface, 46 swimming on it, 48 starting a dive, 57 swimming under water, 43 still under water,
-    // 76 plunging in from a fall, 61 coming out of the plunge.
+    // 76 plunging in from a fall. 61 is the long fall itself: it starts in the air 0.85 s into a fall, a thousand
+    // units over the water in Inside the Mountain (measured 2026-11-11), so it counts only once he is in the water.
     bool on_surface(uint32_t state) {
         return (state == 45) || (state == 46);
     }
-    bool in_water_state(uint32_t state) {
-        return on_surface(state) || (state == 48) || (state == 57) || (state == 43) || (state == 76) || (state == 61);
+    bool in_water_state(uint32_t state, bool already_in) {
+        return on_surface(state) || (state == 48) || (state == 57) || (state == 43) || (state == 76) ||
+            (already_in && (state == 61));
     }
 
     // The water's surface while Banjo is in it: his height as he floats on it, or where he went in.
@@ -335,7 +337,7 @@ namespace {
         const bool have_banjo = banjo_height(rdram, banjo);
         // A water state, or still below the surface he went in at: swimming fast, turning and other moves
         // under water have states of their own, which mustn't end it.
-        const bool in_water = have_banjo && (in_water_state(state) || (was_in_water && (banjo < water_surface + 20.0f)));
+        const bool in_water = have_banjo && (in_water_state(state, was_in_water) || (was_in_water && (banjo < water_surface + 20.0f)));
         if (in_water && (!was_in_water || on_surface(state))) {
             water_surface = banjo + water_surface_offset;
         }
@@ -5014,7 +5016,7 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         static std::chrono::steady_clock::time_point last_at{};
         static bool was_swimming = false;
         float pos[3];
-        const bool swimming = in_water_state(state);
+        const bool swimming = in_water_state(state, was_in_water);
         if (water_waves_on && banjo_position(rdram, pos)) {
             const float moved = std::hypot(pos[0] - last_x, pos[2] - last_z);
             const float since = std::chrono::duration<float>(now - last_at).count();
@@ -5102,7 +5104,7 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         const float dt = (last.time_since_epoch().count() == 0) ? 0.0f : std::clamp(std::chrono::duration<float>(now - last).count(), 0.0f, 0.1f);
         last = now;
         if (char_surface.load()) {
-            const bool in_water = in_water_state(state);
+            const bool in_water = in_water_state(state, was_in_water);
             const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
             float pos[3];
             const bool valid = banjo_position(rdram, pos);
@@ -5193,7 +5195,7 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         // (He drips while he is wet and the wet slider is up.)
         // (He drips once he is out of the water, not while he swims, where his fur goes darker instead.)
         static bool swimming_now = false;
-        swimming_now = char_surface.load() && in_water_state(state);
+        swimming_now = char_surface.load() && in_water_state(state, was_in_water);
         const bool forced_wet = char_forced[0].load() > 0.0f;
         RT64::SetSceneCharDrip(forced_wet ? 1.0f : (char_wet_max.load() > 0.0f && !swimming_now ? amounts[0] : 0.0f),
             (float)std::fmod(std::chrono::duration<double>(now.time_since_epoch()).count(), 1000.0), swimming_now ? 1.0f : 0.0f, icy_water ? 1.0f : 0.0f);

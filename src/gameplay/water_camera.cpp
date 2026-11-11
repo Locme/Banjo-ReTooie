@@ -61,12 +61,14 @@ namespace {
     constexpr uint32_t cam_rot = 0x18;           // pitch, yaw, roll in degrees
 
     // Banjo's states in the water (src/display/picture_filters.cpp): 45 floating on the surface, 46 swimming on
-    // it, 48 starting a dive, 57 swimming under water, 43 still under water, 76 plunging in from a fall, 61 coming
-    // out of the plunge. The Talon Torpedo: 343 winding up, 237 shooting along (measured 2026-11-10).
+    // it, 48 starting a dive, 57 swimming under water, 43 still under water, 76 plunging in from a fall. The Talon
+    // Torpedo: 343 winding up, 237 shooting along (measured 2026-11-10). 61 is the long fall: it starts in the air
+    // 0.85 s into a fall, a thousand units over the pool in Inside the Mountain (measured 2026-11-11), so it is no
+    // way into the water. Taking it for one started the splash ease and set the surface in mid-air.
     bool on_surface(uint32_t s) { return s == 45 || s == 46; }
     bool torpedo(uint32_t s) { return s == 237 || s == 343; }
     bool in_water(uint32_t s) {
-        return on_surface(s) || s == 48 || s == 57 || s == 43 || s == 76 || s == 61 || torpedo(s);
+        return on_surface(s) || s == 48 || s == 57 || s == 43 || s == 76 || torpedo(s);
     }
     bool submerged(uint32_t s) { return in_water(s) && !on_surface(s); }
     // Atlantis and the Sea Bottom in Jolly Roger's Lagoon are under water from end to end: no surface.
@@ -80,9 +82,17 @@ namespace {
     // The splash ease: how long, and how fast the camera catches up meanwhile (per second).
     constexpr float splash_time = 0.5f;
     constexpr float splash_rate = 14.0f;
-    // Under water the camera catches up at this rate (per second).
+    // How firmly the splash's eased camera is pulled onto the game's (per second).
+    constexpr float splash_pull_rate = 4.0f;
+    // Under water the camera catches up with Banjo at this rate (per second), and falls at most this far behind
+    // him, so it stays clear of the walls the game's camera keeps it off.
     constexpr float drag_rate = 9.0f;
-    // A camera jump bigger than this in one step is a cut or a teleport, taken at once.
+    constexpr float drag_max_lag = 80.0f;
+    // When an ease ends (the splash is over, Banjo comes up, a toggle goes off) the camera catches up at this rate
+    // instead of jumping to where the game has it, and hands back once it is this close.
+    constexpr float release_rate = 14.0f;
+    constexpr float release_done = 0.5f;
+    // The camera placed by the game moving more than this in one step is a cut or a teleport, taken at once.
     constexpr float cut_distance = 400.0f;
     // The surface bob: height (units) and the time of one rise and fall (seconds); it fades in and out at
     // bob_fade_rate per second.
@@ -128,6 +138,17 @@ namespace {
         bool has_smooth = false;
         float smooth[3] = { 0, 0, 0 };
         float smooth_rot[2] = { 0, 0 };
+        float vel[3] = { 0, 0, 0 };       // the splash's eased camera speed
+        float anchor[3] = { 0, 0, 0 };    // underwater drag: the point that eases after Banjo
+        float anchor_banjo[3] = { 0, 0, 0 };  // where Banjo was last step, for the point to move with him
+        bool has_anchor = false;
+        float last_in[3] = { 0, 0, 0 };   // where the game (or the free camera) placed it last step, to spot cuts
+        bool releasing = false;           // an ease has ended and the camera is catching up
+        // What the camera held before apply() moved it, and what apply() wrote, so give_back() can put the first
+        // back before the game's next camera step.
+        float given[5] = { 0, 0, 0, 0, 0 };
+        float written[5] = { 0, 0, 0, 0, 0 };
+        bool has_written = false;
         int side = 0;                 // waterline: +1 above, -1 below, 0 unknown
         float glide = 0.0f;           // waterline: the jump left to glide out of the crossing
         float bob_fade = 0.0f;
@@ -282,6 +303,9 @@ void tooie::water_camera::apply(uint8_t* rdram, recomp_context* ctx, uint32_t ca
     }
     rot[0] = read_float(rdram, camera + cam_rot + 0);
     rot[1] = read_float(rdram, camera + cam_rot + 4);
+    std::copy(p, p + 3, state.given);
+    state.given[3] = rot[0];
+    state.given[4] = rot[1];
 
     // The water: the surface is where Banjo floats, or where he went in; kept for a second after he leaves it.
     const bool water = in_water(player_state);
@@ -310,35 +334,120 @@ void tooie::water_camera::apply(uint8_t* rdram, recomp_context* ctx, uint32_t ca
     state.was_in_water = water;
     state.splash = std::max(0.0f, state.splash - dt);
 
-    // Smooth splash and underwater drag: the camera eases after where the game put it. A cut or teleport is
-    // taken at once. The angles are written back only while they are eased.
+    // Smooth splash and underwater drag. A cut or teleport (the game's camera itself jumping) is taken at once. How
+    // far the eased camera has fallen behind is no sign of one: taking it for one snapped the camera on long plunges.
+    // The angles are written back only while they are eased.
     bool eased = false;
-    if (!state.has_smooth || distance(p, state.smooth) > cut_distance) {
+    float prev_in[3];
+    std::copy(state.last_in, state.last_in + 3, prev_in);
+    const bool cut = !state.has_smooth || distance(p, state.last_in) > cut_distance;
+    std::copy(p, p + 3, state.last_in);
+    if (cut) {
         std::copy(p, p + 3, state.smooth);
         state.smooth_rot[0] = rot[0];
         state.smooth_rot[1] = rot[1];
+        state.vel[0] = state.vel[1] = state.vel[2] = 0.0f;
         state.has_smooth = true;
+        state.releasing = false;
     }
     else {
+        // The camera's own speed this step, as the game moved it.
+        float in_vel[3] = { 0, 0, 0 };
+        if (dt > 0.0f) {
+            for (int i = 0; i < 3; i++) in_vel[i] = (p[i] - prev_in[i]) / dt;
+        }
         float k = 1.0f;
-        if (on && option(tooie::water_camera_splash_option, true) && state.splash > 0.0f) {
-            // Fades out over the half second, so the camera hands back to the game smoothly.
+        float k_rot = 1.0f;
+        const bool splash = on && option(tooie::water_camera_splash_option, true) && state.splash > 0.0f;
+        if (splash) {
+            // Smooth splash eases the camera's speed, not its place: a sudden stop or lurch at the plunge is spread
+            // out, but a camera that keeps moving (the game's camera still coming down from far above after a long
+            // fall) is not held back, so no lag builds up to be caught up later. A gentle pull keeps it on the
+            // game's camera. It fades out over the half second.
             const float weight = state.splash / splash_time;
-            k = std::min(k, 1.0f - weight * (1.0f - ease(splash_rate, dt)));
+            const float kv = ease(splash_rate, dt);
+            for (int i = 0; i < 3; i++) {
+                state.vel[i] += (in_vel[i] - state.vel[i]) * kv;
+                state.smooth[i] += state.vel[i] * dt;
+                state.smooth[i] += (p[i] - state.smooth[i]) * (1.0f - weight * (1.0f - ease(splash_pull_rate, dt)));
+            }
+            k_rot = 1.0f - weight * (1.0f - ease(splash_rate, dt));
+            state.releasing = true;
         }
-        if (on && option(tooie::water_camera_drag_option, true) && (submerged(player_state) || whole_level_under_water(map))) {
-            k = std::min(k, ease(drag_rate, dt));
+        else {
+            std::copy(in_vel, in_vel + 3, state.vel);
+            if (state.releasing) {
+                // Nothing eases now, but the camera is still behind: it catches up instead of jumping.
+                const bool close = distance(p, state.smooth) < release_done &&
+                    std::fabs(angle_delta(rot[0], state.smooth_rot[0])) < 0.1f &&
+                    std::fabs(angle_delta(rot[1], state.smooth_rot[1])) < 0.1f;
+                if (close) {
+                    state.releasing = false;
+                }
+                else {
+                    // It moves along with the game's camera and closes the gap on top, so a camera still on the
+                    // move doesn't leave it further behind.
+                    for (int i = 0; i < 3; i++) state.smooth[i] += in_vel[i] * dt;
+                    k = ease(release_rate, dt);
+                }
+            }
+            for (int i = 0; i < 3; i++) {
+                state.smooth[i] += (p[i] - state.smooth[i]) * k;
+            }
+            k_rot = k;
         }
-        eased = k < 1.0f;
-        for (int i = 0; i < 3; i++) {
-            state.smooth[i] += (p[i] - state.smooth[i]) * k;
+        eased = state.releasing;
+        state.smooth_rot[0] = wrap(state.smooth_rot[0] + angle_delta(rot[0], state.smooth_rot[0]) * k_rot);
+        state.smooth_rot[1] = wrap(state.smooth_rot[1] + angle_delta(rot[1], state.smooth_rot[1]) * k_rot);
+        if (!state.releasing) {
+            std::copy(p, p + 3, state.smooth);
+            state.smooth_rot[0] = rot[0];
+            state.smooth_rot[1] = rot[1];
         }
-        state.smooth_rot[0] = wrap(state.smooth_rot[0] + angle_delta(rot[0], state.smooth_rot[0]) * k);
-        state.smooth_rot[1] = wrap(state.smooth_rot[1] + angle_delta(rot[1], state.smooth_rot[1]) * k);
     }
     std::copy(state.smooth, state.smooth + 3, p);
     rot[0] = state.smooth_rot[0];
     rot[1] = state.smooth_rot[1];
+
+    // Underwater drag: the camera trails Banjo's own movement. It follows a point that eases after him and keeps
+    // its place and angles relative to that point, so turning the camera (mouse or stick) stays as direct as on
+    // land. Easing the camera's place itself cut across the circle in a turn: at 180 degrees a second its distance
+    // from Banjo fell from 950 to 400 and back, and an uneven mouse made it pump (L, 2026-11-11). The plunge (76) is
+    // the splash's; the drag starts once he swims under. Once it stops, the point catches up with him.
+    const bool drag = on && option(tooie::water_camera_drag_option, true) &&
+        ((submerged(player_state) && player_state != 76) || whole_level_under_water(map));
+    if (cut || !state.has_anchor || distance(banjo, state.anchor) > cut_distance) {
+        std::copy(banjo, banjo + 3, state.anchor);
+        state.has_anchor = true;
+    }
+    else {
+        float off[3];
+        if (drag) {
+            const float ka = ease(drag_rate, dt);
+            for (int i = 0; i < 3; i++) {
+                state.anchor[i] += (banjo[i] - state.anchor[i]) * ka;
+                off[i] = state.anchor[i] - banjo[i];
+            }
+        }
+        else {
+            // Off: the point moves as Banjo moved this step, and any gap left from the drag closes.
+            const float keep = 1.0f - ease(release_rate, dt);
+            for (int i = 0; i < 3; i++) {
+                off[i] = (state.anchor[i] - state.anchor_banjo[i]) * keep;
+                if (std::fabs(off[i]) < 0.05f) off[i] = 0.0f;
+                state.anchor[i] = banjo[i] + off[i];
+            }
+        }
+        const float lag = std::sqrt(off[0] * off[0] + off[1] * off[1] + off[2] * off[2]);
+        if (lag > drag_max_lag) {
+            for (int i = 0; i < 3; i++) {
+                off[i] *= drag_max_lag / lag;
+                state.anchor[i] = banjo[i] + off[i];
+            }
+        }
+        for (int i = 0; i < 3; i++) p[i] += off[i];
+    }
+    std::copy(banjo, banjo + 3, state.anchor_banjo);
 
     // Follow the torpedo: while Kazooie torpedoes (Banjo waits in slot 0, she is in the next) the game's camera
     // stays back by Banjo and she soon swims out of sight. The camera shown (0x8012D500) is put behind her
@@ -505,5 +614,40 @@ void tooie::water_camera::apply(uint8_t* rdram, recomp_context* ctx, uint32_t ca
     if (eased) {
         write_float(rdram, camera + cam_rot + 0, rot[0]);
         write_float(rdram, camera + cam_rot + 4, rot[1]);
+    }
+    for (int i = 0; i < 3; i++) {
+        state.written[i] = read_float(rdram, camera + cam_pos + 4 * i);
+    }
+    state.written[3] = read_float(rdram, camera + cam_rot + 0);
+    state.written[4] = read_float(rdram, camera + cam_rot + 4);
+    state.has_written = true;
+}
+
+void tooie::water_camera::give_back(uint8_t* rdram, uint32_t camera) {
+    // TOOIE_WATERCAM_NO_GIVE_BACK=1 leaves the eased camera for the game to start from, as before 2026-11-11 (A/B).
+    static const bool off = std::getenv("TOOIE_WATERCAM_NO_GIVE_BACK") != nullptr;
+    if (off || !valid_ptr(camera)) {
+        return;
+    }
+    for (State& s : states) {
+        if (s.camera != camera || !s.has_written) {
+            continue;
+        }
+        s.has_written = false;
+        // Only when nothing else has moved the camera since, so it still holds what apply() wrote.
+        for (int i = 0; i < 3; i++) {
+            if (read_float(rdram, camera + cam_pos + 4 * i) != s.written[i]) {
+                return;
+            }
+        }
+        if (read_float(rdram, camera + cam_rot + 0) != s.written[3] ||
+            read_float(rdram, camera + cam_rot + 4) != s.written[4]) {
+            return;
+        }
+        for (int i = 0; i < 3; i++) {
+            write_float(rdram, camera + cam_pos + 4 * i, s.given[i]);
+        }
+        write_float(rdram, camera + cam_rot + 0, s.given[3]);
+        write_float(rdram, camera + cam_rot + 4, s.given[4]);
     }
 }

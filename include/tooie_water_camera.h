@@ -30,6 +30,12 @@ namespace tooie::water_camera {
     // Banjo's state and `banjo` his position. `ctx` is the hook's, for the game's camera line test.
     void apply(uint8_t* rdram, recomp_context* ctx, uint32_t camera, uint32_t player_state, const float banjo[3]);
 
+    // Run at the start of each camera step (func_8010FC38), before the game's camera update. The game starts its
+    // update from the camera it left last step, so this puts back what the game and the free camera placed there,
+    // without apply()'s touches, so they never steer the game's own camera. Nothing is put back if something else
+    // moved the camera. TOOIE_WATERCAM_NO_GIVE_BACK=1 turns it off for an A/B.
+    void give_back(uint8_t* rdram, uint32_t camera);
+
     // True while Banjo is under water and the Look Up Under Water toggle is on: the free camera may then
     // go further below him, to look up at the surface, down to this many degrees of elevation.
     bool look_up_under_water(uint32_t player_state);
