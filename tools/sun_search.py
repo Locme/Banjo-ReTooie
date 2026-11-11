@@ -344,7 +344,8 @@ def list_pngs(folder):
 
 
 def wait_stable(path, timeout):
-    """Waits until a file exists and its size has stopped changing. Returns the path, or None."""
+    """Waits until a file exists, its size has stopped changing and it reads as a whole picture. Returns the path,
+    or None. A 4K shot can stall part-written for longer than the size check waits, so the picture is read through too."""
     deadline = time.monotonic() + timeout
     last, same = -1, 0
     while time.monotonic() < deadline:
@@ -355,7 +356,12 @@ def wait_stable(path, timeout):
         if size > 0 and size == last:
             same += 1
             if same >= 3:
-                return path
+                try:
+                    with Image.open(path) as im:
+                        im.load()
+                    return path
+                except (OSError, SyntaxError):
+                    same = 0
         else:
             same = 0
         last = size
