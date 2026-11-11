@@ -484,16 +484,14 @@ namespace {
         { 0x747f93d5552d7d66, fx(effect_disable) },
         { 0x80c4e4b432d14a7a, fx(effect_disable) },
         { 0xba2dc3d7540c679c, fx(effect_rt_off) },
-        // L's shader_effect_tags.txt of 2026-10-22 (picked by eye in Shader Effects pick mode; ice picks over textures already in ice_textures[] change nothing).
-        { 0x27a85a283bfcca1b, fx(effect_ice) },
+        // L's shader_effect_tags.txt of 2026-10-22 (picked by eye in Shader Effects pick mode). An Ice pick makes a texture reflect in
+        // every map, so ice_textures[]' own (the icy maps only) are left out: Stomping Plains has the cobbled ice floor's texture.
+        // So are Stomping Plains' teal floor textures, which are not ice (L, 2026-11-11: Terrydactyland had ice where it should not).
         { 0x3b2c4518ef211b93, fx(effect_ice) },
         { 0x5a2c1493b3396e7d, fx(effect_ice) },
         { 0x5bcd476977461cd5, fx(effect_ice) },
         { 0x6150d75cc647a56b, fx(effect_ice) },
-        { 0x6714212997654fa0, fx(effect_ice) },
-        { 0x6f5df938113c6c0e, fx(effect_ice) },
         { 0x71a4019c2da79f19, fx(effect_ice) },
-        { 0x725bb85a4d1af3c2, fx(effect_ice) },
         { 0x77bac8f3566781fd, fx(effect_ice) },
         { 0x81ec5fb38e476e90, fx(effect_ice) },
         { 0x8801f7ab563a0132, fx(effect_ice) },
@@ -506,18 +504,12 @@ namespace {
         { 0xa0f07e99c0e8e41f, fx(effect_ice) },
         { 0xa3d644c0cb8db89e, fx(effect_ice) },
         { 0xa581ab5dd620ca76, fx(effect_ice) },
-        { 0xa8db96ed7838b6a5, fx(effect_ice) },
         { 0xaa784ff04bd78757, fx(effect_ice) },
-        { 0xae436b1f52b9b6e6, fx(effect_ice) },
         { 0xba77d20b3aa188f8, fx(effect_ice) },
         { 0xc2dac938089e0303, fx(effect_ice) },
         { 0xc8f57e8d3428e974, fx(effect_ice) },
         { 0xca6ad113aa32c770, fx(effect_ice) },
-        { 0xcea4f61a7e7130be, fx(effect_ice) },
-        { 0xd5787e1378d43620, fx(effect_ice) },
         { 0xdc200769ae049eca, fx(effect_ice) },
-        { 0xe358c019519f2a49, fx(effect_ice) },
-        { 0xe3890f274d878db4, fx(effect_ice) },
         { 0xe64a57ccbea7f5aa, fx(effect_ice) },
         { 0xec9eae2276c1888a, fx(effect_ice) },
         { 0xf2f354eedc1bab3b, fx(effect_ice) },
@@ -4150,10 +4142,9 @@ namespace {
         { 0xffd9d3b61eaec92d, 105, 155, Smooth },
         { 0xfff36d5a5023683c, 7, 144, Bumpy },
         // L's parallax_tags.txt of 2026-10-22: the shapes above changed to his picks (Ice, with their depths and shadows), and
-        // three textures the sweep left out, with the range Parallax pick mode gives an unlisted texture (40 to 190).
+        // a texture the sweep left out, with the range Parallax pick mode gives an unlisted texture (40 to 190). (Stomping
+        // Plains' teal floor was picked as Ice too; it is not ice, and was taken out on 2026-11-11.)
         { 0x31977ffd179d695b, 40, 190, Ice },
-        { 0x6f5df938113c6c0e, 40, 190, Ice },
-        { 0xa8db96ed7838b6a5, 40, 190, Ice },
     };
 
     constexpr float fog_colours[][3] = {
