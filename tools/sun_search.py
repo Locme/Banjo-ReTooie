@@ -60,8 +60,9 @@ DEFAULT_ELEVATIONS = "45,60,75"
 TARGET_W = 480            # pictures are shrunk to this width before scoring
 SHADOW_RATIO = 0.85       # a pixel counts as shadowed when its light is below this share of the baseline
 MIN_LUMA = 0.03           # baseline pixels darker than this are left out of the score
-ENCLOSED_FRAC = 0.01      # every shadow_frac under this after the first suns means the map is enclosed
-ENCLOSED_AFTER = 3        # the enclosed check runs after this many suns
+ENCLOSED_AFTER = 2        # the first two suns stand on opposite sides; the enclosed check runs after them
+ENCLOSED_DIFF = 1.5 / 255 # when no view changes more than this (mean brightness, 0..1) between them, the sun
+                          # does not reach the map (a room or a cave), so its other suns are skipped
 KEEP_BEST = 4             # suns kept per map, chosen to be spread out
 SEP_AZ = 60.0             # two kept suns are apart when their azimuths differ by at least this much...
 SEP_EL = 999.0            # ...or, when closer in azimuth, their elevations differ by this much (off: L wants four directions)
@@ -631,12 +632,17 @@ class Game:
 def take_shot(run, cmds, name, stage, timeout):
     """Runs cmds, then a screenshot. Returns (path in stage, errors). The shot is moved into stage."""
     game = run.game
-    lines = game.run_batch(cmds + ["screenshot"], timeout)
-    errors = [l for l in lines if ERR_RE.match(l)]
-    if errors:
-        return None, errors
-    if len(game.last_shots) != 1:
-        return None, ["the screenshot was not saved (no saved line)"]
+    for attempt in (1, 2):
+        lines = game.run_batch(cmds + ["screenshot"], timeout)
+        errors = [l for l in lines if ERR_RE.match(l)]
+        if errors:
+            return None, errors
+        if len(game.last_shots) == 1:
+            break
+        # Seen once on a room (Mumbo's Skull) from its 19th sun on: the shots stopped coming. Try once more.
+        say("  %s: no saved line for the screenshot%s" % (name, ", trying again" if attempt == 1 else ""))
+        if attempt == 2:
+            return None, ["the screenshot was not saved (no saved line)"]
     src = wait_stable(game.last_shots[0], timeout)
     if src is None:
         return None, ["the screenshot file is missing: %s" % game.last_shots[0]]
@@ -769,6 +775,10 @@ def run_map(run, mid, name):
         return "skipped"
 
     grid = [(az, el) for az in run.azs for el in run.els]
+    # Two opposite suns first, for the enclosed check: ray tracing darkens a room's corners whatever the sun, so the
+    # shadow against the game's lighting can't tell a room; a sun that changes nothing between opposite sides can.
+    first = [(run.azs[0], run.els[0]), ((run.azs[0] + 180) % 360, run.els[0])]
+    grid = [g for g in first if g in grid] + [g for g in grid if g not in first]
     suns = []
     enclosed = False
     tried = 0
@@ -788,9 +798,13 @@ def run_map(run, mid, name):
             say("  sun az %s el %s: skipped (%s)" % (fmt(az), fmt(el), sun["reason"]))
         append_rows(run.results, RESULT_HEADER, rows)
 
-        if tried == ENCLOSED_AFTER:
-            ok_suns = [s for s in suns if s["ok"]]
-            if ok_suns and all(f < ENCLOSED_FRAC for s in ok_suns for f in s["fracs"].values()):
+        if tried == ENCLOSED_AFTER and len(suns) == 2 and all(x["ok"] for x in suns):
+            # Ground views only: from above, a room's roof or the outside of its hut is in the sun.
+            ground = [v for v in run.views if v != "top"] or run.views
+            change = max(float(np.abs(luma(load_small(suns[0]["shots"][v])) - luma(load_small(suns[1]["shots"][v]))).mean())
+                         for v in ground)
+            say("  opposite suns change the picture by %.4f at most" % change)
+            if change < ENCLOSED_DIFF:
                 enclosed = True
                 say("  map looks enclosed: the other suns are skipped")
 
@@ -894,7 +908,6 @@ def main():
     say("%d maps, views %s, %d azimuths x %d elevations" % (len(maps), ",".join(views), len(azs), len(els)))
     backup_graphics(exe_dir)
     try:
-        run.game.start()
         for mid, name in maps:
             key = "%X" % mid
             if args.resume and key in done:
@@ -903,6 +916,9 @@ def main():
             drop_map_rows(run.results, RESULT_HEADER, key)
             drop_map_rows(run.best, BEST_HEADER, key)
             say("map %s %s" % (key, name))
+            # A fresh game for every map: after a few maps a long-running game drew its frames so slowly that the
+            # screenshots took over 20 s each (2026-11-10, from the second map on), while a fresh one is quick.
+            run.game.start()
             try:
                 run_map(run, mid, name)
             except GameLost as e:
@@ -911,8 +927,12 @@ def main():
                 shutil.rmtree(os.path.join(run.out, key), ignore_errors=True)
                 write_map_skip(run, mid, name, "game lost: %s" % e)
                 clean_leftovers(run)
-                say("restarting the game")
-                run.game.start()
+                continue
+            try:
+                run.game.stop()
+            except Exception as e:
+                say("could not stop the game cleanly: %s" % e)
+                run.game.stop(polite=False)
     except GameLost as e:
         say("the run stopped: %s" % e)
     except KeyboardInterrupt:
