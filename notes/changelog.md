@@ -3,6 +3,10 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-11
+
+- Graphics > Ray Tracing: new **Traced relighting** (experimental, off by default). The traced sun and sky light the outdoor levels again in place of the game's painted shading: sunlit ground is brighter, the side turned from the sun and what stands in shadow darker, and traced shadows no longer land on top of painted ones. Rooms, caves, the sky and water are left as they were.
+
 ## 2026-11-10
 
 - Texture dump: RT64's raw dump files are written on a thread of their own, so a slow disk or a virus scan holding a file no longer holds up the game (one file held it for 21 s in a texture sweep). The files are the same as before; stopping the dump or quitting waits for the last ones.

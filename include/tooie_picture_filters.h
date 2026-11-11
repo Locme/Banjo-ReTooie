@@ -85,6 +85,9 @@ namespace tooie::picture_filters {
     // traced Subsurface scattering (leaves and grass, and any texture a Ray Tracing Material pick gives subsurface) (L, 2026-10-22).
     inline const std::string ray_tracing_brdf_option = "ray_tracing_brdf";
     inline const std::string ray_tracing_subsurface_option = "ray_tracing_subsurface";
+    // Traced relighting: the game's own shading is taken out of each surface and the traced sun, sky and bounce light
+    // light it again, 0 (the game's shading) to 100 (all traced).
+    inline const std::string ray_tracing_relighting_option = "ray_tracing_relighting";
     inline const std::string path_tracing_option = "path_tracing";
     inline const std::string path_tracing_bounces_option = "path_tracing_bounces";
     inline const std::string traced_beams_option = "traced_light_beams";

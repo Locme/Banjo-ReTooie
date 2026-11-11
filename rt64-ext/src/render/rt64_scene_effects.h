@@ -337,6 +337,9 @@ namespace RT64 {
     // Banjo-Tooie: Graphics > Ray tracing > Ray traced BRDF (the roughness, 0 to 1, of every traced reflection's GGX lobe; 0
     // keeps the mirror) and Ray traced subsurface scattering (its strength on leaves and grass, 0 to 1; 0 is off).
     void SetSceneRayTracingBrdfSubsurface(float brdfRoughness, float subsurface);
+    // Banjo-Tooie: Graphics > Ray tracing > Traced relighting (0 to 1): how much of the game's own shading the traced sun, sky
+    // and bounce light take over (0 keeps it).
+    void SetSceneRayTracingRelighting(float amount);
     // Banjo-Tooie: Ray tracing noise smoothing, 0 (the raw rays) to 1.
     void SetSceneRayTracingSmoothing(float smoothing);
     // Banjo-Tooie: Path tracing, its bounces after the first (0 off, up to 4).

@@ -502,6 +502,7 @@ namespace RT64 {
     // Ray traced BRDF's roughness and traced subsurface scattering's strength, in percent.
     static std::atomic<uint32_t> rayTracingBrdfPercent{ 0 };
     static std::atomic<uint32_t> rayTracingSubsurfacePercent{ 0 };
+    static std::atomic<uint32_t> rayTracingRelightPercent{ 0 };
     static std::atomic<bool> rayTracingHitColours{ false };
     static std::atomic<bool> rayTracingPlayerShadows{ true };
     // Ray tracing resolution: 0 half, 1 medium, 2 high.
@@ -1319,6 +1320,10 @@ namespace RT64 {
     void SetSceneRayTracingBrdfSubsurface(float brdfRoughness, float subsurface) {
         rayTracingBrdfPercent.store(uint32_t(std::round(std::clamp(brdfRoughness, 0.0f, 1.0f) * 100.0f)));
         rayTracingSubsurfacePercent.store(uint32_t(std::round(std::clamp(subsurface, 0.0f, 1.0f) * 100.0f)));
+    }
+
+    void SetSceneRayTracingRelighting(float amount) {
+        rayTracingRelightPercent.store(uint32_t(std::round(std::clamp(amount, 0.0f, 1.0f) * 100.0f)));
     }
 
     void SetSceneRayMaterials(const uint64_t *hashes, const uint32_t *albedoRoughness, const uint32_t *metalnessEmissive, size_t count) {
@@ -2849,9 +2854,10 @@ namespace RT64 {
             // Whether the player casts traced shadows (Traced shadows of the player).
             // Player shadows off (1), plus 2 for the half-size traced shadows and beams (the indirect pass draws them), plus 4 when the
             // scene has a draw with a ray tracing material (Ray Tracing Material Pick Mode), plus the Ray traced BRDF roughness in
-            // percent times 8 and the subsurface scattering strength in percent times 1024.
+            // percent times 8, the subsurface scattering strength in percent times 1024 and Traced relighting in percent times
+            // 131072 (seven bits each, so the whole word stays below 2^24 and exact as a float).
             mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayTracingHalf.load() ? 2.0f : 0.0f) + (rayScenesPbr.load() ? 4.0f : 0.0f) +
-                float(rayTracingBrdfPercent.load() * 8u + rayTracingSubsurfacePercent.load() * 1024u);
+                float(rayTracingBrdfPercent.load() * 8u + rayTracingSubsurfacePercent.load() * 1024u + rayTracingRelightPercent.load() * 131072u);
             // 1 when the last traced scene had leaves or grass (Parallax materials 13 and 7) and the rays use Parallax's materials: only then can
             // traced subsurface scattering find a surface to light without a Ray Tracing Material (RaySubsurfaceScene).
             mapped[10] = (rayScenesSubsurface.load() && rayTracingParallax.load()) ? 1.0f : 0.0f;

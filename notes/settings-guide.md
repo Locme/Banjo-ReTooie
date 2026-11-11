@@ -409,6 +409,16 @@ screen-space Stochastic reflections off) and **Ray traced subsurface scattering*
 (0 to 100: sun and lamp light carried through leaves, with a soft coloured glow
 in their shade).
 
+**Traced relighting** (Graphics > Ray Tracing, 0 to 100, off by default, experimental)
+lights the outdoor levels again with the traced light instead of only darkening
+the game's picture. Where the camera's ray meets a surface it reads the
+surface's texture; how much darker or lighter the picture is than that texture
+is the game's painted shading, which is divided out. The traced sun (by how
+squarely the surface faces it, and only where its rays get through) and the sky
+then light it again. Sunlit ground comes out brighter, and the side turned away
+and what is in shadow come out darker. Traced shadows no longer land on top of
+painted ones. Rooms and caves, the sky and water keep the game's shading.
+
 **Shader Effects Pick Mode** (Controls, Pick Modes, no default) works the
 same way for the texture effects. A texture can have several effects at once.
 The label lists the texture's effects ("yours" or "built-in") and the effect

@@ -114,7 +114,11 @@ float RayBrdfRoughness() {
     return float((RayHeaderWord() >> 3u) & 127u) / 100.0f;
 }
 float RaySssStrength() {
-    return float(RayHeaderWord() >> 10u) / 100.0f;
+    return float((RayHeaderWord() >> 10u) & 127u) / 100.0f;
+}
+// Traced relighting (0 to 1): how much of the game's own shading the traced sun and sky light take over (Relit).
+float RayRelight() {
+    return float(RayHeaderWord() >> 17u) / 100.0f;
 }
 // Whether the traced scene has anything subsurface scattering lights without a Ray Tracing Material (lights word 10: leaves
 // or grass, with the Parallax materials in use).
@@ -129,6 +133,9 @@ float RayBrdfRoughness() {
     return 0.0f;
 }
 float RaySssStrength() {
+    return 0.0f;
+}
+float RayRelight() {
     return 0.0f;
 }
 #endif
@@ -1074,6 +1081,10 @@ int RayWrap(int texel, int mask, bool mirror) {
 // The texel of a traced draw where a ray met it (geometry, triangle, barycentrics), as the draw samples its first tile
 // (TextureSampler.hlsli's sampleTexture, one texel, no filtering); white where it can't be read (a texture decoded from
 // TMEM as it is drawn).
+float2 RayTileCoord(RDPTile tile, GPUTile gpuTile, float2 uv);
+float4 RayTileTexel(RDPTile tile, GPUTile gpuTile, int2 texel);
+bool RayCutoutSolid(uint geometry, uint primitive, float2 barycentrics);
+
 float4 RayTexel(uint geometry, uint primitive, float2 barycentrics) {
     const uint4 entry = gRayGeometries.Load4(geometry * 16u);
     const uint base = (entry.x + primitive * 3u) * 4u;
@@ -1085,13 +1096,76 @@ float4 RayTexel(uint geometry, uint primitive, float2 barycentrics) {
     if (gpuTileFlagRawTMEM(gpuTile.flags)) {
         return 1.0f;
     }
+    return RayTileTexel(tile, gpuTile, int2(floor(RayTileCoord(tile, gpuTile, uv))));
+}
+
+// Traced relighting: the texture's colour where the camera's ray meets the surface (view space), blended between its
+// four nearest texels as the game's own filtering blends them, so the colour divided out of the picture (Relit) doesn't
+// show the texel grid. White on an untextured draw, where the drawn colour is all shading. False where there is no
+// surface to read or its texture can't be read (one decoded from TMEM as it is drawn).
+bool SurfaceAlbedo(float3 center, out float3 albedo) {
+    albedo = 1.0f;
+    const float distance = length(center);
+    if ((distance < 10.0f) || !RayTexturesOn()) {
+        return false;
+    }
+    RayDesc ray;
+    ray.Origin = ViewToWorldPoint(center * (1.0f - 6.0f / distance));
+    ray.Direction = ViewToWorldDirection(center / distance);
+    ray.TMin = 0.0f;
+    ray.TMax = 12.0f + distance * 0.004f;
+    // Through a cut-out's or see-through draw's clear texels to what is drawn behind them, as the picture shows it.
+    RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
+    while (query.Proceed()) {
+        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
+            continue;
+        }
+        const uint candidate = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
+        if (RayCutoutSolid(candidate, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
+            query.CommitNonOpaqueTriangleHit();
+        }
+    }
+    if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+        return false;
+    }
+    const uint geometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
+    if ((RayGeometryFlags(geometry) & 2u) == 0u) {
+        return true;
+    }
+    const uint4 entry = gRayGeometries.Load4(geometry * 16u);
+    const uint base = (entry.x + query.CommittedPrimitiveIndex() * 3u) * 4u;
+    const uint3 v = uint3(gRayIndices.Load(base), gRayIndices.Load(base + 4u), gRayIndices.Load(base + 8u));
+    const float2 barycentrics = query.CommittedTriangleBarycentrics();
+    const float2 uv = asfloat(gRayTexcoords.Load2(v.x * 8u)) * (1.0f - barycentrics.x - barycentrics.y) +
+        asfloat(gRayTexcoords.Load2(v.y * 8u)) * barycentrics.x + asfloat(gRayTexcoords.Load2(v.z * 8u)) * barycentrics.y;
+    const RDPTile tile = gRayRDPTiles[entry.y];
+    const GPUTile gpuTile = gRayGPUTiles[entry.y];
+    if (gpuTileFlagRawTMEM(gpuTile.flags)) {
+        return false;
+    }
+    const float2 coord = RayTileCoord(tile, gpuTile, uv) - 0.5f;
+    const int2 corner = int2(floor(coord));
+    const float2 f = coord - floor(coord);
+    const float4 top = lerp(RayTileTexel(tile, gpuTile, corner), RayTileTexel(tile, gpuTile, corner + int2(1, 0)), f.x);
+    const float4 bottom = lerp(RayTileTexel(tile, gpuTile, corner + int2(0, 1)), RayTileTexel(tile, gpuTile, corner + int2(1, 1)), f.x);
+    albedo = lerp(top, bottom, f.y).rgb;
+    return true;
+}
+
+// Where in a tile's texels a texture coordinate falls, as TextureSampler.hlsli's sampleTexture works it out.
+float2 RayTileCoord(RDPTile tile, GPUTile gpuTile, float2 uv) {
     float2 coord = uv * float2(tile.shifts, tile.shiftt);
     if (gpuTileFlagShiftedByHalf(gpuTile.flags)) {
         coord += 0.5f;
     }
     coord *= gpuTile.tcScale;
     coord -= (float2(tile.uls, tile.ult) * gpuTile.ulScale) / 4.0f;
-    int2 texel = int2(floor(coord));
+    return coord;
+}
+
+// One texel of a tile, clamped, mirrored and wrapped by the tile's masks as clampWrapMirrorSample does.
+float4 RayTileTexel(RDPTile tile, GPUTile gpuTile, int2 texel) {
     const float2 tcScale = gpuTile.tcScale;
     // Clamp (2), mirror (1) and wrap by the tile's masks, as clampWrapMirrorSample does.
     if ((tile.cms & 2) != 0) {
@@ -1104,6 +1178,48 @@ float4 RayTexel(uint geometry, uint primitive, float2 barycentrics) {
     texel.y = RayWrap(texel.y, int(round(tile.maskt * tcScale.y)), (tile.cmt & 1) != 0);
     texel = int2((uint2(texel) & gpuTile.texelMask) + gpuTile.texelShift);
     return gRayTextures[NonUniformResourceIndex(gpuTile.textureIndex)].Load(int3(texel, 0));
+}
+
+// Traced relighting: the surface lit again by the traced light instead of the game's. The game's shading here is how
+// much brighter or darker the picture is than the surface's own texture; divided out, what is left is the surface's own
+// colour (keeping the tints the game painted on it), which the sun lights where its rays get through (sunBlocked, from
+// SunShadow), by how squarely the surface faces it, and the sky lights from above (the ground's bounce from below).
+float3 Relit(int2 pixel, float3 center, float3 normal, float3 scene, float sunBlocked) {
+    float3 albedo;
+    if (!SurfaceAlbedo(center, albedo)) {
+        return scene;
+    }
+    const float3 luma = float3(0.299f, 0.587f, 0.114f);
+    // The game's shading is only the brightness between the texture and the picture when both have the same colour.
+    // Where they don't (a grey texture the draw tints, like the flight pad's blue and red), the colour comes from the
+    // draw and not from the texture, so the ratio says nothing about the shading: there the shading is taken as the
+    // game's usual (0.85) instead. Either way it is kept within what the game paints (dividing by a small one turned
+    // the flight pad cyan and yellow).
+    const float sceneLuma = max(dot(scene, luma), 1e-3f);
+    const float albedoLuma = max(dot(albedo, luma), 0.03f);
+    const float hueGap = length(scene / sceneLuma - albedo / albedoLuma);
+    const float trust = saturate(1.0f - (hueGap - 0.15f) * 2.5f);
+    const float shade = lerp(0.85f, clamp(sceneLuma / albedoLuma, 0.45f, 1.5f), trust);
+    const float3 own = scene / shade;
+    // Smoothed over a few pixels of the same surface (more at higher resolutions), so the low-poly level's faces don't
+    // show in the sun's shading, and wrapped a little round the side turned away, so a ridge between two faces turns
+    // from lit to shaded softly instead of along a line.
+    const float3 smooth = SmoothedNormal(pixel, center, normal, max(3, int(gConstants.projection.w / 270.0f)));
+    const float facing = saturate((dot(smooth, normalize(gConstants.sun.xyz)) + 0.25f) / 1.25f);
+    const float skyward = dot(smooth, normalize(gConstants.worldY.xyz)) * 0.5f + 0.5f;
+    const float3 sky = lerp(float3(0.30f, 0.27f, 0.24f), float3(0.42f, 0.47f, 0.56f), skyward);
+    const float3 sun = float3(1.0f, 0.95f, 0.86f) * 0.9f;
+    // The day and night cycle's light: its brightest channel dims the sun and the sky (its colour is already in the picture).
+    float3 tint;
+    const float daylight = DayTint(tint) ? max(tint.r, max(tint.g, tint.b)) : 1.0f;
+    const float3 lit = own * (sky + sun * (facing * (1.0f - sunBlocked))) * daylight;
+    // A soft shoulder on the brightness above three quarters, so sunlit snow and sand roll off towards white instead of
+    // clipping flat. On the brightness and not each channel, so a bright colour keeps its hue (per channel, sunlit grass
+    // went neon).
+    const float brightness = dot(lit, luma);
+    const float over = max(brightness - 0.75f, 0.0f);
+    const float rolled = min(brightness, 0.75f) + over / (1.0f + over * 4.0f);
+    return min(lit * (rolled / max(brightness, 1e-4f)), 1.0f);
 }
 
 // Whether a traced hit is Banjo (whoever is played): a model's triangle (SceneRayDrawModel) in a wide capsule round him.
@@ -5246,7 +5362,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
     const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
     // Eye adaptation also draws the scene itself.
-    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (VolBits() != 0u) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f) || (PointLampCount() > 0u)) && (gConstants.view.x < 0.5f);
+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (VolBits() != 0u) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f) || (RayRelight() > 0.0f) || (PointLampCount() > 0u)) && (gConstants.view.x < 0.5f);
 
     if (depth >= 0.99999f) {
         // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -5320,6 +5436,16 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     const bool reflections = (SsrStrength() > 0.0f) && redraw && ReflectiveAt(pixel, depth);
 #endif
     const bool sunShadows = (gConstants.shadows.x > 0.0f) && (gConstants.view.x < 1.5f);
+    // Traced relighting: how much of the game's shading the traced light takes over here (not the sky, nor water, whose
+    // colour is the water's and not its surface's), and how much of the sun is blocked (SunShadow).
+    float relight = 0.0f;
+    float sunBlocked = 0.0f;
+#ifdef RAY_TRACED
+    float waterAt;
+    if (redraw && (depth < 0.99999f) && !LoadAnyWater(pixel, waterAt)) {
+        relight = RayRelight();
+    }
+#endif
     // The surface's position and normal once for all of them (the normal reads four more depths).
     float3 center = 0.0f;
     float3 normal = float3(0.0f, 0.0f, 1.0f);
@@ -5332,9 +5458,15 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 #endif
     // Point Lights: the lamps light the surface where the pass draws the scene itself.
     const bool pointLamps = redraw && (PointLampCount() > 0u);
-    if (occlusion || globalIllumination || reflections || sunShadows || lightShadows || pointLamps) {
+    if (occlusion || globalIllumination || reflections || sunShadows || lightShadows || pointLamps || (relight > 0.0f)) {
         center = ViewPosition(pixel, depth);
         normal = ViewNormal(pixel, center);
+#ifdef RAY_TRACED
+        // Not in a room or a cave: there the game's own light is the lamps' and the sun doesn't reach.
+        if ((relight > 0.0f) && Enclosed(ViewToWorldPoint(center + normal * 4.0f))) {
+            relight = 0.0f;
+        }
+#endif
 #ifdef RAY_TRACED
         // Banjo's fur: its tufts' normals turn every pixel, so the traced rays on him were a different few a pixel
         // and crawled as he moved (L, 2026-10-20). There the normal is smoothed over his surface and the traced
@@ -5373,7 +5505,11 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 #ifdef RAY_TRACED
             gSunHalf = HalfTraced() ? 2 : 0;
 #endif
-            keep *= SunShadow(pixel, center, normal, lamp);
+            const float sunKeep = SunShadow(pixel, center, normal, lamp);
+            // SunShadow returns 1 - strength * 0.55 * blocked. Relit lights the surface by what gets through, so the
+            // picture keeps the shadow only as much as it is not relit.
+            sunBlocked = saturate((1.0f - sunKeep) / max(gConstants.shadows.x * 0.55f, 1e-3f));
+            keep *= lerp(sunKeep, 1.0f, relight);
 #ifdef RAY_TRACED
             gSunHalf = 0;
 #endif
@@ -5484,6 +5620,11 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         // Ray Tracing Material Pick Mode: the albedo tints the surface before anything lights it. A metal has no diffuse
         // colour of its own, only what it reflects (below).
         scene *= DiffuseAlbedo(pbr);
+#ifdef RAY_TRACED
+        if (relight > 0.0f) {
+            scene = lerp(scene, Relit(pixel, center, normal, scene, sunBlocked), relight);
+        }
+#endif
         if (gConstants.water.z > 0.0f) {
             // The surface's own colour lit by it, and a little of it straight on, so dark corners take on the
             // colour of what is around them.
