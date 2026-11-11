@@ -236,7 +236,8 @@ float3 SnowCell(int2 cell, float groundY) {
     // belongs to another floor.
     const float touchY = float(int(a) >> 8) / 16.0f;
     const float above = groundY - touchY;
-    if ((above < -80.0f) || (above > 200.0f)) {
+    // (Past a sloped wall's full rise above it, SnowWallRise: another floor's print or bank.)
+    if ((above > 200.0f) || (above < -220.0f)) {
         return 0.0f;
     }
     const float4 spring = FrParams.snowSpring;
@@ -244,7 +245,9 @@ float3 SnowCell(int2 cell, float groundY) {
     const float t = saturate((age - spring.x) / max(spring.y, 1.0f));
     const float back = 1.0f - t * t * (3.0f - 2.0f * t);
     const float bank = float(a & 0x7Fu) / 127.0f * back;
-    if ((a & 0x80u) != 0u) {
+    // (Far above this ground: a print on a floor above, or the top of a trench's sloped wall, whose floor the renderer's
+    // copy raised over the snow's top beside a bank, SnowSlopeWalls in rt64_scene_effects.cpp: only the bank counts.)
+    if (((a & 0x80u) != 0u) || (above < -80.0f)) {
         return float3(0.0f, bank, 0.0f);
     }
     // The print's floor rises as it fills back in.
