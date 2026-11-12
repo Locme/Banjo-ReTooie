@@ -2179,14 +2179,27 @@ namespace RT64 {
             return;
         }
         SnowTouchPlace place = { uint32_t(count), 0.0f, 0.0f, 0.0f, soft };
+        float lo[3] = { FLT_MAX, FLT_MAX, FLT_MAX }, hi[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
         for (size_t i = 0; i < count * 3; i++) {
             place.x += triangles[i * 3 + 0];
             place.y += triangles[i * 3 + 1];
             place.z += triangles[i * 3 + 2];
+            for (int c = 0; c < 3; c++) {
+                lo[c] = std::min(lo[c], triangles[i * 3 + c]);
+                hi[c] = std::max(hi[c], triangles[i * 3 + c]);
+            }
         }
         place.x /= float(count * 3);
         place.y /= float(count * 3);
         place.z /= float(count * 3);
+        // Small loose bits press softly too: the shards an ice ball of Chilly Willy's bursts into, and the like (at most 16
+        // triangles, under 40 units across), which pressed holes all round where each ball landed. Not within 80 units of
+        // Banjo, whose own model may be drawn in small pieces: his feet press in full.
+        const float across = std::max({ hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2] });
+        const float bx = place.x - snowTrail.last[0], by = place.y - snowTrail.last[1], bz = place.z - snowTrail.last[2];
+        if ((count <= 16) && (across < 40.0f) && (bx * bx + by * by + bz * bz > 80.0f * 80.0f)) {
+            place.soft = true;
+        }
         const std::scoped_lock lock(snowTouchMutex);
         if (snowTouchNow.triangles.size() + count * 9 > SnowTouchMost * 9) {
             return;

@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- Graphics > Tessellation and Character Shaders turn their effects off the moment they are switched off, without touching the settings under them. Tessellated Snow: the shards Chilly Willy's ice balls burst into, and other small loose bits, leave only a faint imprint too, instead of holes all round where each ball lands.
 - Tessellated Snow: Chilly Willy's ice balls leave only a faint imprint where they land (a tenth of the snow's depth, was a quarter).
 - Tessellated Snow and Sand keep their trails: a print is no longer lost when something presses the snow 1,280 units away (the trail's grid wraps round), and a map's trail is kept when Banjo dies and starts again, goes in and out of a hut or warps, and is there again when he comes back (the last six maps). Footprints keep their own shape and the snow is smoothed a little less, so the trail shows more detail.
 - Tessellated Snow costs far less on a busy snowfield: shaping the trench walls now takes under a millisecond a frame (it reached several), with the walls a little less gentle than in the last change but softer than before it.
