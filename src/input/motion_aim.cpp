@@ -197,6 +197,33 @@ void tooie::motion_aim::add_options(recomp::config::Config& qol) {
         },
         DirectSpeed::Medium);
     qol.add_option_hidden_dependency(direct_speed_option, direct_option, false);
+    qol.add_bool_option(instant_shooter_view_option, "Instant Shooter View",
+        "In the first-person shooter sections (Targitzan's Temple and the like), the view turns and tilts the moment "
+        "you move the mouse, the gyro or the stick, and stops the moment you stop. Off keeps the game's own view, "
+        "which follows at a capped speed and keeps turning for a moment after a quick flick of the mouse.", true);
+}
+
+// func_808003DC_ncba1p, the first-person camera the shooter hands the view to, at 0x80800424: with its +0x50 flag
+// ($t6) set it turns the view toward where Banjo aims at a capped speed (func_80111410, 120), so a quick flick of the
+// mouse went on turning for about 0.4 s after the mouse stopped (L, 2026-11-12). With the flag clear it puts the view
+// there at once. With Instant Shooter View on, the shooter sections take that path. The option is read a few times a
+// second.
+extern "C" void tooie_shooter_instant_view(uint8_t* rdram, recomp_context* ctx) {
+    (void)rdram;
+    static bool on = true;
+    static std::chrono::steady_clock::time_point read_at{};
+    const auto now = std::chrono::steady_clock::now();
+    if (read_at == std::chrono::steady_clock::time_point{} || now - read_at > std::chrono::milliseconds(250)) {
+        read_at = now;
+        try {
+            on = std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::motion_aim::instant_shooter_view_option));
+        } catch (...) {
+            on = true;
+        }
+    }
+    if (on && tooie::fine_aim::in_shooter()) {
+        ctx->r14 = 0;
+    }
 }
 
 void tooie::motion_aim::note_stick(float* x, float* y) {

@@ -3231,3 +3231,11 @@ text = "tooie_shooter_tilt_begin(rdram, ctx);"
 func = "func_8080682C_bsfirstp"
 before_vram = 0x808068D8
 text = "tooie_shooter_tilt_end(rdram, ctx);"
+
+# Instant Shooter View (src/input/motion_aim.cpp): func_808003DC_ncba1p, the first-person camera, turns the view toward
+# where Banjo aims at a capped speed while its +0x50 flag ($t6) is set; the hook clears $t6 in the shooter sections so the
+# view goes there at once.
+[[patches.hook]]
+func = "func_808003DC_ncba1p"
+before_vram = 0x80800424
+text = "tooie_shooter_instant_view(rdram, ctx);"

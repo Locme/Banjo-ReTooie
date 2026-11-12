@@ -2345,8 +2345,8 @@ void cmd_cam(Ctx& c) {
     const uint32_t camera = tooie::rdram::valid_ptr(ctl) ? read_ram(c.rdram, ctl, 4) : 0;
     if (!tooie::rdram::valid_ptr(camera)) { error("no camera yet"); return; }
     auto f = [&](uint32_t off) { return tooie::rdram::read_float(c.rdram, camera + off); };
-    print(format("camera at %.1f %.1f %.1f, pitch %.2f yaw %.2f roll %.2f, fov %.2f, mode %d", f(0), f(4), f(8), f(0x18), f(0x1C), f(0x20), f(0xE4),
-        (int)(int16_t)read_ram(c.rdram, ctl + 0x16, 2)));
+    print(format("camera at %.1f %.1f %.1f, pitch %.2f yaw %.2f roll %.2f, fov %.2f, mode %d (controller %08X, camera %08X)", f(0), f(4), f(8), f(0x18), f(0x1C), f(0x20), f(0xE4),
+        (int)(int16_t)read_ram(c.rdram, ctl + 0x16, 2), ctl, camera));
 }
 
 // playerfade: holds Banjo at a fade (the one the free camera gives him when it is pulled in close), to check how he

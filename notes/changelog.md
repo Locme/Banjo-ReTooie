@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- First-person shooter sections: QoL > Instant Shooter View (on by default) turns and tilts the view the moment you move the mouse, the gyro or the stick and stops it the moment you stop. The game's own view follows at a capped speed, so a quick flick of the mouse kept it turning for about 0.4 s.
 - Above 30 FPS, Sput Sput (the stone dart heads in Targitzan's Temple) no longer spins several times too fast when you shoot it, and turns toward Banjo at the 30 FPS speed too.
 - Ray traced denoising: no more dotted patches and dotted lines across floors in the ray traced occlusion and bounce light (seen in Targitzan's Temple Lobby and Mayahem Temple, and in the SSGI debug view). The denoiser looked up each spot's last frame in the wrong place, more so towards the picture's edges, and took its history from the wrong surface.
 - First-person shooter sections (Targitzan's Temple and the rest): the view tilts up and down as far as 80 degrees each way, where it stopped at 45 down and 70 up, with the mouse, the gyro and R with the stick alike.

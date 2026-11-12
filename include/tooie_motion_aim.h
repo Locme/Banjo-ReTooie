@@ -21,6 +21,9 @@ namespace tooie::motion_aim {
     inline const std::string direct_option = "direct_analog_aim";
     inline const std::string direct_speed_option = "direct_analog_aim_speed";
     enum class DirectSpeed : uint32_t { Slow, Medium, Fast };
+    // Instant shooter view: in the first-person shooter sections the view turns and tilts all the way to where Banjo
+    // aims each frame, instead of at the game's capped speed, which kept it turning after the mouse stopped.
+    inline const std::string instant_shooter_view_option = "instant_shooter_view";
 
     void add_options(recomp::config::Config& qol);
 

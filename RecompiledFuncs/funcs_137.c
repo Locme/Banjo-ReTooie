@@ -1182,6 +1182,7 @@ RECOMP_FUNC void func_808003DC_ncba1p(uint8_t* rdram, recomp_context* ctx) {
     ctx->r5 = ADD32(ctx->r16, 0X24);
     // 0x80800420: addiu       $a2, $s0, 0xC
     ctx->r6 = ADD32(ctx->r16, 0XC);
+    tooie_shooter_instant_view(rdram, ctx);
     // 0x80800424: beq         $t6, $zero, L_8080043C
     if (ctx->r14 == 0) {
         // 0x80800428: addiu       $a0, $s0, 0xC

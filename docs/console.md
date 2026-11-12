@@ -1296,7 +1296,8 @@ Usage: `cam`
 
 Prints the camera as the frame is drawn from it: its position, its pitch, yaw and roll in degrees, its vertical field
 of view in degrees (camera +0xE4, src/gameplay/field_of_view.cpp) (a positive pitch
-looks up, yaw 0 looks along -z), and the camera controller's mode (2 is the gameplay camera).
+looks up, yaw 0 looks along -z), and the camera controller's mode (2 is the gameplay camera), then the addresses of the camera
+controller and of the camera, for `peek` and `writewatch` (the yaw is at camera +0x1C).
 
 ```
 cam

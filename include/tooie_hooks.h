@@ -206,6 +206,7 @@ int tooie_area_name_hidden(void);
 // The mouse and gyro tilt in the first-person shooter (src/input/motion_aim.cpp).
 void tooie_shooter_tilt_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_shooter_tilt_end(uint8_t* rdram, recomp_context* ctx);
+void tooie_shooter_instant_view(uint8_t* rdram, recomp_context* ctx);
 // Whether photo mode has the players hidden (src/gameplay/photo_mode.cpp).
 int tooie_players_hidden(void);
 // A player's draw alpha, faded while the free camera is pulled in close (src/gameplay/free_camera.cpp).
