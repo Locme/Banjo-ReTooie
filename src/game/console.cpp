@@ -4884,6 +4884,10 @@ void tooie::console::start(int argc, char** argv) {
     std::thread(pregame_thread).detach();
 }
 
+void tooie::console::run(const std::string& line) {
+    enqueue_line(line);
+}
+
 int tooie::console::exit_code() {
     int code = g_exit_code.load();
     return code < 0 ? 0 : code;

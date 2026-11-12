@@ -2,6 +2,7 @@
 #define __TOOIE_CONSOLE_H__
 
 #include <cstdint>
+#include <string>
 
 #include "recomp.h"
 
@@ -14,6 +15,9 @@ namespace tooie::console {
 
     // The exit code for main to return: 1 if any command failed, or the one `quit` was given.
     int exit_code();
+
+    // Queues a line of commands as if typed at the prompt. Safe to call from any thread.
+    void run(const std::string& line);
 
     // Once per game update, on the game thread (tooie_warp_tick), before that update's own work.
     void frame(uint8_t* rdram, recomp_context* ctx);

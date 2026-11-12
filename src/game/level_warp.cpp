@@ -6,9 +6,10 @@
 // src/debug/warp.cpp issues on the game thread at the start of the next frame
 // with the game's own map change (the usual wipe and title card). Warping to
 // the map you are in does nothing. F9 repeats the last warp. Before a save
-// file is being played (launcher, title screen, game select) a pick only shows
-// "Start the game and load a file first". Race Warps moved to Cheats > Replays
-// (src/gameplay/replays.cpp, L 2026-10-17).
+// file is being played (launcher, title screen, game select) a pick hands the
+// console a `warp place <n>`, which loads file 1 first (starting the game from
+// the launcher) and then warps, as the console's own warp does. Race Warps
+// moved to Cheats > Replays (src/gameplay/replays.cpp, L 2026-10-17).
 
 #include <atomic>
 #include <chrono>
@@ -34,6 +35,7 @@
 
 #include "tooie_debug.h"
 #include "tooie_cheats.h"
+#include "tooie_console.h"
 #include "tooie_game.h"
 #include "tooie_hotkeys.h"
 #include "tooie_level_warp.h"
@@ -76,15 +78,23 @@ namespace {
     std::once_flag started;
 
     std::mutex last_mutex;
-    std::optional<Place> last;
+    std::optional<size_t> last;   // the last place warped to, by its place in `places`, for F9
 
-    void warp_to(const Place& place) {
+    // Warps at once while a save file is being played. Before that (the launcher, title screen or file select) the
+    // console's `warp place <n>` loads file 1 first, starting the game from the launcher, and then warps.
+    void warp_to(size_t index) {
+        const Place& place = places[index];
         {
             std::lock_guard lock{last_mutex};
-            last = place;
+            last = index;
         }
-        tooie::debug::request_warp(place.map, place.exit);
-        tooie::toast::show(std::string("Warping to ") + place.name);
+        if (tooie::debug::can_warp()) {
+            tooie::debug::request_warp(place.map, place.exit);
+            tooie::toast::show(std::string("Warping to ") + place.name);
+        } else {
+            tooie::console::run("warp place " + std::to_string(index + 1));
+            tooie::toast::show(std::string("Loading file 1, then warping to ") + place.name);
+        }
     }
 
     bool key_down() {
@@ -97,17 +107,13 @@ namespace {
             std::this_thread::sleep_for(poll_interval);
             bool down = key_down() && (debug_tab_on() || tooie::dev_file_present());
             if (down && !was_down) {
-                std::optional<Place> place;
+                std::optional<size_t> index;
                 {
                     std::lock_guard lock{last_mutex};
-                    place = last;
+                    index = last;
                 }
-                if (place.has_value()) {
-                    if (tooie::debug::can_warp()) {
-                        warp_to(*place);
-                    } else {
-                        tooie::toast::show("Start the game and load a file first");
-                    }
+                if (index.has_value()) {
+                    warp_to(*index);
                 } else {
                     tooie::toast::show("Pick a place in Level warp first");
                 }
@@ -131,7 +137,8 @@ namespace {
 
         Container* row = nullptr;
         const char* group = nullptr;
-        for (const Place& place : places) {
+        for (size_t index = 0; index < std::size(places); index++) {
+            const Place& place = places[index];
             if (group == nullptr || std::string(group) != place.group) {
                 group = place.group;
                 Label* heading = context.create_element<Label>(list, group, LabelStyle::Large);
@@ -142,13 +149,9 @@ namespace {
                 row->set_as_navigation_container(NavigationType::Auto);
             }
             Button* button = context.create_element<Button>(row, place.name, ButtonStyle::Secondary, ButtonSize::Medium);
-            button->add_pressed_callback([place]() {
-                if (!tooie::debug::can_warp()) {
-                    tooie::toast::show("Start the game and load a file first");
-                    return;
-                }
+            button->add_pressed_callback([index]() {
                 recompui::config::close();
-                warp_to(place);
+                warp_to(index);
             });
         }
     }
@@ -190,6 +193,6 @@ bool tooie::level_warp::warp_to_place(size_t index) {
     if (index >= std::size(places)) {
         return false;
     }
-    warp_to(places[index]);
+    warp_to(index);
     return true;
 }
