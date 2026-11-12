@@ -5636,7 +5636,17 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             return float4(IndirectAt(pixel, center, normal).aaa, 0.0f);
         }
         if (gConstants.view.x < 20.5f) {
-            return float4(IndirectAt(pixel, center, normal).rgb * (SsgiStrength() * 2.0f), 0.0f);
+            // What SSGI adds to the picture, four times over so it can be seen: the scene's own colours lit by the bounce
+            // light alone, as the scene pass adds it (below). The light by itself, untextured, read as a blurred, broken
+            // copy of the room (L, 2026-11-12).
+            const float3 light = IndirectAt(pixel, center, normal).rgb;
+            const float3 lit = gColor.Load(int3(pixel, 0)).rgb;
+#ifdef RAY_TRACED
+            const float bright = dot(lit, float3(0.299f, 0.587f, 0.114f));
+            return float4(lit * min(light, 0.6f) * (SsgiStrength() * 8.0f * saturate(1.15f - bright * 1.1f)), 0.0f);
+#else
+            return float4(lit * light * (SsgiStrength() * 8.0f), 0.0f);
+#endif
         }
         const float3 scene = gColor.Load(int3(pixel, 0)).rgb;
 #ifdef RAY_TRACED
