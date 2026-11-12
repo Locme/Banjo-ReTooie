@@ -14,7 +14,7 @@
 namespace {
     bool enabled() {
         try {
-            return std::get<bool>(recompui::config::get_graphics_config().get_option_value(tooie::honeycomb_cap::option));
+            return std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::honeycomb_cap::option));
         } catch (...) {
             return false;
         }

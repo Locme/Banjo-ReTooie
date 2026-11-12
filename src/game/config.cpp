@@ -380,6 +380,28 @@ namespace {
             }
         }
     }
+
+    // Honeycombs Stay moved from the WIP tab (a page of Graphics options, graphics.json) to Gameplay >
+    // Difficulty, a page of General options (L, 2026-11-12): carry a value saved in graphics.json into
+    // general.json once, while general.json has none. Done on the files before the configs load.
+    void move_saved_honeycombs_stay() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        auto load = [&](const std::string& file) {
+            std::ifstream in(dir / file);
+            nlohmann::json json = in ? nlohmann::json::parse(in, nullptr, false) : nlohmann::json();
+            return json.is_object() ? json : nlohmann::json::object();
+        };
+        nlohmann::json general_json = load("general.json");
+        if (general_json.contains(tooie::honeycomb_cap::option)) {
+            return;
+        }
+        const nlohmann::json source = load("graphics.json");
+        if (source.contains(tooie::honeycomb_cap::option) && source[tooie::honeycomb_cap::option].is_boolean()) {
+            general_json[tooie::honeycomb_cap::option] = source[tooie::honeycomb_cap::option];
+            std::ofstream out(dir / "general.json", std::ios::trunc);
+            out << general_json.dump(4);
+        }
+    }
 }
 
 namespace {
@@ -803,6 +825,13 @@ void tooie::init_config() {
         "Minjos Stay Dead",
         "A Minjo you have killed does not come back when you return to its area. Remembered until the game is closed, not in the save file.",
         false);
+    // Moved from the WIP tab to Gameplay > Difficulty (L, 2026-11-12); move_saved_honeycombs_stay carries the
+    // value saved in graphics.json.
+    general.add_bool_option(
+        tooie::honeycomb_cap::option,
+        "Honeycombs Stay",
+        "Health honeycombs that enemies and breakables drop no longer vanish after 20 seconds. The game's limit of 10 on the ground at once stays, and the oldest goes when another drops. Leaving the area clears them. Work in progress.",
+        false);
     // Moved from QOL > Balancing to Gameplay > Difficulty (L, 2026-10-23); move_saved_canary_mary carries the
     // value saved in qol.json.
     general.add_enum_option(
@@ -1066,14 +1095,14 @@ void tooie::init_config() {
     recompui::config::create_page_tab("Gameplay", tooie::gameplay_tab_id, recompui::config::general::id);
     for (const std::string* id : { &tooie::damage::double_damage_option, &tooie::damage::aim_option,
             &tooie::damage::aim_chance_option, &tooie::damage::homing_option, &tooie::damage::strafe_option,
-            &tooie::damage::faster_attacks_option, &tooie::damage::enemy_respawn_option, &tooie::damage::minjos_stay_dead_option, &tooie::canary_mary::mode_option }) {
+            &tooie::damage::faster_attacks_option, &tooie::damage::enemy_respawn_option, &tooie::damage::minjos_stay_dead_option, &tooie::honeycomb_cap::option, &tooie::canary_mary::mode_option }) {
         recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
     }
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Difficulty");
     // Difficulty goes to the top of the Gameplay tab, ahead of Boss Rush (L, 2026-10-23).
     for (const std::string* id : { &tooie::damage::double_damage_option, &tooie::damage::aim_option,
             &tooie::damage::aim_chance_option, &tooie::damage::homing_option, &tooie::damage::strafe_option,
-            &tooie::damage::faster_attacks_option, &tooie::damage::enemy_respawn_option, &tooie::damage::minjos_stay_dead_option, &tooie::canary_mary::mode_option }) {
+            &tooie::damage::faster_attacks_option, &tooie::damage::enemy_respawn_option, &tooie::damage::minjos_stay_dead_option, &tooie::honeycomb_cap::option, &tooie::canary_mary::mode_option }) {
         recompui::config::set_option_display_before(*id, tooie::boss_rush::option);
     }
     // Features and Back-Ports from General (L, 2026-10-23), with their headings. Saves, shaders, Discord and the
@@ -1140,19 +1169,12 @@ void tooie::init_config() {
         "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and lies there until you jump. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
         false);
     graphics.add_bool_option(
-        tooie::honeycomb_cap::option,
-        "Honeycombs Stay",
-        "Health honeycombs that enemies and breakables drop no longer vanish after 20 seconds. The game's limit of 10 on the ground at once stays, and the oldest goes when another drops. Leaving the area clears them. Work in progress.",
-        false);
-    recompui::config::set_option_page(tooie::honeycomb_cap::option, tooie::work_in_progress_tab_id);
-    graphics.add_bool_option(
         tooie::transform_menu::option,
         "Transform Anywhere Menu",
         "The Transform key opens a menu of every form you have unlocked so far in this save. The d-pad or stick picks one, A changes into it, B goes back. While this is on, the Transform key opens the menu instead of Transform Anywhere's change. Work in progress.",
         false);
     recompui::config::set_option_page(tooie::transform_menu::option, tooie::work_in_progress_tab_id);
     recompui::config::set_option_group(tooie::transform_menu::option, "Transform Anywhere Menu");
-    recompui::config::set_option_group(tooie::honeycomb_cap::option, "Honeycombs Stay");
     {
         recompui::config::set_option_page(tooie::dive::option, tooie::work_in_progress_tab_id);
         // Each WIP feature has its own heading, so it is quick to find and test (L, 2026-10-23).
@@ -1486,6 +1508,7 @@ void tooie::init_config() {
     move_saved_hud_placement();
     move_saved_canary_mary();
     move_saved_menu_mouse();
+    move_saved_honeycombs_stay();
     turn_on_saved_smooth_walls();
     split_saved_toon_shading();
     pick_saved_lighting();

@@ -211,6 +211,10 @@ own tab, so they are saved in general.json and apply as soon as they change.
   stays gone. Remembered until the game is closed, not in the save file.
   Default: Original.
 - **Minjos Stay Dead**: the same as Never, for Minjos only. Default: off.
+- **Honeycombs stay (untested, was in WIP until 2026-11-12)**: the health honeycombs that enemies and
+  breakables drop no longer vanish after 20 seconds. The game's own limit of 10
+  on the ground at once stays; the oldest goes when another drops. Leaving the
+  area clears them. Default: off.
 - **Canary Mary races** (was in QOL > Balancing until 2026-10-23): Fair, Easy or Original. In the original she speeds up
   past her normal pace whenever you lead; Fair removes that catch-up, Easy is
   Fair with her pace at 85%. She still slows down when you fall behind.
@@ -239,11 +243,6 @@ options: all of them save in graphics.json.
   Kazooie shows when the game shows her (after the Feathery Flap).
   `TOOIE_DIVE_POSE_TUNE=<file>` replaces the pose rules, lines
   `<bone> <type> <scale> <offset degrees> [set]`.
-
-- **Honeycombs stay (untested)**: the health honeycombs that enemies and
-  breakables drop no longer vanish after 20 seconds. The game's own limit of 10
-  on the ground at once stays; the oldest goes when another drops. Leaving the
-  area clears them. Default: off.
 
 ## Controls: Movement
 
