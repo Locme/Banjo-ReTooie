@@ -23,6 +23,8 @@ namespace tooie::picture_filters {
     enum class Water : uint32_t { Original, Modern, Stylised };
     // Graphics > Ray Tracing > Ray tracing resolution.
     enum class RayResolution : uint32_t { Half, Medium, High };
+    // Graphics > Lighting: the game's own, Relighting (no ray tracing) or Ray tracing; each shows its own settings.
+    enum class Lighting : uint32_t { None, Relighting, RayTracing };
 
     inline const std::string preset_option = "effects_preset";
     // Lighting, Water, Fog (Experimental) toggle: hides the effect options below it (they keep their values).
@@ -65,6 +67,8 @@ namespace tooie::picture_filters {
     inline const std::string ssgi_option = "ssgi";
     inline const std::string ssr_option = "ssr";
     inline const std::string ssr_stochastic_option = "ssr_stochastic";
+    // Graphics > Lighting (L, 2026-11-12): sets ray_tracing_option, which the menu no longer shows, and turns Relighting on.
+    inline const std::string lighting_option = "lighting";
     inline const std::string ray_tracing_option = "ray_tracing";
     inline const std::string ray_tracing_strength_option = "ray_tracing_strength";
     // Graphics > Ray Tracing's reflection sliders (L, 2026-10-21): how much the traced reflections show, on water, and on

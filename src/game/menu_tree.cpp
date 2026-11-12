@@ -77,17 +77,12 @@ void tooie::menu_tree::classify() {
         }
     }
 
-    // Ray Tracing, Reflections, Toon Shading and Free Camera are collapsible menus (L, 2026-10-23): each switch
-    // is an enable switch, and its settings open under it.
+    // Reflections, Toon Shading and Free Camera are collapsible menus (L, 2026-10-23): each switch is an enable
+    // switch, and its settings open under it. Ray Tracing's settings show under Graphics > Lighting when it is set
+    // to Ray Tracing instead (L, 2026-11-12; picture_filters.cpp).
     {
         using namespace tooie::picture_filters;
         const std::vector<std::pair<const std::string*, std::vector<const std::string*>>> groups = {
-            { &ray_tracing_option, { &ray_tracing_strength_option, &ray_tracing_reflections_option,
-                &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option,
-                &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option,
-                &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option,
-                &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option,
-                &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option } },
             { &reflections_section_option, { &ssr_option, &ssr_stochastic_option, &water_reflections_option,
                 &ice_reflections_option } },
             { &toon_section_option, { &toon_characters_option, &toon_world_option } },

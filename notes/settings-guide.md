@@ -530,15 +530,21 @@ their texture is drawn.
   distance, whether on screen or not, so shadows don't come and go as the camera
   turns. Past 6000 shadows get a little blurrier, and higher costs more. Applies
   at once. Default: 3000.
-- **Relighting** (experimental): Traced Relighting without ray tracing, for
+- **Lighting** (Graphics, its own section): how the outdoor levels are lit. **None** keeps the game's own shading;
+  **Relighting** lights them again without ray tracing (below); **Ray Tracing** turns on the ray traced effects
+  (the Ray Tracing settings above). Each choice shows only its own settings under it: Relighting Strength, or all of
+  Ray Tracing's. It replaced the Ray Tracing switch; settings saved with that switch on start at Ray Tracing, and
+  with Relighting above 0 at Relighting. The console's `set ray_tracing on` still works and picks Ray Tracing. On a
+  phone Ray Tracing is greyed out. Applies at once. Default: None.
+- **Relighting Strength** (experimental, shown with Lighting at Relighting): Traced Relighting without ray tracing, for
   graphics cards and phones without it. The sun and the sky light the level
   again from the sun shadow map: ground facing the sun is brighter, the side
   turned from it and what is in shadow darker. With no rays to read each
   texture, the game's painted shading is guessed from the brightness round each
   spot on the same surface, so it comes close to Traced Relighting. What faces down takes on the ground's colour,
   a low sun lights warmer and weaker, and shiny surfaces catch a highlight from it. Needs Sun shadows on; outdoors only. With Ray
-  tracing on, Traced Relighting is used instead. 0 to 100. Applies at once.
-  Default: 0 (off).
+  tracing on, Traced Relighting is used instead. 0 to 100; picking Relighting with it at 0 sets it to 100. Applies
+  at once. Default: 100.
 - **Window Light Beams** (Graphics, Vanilla Enhancements): see-through beams of light, shaped like their windows,
   fall from the windows and light a patch of the floor in Bottles' house, Banjo's house and King Jingaling's throne room,
   like the beams under the windows in Mumbo's Skull. Switching it in one of

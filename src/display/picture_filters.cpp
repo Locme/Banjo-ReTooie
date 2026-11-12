@@ -4607,7 +4607,8 @@ void tooie::picture_filters::apply() {
     sun_shadow_reach = sun_shadows ? shadow_distance : 0.0f;
     sun_shadow_distance_set.store(shadow_distance);
     RT64::SetSceneSunShadowDistance(shadow_distance);
-    RT64::SetSceneRelighting((float)(value<double>(relighting_option, 0.0) / 100.0));
+    const bool relighting = value<uint32_t>(lighting_option, (uint32_t)Lighting::None) == (uint32_t)Lighting::Relighting;
+    RT64::SetSceneRelighting(relighting ? (float)(value<double>(relighting_option, 100.0) / 100.0) : 0.0f);
     send_effect_textures();
     // The Character Shaders switch turns all of the character shaders off; their settings stay as they are.
     const bool character_on = value<bool>(character_section_option, true);
@@ -5220,6 +5221,51 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
+namespace {
+    using namespace tooie::picture_filters;
+
+    // Ray Tracing's own settings, which Graphics > Lighting shows only when it is set to Ray Tracing.
+    const std::string* const ray_tracing_settings[] = { &ray_tracing_strength_option, &ray_tracing_reflections_option,
+        &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option,
+        &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option,
+        &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option,
+        &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option,
+        &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option };
+
+    // An option's value as the menu has it now: the graphics tab keeps a change aside until it is saved.
+    recomp::config::ConfigValueVariant current_value(const std::string& id) {
+        recomp::config::Config& graphics = graphics_config();
+        return graphics.requires_confirmation ? graphics.get_temp_option_value(id) : graphics.get_option_value(id);
+    }
+
+    // Graphics > Lighting and the Ray Tracing switch it replaced say the same thing: picking Ray Tracing turns the
+    // switch on and anything else turns it off, and the console's "set ray_tracing on" or "off" picks Ray Tracing or
+    // None. Picking Relighting with its strength at 0 sets it to 100, so the choice does something. Each side is only
+    // changed when it disagrees, so the two callbacks don't call each other back and forth.
+    void sync_lighting(const std::string& id, const recomp::config::ConfigValueVariant& value) {
+        recomp::config::Config& graphics = graphics_config();
+        try {
+            if ((id == lighting_option) && std::holds_alternative<uint32_t>(value)) {
+                const bool traced = std::get<uint32_t>(value) == (uint32_t)Lighting::RayTracing;
+                if (std::get<bool>(current_value(ray_tracing_option)) != traced) {
+                    graphics.update_option_value(ray_tracing_option, traced);
+                }
+                if ((std::get<uint32_t>(value) == (uint32_t)Lighting::Relighting) && (std::get<double>(current_value(relighting_option)) <= 0.0)) {
+                    graphics.update_option_value(relighting_option, 100.0);
+                }
+            } else if ((id == ray_tracing_option) && std::holds_alternative<bool>(value)) {
+                const uint32_t lighting = std::get<uint32_t>(current_value(lighting_option));
+                if (std::get<bool>(value) && (lighting != (uint32_t)Lighting::RayTracing)) {
+                    graphics.update_option_value(lighting_option, (uint32_t)Lighting::RayTracing);
+                } else if (!std::get<bool>(value) && (lighting == (uint32_t)Lighting::RayTracing)) {
+                    graphics.update_option_value(lighting_option, (uint32_t)Lighting::None);
+                }
+            }
+        } catch (...) {
+        }
+    }
+}
+
 void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     created = true;
 
@@ -5469,6 +5515,18 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Displaced Ground Distance",
         "How far from the camera the ground is displaced, in the game's units. The dips fade out over the last quarter. Further costs more: every displaced floor in reach is cut into fine triangles.",
         2000, 20000, 500, 0, false, 8000);
+    graphics.add_enum_option(
+        lighting_option,
+        "Lighting",
+        "How the outdoor levels are lit. <recomp-color primary>None</recomp-color> keeps the game's own shading. <recomp-color primary>Relighting</recomp-color> lights the level again by the sun and the sky without ray tracing, for graphics cards and phones without it (it needs Sun Shadows on). <recomp-color primary>Ray Tracing</recomp-color> turns on the ray traced effects: reflections, sun and lamp shadows, ambient occlusion, bounce and sky light, found by tracing rays through the level's triangles; it needs the Vulkan renderer and a graphics card with hardware ray tracing, and is heavy on the graphics card. Each choice shows its own settings under it.",
+        {
+            {Lighting::None, "None", "None"},
+            {Lighting::Relighting, "Relighting", "Relighting"},
+            {Lighting::RayTracing, "RayTracing", "Ray Tracing"},
+        },
+        Lighting::None);
+    // The old Ray Tracing switch: Lighting sets it, and it is kept out of the menu (below) but not the console, whose
+    // "set ray_tracing on" still works.
     graphics.add_bool_option(
         ray_tracing_option,
         "Ray Tracing",
@@ -5751,9 +5809,9 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         1500, 20000, 500, 0, false, 3000);
     graphics.add_number_option(
         relighting_option,
-        "Relighting",
-        "Experimental. Traced Relighting without ray tracing, for graphics cards and phones without it: the sun and the sky light the level again from the sun shadow map, so sunlit ground facing the sun is brighter and the side turned from it and what is in shadow darker. Without rays to read each texture, the game's painted shading is guessed from the picture around each spot, so it is close to Traced Relighting but not the same. Needs Sun Shadows on, and only works outdoors. With Ray tracing on, Traced Relighting is used instead. 0 is off.",
-        0, 100, 5, 0, false, 0);
+        "Relighting Strength",
+        "Experimental. Traced Relighting without ray tracing, for graphics cards and phones without it: the sun and the sky light the level again from the sun shadow map, so sunlit ground facing the sun is brighter and the side turned from it and what is in shadow darker. Without rays to read each texture, the game's painted shading is guessed from the picture around each spot, so it is close to Traced Relighting but not the same. Needs Sun Shadows on, and only works outdoors. Shown when Lighting is Relighting.",
+        0, 100, 5, 0, false, 100);
     graphics.add_number_option(
         light_shafts_option,
         "Light Shafts",
@@ -5825,11 +5883,12 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &relighting_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &parallax_smoothness_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &lighting_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &relighting_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &parallax_smoothness_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
-            [in_presets](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            [in_presets, id](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+                sync_lighting(*id, value);
                 if (context == recomp::config::OptionChangeContext::Temporary) {
                     if (applying_preset) {
                         // The preset saves once it has set everything.
@@ -5846,6 +5905,13 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
             });
     }
 
+
+    // Lighting shows only the settings of what it is set to (L, 2026-11-12): Relighting's strength, or all of Ray Tracing's.
+    graphics.update_option_hidden(ray_tracing_option, true);
+    graphics.add_option_hidden_dependency(relighting_option, lighting_option, Lighting::None, Lighting::RayTracing);
+    for (const std::string* id : ray_tracing_settings) {
+        graphics.add_option_hidden_dependency(*id, lighting_option, Lighting::None, Lighting::Relighting);
+    }
 
     // Hidden when the Shaders toggle is off; the effects keep their values either way.
 }
@@ -5877,7 +5943,9 @@ std::vector<tooie::picture_filters::CostEffect> tooie::picture_filters::cost_eff
         }
         add(preset.id, preset.off);
     }
-    add(&relighting_option, 0.0);
+    if (value<uint32_t>(lighting_option, (uint32_t)Lighting::None) == (uint32_t)Lighting::Relighting) {
+        add(&relighting_option, 0.0);
+    }
     // Ray tracing as a whole (its effects fall back to their screen-space forms), then its own extras.
     add(&ray_tracing_option, false);
     if (ray_tracing_active()) {

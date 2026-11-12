@@ -432,6 +432,29 @@ namespace {
         }
         std::ofstream{marker};
     }
+
+    // Graphics > Lighting replaced the Ray Tracing switch and Relighting's 0 for off (L, 2026-11-12). A graphics.json
+    // saved before it gets the choice its settings made: Ray Tracing where the switch was on, else Relighting where
+    // Relighting was above 0, else None (the default, so nothing is written). Done on the file before the configs load.
+    void pick_saved_lighting() {
+        namespace pf = tooie::picture_filters;
+        const std::filesystem::path path = recomp::get_config_path() / "graphics.json";
+        nlohmann::json json;
+        if (std::ifstream file(path); file) {
+            json = nlohmann::json::parse(file, nullptr, false);
+        }
+        if (!json.is_object() || json.contains(pf::lighting_option)) {
+            return;
+        }
+        const bool traced = json.contains(pf::ray_tracing_option) && json[pf::ray_tracing_option].is_boolean() && json[pf::ray_tracing_option].get<bool>();
+        const bool relit = json.contains(pf::relighting_option) && json[pf::relighting_option].is_number() && (json[pf::relighting_option].get<double>() > 0.0);
+        if (!traced && !relit) {
+            return;
+        }
+        json[pf::lighting_option] = traced ? "RayTracing" : "Relighting";
+        std::ofstream file(path, std::ios::trunc);
+        file << json.dump(4);
+    }
 }
 
 #if defined(__ANDROID__)
@@ -473,6 +496,13 @@ namespace {
         }
         if (graphics.has_option(pf::ray_tracing_option)) {
             graphics.update_option_value(pf::ray_tracing_option, false);
+        }
+        // Graphics > Lighting keeps None and Relighting; Ray Tracing is greyed out, and a saved Ray Tracing becomes None.
+        if (graphics.has_option(pf::lighting_option)) {
+            graphics.update_enum_option_disabled(pf::lighting_option, (uint32_t)pf::Lighting::RayTracing, true);
+            if (std::get<uint32_t>(graphics.get_option_value(pf::lighting_option)) == (uint32_t)pf::Lighting::RayTracing) {
+                graphics.update_option_value(pf::lighting_option, (uint32_t)pf::Lighting::None);
+            }
         }
         if (graphics.has_option(pf::path_tracing_option)) {
             graphics.update_option_value(pf::path_tracing_option, false);
@@ -1297,8 +1327,10 @@ void tooie::init_config() {
     // Snow's settings, before Parallax.
     recompui::config::set_option_display_before(tooie::picture_filters::tessellation_section_option, tooie::picture_filters::deep_snow_option);
     recompui::config::set_option_display_before(tooie::picture_filters::tessellated_sand_option, tooie::picture_filters::parallax_option);
-    // Ray Tracing has its own section after the colour grading, always shown (L, 2026-10-21).
-    for (const std::string* option : { &tooie::picture_filters::ray_tracing_option, &tooie::picture_filters::ray_tracing_strength_option,
+    // Lighting has its own section after the colour grading, always shown (L, 2026-10-21, as Ray Tracing): the choice,
+    // then Relighting's strength and Ray Tracing's settings, each shown only when picked (L, 2026-11-12).
+    for (const std::string* option : { &tooie::picture_filters::lighting_option, &tooie::picture_filters::relighting_option,
+                                       &tooie::picture_filters::ray_tracing_option, &tooie::picture_filters::ray_tracing_strength_option,
                                        &tooie::picture_filters::ray_tracing_reflections_option, &tooie::picture_filters::ray_tracing_water_reflections_option,
                                        &tooie::picture_filters::ray_tracing_metal_option, &tooie::picture_filters::ray_tracing_tiles_option,
                                        &tooie::picture_filters::ray_tracing_smooth_option, &tooie::picture_filters::ray_tracing_smoothing_option,
@@ -1311,7 +1343,7 @@ void tooie::init_config() {
                                        &tooie::picture_filters::ray_detail_half_option, &tooie::picture_filters::ray_detail_quarter_option }) {
         recompui::config::set_option_display_before(*option, tooie::high_detail_models_option);
     }
-    recompui::config::set_option_group(tooie::picture_filters::ray_tracing_option, "Ray Tracing");
+    recompui::config::set_option_group(tooie::picture_filters::lighting_option, "Lighting");
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game View");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
     // Anti-Aliasing and Scaling sit at the bottom of the Display tab (L, 2026-10-24), in this order.
@@ -1467,8 +1499,11 @@ void tooie::init_config() {
     move_saved_menu_mouse();
     turn_on_saved_smooth_walls();
     split_saved_toon_shading();
+    pick_saved_lighting();
     tooie::menu_tree::classify();
     recompui::config::finalize();
+    // General > Language: the Esc menu's names, descriptions and choices in the chosen language.
+    tooie::language::apply_settings();
 #if defined(__ANDROID__)
     hide_options_android_cannot_use();
     apply_android_defaults_once();

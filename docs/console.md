@@ -308,6 +308,9 @@ set hpfb_option on
 Catch: the value is checked against the setting. A value the setting does not take is an error, and `get` shows what
 it takes.
 
+Graphics > Lighting is `set lighting None`, `set lighting Relighting` or `set lighting RayTracing`. The old switch
+`set ray_tracing on` still works: it picks Ray Tracing, and `off` picks None.
+
 ### `toggle`
 
 Usage: `toggle <setting>`

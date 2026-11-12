@@ -6,6 +6,7 @@ regenerated code, CI, notes and tooling are left out.
 ## 2026-11-12
 
 - Relighting and Traced relighting: what faces down (overhangs, the undersides of ledges, Banjo's chin) is lit by the ground's own colour, so grass bounces green and snow white instead of the same grey everywhere. A sun low in the sky lights warmer and weaker. Shiny surfaces catch a highlight from the sun where it gets through.
+- Graphics: new **Lighting** choice, None, Relighting or Ray Tracing, in place of the Ray Tracing switch. Each choice shows only its own settings: Relighting Strength, or all of Ray Tracing's. Saved settings carry over: Ray Tracing on starts at Ray Tracing, Relighting above 0 at Relighting.
 - Relighting: the game's painted shading is now guessed only from the same surface round each spot, so a tree or a post against the bright sky no longer comes out too dark with a pale ring round it.
 
 ## 2026-11-11
