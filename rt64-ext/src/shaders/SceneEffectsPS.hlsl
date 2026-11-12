@@ -5045,11 +5045,11 @@ float4 TracedHalfLamp(int2 pixel, float3 center, float3 normal) {
         const float planeDistance = abs(dot(ViewPosition(q * 2, sampleDepth) - center, normal));
         const float2 b = lerp(1.0f - f, f, float2(corner));
         const float w = saturate(1.0f - planeDistance / tolerance) * (b.x * b.y + 1e-3f);
-        sum += gIndirect.Load(int3(q.x, q.y + halfSize.y * 2, 0)).rgb * w;
+        sum += gIndirect.Load(int3(q.x, q.y + halfSize.y * 2, 0)) * w;
         weight += w;
     }
     if (weight < 1e-4f) {
-        return gIndirect.Load(int3(clamp(pixel / 2, int2(0, 0), halfSize - 1) + int2(0, halfSize.y * 2), 0)).rgb;
+        return gIndirect.Load(int3(clamp(pixel / 2, int2(0, 0), halfSize - 1) + int2(0, halfSize.y * 2), 0));
     }
     return sum / weight;
 }
@@ -5987,7 +5987,14 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             gLampHalf = HalfTraced() ? 2 : 0;
             keep *= LightShadows(pixel, center, normal, lamps);
             gLampHalf = 0;
-            lamp += HalfTraced() ? TracedHalfLamp(pixel, center, normal) : lamps;
+            if (HalfTraced()) {
+                const float4 halfLamp = TracedHalfLamp(pixel, center, normal);
+                lamp += halfLamp.rgb;
+                keep *= halfLamp.a;
+            }
+            else {
+                lamp += lamps;
+            }
             if (!onBanjo) {
                 keep *= ModelShadow(center, normal);
             }
