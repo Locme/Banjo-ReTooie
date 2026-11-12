@@ -1141,7 +1141,6 @@ RECOMP_FUNC void _bapackctrl_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800F4A58(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
-    if (tooie_test_room_quiet()) { return; }
     // 0x800F4A58: mtc1        $a2, $f12
     ctx->f12.u32l = ctx->r6;
     // 0x800F4A5C: sll         $t6, $a0, 2

@@ -789,7 +789,7 @@ struct WarpList {
 
 const std::vector<WarpList>& warp_lists() {
     static const std::vector<WarpList> lists = {
-        { "place", kListPlace, "The Warp tab's places (levels, areas and the test room)", { "place", "places", "level", "levels" } },
+        { "place", kListPlace, "The Warp tab's places (levels and areas)", { "place", "places", "level", "levels" } },
         { "map", kListMap, "Every map the game has (map_names.inc), by name", { "map", "maps" } },
     };
     return lists;
@@ -2446,7 +2446,7 @@ void cmd_face(Ctx& c) {
 
 // Player states where the game has Banjo, not the player: none (0), door walk-ins and loading zones (0x98, also the
 // scripted walk Mumbo, Heggy, Master Jiggywiggy and King Jingaling call him over with), the locked states for
-// signposts, talking and cutscenes (src/gameplay/player_cheats.cpp's noclip_paused_state and src/gameplay/test_room.cpp),
+// signposts, talking and cutscenes (src/gameplay/player_cheats.cpp's noclip_paused_state),
 // and dead (0x41, src/gameplay/boss_rush.cpp).
 bool locked_state(uint32_t s) {
     return s == 0 || s == 0x98 || s == 0x97 || s == 0x93 || s == 0x92 || s == 0x5D || s == 0x75 || s == 0x9A || s == 0x41;
@@ -4422,7 +4422,7 @@ const Shortcut kShortcuts[] = {
     { "noclip", "cheat noclip" }, { "levitate", "cheat infinite_jumps" }, { "fly", "cheat fly_anywhere" }, { "onehit", "cheat one_hit" },
     { "msaa", "set msaa_option" }, { "res", "set res_option" }, { "hdshadows", "set hd_shadows" }, { "mirror", "set mirror_mode" },
     { "daynight", "set day_night" }, { "sunshadows", "set sun_shadows" }, { "upscale", "set texture_upscale" },
-    { "interp", "set force_scene_interpolation" }, { "testroom", "warp place test room" },
+    { "interp", "set force_scene_interpolation" },
     { "freecam", "set free_camera" }, { "boss", "set boss_rush" }, { "cutscene", "set cutscene_skip_all" },
     { "dive", "set dive" }, { "trot", "set talon_trot" }, { "fineaim", "set fine_aim" }, { "music", "set music_player" },
     { "mem", "set more_game_memory" }, { "char", "transform" },

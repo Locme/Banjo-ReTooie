@@ -51,7 +51,7 @@ namespace {
     constexpr uint32_t bk_jig_anim = 0x2E;     // BK's jiggy jig (ASSET_2E_ANIM_BSJIG_JIGGY)
     constexpr uint32_t bk_jig_duration = 0x4089999A; // 4.3f, as BK's bsjig_jiggy_init sets it
 
-    // Objects (see src/gameplay/test_room.cpp): +0x10 holds the actor's syscall entry.
+    // Objects: +0x10 holds the actor's syscall entry.
     constexpr uint32_t object_array_pointer = 0x80136EE0;
     constexpr uint32_t object_first = 0x04;
     constexpr uint32_t object_last = 0x08;
@@ -60,7 +60,7 @@ namespace {
     constexpr uint32_t object_entry = 0x10;
     constexpr int max_objects = 2048;
     constexpr uint32_t jiggy_collect_entry = 0x800867B0; // _chjigsawcollect_entrypoint_0
-    constexpr uint16_t jiggy_actor = 0x21F;              // a Jiggy (src/gameplay/test_room_actors.inc)
+    constexpr uint16_t jiggy_actor = 0x21F;              // a Jiggy
 
     // How long after a Jiggy is collected the jig may still start (Banjo landing first).
     constexpr auto start_window = std::chrono::milliseconds(3000);
@@ -168,8 +168,8 @@ namespace {
         return found;
     }
 
-    // Debug aid (TOOIE_JIGGY_DANCE_SPAWN): spawns a Jiggy where Banjo stands, as src/gameplay/test_room.cpp
-    // does, with the position in a scratch area below the stack.
+    // Debug aid (TOOIE_JIGGY_DANCE_SPAWN): spawns a Jiggy where Banjo stands with func_80108474,
+    // with the position in a scratch area below the stack.
     void spawn_jiggy(uint8_t* rdram, recomp_context* ctx, uint32_t pos_ptr) {
         recomp_context call = *ctx;
         const uint32_t vec = ((uint32_t)ctx->r29 - 0x100) & ~0xFu;

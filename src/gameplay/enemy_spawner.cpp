@@ -3,7 +3,7 @@
 // A drop-down of the game's enemies with a Spawn button beside it (the button is RecompFrontend's
 // recompui::config::set_option_button). Each press spawns the picked enemy a few steps in front of
 // Banjo, facing him, on the ground there, with func_80108474(actor id, f32 pos[3], yaw), the game's
-// spawn-by-id the test room uses (src/gameplay/test_room.cpp). Presses are queued and spawned on the game
+// own spawn-by-id. Presses are queued and spawned on the game
 // thread, one a frame. Enemies that live in water go in the nearest water instead (the game's line test
 // against water surfaces, searched outward in rings), with a notice; with no water nearby, a notice says
 // so and nothing spawns.
@@ -140,7 +140,7 @@ namespace {
     };
     constexpr uint16_t default_enemy = 0x111;
 
-    // The object array (as the test room walks it).
+    // The game's object array.
     constexpr uint32_t object_array_pointer = 0x80136EE0;
     constexpr uint32_t object_first = 0x04;
     constexpr uint32_t object_last = 0x08;
@@ -188,8 +188,7 @@ namespace {
         }
     }
 
-    // Spawns with a copy of the hook's context, the position in a scratch area below the stack
-    // (as the test room's spawn does).
+    // Spawns with a copy of the hook's context, the position in a scratch area below the stack.
     uint32_t spawn(uint8_t* rdram, recomp_context* ctx, uint16_t id, const float pos[3], float yaw) {
         recomp_context saved = *ctx;
         const uint32_t sp = (uint32_t)ctx->r29;

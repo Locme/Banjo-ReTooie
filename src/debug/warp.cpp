@@ -68,7 +68,6 @@ namespace tooie::debug {
 #include "tooie_memory_guard.h"
 #include "tooie_asset_mods.h"
 #include "tooie_sound_dump.h"
-#include "tooie_test_room.h"
 #include "tooie_race_warp.h"
 #include "tooie_replays.h"
 #include "tooie_boss_rush.h"
@@ -215,7 +214,6 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::texture_sweep::tick(rdram);
     tooie::asset_mods::tick(rdram);
     tooie::sound_dump::tick(rdram);
-    tooie::test_room::tick(rdram, ctx);
     // Before the warp below, which it may ask for.
     tooie::replays::tick(rdram, ctx);
     tooie::race_warp::tick(rdram, ctx);

@@ -9,7 +9,7 @@
 // table move exactly those bones.
 //
 // This file brings it back. While the option is on, torches are spawned at fixed spots in the Flooded
-// Caves through the game's spawn by id (func_80108474, see src/gameplay/test_room.cpp), with an animation
+// Caves through the game's spawn by id (func_80108474), with an animation
 // table patched into the torch's ActorData first (+0x08; entries are { f32 duration, u16 animation,
 // u16 playback }, index = actor state), so func_80101FDC(actor, state) switches its animation as it does
 // for any actor. The behaviour runs here, once a frame:
@@ -129,7 +129,7 @@ namespace {
     constexpr int light_rgb[3] = { 255, 140, 50 };
     constexpr float light_height = 70.0f;
 
-    // Objects (test_room.cpp): pointer to the array, first and last, 0x9C bytes each.
+    // Objects: pointer to the array, first and last, 0x9C bytes each.
     constexpr uint32_t object_array_pointer = 0x80136EE0;
     constexpr uint32_t object_size = 0x9C;
     constexpr int max_objects = 2048;

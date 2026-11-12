@@ -214,7 +214,7 @@ warps and holds the queue until Banjo can move in the new map (`wait control`), 
 soon as the game boots.
 
 * `warp <list> <n|name>` warps to an entry of a list. The lists are `place` (also `places`, `level`, `levels`), which
-  is the Warp tab's places, meaning levels, areas and the test room, and `map` (also `maps`), which is every map in
+  is the Warp tab's places, meaning levels and areas, and `map` (also `maps`), which is every map in
   `map_names.inc`. A number after the list name is that entry's position in `list`.
 * `warp <name>` looks for the name in both lists. An exact match wins. Otherwise a part of a name works when only one
   entry has it. A number without a list name is not a position, so it is searched as text.
@@ -226,7 +226,6 @@ and warps to none. A map warp uses exit 0.
 
 ```
 warp place 3
-warp place test room
 warp id 1A 0
 ```
 
@@ -2189,7 +2188,6 @@ A one-word shortcut runs a command, and any words typed after the shortcut are a
 | `sunshadows` | `set sun_shadows` | Needs a value. |
 | `upscale` | `set texture_upscale` | Needs a value. |
 | `interp` | `set force_scene_interpolation` | Needs a value, such as `interp on`. |
-| `testroom` | `warp place test room` | Needs a save file loaded. |
 | `freecam` | `set free_camera` | Needs a value, such as `freecam on`. |
 | `boss` | `set boss_rush` | Needs a value. |
 | `cutscene` | `set cutscene_skip_all` | Needs a value. |

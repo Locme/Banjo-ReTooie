@@ -13,7 +13,7 @@ namespace recomp::config {
 
 // Enemy spawner (src/gameplay/enemy_spawner.cpp): the Cheats tab's "Enemy spawner" row is a drop-down of
 // the game's enemies with a Spawn button beside it; each press spawns the picked enemy in front of Banjo
-// through the game's own spawn-by-id (func_80108474, as the test room does).
+// through the game's own spawn-by-id (func_80108474).
 namespace tooie::enemy_spawner {
     inline const std::string option = "cheat_enemy_spawner";
 

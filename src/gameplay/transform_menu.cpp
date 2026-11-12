@@ -13,8 +13,7 @@
 // game stands still), facing the camera and leaning back as far as the camera looks down.
 //
 // The models: each is a Golden Goliath statue (actor 0x163, a still model) spawned with the game's own
-// func_80108474 and given the form's model (its id struct +0x14), as the test room shows the transformations
-// (test_room_actors.inc). They are removed with func_800FFAB0 when the
+// func_80108474 and given the form's model (its id struct +0x14). They are removed with func_800FFAB0 when the
 // menu closes (a map change removes them too). Banjo alone has no model of his own: the game draws him with the
 // pair's 0x062A, so his statue shows Banjo-Kazooie (L to judge).
 //

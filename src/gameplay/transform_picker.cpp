@@ -51,8 +51,8 @@ namespace {
 
     // The form waiting to be applied (0 = none), set by the row's change callback.
     std::atomic<uint8_t> pending_form{0};
-    // Banjo's form as of the last frame, and whether the waiting request came from the test room
-    // (which works without the Cheats switch, since the Warp tab already needs it).
+    // Banjo's form as of the last frame, and whether the waiting request came from the Transform
+    // Anywhere Menu (which works without the Cheats switch).
     std::atomic<uint8_t> current_form{0};
     std::atomic<bool> pending_from_room{false};
     // Set while the row is put back to Off after a reload, so its callback does not ask for the normal form.
