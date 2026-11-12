@@ -191,12 +191,14 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   change `config::notify_tab_sound(tab_id)` goes to the game (its character's voice), falling back to the
   RowIn/RowLand pair when no callback is set; that page glides 48 dp in from the left while the settings list fades
   in (`Modal::update_page_slide`, `Modal::page_list`). `Tab::set_fade` fades a sliding tab's portrait with it, as
-  RmlUi does not carry a parent's opacity onto a child that sets its own. The peek (`Modal::update_peek`): while a
-  slider in the page moves (`Slider::get_peek`: dragged, pressed or changed in the last 0.6 s) the box fades to 10%
-  and the backdrop away, the moved slider's row keeps opacity 1 (opacity is inherited in RmlUi, not multiplied),
+  RmlUi does not carry a parent's opacity onto a child that sets its own. The peek (`Modal::update_peek`): after a
+  slider in the page moves (`Slider::get_peek`: dragged, pressed or changed), on pages `config::set_peek_page_callback`
+  allows (the game: its graphics pages), the box fades to 2% and the backdrop away, and it holds while the pointer
+  stays on the row (`recompui::get_ui_mouse_position`) or, with a controller, the focus does; leaving ends it until
+  the next change. The moved slider's row grows 3% on a dark panel and keeps opacity 1 (opacity is inherited in RmlUi, not multiplied),
   and everything beside the row and beside its parents up to the page, the header's buttons and the hints under
   the box are hidden (`visibility`), since some of them set their own opacity and would stay at full strength.
-  `Style::unset_visibility` is new.
+  `Style::unset_visibility` and `Style::unset_background_color` are new.
 * **Hand cursor reach** (`recompui/src/base/ui_state.cpp`, `hand_reach`): when nothing focusable or no scroll bar is
   under the mouse, its motion and clicks go to the nearest point within 22 pixels that has one, so the hand cursor
   (64 pixels across, its click point in its middle) picks what it covers. A drag keeps the shift its press had.

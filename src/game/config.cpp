@@ -1075,6 +1075,12 @@ void tooie::init_config() {
         true);
     recompui::config::set_slide_enabled_callback(tooie::menu_pause::slide_enabled);
     recompui::config::set_slide_callback(tooie::menu_pause::slide_sound);
+    // Moving a slider hides the menu to show the game only on the pages of picture settings (L, 2026-11-12): Graphics
+    // and the pages that show its settings (Display, WIP).
+    recompui::config::set_peek_page_callback([](const std::string& tab_id) {
+        return tab_id == recompui::config::graphics::id || tab_id == tooie::performance_tab_id ||
+            tab_id == tooie::work_in_progress_tab_id;
+    });
     // Another tab picked: its portrait's character speaks; a tab with none gets the Start menu's page sound.
     recompui::config::set_tab_sound_callback([](const std::string& tab_id) {
         if (!tooie::menu_portraits::tab_voice(tab_id)) {
