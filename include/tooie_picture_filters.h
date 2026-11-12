@@ -19,7 +19,9 @@ namespace tooie::picture_filters {
     enum class Colour16 : uint32_t { Off, Console, Raw };
     enum class TextureUpscale : uint32_t { Off, Double, Quadruple };
     enum class FogColour : uint32_t { Haze, Mist, Dusk, Gloom };
-    enum class Preset : uint32_t { Custom, Original, Enhanced, Retro };
+    enum class Preset : uint32_t { Custom, Original, Enhanced, Retro, Toon };
+    // Toon Shading's style: soft bands, or hard, two flat tones with a sharp line between.
+    enum class ToonStyle : uint32_t { Soft, Hard };
     enum class Water : uint32_t { Original, Modern, Stylised };
     // Graphics > Ray Tracing > Ray tracing resolution.
     enum class RayResolution : uint32_t { Half, Medium, High };
@@ -57,6 +59,7 @@ namespace tooie::picture_filters {
     inline const std::string toon_world_option = "toon_shading_world";
     inline const std::string toon_section_option = "toon_shading_section";
     inline const std::string toon_characters_option = "toon_shading_characters";
+    inline const std::string toon_style_option = "toon_shading_style";
     inline const std::string underwater_tint_option = "underwater_tint";
     inline const std::string underwater_haze_option = "underwater_haze";
     inline const std::string heat_haze_option = "heat_haze";
@@ -98,6 +101,8 @@ namespace tooie::picture_filters {
     inline const std::string path_tracing_bounces_option = "path_tracing_bounces";
     inline const std::string traced_beams_option = "traced_light_beams";
     inline const std::string texture_upscale_option = "texture_upscale";
+    // Cartoon Textures (0 off to 100): the game's textures flattened into areas of even colour as they load.
+    inline const std::string texture_cartoon_option = "texture_cartoon";
     inline const std::string water_waves_option = "water_waves";
     inline const std::string light_shafts_option = "light_shafts";
     inline const std::string sun_shadows_option = "sun_shadows";

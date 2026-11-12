@@ -60,6 +60,7 @@ namespace RT64 {
         float rimLight = 0.0f;
         float toonShading = 0.0f;
         float toonCharacters = 0.0f;
+        bool toonHard = false;
         float underwaterTint = 0.0f;
         float underwaterHaze = 0.0f;
         float heatHaze = 0.0f;
@@ -204,6 +205,8 @@ namespace RT64 {
     void SetSceneRimLight(float strength);
     // Toon shading (0 off, 1 strongest), apart for the level (world) and for characters and other models.
     void SetSceneToonShading(float world, float characters);
+    // Toon shading's style: soft bands (false) or hard, two flat tones of light and shadow with a sharp line between.
+    void SetSceneToonHard(bool hard);
     // Whether characters are drawn into the water mask this frame (marked apart, for the character toon shading).
     bool SceneCharacterToonWanted();
     // Underwater look while the camera is under water: tint (0 off, 1 strongest) and distance haze (0 to 1).

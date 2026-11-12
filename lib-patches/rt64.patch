@@ -7874,7 +7874,7 @@ index 95618bc..f298779 100644
      };
  };
 diff --git a/src/render/rt64_texture_cache.cpp b/src/render/rt64_texture_cache.cpp
-index 0848f3e..07187d6 100644
+index 0848f3e..30f9166 100644
 --- a/src/render/rt64_texture_cache.cpp
 +++ b/src/render/rt64_texture_cache.cpp
 @@ -4,6 +4,7 @@
@@ -7898,7 +7898,7 @@ index 0848f3e..07187d6 100644
  #define ONLY_USE_LOW_MIP_CACHE 0
  
  namespace RT64 {
-@@ -29,6 +33,35 @@ namespace RT64 {
+@@ -29,6 +33,49 @@ namespace RT64 {
      static const uint32_t TextureDataPitchAlignment = 256;
      static const uint32_t TextureDataPlacementAlignment = 512;
  
@@ -7915,6 +7915,20 @@ index 0848f3e..07187d6 100644
 +
 +    uint32_t GetTextureUpscale() {
 +        return TextureUpscaleFactor;
++    }
++
++    // Banjo-Tooie: cartoon textures, refreshed through the upscale's generation.
++    static std::atomic<uint32_t> TextureCartoonStrength = 0;
++
++    void SetTextureCartoon(uint32_t strength) {
++        strength = std::min(strength, 100u);
++        if (TextureCartoonStrength.exchange(strength) != strength) {
++            TextureUpscaleGeneration++;
++        }
++    }
++
++    uint32_t GetTextureCartoon() {
++        return TextureCartoonStrength;
 +    }
 +
 +    // Banjo-Tooie: a lower cap on the replacement pool while the texture sweep warps from map to map.
@@ -7934,7 +7948,7 @@ index 0848f3e..07187d6 100644
      ReplacementMap::ReplacementMap() {
          // Empty constructor.
      }
-@@ -66,7 +99,9 @@ namespace RT64 {
+@@ -66,7 +113,9 @@ namespace RT64 {
      }
  
      void ReplacementMap::evict(std::vector<Texture *> &evictedTextures) {
@@ -7945,7 +7959,7 @@ index 0848f3e..07187d6 100644
              // Push texture to the eviction list.
              Texture *lastUnusedTexture = unusedTextureList.back();
              evictedTextures.emplace_back(lastUnusedTexture);
-@@ -81,6 +116,8 @@ namespace RT64 {
+@@ -81,6 +130,8 @@ namespace RT64 {
              unusedTextureList.pop_back();
              cachedTexturePoolSize -= lastUnusedTexture->memorySize;
          }
@@ -7954,7 +7968,7 @@ index 0848f3e..07187d6 100644
      }
  
      bool ReplacementMap::saveDatabase(std::ostream &stream) {
-@@ -211,6 +248,9 @@ namespace RT64 {
+@@ -211,6 +262,9 @@ namespace RT64 {
              }
          }
  
@@ -7964,7 +7978,7 @@ index 0848f3e..07187d6 100644
          globalVersion++;
      }
  
-@@ -314,9 +354,14 @@ namespace RT64 {
+@@ -314,9 +368,14 @@ namespace RT64 {
          }
  
          // Remove the existing entry from the list if it exists.
@@ -7980,7 +7994,7 @@ index 0848f3e..07187d6 100644
          }
  
          // Push a new access entry to the front of the list and store the new iterator.
-@@ -325,6 +370,32 @@ namespace RT64 {
+@@ -325,6 +384,32 @@ namespace RT64 {
          return true;
      }
  
@@ -8013,7 +8027,7 @@ index 0848f3e..07187d6 100644
      bool TextureMap::evict(uint64_t submissionFrame, std::vector<uint64_t> &evictedHashes) {
          evictedHashes.clear();
  
-@@ -352,6 +423,7 @@ namespace RT64 {
+@@ -352,6 +437,7 @@ namespace RT64 {
                  listIterators[textureIndex] = accessList.end();
                  hashMap.erase(textureHash);
                  evictedHashes.push_back(textureHash);
@@ -8021,7 +8035,7 @@ index 0848f3e..07187d6 100644
                  it = decltype(it)(accessList.erase(std::next(it).base()));
  
                  // If a texture replacement was used for this texture, decrease the reference in the map.
-@@ -976,12 +1048,25 @@ namespace RT64 {
+@@ -976,12 +1062,25 @@ namespace RT64 {
          std::vector<StreamResult> streamResultQueueCopy;
          std::vector<TextureMapAddition> textureMapAdditions;
          std::vector<ReplacementMapAddition> replacementMapAdditions;
@@ -8047,7 +8061,7 @@ index 0848f3e..07187d6 100644
              resolvedPathQueueCopy.clear();
              streamResultQueueCopy.clear();
              beforeCopyBarriers.clear();
-@@ -991,10 +1076,17 @@ namespace RT64 {
+@@ -991,10 +1090,17 @@ namespace RT64 {
              // Check the top of the queue or wait if it's empty.
              {
                  std::unique_lock queueLock(uploadQueueMutex);
@@ -8067,7 +8081,7 @@ index 0848f3e..07187d6 100644
                  if (!uploadQueue.empty()) {
                      queueCopy = uploadQueue;
                  }
-@@ -1174,6 +1266,52 @@ namespace RT64 {
+@@ -1174,6 +1280,52 @@ namespace RT64 {
                          bool referenceCounted = (resolvedPath.resolvedOperation != ReplacementOperation::Preload) && (replacementTexture != lowMipCacheTexture);
                          replacementMapAdditions.emplace_back(ReplacementMapAddition{ resolvedPath.textureHash, replacementTexture, resolvedPath.resolvedShift, referenceCounted });
                      }
@@ -8120,14 +8134,14 @@ index 0848f3e..07187d6 100644
                  }
                  
                  // Execute the copy worker and signal a semaphore so it synchronizes with the direct worker afterwards.
-@@ -1222,6 +1360,24 @@ namespace RT64 {
+@@ -1222,6 +1374,24 @@ namespace RT64 {
                      directWorker->commandList->barriers(RenderBarrierStage::GRAPHICS_AND_COMPUTE, afterDecodeBarriers);
                  }
  
-+                // Banjo-Tooie: upscale the newly decoded textures that no texture pack replaces.
++                // Banjo-Tooie: upscale (and cartoon) the newly decoded textures that no texture pack replaces.
 +                const uint32_t upscaleFactor = GetTextureUpscale();
 +                upscaleDescriptorsUsed = 0;
-+                if (upscaleFactor > 1) {
++                if ((upscaleFactor > 1) || (GetTextureCartoon() > 0)) {
 +                    packHashes.clear();
 +                    for (const ReplacementResolvedPath &resolvedPath : resolvedPathQueueCopy) {
 +                        packHashes.insert(resolvedPath.textureHash);
@@ -8145,7 +8159,7 @@ index 0848f3e..07187d6 100644
                  // Execute the direct worker but make it wait for the copy worker to finish first.
                  const RenderCommandList *directCommandList = directWorker->commandList.get();
                  directWorker->commandList->end();
-@@ -1230,6 +1386,7 @@ namespace RT64 {
+@@ -1230,6 +1400,7 @@ namespace RT64 {
  
                  // Delete all the resources used during the upload of replacements.
                  replacementUploadResources.clear();
@@ -8153,7 +8167,7 @@ index 0848f3e..07187d6 100644
                  
                  // Add all the textures to the map once they're ready.
                  {
-@@ -1242,6 +1399,16 @@ namespace RT64 {
+@@ -1242,6 +1413,16 @@ namespace RT64 {
                          textureMap.replace(addition.hash, addition.texture, addition.shift == ReplacementShift::Half, addition.referenceCounted);
                      }
  
@@ -8170,7 +8184,7 @@ index 0848f3e..07187d6 100644
                      textureMap.replacementMap.evict(textureMap.evictedTextures);
                  }
  
-@@ -1314,7 +1481,38 @@ namespace RT64 {
+@@ -1314,7 +1495,38 @@ namespace RT64 {
  
      bool TextureCache::useTexture(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureScale, interop::float3 &textureDimensions, bool &textureReplaced, bool &hasMipmaps, bool &shiftedByHalf) {
          std::unique_lock lock(textureMapMutex);
@@ -8211,7 +8225,7 @@ index 0848f3e..07187d6 100644
  
      bool TextureCache::useTexture(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex) {
 diff --git a/src/render/rt64_texture_cache.h b/src/render/rt64_texture_cache.h
-index 9131697..aacb9d2 100644
+index 9131697..e0b127b 100644
 --- a/src/render/rt64_texture_cache.h
 +++ b/src/render/rt64_texture_cache.h
 @@ -137,13 +137,31 @@ namespace RT64 {
@@ -8246,7 +8260,7 @@ index 9131697..aacb9d2 100644
          bool evict(uint64_t submissionFrame, std::vector<uint64_t> &evictedHashes);
          void incrementLock();
          void decrementLock();
-@@ -151,6 +169,16 @@ namespace RT64 {
+@@ -151,6 +169,21 @@ namespace RT64 {
          size_t getMaxIndex() const;
      };
  
@@ -8254,6 +8268,11 @@ index 9131697..aacb9d2 100644
 +    // Textures that a texture pack replaces are left alone. Changes apply to the textures already loaded.
 +    void SetTextureUpscale(uint32_t factor);
 +    uint32_t GetTextureUpscale();
++
++    // Banjo-Tooie: cartoon textures (0 off to 100), a pass after the upscale that flattens a texture into areas of
++    // even colour. It goes with the upscale: the same textures, and a change applies to those already loaded.
++    void SetTextureCartoon(uint32_t strength);
++    uint32_t GetTextureCartoon();
 +
 +    // Banjo-Tooie: caps the texture pack's replacement pool below its usual size (2/3 of video memory). 0 lifts the cap.
 +    // Unused replacements over the cap are freed the next time new ones are loaded.
@@ -8263,7 +8282,7 @@ index 9131697..aacb9d2 100644
      struct TextureCache {
          struct StreamDescription {
              uint32_t fileSystemIndex = 0;
-@@ -205,6 +233,16 @@ namespace RT64 {
+@@ -205,6 +238,16 @@ namespace RT64 {
          std::vector<std::unique_ptr<RenderBuffer>> tmemUploadResources;
          std::vector<std::unique_ptr<RenderBuffer>> replacementUploadResources;
          std::vector<std::unique_ptr<TextureDecodeDescriptorSet>> descriptorSets;
@@ -8280,13 +8299,14 @@ index 9131697..aacb9d2 100644
          std::mutex uploadQueueMutex;
          std::condition_variable uploadQueueChanged;
          std::condition_variable uploadQueueFinished;
-@@ -233,11 +271,22 @@ namespace RT64 {
+@@ -233,11 +276,23 @@ namespace RT64 {
          TextureCache(RenderWorker *directWorker, RenderWorker *copyWorker, uint32_t threadCount, const ShaderLibrary *shaderLibrary);
          ~TextureCache();
          void uploadThreadLoop();
-+        // Banjo-Tooie: records the upscale of a decoded texture (in SHADER_READ) into texture->upscaled, left in SHADER_READ.
++        // Banjo-Tooie: records the upscale of a decoded texture (in SHADER_READ) into texture->upscaled, left in SHADER_READ,
++        // and the cartoon pass after it when that is on (factor 1 with it on is the cartoon pass alone).
 +        bool recordUpscale(RenderCommandList *commandList, Texture *texture, uint32_t factor);
-+        // Banjo-Tooie: applies a changed upscale setting to the textures already in the cache.
++        // Banjo-Tooie: applies a changed upscale or cartoon setting to the textures already in the cache.
 +        void refreshUpscaled(uint32_t factor);
 +        // Banjo-Tooie: bakes the height maps of the parallax list's textures that need one (new, drawn from another
 +        // texture now, or baked with other settings), a batch at a time. True when more are left for the next call.

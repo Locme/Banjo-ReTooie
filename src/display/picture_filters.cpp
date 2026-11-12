@@ -63,6 +63,7 @@ namespace RT64 {
     void SetSceneEyeAdaptation(float strength);
     void SetSceneRimLight(float strength);
     void SetSceneToonShading(float world, float characters);
+    void SetSceneToonHard(bool hard);
     void SetSceneUnderwater(float tint, float haze);
     void SetSceneHeatHaze(float strength, bool warmOnly);
     void SetSceneWaterReflections(float strength);
@@ -126,6 +127,7 @@ namespace RT64 {
     bool GetSceneCameraHeight(float *height);
     // lib/rt64/src/render/rt64_texture_cache.h.
     void SetTextureUpscale(uint32_t factor);
+    void SetTextureCartoon(uint32_t strength);
 }
 
 namespace {
@@ -4188,6 +4190,7 @@ namespace {
         { &tooie::picture_filters::rim_light_option, 0.0 },
         { &tooie::picture_filters::toon_world_option, 0.0 },
         { &tooie::picture_filters::toon_characters_option, 0.0 },
+        { &tooie::picture_filters::toon_style_option, (uint32_t)tooie::picture_filters::ToonStyle::Soft },
         { &tooie::picture_filters::underwater_tint_option, 0.0 },
         { &tooie::picture_filters::underwater_haze_option, 0.0 },
         { &tooie::picture_filters::heat_haze_option, 0.0 },
@@ -4217,6 +4220,7 @@ namespace {
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
         { &tooie::picture_filters::shore_foam_option, false },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
+        { &tooie::picture_filters::texture_cartoon_option, 0.0 },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
         { &tooie::picture_filters::saturation_option, 0.0 },
@@ -4251,6 +4255,22 @@ namespace {
         } else if (preset == Preset::Retro) {
             graphics.update_option_value(dither16_option, (uint32_t)Colour16::Console);
             graphics.update_option_value(crt_option, true);
+        } else if (preset == Preset::Toon) {
+            // A cel-shaded cartoon look: flat painted textures, hard two-tone light and shadow, strong colour, a soft glow
+            // and a little distance blur, with thin outlines.
+            graphics.update_option_value(tooie::smaa::option, (uint32_t)tooie::smaa::Quality::High);
+            graphics.update_option_value(texture_upscale_option, (uint32_t)TextureUpscale::Double);
+            graphics.update_option_value(texture_cartoon_option, 70.0);
+            graphics.update_option_value(toon_section_option, true);
+            graphics.update_option_value(toon_style_option, (uint32_t)ToonStyle::Hard);
+            graphics.update_option_value(toon_characters_option, 85.0);
+            graphics.update_option_value(toon_world_option, 50.0);
+            graphics.update_option_value(outlines_option, 25.0);
+            graphics.update_option_value(rim_light_option, 30.0);
+            graphics.update_option_value(bloom_option, 35.0);
+            graphics.update_option_value(gameplay_dof_option, 15.0);
+            graphics.update_option_value(cutscene_dof_option, 40.0);
+            graphics.update_option_value(saturation_option, 25.0);
         }
         applying_preset = false;
     }
@@ -4571,6 +4591,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneOutlines((float)(shader(value<double>(outlines_option, 0.0)) / 100.0), (float)(thickness / 25.0));
     const uint32_t upscale = debug_value(Solo::TextureUpscale, value<uint32_t>(texture_upscale_option, (uint32_t)TextureUpscale::Off), (uint32_t)TextureUpscale::Off, (uint32_t)TextureUpscale::Double);
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
+    RT64::SetTextureCartoon((uint32_t)std::clamp(value<double>(texture_cartoon_option, 0.0), 0.0, 100.0));
     RT64::SetSceneBounceLight((float)(shader(value<double>(bounce_light_option, 0.0)) / 100.0));
     RT64::SetSceneScreenSpaceGI((float)(shader(value<double>(ssgi_option, 0.0)) / 100.0));
     // Graphics > Ray tracing (L, 2026-10-20): its own switch, not one of the shader effects. Reflections are the
@@ -4757,6 +4778,7 @@ void tooie::picture_filters::apply() {
     // Toon Shading is an enable switch (L, 2026-10-23): off, both sliders count as 0.
     const bool toon_on = value<bool>(toon_section_option, true);
     RT64::SetSceneToonShading((float)(toon_on ? shader(value<double>(toon_world_option, 0.0)) : 0.0) / 100.0f, (float)(toon_on ? shader(value<double>(toon_characters_option, 0.0)) : 0.0) / 100.0f);
+    RT64::SetSceneToonHard(value<uint32_t>(toon_style_option, (uint32_t)ToonStyle::Soft) == (uint32_t)ToonStyle::Hard);
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
     RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0), bloom_threshold);
 
@@ -5284,12 +5306,13 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         preset_option,
         "Effects Preset",
-        "Sets all the picture effects below at once. <recomp-color primary>Vanilla</recomp-color> turns them all off, so none of the effect shaders run. <recomp-color primary>Enhanced</recomp-color> adds SMAA, ambient occlusion and sharpening. <recomp-color primary>Retro</recomp-color> gives N64 16-bit colour and a CRT look. Changing any of them yourself makes it <recomp-color primary>Custom</recomp-color>.",
+        "Sets all the picture effects below at once. <recomp-color primary>Vanilla</recomp-color> turns them all off, so none of the effect shaders run. <recomp-color primary>Enhanced</recomp-color> adds SMAA, ambient occlusion and sharpening. <recomp-color primary>Retro</recomp-color> gives N64 16-bit colour and a CRT look. <recomp-color primary>Toon</recomp-color> gives a cel-shaded cartoon look: cartoon textures, hard toon shading, stronger colour, bloom and a little depth of field. Changing any of them yourself makes it <recomp-color primary>Custom</recomp-color>.",
         {
             {Preset::Custom, "Custom", "Custom"},
             {Preset::Original, "Original", "Vanilla"},
             {Preset::Enhanced, "Enhanced", "Enhanced"},
             {Preset::Retro, "Retro", "Retro"},
+            {Preset::Toon, "Toon", "Toon"},
         },
         // A first launch or a fresh graphics.json starts on Vanilla (L, 2026-10-17).
         Preset::Original);
@@ -5617,6 +5640,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         },
         TextureUpscale::Off);
     graphics.add_number_option(
+        texture_cartoon_option,
+        "Cartoon Textures",
+        "Flattens the game's textures into areas of even colour with clean edges between them, like painted cartoon textures: noise and dither wash out and brightness falls into a few soft steps. Done once as each texture loads (a compute shader on the GPU), after Texture Upscaling, which gives it more to work with. Texture packs take priority. Goes well with Toon Shading's Hard style. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         sharpen_option,
         "Sharpening",
         "Sharpens the picture's fine detail, most where it is soft. 0 is off.",
@@ -5807,6 +5835,15 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Toon Shading",
         "Cel shading for characters and for the world: the two sliders below. Off turns it off; the sliders keep their values.",
         true);
+    graphics.add_enum_option(
+        toon_style_option,
+        "Toon Shading Style",
+        "<recomp-color primary>Soft</recomp-color> splits the light into a few bands with soft steps between them. <recomp-color primary>Hard</recomp-color> gives two flat tones, light and a cool shadow, with one sharp line between them, as cel-shaded games do.",
+        {
+            {ToonStyle::Soft, "Soft", "Soft"},
+            {ToonStyle::Hard, "Hard", "Hard"},
+        },
+        ToonStyle::Soft);
     graphics.add_number_option(
         toon_characters_option,
         "Toon Shading: Characters",
@@ -5891,7 +5928,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &lighting_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &relighting_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &parallax_smoothness_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option,
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &toon_style_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &lighting_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &texture_cartoon_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &relighting_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &parallax_smoothness_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option,
                                    &tessellation_section_option, &character_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });

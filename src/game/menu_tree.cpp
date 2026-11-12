@@ -85,7 +85,7 @@ void tooie::menu_tree::classify() {
         const std::vector<std::pair<const std::string*, std::vector<const std::string*>>> groups = {
             { &reflections_section_option, { &ssr_option, &ssr_stochastic_option, &water_reflections_option,
                 &ice_reflections_option } },
-            { &toon_section_option, { &toon_characters_option, &toon_world_option } },
+            { &toon_section_option, { &toon_style_option, &toon_characters_option, &toon_world_option } },
             { &tessellation_section_option, { &deep_snow_option, &tessellated_sand_option } },
             { &deep_snow_option, { &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option } },
             { &character_section_option, { &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option,

@@ -605,6 +605,11 @@ namespace RT64 {
         effectsSettings.toonCharacters = characters;
     }
 
+    void SetSceneToonHard(bool hard) {
+        const std::scoped_lock lock(effectsMutex);
+        effectsSettings.toonHard = hard;
+    }
+
     bool SceneCharacterToonWanted() {
         const std::scoped_lock lock(effectsMutex);
         return effectsSettings.toonCharacters > 0.0f;
@@ -3768,7 +3773,7 @@ namespace RT64 {
         const auto hundredths = [](float strength) { return std::round(std::clamp(strength, 0.0f, 1.0f) * 100.0f); };
         const float indirectPacked = hundredths(settings.ambientOcclusion) + 128.0f * hundredths(settings.screenSpaceGI) + 16384.0f * hundredths(settings.screenSpaceReflections) +
             2097152.0f * std::round(std::clamp(settings.reflectionGlossiness, 0.0f, 1.0f) * 7.0f);
-        constants.ambientOcclusion = { indirectPacked, settings.ambientOcclusionRadius, 0.0f, std::min(settings.rimLight, 1.0f) + 2.0f * (std::round(std::clamp(settings.toonShading, 0.0f, 1.0f) * 100.0f) + 101.0f * std::round(std::clamp(settings.toonCharacters, 0.0f, 1.0f) * 100.0f)) };
+        constants.ambientOcclusion = { indirectPacked, settings.ambientOcclusionRadius, 0.0f, std::min(settings.rimLight, 1.0f) + 2.0f * (std::round(std::clamp(settings.toonShading, 0.0f, 1.0f) * 100.0f) + 101.0f * std::round(std::clamp(settings.toonCharacters, 0.0f, 1.0f) * 100.0f) + (settings.toonHard ? 10201.0f : 0.0f)) };
         static const auto startTime = std::chrono::steady_clock::now();
         const float seconds = std::fmod(std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count(), 3600.0f);
         // Heat haze only above warm surfaces is sent as 2 + its strength (see HeatHaze in SceneEffectsPS).
@@ -4267,7 +4272,7 @@ namespace RT64 {
         res.waterDrawn = false;
         // Toon shading's character part reads the characters in the water mask, so it is left out when none was drawn.
         if (!waterDrawn && (settings.toonCharacters > 0.0f)) {
-            constants.ambientOcclusion.w = std::min(settings.rimLight, 1.0f) + 2.0f * std::round(std::clamp(settings.toonShading, 0.0f, 1.0f) * 100.0f);
+            constants.ambientOcclusion.w = std::min(settings.rimLight, 1.0f) + 2.0f * (std::round(std::clamp(settings.toonShading, 0.0f, 1.0f) * 100.0f) + (settings.toonHard ? 10201.0f : 0.0f));
         }
         // Modern water draws in place of the game's (water.y 2): its waves are always on, at the Water waves
         // setting or a moderate default, and the old reflections are left out (it reflects by itself).

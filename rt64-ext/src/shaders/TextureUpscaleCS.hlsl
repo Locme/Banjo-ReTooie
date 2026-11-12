@@ -6,12 +6,15 @@
 // across that corner is compared with the one along it, using the pixels around them, and where the
 // corner sits on an edge it takes the colour of the nearer side, half blended. Run twice for 4x.
 // Textures wrap, as most of the game's tile, unless the far side is nothing like the edge (see Fetch).
+//
+// Mode 1 is the cartoon textures pass instead, at the same size (after the upscale when that is on): see Cartoon.
 
 #define GROUP_SIZE 8
 
 struct TextureUpscaleCB {
     uint2 inputSize;
-    uint2 padding;
+    uint mode;          // 0: double the size (xBR); 1: cartoon, same size
+    uint strength;      // cartoon: 0 to 100
 };
 
 [[vk::push_constant]] ConstantBuffer<TextureUpscaleCB> gConstants : register(b0);
@@ -42,8 +45,81 @@ float4 Fetch(int2 base, int2 offset, int2 mirror) {
     return (Distance(value, edge) > 10.0f) ? edge : value;
 }
 
+float Luma(float3 c) {
+    return dot(c, float3(0.299f, 0.587f, 0.114f));
+}
+
+// Cartoon textures: the texture flattened into areas of even colour, as painted cartoon textures are, with the edges
+// between them kept sharp.
+// - A Kuwahara filter: the four squares that have the pixel in a corner are each averaged, and the pixel takes the
+//   average of the evenest of them (the least spread of brightness), so it joins the area on its own side of an edge
+//   and noise and dither inside an area wash out. The squares are blended by how even they are, not just the evenest
+//   picked, which keeps the blocky look of the plain filter away. Pixels are weighted by alpha, so a cut-out's empty
+//   part doesn't darken its edge.
+// - Brightness is then pulled towards a few even steps (softly, so a gradient becomes bands without hard stairs)
+//   and colour made a little stronger.
+// strength blends it from the texture.
+float4 Cartoon(int2 pixel) {
+    const int2 one = int2(1, 1);
+    const float4 centre = Fetch(pixel, int2(0, 0), one);
+    if (centre.a <= 0.0f) {
+        return centre;
+    }
+
+    // About a 24th of the texture's size across, 1 to 4 pixels.
+    const int radius = clamp(int(min(gConstants.inputSize.x, gConstants.inputSize.y)) / 24, 1, 4);
+    float3 blended = float3(0.0f, 0.0f, 0.0f);
+    float blendWeight = 0.0f;
+    [unroll] for (int q = 0; q < 4; q++) {
+        const int2 direction = int2(((q & 1) != 0) ? 1 : -1, ((q & 2) != 0) ? 1 : -1);
+        float3 sum = float3(0.0f, 0.0f, 0.0f);
+        float lumaSum = 0.0f;
+        float lumaSquares = 0.0f;
+        float weight = 0.0f;
+        for (int y = 0; y <= radius; y++) {
+            for (int x = 0; x <= radius; x++) {
+                const float4 s = Fetch(pixel, int2(x, y) * direction, one);
+                const float l = Luma(s.rgb);
+                sum += s.rgb * s.a;
+                lumaSum += l * s.a;
+                lumaSquares += l * l * s.a;
+                weight += s.a;
+            }
+        }
+        if (weight < 0.5f) {
+            continue;
+        }
+        const float mean = lumaSum / weight;
+        const float spread = max(lumaSquares / weight - mean * mean, 0.0f);
+        // Evener squares count far more (by the square of the spread, the fourth power of its standard deviation), so
+        // the pixel follows its own side of an edge.
+        const float w = 1.0f / (1.0f + pow(spread * 400.0f, 2.0f));
+        blended += (sum / weight) * w;
+        blendWeight += w;
+    }
+    float3 flat = (blendWeight > 0.0f) ? (blended / blendWeight) : centre.rgb;
+
+    // A few soft steps of brightness: 6 at a low strength, 4 at full.
+    const float strength = saturate(float(gConstants.strength) / 100.0f);
+    const float steps = lerp(6.0f, 4.0f, strength);
+    const float luma = Luma(flat);
+    const float level = luma * steps;
+    const float stepped = (floor(level) + smoothstep(0.3f, 0.7f, frac(level))) / steps;
+    flat *= lerp(1.0f, stepped / max(luma, 0.004f), 0.75f);
+    flat = lerp(Luma(flat).xxx, flat, 1.0f + 0.3f * strength);
+
+    return float4(lerp(centre.rgb, saturate(flat), strength), centre.a);
+}
+
 [numthreads(GROUP_SIZE, GROUP_SIZE, 1)]
 void CSMain(uint2 coord : SV_DispatchThreadID) {
+    if (gConstants.mode == 1) {
+        if ((coord.x < gConstants.inputSize.x) && (coord.y < gConstants.inputSize.y)) {
+            gOutput[coord] = Cartoon(int2(coord));
+        }
+        return;
+    }
+
     if ((coord.x >= gConstants.inputSize.x * 2) || (coord.y >= gConstants.inputSize.y * 2)) {
         return;
     }

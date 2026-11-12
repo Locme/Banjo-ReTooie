@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- A cel-shaded cartoon look. Graphics > Cartoon Textures (under Texture Upscaling) flattens the game's textures into areas of even colour with clean edges, as painted cartoon textures are: noise and dither wash out and brightness falls into a few soft steps. It is done once as each texture loads, after the upscale, and applies the moment it changes. Toon Shading has a Style: Soft (the bands it had) or Hard, two flat tones of light and a cool shadow with one sharp line between. The Effects Preset has a new Toon choice that sets them with stronger colour, bloom, rim light, thin outlines and a little depth of field.
 - Esc menu (QoL > Menu > Menu Slide): it now sounds like the Start menu. As it opens, five waves of the Start menu's row sounds play a tenth of a second apart (each row's whoosh in, then its landing), and closing plays both of the Start menu's closing sounds, not one. The tabs come in one after another at a gentler pace, and the page's settings follow them in row by row from the left, as the Start menu's rows do.
 - The hand cursor reaches further: in the Esc menu and the launcher, a click or hover with the hand over the empty space beside a tab, button, switch or slider (up to about 22 pixels away) lands on it. In the Start menu a row also counts when the hand is over its character portrait.
 - Notices ("Screenshot saved" and the rest) no longer block clicks in the Esc menu while they show.

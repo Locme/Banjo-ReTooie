@@ -2,7 +2,7 @@
 // RT64
 //
 // Banjo-Tooie: the texture cache's additions that are whole functions of their own: parallax height maps in
-// the texture map (setHeight, useHeight), live texture upscaling (recordUpscale, refreshUpscaled) and the parallax
+// the texture map (setHeight, useHeight), live texture upscaling and cartoon textures (recordUpscale, refreshUpscaled) and the parallax
 // height maps baked as textures load (refreshHeights). rt64_texture_cache.cpp (lib-patches/rt64.patch) calls them.
 
 #include <cstring>
@@ -57,7 +57,10 @@ namespace RT64 {
     }
 
     bool TextureCache::recordUpscale(RenderCommandList *commandList, Texture *texture, uint32_t factor) {
-        if ((texture->texture == nullptr) || (texture->width == 0) || (texture->height == 0) || ((texture->width * factor) > TextureUpscaleMaxSize) || ((texture->height * factor) > TextureUpscaleMaxSize)) {
+        const uint32_t cartoon = GetTextureCartoon();
+        if ((texture->texture == nullptr) || (texture->width == 0) || (texture->height == 0) || ((texture->width * factor) > TextureUpscaleMaxSize) || ((texture->height * factor) > TextureUpscaleMaxSize) ||
+            ((factor <= 1) && (cartoon == 0)))
+        {
             return false;
         }
 
@@ -65,15 +68,27 @@ namespace RT64 {
         commandList->setPipeline(textureUpscale.pipeline.get());
         commandList->setComputePipelineLayout(textureUpscale.pipelineLayout.get());
 
-        // Each pass doubles the size: once for 2x, twice for 4x (through a half-way texture).
+        // The passes, each through a texture of its own: one that doubles the size for 2x, two for 4x, then the cartoon
+        // pass at the size reached (TextureUpscaleCS.hlsl's mode 1). The last pass's texture is the result.
+        uint32_t passes[3];
+        uint32_t passCount = 0;
+        for (uint32_t scale = 2; scale <= factor; scale *= 2) {
+            passes[passCount++] = 0;
+        }
+        if (cartoon > 0) {
+            passes[passCount++] = 1;
+        }
+
         RenderTexture *input = texture->texture.get();
         uint32_t width = texture->width;
         uint32_t height = texture->height;
         std::unique_ptr<Texture> upscaled = std::make_unique<Texture>();
-        for (uint32_t scale = 2; scale <= factor; scale *= 2) {
-            const bool lastPass = (scale * 2) > factor;
-            std::unique_ptr<RenderTexture> output = directWorker->device->createTexture(RenderTextureDesc::Texture2D(width * 2, height * 2, 1, RenderFormat::R8G8B8A8_UNORM, RenderTextureFlag::STORAGE | RenderTextureFlag::UNORDERED_ACCESS));
-            output->setName("Texture Cache Upscaled");
+        for (uint32_t pass = 0; pass < passCount; pass++) {
+            const uint32_t mode = passes[pass];
+            const uint32_t outputWidth = (mode == 0) ? (width * 2) : width;
+            const uint32_t outputHeight = (mode == 0) ? (height * 2) : height;
+            std::unique_ptr<RenderTexture> output = directWorker->device->createTexture(RenderTextureDesc::Texture2D(outputWidth, outputHeight, 1, RenderFormat::R8G8B8A8_UNORM, RenderTextureFlag::STORAGE | RenderTextureFlag::UNORDERED_ACCESS));
+            output->setName((mode == 0) ? "Texture Cache Upscaled" : "Texture Cache Cartoon");
             if (upscaleDescriptorsUsed >= upscaleDescriptorSets.size()) {
                 upscaleDescriptorSets.emplace_back(std::make_unique<TextureUpscaleDescriptorSet>(directWorker->device));
             }
@@ -83,17 +98,17 @@ namespace RT64 {
             descSet->setTexture(descSet->gOutput, output.get(), RenderTextureLayout::GENERAL);
             commandList->barriers(RenderBarrierStage::COMPUTE, RenderTextureBarrier(output.get(), RenderTextureLayout::GENERAL));
 
-            const uint32_t upscaleCB[4] = { width, height, 0, 0 };
+            const uint32_t upscaleCB[4] = { width, height, mode, cartoon };
             const uint32_t ThreadGroupSize = 8;
             commandList->setComputePushConstants(0, upscaleCB);
             commandList->setComputeDescriptorSet(descSet->get(), 0);
-            commandList->dispatch((width * 2 + ThreadGroupSize - 1) / ThreadGroupSize, (height * 2 + ThreadGroupSize - 1) / ThreadGroupSize, 1);
+            commandList->dispatch((outputWidth + ThreadGroupSize - 1) / ThreadGroupSize, (outputHeight + ThreadGroupSize - 1) / ThreadGroupSize, 1);
             commandList->barriers(RenderBarrierStage::GRAPHICS_AND_COMPUTE, RenderTextureBarrier(output.get(), RenderTextureLayout::SHADER_READ));
 
-            width *= 2;
-            height *= 2;
+            width = outputWidth;
+            height = outputHeight;
             input = output.get();
-            if (lastPass) {
+            if ((pass + 1) == passCount) {
                 upscaled->texture = std::move(output);
             }
             else {
@@ -134,11 +149,11 @@ namespace RT64 {
         }
 
         textureMap.globalVersion++;
-        if (factor <= 1) {
+        if ((factor <= 1) && (GetTextureCartoon() == 0)) {
             return;
         }
 
-        // Upscale every decoded texture that nothing else replaces.
+        // Upscale (and cartoon) every decoded texture that nothing else replaces.
         std::vector<uint32_t> upscaledIndices;
         directWorker->commandList->begin();
         upscaleDescriptorsUsed = 0;

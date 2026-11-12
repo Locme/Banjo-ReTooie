@@ -5219,9 +5219,20 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
 }
 
 // Rim light and Toon shading share ambientOcclusion.w, packed as rim light (0 to 1) + 2 * (the level's toon shading
-// in hundredths + 101 * the characters' toon shading in hundredths).
-float ToonPacked() {
+// in hundredths + 101 * the characters' toon shading in hundredths + 10201 when the toon style is Hard).
+float ToonPackedAll() {
     return floor(max(gConstants.ambientOcclusion.w, 0.0f) * 0.5f + 1e-4f);
+}
+
+// The toon style is Hard (ToonShadeHard).
+bool ToonHard() {
+    return ToonPackedAll() > 10200.5f;
+}
+
+// The two strengths, without the style.
+float ToonPacked() {
+    const float packed = ToonPackedAll();
+    return ToonHard() ? (packed - 10201.0f) : packed;
 }
 
 // Toon shading of the level.
@@ -5258,6 +5269,20 @@ float3 ToonShade(float3 scene, float strength) {
     // Colour is pulled halfway to its own average so bands read as flat paint, not as darker texture.
     const float3 flatChroma = lerp(chroma, float3(1.0f, 1.0f, 1.0f), 0.2f);
     return lerp(scene, min(flatChroma * banded * tint * 1.1f, 1.5f), strength);
+}
+
+// Toon shading's Hard style: two flat tones, light and shadow, with one sharp line between them where the brightness
+// crosses a quarter, as cel-shaded games light their models. Each side keeps a little of its own brightness (a third
+// of the contrast or less) so the texture's detail still shows. The shadow tone is a cool blue-violet and the lit one
+// warm, colour kept and pulled a little towards flat.
+float3 ToonShadeHard(float3 scene, float strength) {
+    const float luma = dot(scene, float3(0.299f, 0.587f, 0.114f));
+    const float lit = smoothstep(0.24f, 0.26f, luma);
+    const float level = lerp(0.36f + 0.35f * luma, 0.8f + 0.22f * luma, lit);
+    const float3 tint = lerp(float3(0.8f, 0.83f, 1.0f), float3(1.0f, 0.98f, 0.93f), lit);
+    const float3 chroma = scene / max(luma, 0.02f);
+    const float3 flatChroma = lerp(chroma, float3(1.0f, 1.0f, 1.0f), 0.15f);
+    return lerp(scene, min(flatChroma * level * tint, 1.5f), strength);
 }
 
 // Rim light: near the edge of something in front of what's behind it, the more the surface turns away
@@ -6180,7 +6205,8 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             // The characters' strength where the mask has a character (drawn this frame: the constants leave it out otherwise).
             const float toon = ((ToonCharacterStrength() > 0.0f) && LoadCharacter(pixel)) ? ToonCharacterStrength() : ToonWorldStrength();
             if (toon > 0.0f) {
-                scene = ToonShade(scene * (keep + lamp), toon) / max(keep + lamp, 0.001f);
+                const float3 shaded = scene * (keep + lamp);
+                scene = (ToonHard() ? ToonShadeHard(shaded, toon) : ToonShade(shaded, toon)) / max(keep + lamp, 0.001f);
             }
         }
         if (gConstants.bloom.z > 0.0f) {
