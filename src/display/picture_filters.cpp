@@ -4600,10 +4600,15 @@ void tooie::picture_filters::apply() {
     }
     RT64::SetSceneScreenSpaceReflections((float)(reflection(value<double>(ssr_option, 0.0)) / 100.0), (traced_brdf > 0.0f) ? 0.0f : (float)(reflection(value<double>(ssr_stochastic_option, 0.0)) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
-    // Relighting brings its own sun shadows (L, 2026-11-12): they are what it lights the level by, so with Lighting at
-    // Relighting they are on at Sun Shadows' strength, or at full strength while Sun Shadows is at 0.
-    const bool relighting = value<uint32_t>(lighting_option, (uint32_t)Lighting::None) == (uint32_t)Lighting::Relighting;
-    const double sun_shadow_strength = (relighting && (value<double>(sun_shadows_option, 0.0) <= 0.0)) ? 100.0 : value<double>(sun_shadows_option, 0.0);
+    // Sun Shadows is part of Relighting (L, 2026-11-12), shown only with it: they are what it lights the level by, so
+    // with Lighting at Relighting they are on at Sun Shadows' strength, or at full strength while it is at 0. With
+    // Lighting at None there are none. Ray Tracing keeps using the value as before (hidden, as its own strength sets
+    // the least the traced shadows show at).
+    const uint32_t lighting = value<uint32_t>(lighting_option, (uint32_t)Lighting::None);
+    const bool relighting = lighting == (uint32_t)Lighting::Relighting;
+    const double sun_shadow_set = value<double>(sun_shadows_option, 0.0);
+    const double sun_shadow_strength = relighting ? ((sun_shadow_set <= 0.0) ? 100.0 : sun_shadow_set) :
+        ((lighting == (uint32_t)Lighting::RayTracing) ? sun_shadow_set : 0.0);
     sun_shadows = sun_shadow_strength > 0.0;
     RT64::SetSceneSunShadows((float)(sun_shadow_strength / 100.0), value<bool>(sun_shadow_banjo_option, true),
         (float)(value<double>(sun_shadow_softness_option, 60.0) / 100.0));
@@ -5314,7 +5319,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         lighting_option,
         "Lighting",
-        "How the outdoor levels are lit. <recomp-color primary>None</recomp-color> keeps the game's own shading. <recomp-color primary>Relighting</recomp-color> lights the level again by the sun and the sky without ray tracing, for graphics cards and phones without it, with sun shadows of its own (Sun Shadows, below). <recomp-color primary>Ray Tracing</recomp-color> turns on the ray traced effects: reflections, sun and lamp shadows, ambient occlusion, bounce and sky light, found by tracing rays through the level's triangles; it needs the Vulkan renderer and a graphics card with hardware ray tracing, and is heavy on the graphics card. Each choice shows its own settings under it.",
+        "How the outdoor levels are lit. <recomp-color primary>None</recomp-color> keeps the game's own shading. <recomp-color primary>Relighting</recomp-color> lights the level again by the sun and the sky without ray tracing, for graphics cards and phones without it, with sun shadows of its own (Sun Shadows, shown under it). <recomp-color primary>Ray Tracing</recomp-color> turns on the ray traced effects: reflections, sun and lamp shadows, ambient occlusion, bounce and sky light, found by tracing rays through the level's triangles; it needs the Vulkan renderer and a graphics card with hardware ray tracing, and is heavy on the graphics card. Each choice shows its own settings under it.",
         {
             {Lighting::None, "None", "None"},
             {Lighting::Relighting, "Relighting", "Relighting"},
@@ -5441,7 +5446,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         sun_shadows_option,
         "Sun Shadows",
-        "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. The whole level casts one, on screen or not. Their edges soften the further they fall from what casts them, as the ray traced ones do. 0 is off, except with Lighting at Relighting, which keeps them on at full strength.",
+        "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. The whole level casts one, on screen or not. Their edges soften the further they fall from what casts them, as the ray traced ones do. Part of Relighting: shown and on only with Lighting at Relighting, at full strength while this is at 0.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         sun_shadow_banjo_option,
@@ -5912,6 +5917,10 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     // Lighting shows only the settings of what it is set to (L, 2026-11-12): Relighting's strength, or all of Ray Tracing's.
     graphics.update_option_hidden(ray_tracing_option, true);
     graphics.add_option_hidden_dependency(relighting_option, lighting_option, Lighting::None, Lighting::RayTracing);
+    // Sun Shadows and its settings are part of Relighting, shown only with it (see apply).
+    for (const std::string* id : { &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option }) {
+        graphics.add_option_hidden_dependency(*id, lighting_option, Lighting::None, Lighting::RayTracing);
+    }
     for (const std::string* id : ray_tracing_settings) {
         graphics.add_option_hidden_dependency(*id, lighting_option, Lighting::None, Lighting::Relighting);
     }

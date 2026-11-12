@@ -541,7 +541,7 @@ their texture is drawn.
   again from the sun shadow map: ground facing the sun is brighter, the side
   turned from it and what is in shadow darker. With no rays to read each
   texture, the game's painted shading is guessed from the brightness round each
-  spot on the same surface, so it comes close to Traced Relighting. It brings its own sun shadows: Sun Shadows is on while Lighting is Relighting (full strength if it is at 0). What faces down takes on the ground's colour,
+  spot on the same surface, so it comes close to Traced Relighting. Sun Shadows is part of it: shown and on only with Lighting at Relighting (full strength if it is at 0); with Lighting at None there are no sun shadows. What faces down takes on the ground's colour,
   a low sun lights warmer and weaker, and shiny surfaces catch a highlight from it. Needs Sun shadows on; outdoors only. With Ray
   tracing on, Traced Relighting is used instead. 0 to 100; picking Relighting with it at 0 sets it to 100. Applies
   at once. Default: 100.
