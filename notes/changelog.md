@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- SSGI without ray tracing (Lighting at None or Relighting) now does its job outdoors: rays that reach the open sky bring the sky's light, as the ray traced ones do, where before they brought nothing, so SSGI hardly showed except in corners. At 100 the picture is about a quarter brighter in Spiral Mountain's shade, close to what the ray traced SSGI gives. The ray traced SSGI's sky light no longer changes colour as the camera turns.
 - DLSS, FSR and the other upscalers turned on during play no longer leave the game drawing into a corner of an oversized picture. Banjo's shadow (and the sun shadows, ray tracing and the other effects) now stays under him instead of sliding off to one side, with every lighting choice. Turning an upscaler on before starting the game already worked.
 - Point Lights moved from the WIP tab to Graphics, in the Lighting section after Rim Light.
 - The upscalers (Upscaler and its settings) moved from the WIP tab to Display, under Anti-Aliasing And Scaling after FSR 1.

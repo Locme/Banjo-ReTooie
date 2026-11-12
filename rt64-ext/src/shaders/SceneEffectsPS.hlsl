@@ -797,6 +797,14 @@ float RayEdgeFade(float2 hitPixel) {
     return sqrt(fade.x * fade.y);
 }
 
+// The sky's light coming from a direction that rises this much (0 level, 1 straight up): the horizon's haze at the
+// horizon, bluer overhead, dimmer than the sky itself so it only lifts what the game's own ambient light leaves. For the
+// traced light (SkyLight) and screen-space global illumination alike.
+float3 SkyLightUp(float up) {
+    const float3 haze = gConstants.fogColor.rgb;
+    return lerp(haze, haze * float3(0.75f, 0.9f, 1.25f), up) * 0.35f;
+}
+
 // Screen-space global illumination (after realism-effects' SSGI, diffuse rays): two cosine-weighted rays about the
 // normal, the 16 pixels of each 4x4 block spreading their 32 over the hemisphere (a Vogel spiral, which is
 // cosine-weighted), each taking the colour of the scene where it lands. The average light arriving at the surface;
@@ -821,6 +829,13 @@ float3 ScreenSpaceGI(float3 center, float3 normal, uint cell) {
         float2 hitPixel;
         if (MarchRay(origin, direction, rayDistance, 12, 4, stepOffset, hitPixel)) {
             light += gColorHalf.SampleLevel(LinearSampler, hitPixel / gConstants.projection.zw, 0).rgb * RayEdgeFade(hitPixel);
+        }
+        else {
+            // A ray that meets nothing gets out: it brings the sky's light, as the traced light's do (TracedGI), the more
+            // the higher it rises (one that leaves the screen level may still have met a wall off it). Before, it brought
+            // nothing, so outdoors, where most rays get out, SSGI hardly showed (L, 2026-11-12).
+            const float up = dot(direction, normalize(gConstants.worldY.xyz));
+            light += SkyLightUp(saturate(up)) * saturate(up * 2.0f);
         }
     }
     return light * 0.5f;
@@ -2168,12 +2183,10 @@ float TracedOcclusion(float3 center, float3 normal, uint cell) {
     return OcclusionFrom(distances);
 }
 
-// The sky's light from a direction (world space up from the view's worldY): the horizon's haze at the horizon, bluer
-// overhead, dimmer than the sky itself so it only lifts what the game's own ambient light leaves.
+// The sky's light from a world direction (normalised; see SkyLightUp). Its height was read as the direction's dot with
+// worldY.xyz, which is the world's up in view space, so a world direction came out higher or lower as the camera turned.
 float3 SkyLight(float3 direction) {
-    const float up = saturate(dot(direction, normalize(gConstants.worldY.xyz)));
-    const float3 haze = gConstants.fogColor.rgb;
-    return lerp(haze, haze * float3(0.75f, 0.9f, 1.25f), up) * 0.35f;
+    return SkyLightUp(saturate(direction.y));
 }
 
 // The colour a traced ray brings back from where it landed (view space): that spot's colour on the screen when it is in
