@@ -108,6 +108,11 @@ namespace {
     constexpr int16_t pool_s = 16 * 32 + 16, pool_t = 22 * 32 + 16;
     constexpr float pool_lift = 2.0f;         // above the floor, so it doesn't fight it
     constexpr float floor_reach = 80.0f;      // how far from the beam's floor height a floor may be
+    // RT64's extended GBI, as model_tagging.cpp writes it: the hook that turns the extended commands on, and
+    // G_EX_SETSCENEEFFECTSEXCLUDE_V1 (0x34) under the extended opcode (0x64).
+    constexpr uint32_t rt64_hook_word0 = 0xE0000000 | 0x525464;
+    constexpr uint32_t rt64_hook_enable = (0x1u << 28) | 0x64;
+    constexpr uint32_t rt64_not_water_word0 = (0x64u << 24) | 0x000034;
 
     std::atomic<uint16_t> looked_up_map{ 0 };
 
@@ -315,12 +320,16 @@ namespace {
             { 0xF2000000, 0x000FC0FC }, { 0xE7000000, 0x00000000 }, { 0xFC129804, 0x3F15FFFF },
             { 0xDE000000, 0x03000020 },
         };
+        // All the tubes first, then all the pools marked never water. The renderer takes a see-through draw
+        // with flat parts for water (waves and shore foam on it, L 2026-11-11); the tubes on their own are
+        // steep, which it puts back as drawn. (Decal mode kept the pools out of the water too, but RT64 draws a
+        // decal only on the floor's own depth, and the pools, 2 above it, vanished.)
+        auto tri = [](uint32_t a, uint32_t b, uint32_t c) { return (a * 2 << 16) | (b * 2 << 8) | (c * 2); };
         uint32_t ntri = 0, first = nv;
         for (const Window& w : room.windows) {
             const uint32_t sides = uint32_t(w.shape->size());
             const uint32_t per_tube = 3 * (sides + 1), per_pool = 1 + sides * (uint32_t(pool_rings.size()) - 1);
             beams.push_back({ 0x01000000 | (per_tube << 12) | (per_tube * 2), 0x01000000 + first * 16 });
-            auto tri = [](uint32_t a, uint32_t b, uint32_t c) { return (a * 2 << 16) | (b * 2 << 8) | (c * 2); };
             for (uint32_t band = 0; band < 2; band++) {
                 for (uint32_t i = 0; i < sides; i++) {
                     const uint32_t t0 = band * (sides + 1) + i, t1 = t0 + 1, b0 = t0 + sides + 1, b1 = b0 + 1;
@@ -330,6 +339,16 @@ namespace {
                     ntri += 4;
                 }
             }
+            first += per_tube + per_pool;
+        }
+        // RT64's extended commands (G_SPNOOP to the game): turn them on, then the scene effects mark 4, never
+        // water (lib-patches/rt64.patch, G_EX_SETSCENEEFFECTSEXCLUDE_V1).
+        beams.push_back({ rt64_hook_word0, rt64_hook_enable });
+        beams.push_back({ rt64_not_water_word0, 4 });
+        first = nv;
+        for (const Window& w : room.windows) {
+            const uint32_t sides = uint32_t(w.shape->size());
+            const uint32_t per_tube = 3 * (sides + 1), per_pool = 1 + sides * (uint32_t(pool_rings.size()) - 1);
             // The pool, loaded in the tube's place (more than 32 vertices don't fit at once): a fan
             // round the middle, then a band between each ring and the next.
             beams.push_back({ 0x01000000 | (per_pool << 12) | (per_pool * 2), 0x01000000 + (first + per_tube) * 16 });
@@ -348,6 +367,8 @@ namespace {
             }
             first += per_tube + per_pool;
         }
+        // The mark off again, or it stays on for whatever is drawn next.
+        beams.push_back({ rt64_not_water_word0, 0 });
         beams.push_back({ 0xDF000000, 0x00000000 });
 
         std::vector<uint8_t> dl;
