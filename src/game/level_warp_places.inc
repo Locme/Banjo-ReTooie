@@ -1,8 +1,8 @@
 // Level warp places (handoff 4.80): group, name, map id, exit.
 // Exit 0 is the area's default spawn. Names follow map_names.inc.
-// Wumba's Wigwams, Honey B's Hive and Smuggler's Cavern have no spawn at exit 0 (Banjo is never placed and the
-// game waits), so they use exit 1, the door. Bosses, minigames and cutscenes are in Cheats > Replays instead, and
-// the Tower of Tragedy is left out because entering it starts the quiz.
+// Wumba's Wigwams, Honey B's Hive, Smuggler's Cavern and Jiggywiggy's Temple have no spawn at exit 0 (Banjo is
+// never placed and the game waits), so they use exit 1, the door. Bosses, minigames and cutscenes are in
+// Cheats > Replays instead, and the Tower of Tragedy is left out because entering it starts the quiz.
 { "Spiral Mountain", "Spiral Mountain", 0xAF, 0 },
 { "Spiral Mountain", "Banjo's House", 0x173, 0 },
 { "Spiral Mountain", "Behind the Waterfall", 0xAE, 0 },
@@ -12,7 +12,7 @@
 { "Isle o' Hags", "King Jingaling's Throne Room", 0x144, 0 },
 { "Isle o' Hags", "Wooded Hollow", 0x14F, 0 },
 { "Isle o' Hags", "Heggy's Egg Shed", 0x150, 0 },
-{ "Isle o' Hags", "Jiggywiggy's Temple", 0x151, 0 },
+{ "Isle o' Hags", "Jiggywiggy's Temple", 0x151, 1 },
 { "Isle o' Hags", "Plateau", 0x152, 0 },
 { "Isle o' Hags", "Honey B's Hive", 0x153, 1 },
 { "Isle o' Hags", "Pine Grove", 0x154, 0 },
