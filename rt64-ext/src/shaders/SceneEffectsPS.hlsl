@@ -4656,7 +4656,6 @@ float SunMapLookup(SunMapFrame mapFrame, int offsetX, float3 worldCenter, float3
     const float sunCos = saturate(sunFacing);
     const float sunSin = sqrt(1.0f - sunCos * sunCos);
     const float sunTan = min(sunSin / max(sunCos, 0.05f), 8.0f);
-    const float radius = 1.0f + softness * 2.5f;
     const float3 world = worldCenter + worldNormal * (texel * (1.5f + 1.5f * sunSin) + distance * 0.001f);
     const float3 m = SunMapPosition(mapFrame, world);
     if ((m.z <= 0.0f) || (m.z >= 1.0f)) {
@@ -4666,7 +4665,6 @@ float SunMapLookup(SunMapFrame mapFrame, int offsetX, float3 worldCenter, float3
     if (cover <= 0.0f) {
         return 0.0f;
     }
-    const float depthBias = texel * (1.5f + sunTan * (radius + 1.0f)) / (2.0f * mapFrame.range);
     const float2 base = float2(m.x * 0.5f + 0.5f, 0.5f - m.y * 0.5f) * mapFrame.size;
     const float angle = jitter * 6.2831853f;
     const float2x2 turn = float2x2(cos(angle), -sin(angle), sin(angle), cos(angle));
@@ -4677,6 +4675,27 @@ float SunMapLookup(SunMapFrame mapFrame, int offsetX, float3 worldCenter, float3
         float2(0.507f, 0.064f), float2(0.896f, 0.412f), float2(-0.322f, -0.933f), float2(-0.792f, -0.598f)
     };
     const int last = int(mapFrame.size) - 1;
+    // The shadow's edge as soft as the traced one's (SunShadow under RAY_TRACED): its rays spread over a cone round the
+    // sun, lerp(0.006, 0.04, softness) wide, so its edge widens with how far the shadow falls from what casts it. That
+    // distance is found first, as percentage-closer soft shadows do (Fernando 2005): six taps over the widest edge the
+    // cone can give near here, averaging how far towards the sun the ones that block are. The edge is then that far
+    // times the cone, at least a texel (the map can't be sharper) and at most twelve.
+    const float spread = lerp(0.006f, 0.04f, softness);
+    const float depthToWorld = 2.0f * mapFrame.range;
+    const float searchTexels = clamp(min(m.z * depthToWorld, 1500.0f) * spread / texel, 1.0f, 12.0f);
+    float blockerDepth = 0.0f;
+    float blockers = 0.0f;
+    [unroll] for (int s = 0; s < 6; s++) {
+        const int2 at = clamp(int2(floor(base + mul(turn, disk[s * 2]) * searchTexels)), int2(0, 0), int2(last, last));
+        const float there = gSunShadowMap.Load(int3(at.x + offsetX, at.y, 0));
+        if (there < m.z - texel * 1.5f / depthToWorld) {
+            blockerDepth += there;
+            blockers += 1.0f;
+        }
+    }
+    const float casterDistance = (blockers > 0.0f) ? max(m.z - blockerDepth / blockers, 0.0f) * depthToWorld : 0.0f;
+    const float radius = clamp(casterDistance * spread / texel, 1.0f, 12.0f);
+    const float depthBias = texel * (1.5f + sunTan * (radius + 1.0f)) / depthToWorld;
     float blocked = 0.0f;
     [unroll] for (int k = 0; k < Taps; k++) {
         const int2 at = clamp(int2(floor(base + mul(turn, disk[k]) * radius)), int2(0, 0), int2(last, last));

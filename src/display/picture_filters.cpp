@@ -4600,14 +4600,17 @@ void tooie::picture_filters::apply() {
     }
     RT64::SetSceneScreenSpaceReflections((float)(reflection(value<double>(ssr_option, 0.0)) / 100.0), (traced_brdf > 0.0f) ? 0.0f : (float)(reflection(value<double>(ssr_stochastic_option, 0.0)) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
-    sun_shadows = value<double>(sun_shadows_option, 0.0) > 0.0;
-    RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true),
+    // Relighting brings its own sun shadows (L, 2026-11-12): they are what it lights the level by, so with Lighting at
+    // Relighting they are on at Sun Shadows' strength, or at full strength while Sun Shadows is at 0.
+    const bool relighting = value<uint32_t>(lighting_option, (uint32_t)Lighting::None) == (uint32_t)Lighting::Relighting;
+    const double sun_shadow_strength = (relighting && (value<double>(sun_shadows_option, 0.0) <= 0.0)) ? 100.0 : value<double>(sun_shadows_option, 0.0);
+    sun_shadows = sun_shadow_strength > 0.0;
+    RT64::SetSceneSunShadows((float)(sun_shadow_strength / 100.0), value<bool>(sun_shadow_banjo_option, true),
         (float)(value<double>(sun_shadow_softness_option, 60.0) / 100.0));
     const float shadow_distance = (float)value<double>(sun_shadow_distance_option, 3000.0);
     sun_shadow_reach = sun_shadows ? shadow_distance : 0.0f;
     sun_shadow_distance_set.store(shadow_distance);
     RT64::SetSceneSunShadowDistance(shadow_distance);
-    const bool relighting = value<uint32_t>(lighting_option, (uint32_t)Lighting::None) == (uint32_t)Lighting::Relighting;
     RT64::SetSceneRelighting(relighting ? (float)(value<double>(relighting_option, 100.0) / 100.0) : 0.0f);
     send_effect_textures();
     // The Character Shaders switch turns all of the character shaders off; their settings stay as they are.
@@ -5240,7 +5243,7 @@ namespace {
 
     // Graphics > Lighting and the Ray Tracing switch it replaced say the same thing: picking Ray Tracing turns the
     // switch on and anything else turns it off, and the console's "set ray_tracing on" or "off" picks Ray Tracing or
-    // None. Picking Relighting with its strength at 0 sets it to 100, so the choice does something. Each side is only
+    // None. Picking Relighting with its strength or Sun Shadows at 0 sets them to 100, so the choice does something. Each side is only
     // changed when it disagrees, so the two callbacks don't call each other back and forth.
     void sync_lighting(const std::string& id, const recomp::config::ConfigValueVariant& value) {
         recomp::config::Config& graphics = graphics_config();
@@ -5252,6 +5255,10 @@ namespace {
                 }
                 if ((std::get<uint32_t>(value) == (uint32_t)Lighting::Relighting) && (std::get<double>(current_value(relighting_option)) <= 0.0)) {
                     graphics.update_option_value(relighting_option, 100.0);
+                }
+                // Relighting's sun shadows are on with it (see apply): Sun Shadows shows them on too.
+                if ((std::get<uint32_t>(value) == (uint32_t)Lighting::Relighting) && (std::get<double>(current_value(sun_shadows_option)) <= 0.0)) {
+                    graphics.update_option_value(sun_shadows_option, 100.0);
                 }
             } else if ((id == ray_tracing_option) && std::holds_alternative<bool>(value)) {
                 const uint32_t lighting = std::get<uint32_t>(current_value(lighting_option));
@@ -5307,7 +5314,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         lighting_option,
         "Lighting",
-        "How the outdoor levels are lit. <recomp-color primary>None</recomp-color> keeps the game's own shading. <recomp-color primary>Relighting</recomp-color> lights the level again by the sun and the sky without ray tracing, for graphics cards and phones without it (it needs Sun Shadows on). <recomp-color primary>Ray Tracing</recomp-color> turns on the ray traced effects: reflections, sun and lamp shadows, ambient occlusion, bounce and sky light, found by tracing rays through the level's triangles; it needs the Vulkan renderer and a graphics card with hardware ray tracing, and is heavy on the graphics card. Each choice shows its own settings under it.",
+        "How the outdoor levels are lit. <recomp-color primary>None</recomp-color> keeps the game's own shading. <recomp-color primary>Relighting</recomp-color> lights the level again by the sun and the sky without ray tracing, for graphics cards and phones without it, with sun shadows of its own (Sun Shadows, below). <recomp-color primary>Ray Tracing</recomp-color> turns on the ray traced effects: reflections, sun and lamp shadows, ambient occlusion, bounce and sky light, found by tracing rays through the level's triangles; it needs the Vulkan renderer and a graphics card with hardware ray tracing, and is heavy on the graphics card. Each choice shows its own settings under it.",
         {
             {Lighting::None, "None", "None"},
             {Lighting::Relighting, "Relighting", "Relighting"},
@@ -5317,7 +5324,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         relighting_option,
         "Relighting Strength",
-        "Experimental. Traced Relighting without ray tracing, for graphics cards and phones without it: the sun and the sky light the level again from the sun shadow map, so sunlit ground facing the sun is brighter and the side turned from it and what is in shadow darker. Without rays to read each texture, the game's painted shading is guessed from the picture around each spot, so it is close to Traced Relighting but not the same. Needs Sun Shadows on, and only works outdoors. Shown when Lighting is Relighting.",
+        "Experimental. Traced Relighting without ray tracing, for graphics cards and phones without it: the sun and the sky light the level again from the sun shadow map, so sunlit ground facing the sun is brighter and the side turned from it and what is in shadow darker. Without rays to read each texture, the game's painted shading is guessed from the picture around each spot, so it is close to Traced Relighting but not the same. Its sun shadows come with it: Sun Shadows is on while Lighting is Relighting (at full strength if it is at 0). Only works outdoors. Shown when Lighting is Relighting.",
         0, 100, 5, 0, false, 100);
     // The old Ray Tracing switch: Lighting sets it, and it is kept out of the menu (below) but not the console, whose
     // "set ray_tracing on" still works.
@@ -5434,7 +5441,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         sun_shadows_option,
         "Sun Shadows",
-        "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. The whole level casts one, on screen or not. 0 is off.",
+        "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. The whole level casts one, on screen or not. Their edges soften the further they fall from what casts them, as the ray traced ones do. 0 is off, except with Lighting at Relighting, which keeps them on at full strength.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         sun_shadow_banjo_option,
