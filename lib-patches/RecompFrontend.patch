@@ -4812,7 +4812,7 @@ index b057f46..9aa85fb 100644
 +    header->set_as_navigation_container(sidebar ? NavigationType::Vertical : NavigationType::Horizontal);
 +    header->set_flex_shrink(sidebar ? 0.0f : 1.0f);
 +    if (sidebar) {
-+        header->set_width(300.0f);
++        header->set_width(340.0f);
 +        header->set_height(100.0f, Unit::Percent);
 +        header->set_padding(16.0f);
 +        header->set_background_color(sidebar_style::sidebar);
@@ -5462,10 +5462,10 @@ index 2c5dc52..f415e57 100644
 +            jiggy->set_margin_top(-15.0f);
 +        }
 +        jiggy->set_display(is_selected && portrait == nullptr ? Display::Block : Display::None);
-+        set_padding_top(10.0f);
-+        set_padding_bottom(8.0f);
-+        // Room for the portrait (2026-11-12: drawn larger than the Jiggy was).
-+        set_padding_left(70.0f);
++        set_padding_top(12.0f);
++        set_padding_bottom(10.0f);
++        // Room for the portrait, drawn larger than the Jiggy was; tabs a little larger again (L, 2026-11-12).
++        set_padding_left(86.0f);
 +        set_padding_right(12.0f);
 +        set_border_radius(theme::border::radius_md);
 +        set_border_width(2.0f);
@@ -5474,7 +5474,7 @@ index 2c5dc52..f415e57 100644
 +        label->set_typography(theme::Typography::LabelMD);
 +        label->set_font_family(sidebar_style::font);
 +        label->set_font_weight(400);
-+        label->set_font_size(28.0f);
++        label->set_font_size(31.0f);
 +        label->set_letter_spacing(1.0f);
 +        indicator->set_display(Display::None);
 +        hover_style.set_color(sidebar_style::cream);
@@ -5530,9 +5530,9 @@ index 2c5dc52..f415e57 100644
 +            // picked tab's at full size reaches past its row a little, as the Start menu's highlighted box does.
 +            portrait->set_left(-12.0f);
 +            portrait->set_top(50.0f, Unit::Percent);
-+            portrait->set_width(80.0f);
-+            portrait->set_height(80.0f);
-+            portrait->set_margin_top(-40.0f);
++            portrait->set_width(88.0f);
++            portrait->set_height(88.0f);
++            portrait->set_margin_top(-44.0f);
 +            portrait->set_pointer_events(PointerEvents::None);
 +        } else {
 +            portrait->set_src(src);
