@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- Ray traced denoising: no more dotted patches and dotted lines across floors in the ray traced occlusion and bounce light (seen in Targitzan's Temple Lobby and Mayahem Temple, and in the SSGI debug view). The denoiser looked up each spot's last frame in the wrong place, more so towards the picture's edges, and took its history from the wrong surface.
 - First-person shooter sections (Targitzan's Temple and the rest): the view tilts up and down as far as 80 degrees each way, where it stopped at 45 down and 70 up, with the mouse, the gyro and R with the stick alike.
 - Above 30 FPS, the light round torch fires no longer flickers many times too fast (Witchyworld's Haunted Cavern and every fire of that kind): the walls a torch lights now change brightness 30 times a second, as at 30 FPS, instead of on every frame.
 - Ray traced denoising: when Banjo jumps up onto a ledge, the shade he cast on the ground below no longer stays behind as a dark Banjo-shaped patch that fades over a third of a second.

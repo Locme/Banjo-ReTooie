@@ -5384,7 +5384,14 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 float3 HistoryView(float3 world) {
     const float4 x = DenoiseRow(0u), y = DenoiseRow(1u), z = DenoiseRow(2u);
     const float3 d = world - float3(x.w, y.w, z.w);
-    return float3(x.x * d.x + y.x * d.y + z.x * d.z, x.y * d.x + y.y * d.y + z.y * d.z, x.z * d.x + y.z * d.y + z.z * d.z);
+    // The rows take a view position into the world (world.x = dot(view, x.xyz) + x.w and so on); this undoes them with
+    // their true inverse (the cross products of the rows over their determinant). Their transpose, used before, is the
+    // inverse only for a pure rotation: the game's view isn't one, so each spot was looked for in the wrong place of the
+    // history, the more so towards the picture's edges. There the history came from texels of the wrong surface and the
+    // occlusion and bounce light showed a dotted pattern in patches and lines across the floor (L, 2026-11-12).
+    const float3 c0 = cross(y.xyz, z.xyz), c1 = cross(z.xyz, x.xyz), c2 = cross(x.xyz, y.xyz);
+    const float det = dot(x.xyz, c0);
+    return (c0 * d.x + c1 * d.y + c2 * d.z) / ((abs(det) > 1e-12f) ? det : 1.0f);
 }
 
 // Ray traced denoising: a band's new rays (raw) blended into what the same spot of the world held in the pass before. The spot
