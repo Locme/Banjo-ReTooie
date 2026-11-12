@@ -396,20 +396,28 @@ bool SnowTrailNear(float2 xz, float r) {
 // dents' walls are soft slopes in both shape and light, at a quarter of the lookups a wider filter took. The trail
 // itself (s.trail) is the four's average.
 void SnowTrailSmoothed(float2 xz, float groundY, float blur, float edge, inout SnowSample s) {
-    const float r = blur * 0.75f;
+    // Nine lookups blur * 0.5 apart, weighted 1 2 1 each way (a tent over the whole blur), the slope from the same nine
+    // as a Sobel filter takes it. (Four lookups at the corners, as before, averaged two cliffs of a print's edge into a
+    // terrace of two hard steps: the snow's edges looked cut.)
+    const float r = blur * 0.5f;
     // (Not below the ground near the snowy ground's edge, edge: there the trench would open a hole beside a cliff.)
     const float3 keep = float3(1.0f, 1.0f, edge);
-    const float3 t00 = SnowTrailAt(xz + float2(-r, -r), groundY) * keep;
-    const float3 t10 = SnowTrailAt(xz + float2(r, -r), groundY) * keep;
-    const float3 t01 = SnowTrailAt(xz + float2(-r, r), groundY) * keep;
-    const float3 t11 = SnowTrailAt(xz + float2(r, r), groundY) * keep;
-    const float h00 = SnowHeight(s.surface, t00);
-    const float h10 = SnowHeight(s.surface, t10);
-    const float h01 = SnowHeight(s.surface, t01);
-    const float h11 = SnowHeight(s.surface, t11);
-    s.trail = (t00 + t10 + t01 + t11) * 0.25f;
-    s.height = (h00 + h10 + h01 + h11) * 0.25f;
-    s.slope = float2((h10 + h11) - (h00 + h01), (h01 + h11) - (h00 + h10)) / (4.0f * r);
+    float3 trail = 0.0f;
+    float height = 0.0f;
+    float2 slope = 0.0f;
+    [unroll] for (int j = -1; j <= 1; j++) {
+        [unroll] for (int i = -1; i <= 1; i++) {
+            const float3 t = SnowTrailAt(xz + float2(i, j) * r, groundY) * keep;
+            const float h = SnowHeight(s.surface, t);
+            const float w = float((2 - abs(i)) * (2 - abs(j)));
+            trail += t * w;
+            height += h * w;
+            slope += float2(float(i) * float(2 - abs(j)), float(j) * float(2 - abs(i))) * h;
+        }
+    }
+    s.trail = trail / 16.0f;
+    s.height = height / 16.0f;
+    s.slope = slope / (8.0f * r);
     s.sloped = true;
 }
 
@@ -417,7 +425,7 @@ void SnowTrailSmoothed(float2 xz, float groundY, float blur, float edge, inout S
 // Two cells up to the Snow LOD distance, then coarser and coarser (smoother, and cheaper) the further away.
 float SnowTrailSegment(float cameraDistance) {
     const float start = max(FrParams.snowLod.x, 1.0f);
-    // (No finer than 4 units: the trail is smoothed over 4.5, SnowTrailBlur, so finer points cost without showing more.
+    // (No finer than 4 units: the trail is smoothed over 7, SnowTrailBlur, so finer points cost without showing more.
     // Sand, shallow, keeps its footprints' detail: one cell. Further off, coarser with the distance as a point covers
     // fewer pixels, about as many pixels apart everywhere: finely cut prints all over the level, held until the map
     // changes, cost the most of a frame.)
@@ -430,7 +438,7 @@ float SnowTrailSegment(float cameraDistance) {
 // shader where to raise the surface to, and the pixel shader alike, so the shading matches the shape. Never less than
 // a few cells, so the dents' walls slope as soft snow does instead of standing as steps and spikes between the cells.
 float SnowTrailBlur(float cameraDistance) {
-    return SnowSand() ? max(SnowTrailSegment(cameraDistance) * 0.5f, 1.25f) : max(SnowTrailSegment(cameraDistance) * 0.75f, 4.5f);
+    return SnowSand() ? max(SnowTrailSegment(cameraDistance) * 0.5f, 1.25f) : max(SnowTrailSegment(cameraDistance) * 0.75f, 7.0f);
 }
 
 // SnowTrailSegment and SnowTrailBlur at a world position: closer together round Banjo (half as far apart within 150
@@ -451,7 +459,9 @@ float SnowTrailSegmentAt(float3 world, float cameraDistance) {
 
 float SnowTrailBlurAt(float3 world, float cameraDistance) {
     const float near = SnowTrailNearBanjo(world);
-    return SnowSand() ? max(SnowTrailSegment(cameraDistance) * near * 0.5f, 1.25f) : max(SnowTrailSegment(cameraDistance) * near * 0.75f, 4.5f);
+    // (Snow smoothed as far round Banjo as elsewhere, at least 7 units, so its soft edges stay soft: only sand's prints,
+    // shallow and crisp, are smoothed less there. Banjo's prints still show one by one, by their light, SnowShellShade.)
+    return SnowSand() ? max(SnowTrailSegment(cameraDistance) * near * 0.5f, 1.25f) : max(SnowTrailSegment(cameraDistance) * 0.75f, 7.0f);
 }
 
 // The tessellated snow (RASTER_SNOW_TESS, SnowTess.hlsl): its height over a point of the ground (ground, with how much
@@ -524,7 +534,9 @@ bool SnowTessPacked() {
 
 float4 SnowTessPack(float3 ground, bool shaped, SnowSample s, bool groundPass) {
     if (groundPass) {
-        return float4(ground, shaped ? s.height : 0.0f);
+        // (Where no snow lies, far above, so RasterPS keeps the ground there: it leaves the ground pass out where the snow
+        // lies within 2 units of it.)
+        return float4(ground, shaped ? s.height : 1.0e4f);
     }
     const float lit = s.sloped ? SnowTrailLight(s.slope) : 0.0f;
     const float under = saturate((s.surface - s.shellY) / max(s.surface, 1.0f));
@@ -628,9 +640,10 @@ bool SnowShellShade(float3 world, float3 baseColor, float share, SnowSample s, b
     }
     // A footprint reads plainly on snow near white: its floor darker and bluer the deeper it goes (packed snow in a
     // hollow, the sky's blue light all that reaches it), the wall turned from the light in clear blue shade.
-    float3 shade = color * lerp(1.06f, 0.76f, under) * (1.0f + 0.3f * max(lit, 0.0f));
+    // (Eased in over the wall, not started hard at the rim, so a trench's edge reads as a soft fold in the snow.)
+    float3 shade = color * lerp(1.06f, 0.76f, smoothstep(0.0f, 1.0f, under)) * (1.0f + 0.3f * max(lit, 0.0f));
     shade = lerp(shade, shade * float3(0.55f, 0.62f, 0.84f), saturate(-lit * 1.25f));
-    shade = lerp(shade, shade * float3(0.74f, 0.8f, 0.95f), smoothstep(0.0f, 0.6f, under));
+    shade = lerp(shade, shade * float3(0.74f, 0.8f, 0.95f), smoothstep(0.05f, 0.8f, under));
 
     // Glints in the sun off grains of snow lying on its untouched top (SnowSparkle), each fading in and out as the
     // camera moves.

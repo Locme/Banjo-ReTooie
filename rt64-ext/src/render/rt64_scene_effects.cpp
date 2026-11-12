@@ -2514,9 +2514,9 @@ namespace RT64 {
     // Deep snow's trench walls in the renderer's copy of the trail (SnowSlopeWalls): how steeply a print's floor rises
     // to the cells round it (rise per unit across), how far it rises at most, and how wide the rounded toe is where
     // the wall curves into the floor (world units).
-    static constexpr float SnowWallSlope = 3.0f;
+    static constexpr float SnowWallSlope = 2.2f;
     static constexpr float SnowWallRise = 140.0f;
-    static constexpr float SnowWallToe = 4.0f;
+    static constexpr float SnowWallToe = 6.0f;
     // The tiles (cells a side) SnowTrail::tilePressed and tileHeld mark, and the most times a second a copy's walls are
     // worked out round new prints, and round prints only held again (their time renewed, their floor the same).
     static constexpr int32_t SnowWallTile = 8;
@@ -2548,7 +2548,7 @@ namespace RT64 {
     // step down evenly and the lookups blend them into a round, sloped wall the points can follow.
     //
     // It is worked out on a grid of 2 x 2 cells (each the lowest print in it), a quarter of the work, and blended back
-    // to the cells between them, as the walls are some 50 units wide; the distance passes on from neighbour to
+    // to the cells between them, as the walls are some 65 units wide; the distance passes on from neighbour to
     // neighbour in two sweeps (a chamfer distance transform) through steps of 1, the square root of 2 and of 5 cells,
     // which keeps the walls of round prints within about 2% of round (one and the root of 2 alone give octagons) with
     // additions only. A cell given a floor takes the time and world cell of the print it came from, so it fills back in
