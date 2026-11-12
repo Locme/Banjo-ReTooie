@@ -425,7 +425,7 @@ void SnowTrailSmoothed(float2 xz, float groundY, float blur, float edge, inout S
 // Two cells up to the Snow LOD distance, then coarser and coarser (smoother, and cheaper) the further away.
 float SnowTrailSegment(float cameraDistance) {
     const float start = max(FrParams.snowLod.x, 1.0f);
-    // (No finer than 4 units: the trail is smoothed over 7, SnowTrailBlur, so finer points cost without showing more.
+    // (No finer than 4 units: the trail is smoothed over 6, SnowTrailBlur, so finer points cost without showing more.
     // Sand, shallow, keeps its footprints' detail: one cell. Further off, coarser with the distance as a point covers
     // fewer pixels, about as many pixels apart everywhere: finely cut prints all over the level, held until the map
     // changes, cost the most of a frame.)
@@ -438,7 +438,7 @@ float SnowTrailSegment(float cameraDistance) {
 // shader where to raise the surface to, and the pixel shader alike, so the shading matches the shape. Never less than
 // a few cells, so the dents' walls slope as soft snow does instead of standing as steps and spikes between the cells.
 float SnowTrailBlur(float cameraDistance) {
-    return SnowSand() ? max(SnowTrailSegment(cameraDistance) * 0.5f, 1.25f) : max(SnowTrailSegment(cameraDistance) * 0.75f, 7.0f);
+    return SnowSand() ? max(SnowTrailSegment(cameraDistance) * 0.5f, 1.25f) : max(SnowTrailSegment(cameraDistance) * 0.75f, 6.0f);
 }
 
 // SnowTrailSegment and SnowTrailBlur at a world position: closer together round Banjo (half as far apart within 150
@@ -459,9 +459,9 @@ float SnowTrailSegmentAt(float3 world, float cameraDistance) {
 
 float SnowTrailBlurAt(float3 world, float cameraDistance) {
     const float near = SnowTrailNearBanjo(world);
-    // (Snow smoothed as far round Banjo as elsewhere, at least 7 units, so its soft edges stay soft: only sand's prints,
+    // (Snow smoothed as far round Banjo as elsewhere, at least 6 units, so its soft edges stay soft: only sand's prints,
     // shallow and crisp, are smoothed less there. Banjo's prints still show one by one, by their light, SnowShellShade.)
-    return SnowSand() ? max(SnowTrailSegment(cameraDistance) * near * 0.5f, 1.25f) : max(SnowTrailSegment(cameraDistance) * 0.75f, 7.0f);
+    return SnowSand() ? max(SnowTrailSegment(cameraDistance) * near * 0.5f, 1.25f) : max(SnowTrailSegment(cameraDistance) * 0.75f, 6.0f);
 }
 
 // The tessellated snow (RASTER_SNOW_TESS, SnowTess.hlsl): its height over a point of the ground (ground, with how much
