@@ -230,6 +230,22 @@ SnowVertex DSMain(SnowPatch p, float3 w : SV_DomainLocation, const OutputPatch<S
     const bool shaped = SnowTessShape(v.furAnchor.xyz, v.furAnchor.w, p.normal, blur, s);
     const bool groundPass = (gConstants.grassShells & RASTER_SNOW_GROUND) != 0;
     const float height = groundPass ? 0.0f : s.height;
+    // The snow's texture lies on it by the ground's x and z under it, so down a trench's steep wall every point of a
+    // column had the same place in it, and the texture was drawn as streaks straight down the wall (in every lighting).
+    // A point pressed down is moved in the texture as far again as it dropped, downhill, by how steep the snow is there,
+    // so the texture runs on down the wall instead. (The ground's texture across the patch, from its corners.)
+    if (!groundPass && shaped && s.sloped) {
+        const float drop = max(s.surface - s.height, 0.0f);
+        const float slopeLength = length(s.slope);
+        const float2 e1 = b.xz - a.xz, e2 = c.xz - a.xz;
+        const float det = e1.x * e2.y - e1.y * e2.x;
+        if ((drop > 0.25f) && (slopeLength > 0.05f) && (abs(det) > 1e-3f)) {
+            const float2 move = (-s.slope / slopeLength) * (drop * saturate(slopeLength * 0.5f));
+            const float u = (move.x * e2.y - move.y * e2.x) / det;
+            const float t = (e1.x * move.y - e1.y * move.x) / det;
+            v.uv += (patch[1].uv - patch[0].uv) * u + (patch[2].uv - patch[0].uv) * t;
+        }
+    }
     if (SnowTessPacked()) {
         v.furAnchor = SnowTessPack(v.furAnchor.xyz, shaped, s, groundPass);
     }

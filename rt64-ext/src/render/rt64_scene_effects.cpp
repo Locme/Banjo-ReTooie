@@ -1949,6 +1949,8 @@ namespace RT64 {
             // This frame's touches round Banjo (a window of the grid's size centred on him): the lowest a model
             // reached down to in each cell, and which cells that is so they can be cleared again.
             std::vector<float> touchLowest = std::vector<float>(SnowGridSize * SnowGridSize, FLT_MAX);
+            // Whether a solid draw (not only a see-through one, SceneSnowTouchDraw's soft) touched each of them.
+            std::vector<uint8_t> touchHard = std::vector<uint8_t>(SnowGridSize * SnowGridSize, 0);
             std::vector<uint32_t> touched;
             std::vector<float> bankMost = std::vector<float>(SnowGridSize * SnowGridSize, 0.0f);
             std::vector<float> bankY = std::vector<float>(SnowGridSize * SnowGridSize, FLT_MAX);
@@ -1976,6 +1978,8 @@ namespace RT64 {
         struct SnowTouchPlace {
             uint32_t count;
             float x, y, z;
+            // A see-through draw (SceneSnowTouchDraw's soft).
+            bool soft = false;
         };
         struct SnowTouchDraws {
             std::vector<float> triangles;
@@ -2074,11 +2078,11 @@ namespace RT64 {
         }
     }
 
-    void SceneSnowTouchDraw(const float *triangles, size_t count) {
+    void SceneSnowTouchDraw(const float *triangles, size_t count, bool soft) {
         if (count == 0) {
             return;
         }
-        SnowTouchPlace place = { uint32_t(count), 0.0f, 0.0f, 0.0f };
+        SnowTouchPlace place = { uint32_t(count), 0.0f, 0.0f, 0.0f, soft };
         for (size_t i = 0; i < count * 3; i++) {
             place.x += triangles[i * 3 + 0];
             place.y += triangles[i * 3 + 1];
@@ -2108,6 +2112,10 @@ namespace RT64 {
     static void SnowTakeTouches(SnowTrail &trail, float x, float y, float z, float full, uint32_t now, float recover) {
         const auto started = std::chrono::steady_clock::now();
         std::vector<float> touches;
+        // The see-through draws' (Chilly Willy's ice balls, SceneSnowTouchDraw's soft): each lands with a great round
+        // ball, and pressed in full it blasted a crater as deep as the snow with banks round it. They press no lower than
+        // a quarter of the snow's depth below its top (softFloor), and raise no banks: a soft dent where each one fell.
+        std::vector<float> softTouches;
         {
             const std::scoped_lock lock(snowTouchMutex);
             touches.swap(snowTouches);
@@ -2115,7 +2123,8 @@ namespace RT64 {
             uint32_t still = 0;
             for (const auto &[place, range] : snowTouchHeld.draws) {
                 if (!SnowTouchFound(snowTouchNow.draws, place) && !SnowTouchFound(snowTouchBefore, place)) {
-                    touches.insert(touches.end(), snowTouchHeld.triangles.begin() + range.first, snowTouchHeld.triangles.begin() + range.first + range.second);
+                    std::vector<float> &into = place.soft ? softTouches : touches;
+                    into.insert(into.end(), snowTouchHeld.triangles.begin() + range.first, snowTouchHeld.triangles.begin() + range.first + range.second);
                     // TOOIE_SNOW_LOG=2: the moving draws now and then (how many triangles, where, and the nearest draw
                     // of as many triangles the frame after).
                     static const bool movingLog = (std::getenv("TOOIE_SNOW_LOG") != nullptr) && (std::getenv("TOOIE_SNOW_LOG")[0] == '2');
@@ -2143,7 +2152,7 @@ namespace RT64 {
             std::swap(snowTouchHeld, snowTouchNow);
             snowTouchNow.clear();
         }
-        trail.lastTouches = uint32_t(touches.size() / 9);
+        trail.lastTouches = uint32_t((touches.size() + softTouches.size()) / 9);
         // The window: the grid's size, centred on Banjo, in world cells.
         const int32_t n = int32_t(SnowGridSize);
         const int32_t originX = int32_t(std::floor(x / trail.cell)) - n / 2;
@@ -2153,7 +2162,8 @@ namespace RT64 {
         // slopes round him), or every creature walking or flying about near him marks the trail (Terrydactyland).
         const float ceiling = effectsSettings.snowSand ? (y + full + 20.0f) : (y + 50.0f + full + 10.0f);
         const float spacing = trail.cell;
-        auto touch = [&](float px, float py, float pz) {
+        const float softFloor = y + full / (1.0f + SnowBank) * 0.75f;
+        auto touch = [&](float px, float py, float pz, bool soft) {
             const int32_t cx = int32_t(std::floor(px / trail.cell)) - originX;
             const int32_t cz = int32_t(std::floor(pz / trail.cell)) - originZ;
             if ((cx < 0) || (cz < 0) || (cx >= n) || (cz >= n)) {
@@ -2164,26 +2174,33 @@ namespace RT64 {
             if (lowest == FLT_MAX) {
                 trail.touched.push_back(k);
             }
-            lowest = std::min(lowest, py);
+            lowest = std::min(lowest, soft ? std::max(py, softFloor) : py);
+            if (!soft) {
+                trail.touchHard[k] = 1;
+            }
         };
         const float reach = float(n / 2) * trail.cell;
-        for (size_t i = 0; i + 9 <= touches.size(); i += 9) {
-            const float *p = &touches[i];
-            if ((std::min(p[1], std::min(p[4], p[7])) > ceiling) || (std::max(p[1], std::max(p[4], p[7])) < y - 400.0f) ||
-                (std::abs(p[0] - x) > reach) || (std::abs(p[2] - z) > reach))
-            {
-                continue;
-            }
-            // Points over the triangle at most spacing apart (fewer on a big one), each marking the cell under it.
-            const float e1[3] = { p[3] - p[0], p[4] - p[1], p[5] - p[2] };
-            const float e2[3] = { p[6] - p[0], p[7] - p[1], p[8] - p[2] };
-            const float longest = std::sqrt(std::max({ e1[0] * e1[0] + e1[2] * e1[2], e2[0] * e2[0] + e2[2] * e2[2],
-                (p[6] - p[3]) * (p[6] - p[3]) + (p[8] - p[5]) * (p[8] - p[5]) }));
-            const uint32_t steps = std::clamp(uint32_t(std::ceil(longest / spacing)), 1u, 96u);
-            for (uint32_t u = 0; u <= steps; u++) {
-                for (uint32_t v = 0; v <= steps - u; v++) {
-                    const float fu = float(u) / float(steps), fv = float(v) / float(steps);
-                    touch(p[0] + e1[0] * fu + e2[0] * fv, p[1] + e1[1] * fu + e2[1] * fv, p[2] + e1[2] * fu + e2[2] * fv);
+        // (The see-through draws' triangles second, pressing no lower than softFloor.)
+        for (int list = 0; list < 2; list++) {
+            const std::vector<float> &from = (list == 0) ? touches : softTouches;
+            for (size_t i = 0; i + 9 <= from.size(); i += 9) {
+                const float *p = &from[i];
+                if ((std::min(p[1], std::min(p[4], p[7])) > ceiling) || (std::max(p[1], std::max(p[4], p[7])) < y - 400.0f) ||
+                    (std::abs(p[0] - x) > reach) || (std::abs(p[2] - z) > reach))
+                {
+                    continue;
+                }
+                // Points over the triangle at most spacing apart (fewer on a big one), each marking the cell under it.
+                const float e1[3] = { p[3] - p[0], p[4] - p[1], p[5] - p[2] };
+                const float e2[3] = { p[6] - p[0], p[7] - p[1], p[8] - p[2] };
+                const float longest = std::sqrt(std::max({ e1[0] * e1[0] + e1[2] * e1[2], e2[0] * e2[0] + e2[2] * e2[2],
+                    (p[6] - p[3]) * (p[6] - p[3]) + (p[8] - p[5]) * (p[8] - p[5]) }));
+                const uint32_t steps = std::clamp(uint32_t(std::ceil(longest / spacing)), 1u, 96u);
+                for (uint32_t u = 0; u <= steps; u++) {
+                    for (uint32_t v = 0; v <= steps - u; v++) {
+                        const float fu = float(u) / float(steps), fv = float(v) / float(steps);
+                        touch(p[0] + e1[0] * fu + e2[0] * fv, p[1] + e1[1] * fu + e2[1] * fv, p[2] + e1[2] * fu + e2[2] * fv, list == 1);
+                    }
                 }
             }
         }
@@ -2240,7 +2257,7 @@ namespace RT64 {
             }
             SnowTouchCell(trail, originX + cx, originZ + cz, lowest, 0.0f, now, recover);
             const float deep = std::clamp((y + full - lowest) / std::max(full, 1e-3f), 0.0f, 1.0f);
-            if ((deep <= 0.05f) || !edge(k)) {
+            if ((deep <= 0.05f) || !edge(k) || !trail.touchHard[k]) {
                 continue;
             }
             for (int32_t dz = -bankReach; dz <= bankReach; dz++) {
@@ -2273,6 +2290,7 @@ namespace RT64 {
         trail.banked.clear();
         for (uint32_t k : trail.touched) {
             trail.touchLowest[k] = FLT_MAX;
+            trail.touchHard[k] = 0;
         }
         trail.touched.clear();
         trail.lastTouchMs = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - started).count();

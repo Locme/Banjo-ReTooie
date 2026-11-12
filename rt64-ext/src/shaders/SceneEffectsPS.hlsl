@@ -1059,7 +1059,16 @@ float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float su
     const float brightness = dot(lit, luma);
     const float over = max(brightness - 0.75f, 0.0f);
     const float rolled = min(brightness, 0.75f) + over / (1.0f + over * 4.0f);
-    return min(lit * (rolled / max(brightness, 1e-4f)), 1.0f);
+    const float3 shouldered = lit * (rolled / max(brightness, 1e-4f));
+    // A channel still over white fades the colour towards white at the same brightness, as film and the eye see too
+    // much light, instead of being cut off on its own: cut per channel, a strongly coloured surface lit brightly went
+    // neon (Icy Side's teal ice turned cyan, its bright channels cut and its dark one left), and its shading flattened.
+    const float most = max(shouldered.r, max(shouldered.g, shouldered.b));
+    if (most <= 1.0f) {
+        return shouldered;
+    }
+    const float level = min(dot(shouldered, luma), 1.0f);
+    return saturate(level + (shouldered - level) * ((1.0f - level) / max(most - level, 1e-4f)));
 }
 
 #ifndef RAY_TRACED

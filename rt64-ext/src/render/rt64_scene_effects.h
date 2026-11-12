@@ -456,7 +456,8 @@ namespace RT64 {
     void SceneSnowTouch(const float *triangle);
     // One model draw's triangles (count of them, nine floats each) that may press the snow: held back a frame, and left
     // out if the draw stands still.
-    void SceneSnowTouchDraw(const float *triangles, size_t count);
+    // soft: a see-through draw (Chilly Willy's ice balls): it presses at most a shallow dent and raises no banks.
+    void SceneSnowTouchDraw(const float *triangles, size_t count, bool soft = false);
     // The most shells drawn over a snow draw: 0 when there is no deep snow.
     uint32_t SceneSnowShells();
     // How much nearer the snow counts as being for the camera's zoom (1 for the usual camera, less zoomed in).
