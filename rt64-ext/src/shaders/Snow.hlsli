@@ -417,7 +417,7 @@ void SnowTrailSmoothed(float2 xz, float groundY, float blur, float edge, inout S
 // Two cells up to the Snow LOD distance, then coarser and coarser (smoother, and cheaper) the further away.
 float SnowTrailSegment(float cameraDistance) {
     const float start = max(FrParams.snowLod.x, 1.0f);
-    // (No finer than 4 units: the trail is smoothed over 6, SnowTrailBlur, so finer points cost without showing more.
+    // (No finer than 4 units: the trail is smoothed over 4.5, SnowTrailBlur, so finer points cost without showing more.
     // Sand, shallow, keeps its footprints' detail: one cell. Further off, coarser with the distance as a point covers
     // fewer pixels, about as many pixels apart everywhere: finely cut prints all over the level, held until the map
     // changes, cost the most of a frame.)
@@ -430,7 +430,28 @@ float SnowTrailSegment(float cameraDistance) {
 // shader where to raise the surface to, and the pixel shader alike, so the shading matches the shape. Never less than
 // a few cells, so the dents' walls slope as soft snow does instead of standing as steps and spikes between the cells.
 float SnowTrailBlur(float cameraDistance) {
-    return SnowSand() ? max(SnowTrailSegment(cameraDistance) * 0.5f, 1.25f) : max(SnowTrailSegment(cameraDistance) * 0.75f, 6.0f);
+    return SnowSand() ? max(SnowTrailSegment(cameraDistance) * 0.5f, 1.25f) : max(SnowTrailSegment(cameraDistance) * 0.75f, 4.5f);
+}
+
+// SnowTrailSegment and SnowTrailBlur at a world position: closer together round Banjo (half as far apart within 150
+// units of him, easing back by 400), so his footprints, about 10 units long, show one by one where they are fresh
+// and looked at instead of running together into a furrow, while the trail further off stays as cheap as before. (By
+// the position only, so the patches either side of an edge, and the domain shader's points, agree.)
+float SnowTrailNearBanjo(float3 world) {
+    const float4 player = FrParams.snowPlayer;
+    if (player.w <= 0.0f) {
+        return 1.0f;
+    }
+    return lerp(0.5f, 1.0f, saturate((distance(world.xz, player.xy) - 150.0f) / 250.0f));
+}
+
+float SnowTrailSegmentAt(float3 world, float cameraDistance) {
+    return SnowTrailSegment(cameraDistance) * SnowTrailNearBanjo(world);
+}
+
+float SnowTrailBlurAt(float3 world, float cameraDistance) {
+    const float near = SnowTrailNearBanjo(world);
+    return SnowSand() ? max(SnowTrailSegment(cameraDistance) * near * 0.5f, 1.25f) : max(SnowTrailSegment(cameraDistance) * near * 0.75f, 4.5f);
 }
 
 // The tessellated snow (RASTER_SNOW_TESS, SnowTess.hlsl): its height over a point of the ground (ground, with how much
@@ -584,12 +605,15 @@ bool SnowShellShade(float3 world, float3 baseColor, float share, SnowSample s, b
     const float sunny = saturate(lit * 2.0f + 1.0f);
 
     if (SnowSand()) {
-        // Sand: rippled by the wind where no foot has flattened it, a footprint a little darker (packed down), and its
-        // shaded slopes warm, not blue.
+        // Sand: rippled by the wind where no foot has flattened it, and its shaded slopes warm, not blue. A footprint
+        // reads plainly: its floor darker the deeper it goes and browner (the sand under the dry top, packed down and a
+        // little damp), its wall toward the light brighter and the one away in deep warm shade.
+        // (Sand's prints are shallow, so the trail's own slopes light them half again as strongly as snow's.)
         const float2 sandSlope = surfaceSlope + SandRippleSlope(world.xz, s.cameraDistance) * (1.0f - under);
-        lit = clamp(lit + SnowTrailLight(sandSlope - surfaceSlope), -1.0f, 1.0f);
-        float3 sand = color * lerp(1.03f, 0.76f, under) * (1.0f + 0.25f * max(lit, 0.0f));
-        sand = lerp(sand, sand * float3(0.8f, 0.75f, 0.68f), saturate(-lit) * 0.85f);
+        lit = clamp(lit * 1.5f + SnowTrailLight(sandSlope - surfaceSlope), -1.0f, 1.0f);
+        float3 sand = color * lerp(1.04f, 0.6f, under) * (1.0f + 0.4f * max(lit, 0.0f));
+        sand = lerp(sand, sand * float3(0.68f, 0.6f, 0.52f), saturate(-lit * 1.3f) * 0.9f);
+        sand = lerp(sand, sand * float3(0.88f, 0.79f, 0.68f), saturate(under * 2.0f));
         // Journey's sand (Edwards, GDC 2013): a broad sheen off the swells' and big ripples' slopes toward the sun,
         // strongest seen low across the sand ("ocean specular"), and glitter off single grains. Not on packed-down
         // sand. (Off the broad shape only: the small ripples, about as fine as the pixels, drew bands of moire in it.)
@@ -602,9 +626,11 @@ bool SnowShellShade(float3 world, float3 baseColor, float share, SnowSample s, b
         color = sand;
         return true;
     }
-    float3 shade = color * lerp(1.06f, 0.84f, under) * (1.0f + 0.3f * max(lit, 0.0f));
-    shade = lerp(shade, shade * float3(0.62f, 0.68f, 0.86f), saturate(-lit));
-    shade = lerp(shade, shade * float3(0.8f, 0.84f, 0.94f), saturate(under * s.trail.x * 1.5f));
+    // A footprint reads plainly on snow near white: its floor darker and bluer the deeper it goes (packed snow in a
+    // hollow, the sky's blue light all that reaches it), the wall turned from the light in clear blue shade.
+    float3 shade = color * lerp(1.06f, 0.76f, under) * (1.0f + 0.3f * max(lit, 0.0f));
+    shade = lerp(shade, shade * float3(0.55f, 0.62f, 0.84f), saturate(-lit * 1.25f));
+    shade = lerp(shade, shade * float3(0.74f, 0.8f, 0.95f), smoothstep(0.0f, 0.6f, under));
 
     // Glints in the sun off grains of snow lying on its untouched top (SnowSparkle), each fading in and out as the
     // camera moves.

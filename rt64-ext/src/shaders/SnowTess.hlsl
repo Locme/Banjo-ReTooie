@@ -82,12 +82,12 @@ bool SandTooFar(float3 world, float cameraDistance) {
     return (player.w <= 0.0f) || (distance(world, float3(player.x, player.z, player.y)) > SandTessReach);
 }
 
-float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
+float SnowSegmentFactor(float edgeLength, float3 middle, float cameraDistance, bool trail) {
     // (Untouched snow lies flat over the ground, raised by the same height all over a triangle: nothing to cut.)
     if (!trail) {
         return 1.0f;
     }
-    return clamp(edgeLength / SnowTrailSegment(cameraDistance), 1.0f, SnowTessMaxFactor);
+    return clamp(edgeLength / SnowTrailSegmentAt(middle, cameraDistance), 1.0f, SnowTessMaxFactor);
 }
 
 // For the untouched surface's own shape (SnowSurfaceShape): 1 past its reach, for the ground pass
@@ -110,7 +110,7 @@ float SnowEdgeFactor(float4 anchorA, float4 anchorB) {
     const float3 camera = FrParams.snowCamera.xyz;
     const float cameraDistance = distance((a + b) * 0.5f, camera);
     const bool trail = !SandTooFar((a + b) * 0.5f, cameraDistance) && SnowTrailInBox(min(a.xz, b.xz), max(a.xz, b.xz));
-    return max(SnowSegmentFactor(edgeLength, cameraDistance, trail), SnowSurfaceFactor(edgeLength, cameraDistance, min(anchorA.w, anchorB.w)));
+    return max(SnowSegmentFactor(edgeLength, (a + b) * 0.5f, cameraDistance, trail), SnowSurfaceFactor(edgeLength, cameraDistance, min(anchorA.w, anchorB.w)));
 }
 
 // The inside's factor: as fine as the trail anywhere over the triangle needs, and at least as fine as its edges.
@@ -119,7 +119,7 @@ float SnowInsideFactor(float3 a, float3 b, float3 c, float raised, float edgeFac
     const float3 camera = FrParams.snowCamera.xyz;
     const float cameraDistance = distance((a + b + c) / 3.0f, camera);
     const bool trail = !SandTooFar((a + b + c) / 3.0f, cameraDistance) && SnowTrailInBox(min(a.xz, min(b.xz, c.xz)), max(a.xz, max(b.xz, c.xz)));
-    return max(edgeFactor, max(SnowSegmentFactor(longest, cameraDistance, trail), SnowSurfaceFactor(longest, cameraDistance, raised)));
+    return max(edgeFactor, max(SnowSegmentFactor(longest, (a + b + c) / 3.0f, cameraDistance, trail), SnowSurfaceFactor(longest, cameraDistance, raised)));
 }
 
 // Whether a patch is out of view: all of it, from the snow's full height above the ground to as far below it, past the
@@ -226,7 +226,7 @@ SnowVertex DSMain(SnowPatch p, float3 w : SV_DomainLocation, const OutputPatch<S
     else if (zeros == 0u) {
         spacing = max(distance(a, b), max(distance(b, c), distance(c, a))) / p.inside;
     }
-    const float blur = max(SnowTrailBlur(distance(v.furAnchor.xyz, camera)), spacing * 0.75f);
+    const float blur = max(SnowTrailBlurAt(v.furAnchor.xyz, distance(v.furAnchor.xyz, camera)), spacing * 0.75f);
     const bool shaped = SnowTessShape(v.furAnchor.xyz, v.furAnchor.w, p.normal, blur, s);
     const bool groundPass = (gConstants.grassShells & RASTER_SNOW_GROUND) != 0;
     const float height = groundPass ? 0.0f : s.height;
