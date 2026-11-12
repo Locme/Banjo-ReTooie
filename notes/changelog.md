@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- First-person shooter sections (Targitzan's Temple and the rest): the view tilts up and down as far as 80 degrees each way, where it stopped at 45 down and 70 up, with the mouse, the gyro and R with the stick alike.
 - Above 30 FPS, the light round torch fires no longer flickers many times too fast (Witchyworld's Haunted Cavern and every fire of that kind): the walls a torch lights now change brightness 30 times a second, as at 30 FPS, instead of on every frame.
 - Ray traced denoising: when Banjo jumps up onto a ledge, the shade he cast on the ground below no longer stays behind as a dark Banjo-shaped patch that fades over a third of a second.
 - Relighting: the light bounced off the surroundings and up from the ground carries a third of their colour instead of all or half of it, so green levels no longer tint grey stone green.

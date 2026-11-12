@@ -168,6 +168,8 @@ namespace {
     // limits, so the view holds where the mouse left it (L, 2026-11-04: up and down did not work, then down did not).
     std::atomic<float> shooter_tilt{0.0f};
     float shooter_tilt_applied = 0.0f;
+    // How far the shooter's view may tilt up and down, in degrees (the game's own limits are -45 and 70).
+    constexpr float shooter_tilt_limit = 80.0f;
 
     bool invert_y() {
         try {
@@ -353,9 +355,22 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
-// func_8080682C_bsfirstp as it starts ($a0 the player): the mouse's share of the tilt from last frame taken off.
+// func_8080682C_bsfirstp as it starts ($a0 the player): the tilt's limits widened, and the mouse's share of the tilt
+// from last frame taken off.
 extern "C" void tooie_shooter_tilt_begin(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t block = tooie::rdram::valid_ptr((uint32_t)ctx->r4) ? tooie::rdram::read_word(rdram, (uint32_t)ctx->r4 + 0x188) : 0;
+    if (tooie::rdram::valid_ptr(block)) {
+        // The game keeps the tilt between -45 and 70 degrees (+0x1EC and +0x1E8, Targitzan's Temple lobby), so the view
+        // stopped short when looking down at the floor or up (L, 2026-11-12: "it stops where I am aiming"). Both limits
+        // are widened to 80 degrees before the game uses them. The R-held stick look (func_80806928_bsfirstp) aims at
+        // the stick's share of the same limits, so the controller reaches as far as the mouse.
+        const float high = tooie::rdram::read_float(rdram, block + 0x1E8);
+        const float low = tooie::rdram::read_float(rdram, block + 0x1EC);
+        if (low < high) {
+            tooie::rdram::write_float(rdram, block + 0x1E8, std::max(high, shooter_tilt_limit));
+            tooie::rdram::write_float(rdram, block + 0x1EC, std::min(low, -shooter_tilt_limit));
+        }
+    }
     if (!tooie::rdram::valid_ptr(block) || shooter_tilt_applied == 0.0f) {
         shooter_tilt_applied = 0.0f;
         return;
