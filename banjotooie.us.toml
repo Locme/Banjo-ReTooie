@@ -1146,6 +1146,15 @@ func = "chfirefx_entrypoint_3"
 before_vram = 0x808005C4
 text = "tooie_fire_puff_whole(rdram, ctx, 3);"
 
+# func_80800C18_chfirefx moves a torch fire's light and then gives it a new random brightness
+# (func_800DC178) each game frame, so above 30 FPS the light on the walls round a torch flickered many
+# times faster (Witchyworld's Haunted Cavern). Above 30 FPS the new brightness is skipped until 1/30 s of
+# game time has gone by for that light ($s0), and the light keeps its last one (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_80800C18_chfirefx"
+before_vram = 0x80800E50
+text = "if (tooie_fire_light_skip(rdram, ctx)) { goto L_80800E88; }"
+
 # suflamefx_entrypoint_2 updates a flame's puffs ($s1 = the flame, $s0 = the puff). Each puff's width and
 # depth shrink by a factor ($f18, then $f8) and its age goes up by a step ($f16) once per game frame, so
 # above 30 FPS the puffs died in a fraction of the time and torches burned short and flat. Above 30 FPS the

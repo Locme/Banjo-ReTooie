@@ -986,6 +986,7 @@ namespace {
     StepGate vertex_flicker_gate;
     StepGate flame_flipbook_gate;
     StepGate fire_count_gate;
+    StepGate fire_light_gate;
 }
 
 // Talking-head portraits (the zoombox overlay): func_8080156C_gczoombox moves a
@@ -1573,6 +1574,16 @@ extern "C" void tooie_fire_puff_whole(uint8_t* rdram, recomp_context* ctx, int w
 
 extern "C" int tooie_fire_count_skip(uint8_t* rdram, recomp_context* ctx) {
     return fire_count_gate.skip(rdram, (uint32_t)ctx->r19) ? 1 : 0;
+}
+
+// A fire's light (chfirefx): func_80800C18_chfirefx moves the light with the fire, then multiplies its
+// colour by a new random brightness (func_800DC178) and sets it ($s0 = the light's holder), once per game
+// frame. The map's lit walls round the torch take that colour, so at Uncapped they flickered 300 or more
+// times a second instead of 30 (Witchyworld's Haunted Cavern; L, 2026-11-12). Above 30 FPS the new
+// brightness is skipped until 1/30 s of game time has gone by for that light, which keeps its last colour;
+// the light still follows the fire every frame.
+extern "C" int tooie_fire_light_skip(uint8_t* rdram, recomp_context* ctx) {
+    return fire_light_gate.skip(rdram, (uint32_t)ctx->r16) ? 1 : 0;
 }
 
 // Flames (the suflamefx overlay: torches and braziers, such as the ones in Witchyworld's Haunted Cavern
