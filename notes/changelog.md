@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- DLSS, FSR and the other upscalers turned on during play no longer leave the game drawing into a corner of an oversized picture. Banjo's shadow (and the sun shadows, ray tracing and the other effects) now stays under him instead of sliding off to one side, with every lighting choice. Turning an upscaler on before starting the game already worked.
 - Point Lights moved from the WIP tab to Graphics, in the Lighting section after Rim Light.
 - The upscalers (Upscaler and its settings) moved from the WIP tab to Display, under Anti-Aliasing And Scaling after FSR 1.
 - Relighting: shadows on Banjo no longer flicker. The check that leaves caves to the game's own lighting took Banjo's own head and arms for a roof, so his shaded side switched between relit and not as he moved; characters are now left out of it. Sun shadows also no longer speckle his low-poly body where a shadow begins.
