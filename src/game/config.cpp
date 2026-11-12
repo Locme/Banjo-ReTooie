@@ -1258,6 +1258,7 @@ void tooie::init_config() {
     tooie::fxaa::add_option(graphics);
     tooie::api_restart::add_prompt(graphics);
     tooie::fsr::add_option(graphics);
+    tooie::upscaler::add_option(graphics);
     // Game View (L, 2026-11-12): what the camera shows, at the bottom of the Display tab after the anti-aliasing. Added
     // after them, as the options set to show last keep the order they were added in.
     graphics.add_bool_option(
@@ -1286,14 +1287,15 @@ void tooie::init_config() {
                 recompui::config::get_graphics_config().save_config();
             }
         });
-    tooie::upscaler::add_option(graphics);
     // The Water entry (Original, Modern, Stylised) is WIP (L, 2026-10-23): it sits in the WIP tab.
     recompui::config::set_option_page(tooie::picture_filters::water_option, tooie::work_in_progress_tab_id);
     {
-        // The upscalers are WIP (L, 2026-10-23): in the WIP tab. Still Graphics options, so they save to
-        // graphics.json. The Upscaler drop-down is a collapsible menu over the rest (L, 2026-10-24).
+        // The upscalers (L, 2026-11-12; WIP tab before): the Display tab, under Anti-Aliasing And Scaling after FSR 1 and
+        // before Game View. Still Graphics options, so they save to graphics.json. The Upscaler drop-down is a
+        // collapsible menu over the rest (L, 2026-10-24).
         for (const std::string* id : { &tooie::upscaler::option, &tooie::upscaler::quality_option, &tooie::upscaler::hud_option, &tooie::upscaler::hud_full_option, &tooie::upscaler::reactive_option, &tooie::upscaler::object_motion_option, &tooie::upscaler::sharpness_option }) {
-            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+            recompui::config::set_option_page(*id, tooie::performance_tab_id);
+            recompui::config::set_option_display_last(*id);
         }
     }
     tooie::game_frame_rate::add_option(graphics);
