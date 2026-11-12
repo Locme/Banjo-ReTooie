@@ -5640,11 +5640,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         },
         TextureUpscale::Off);
     graphics.add_number_option(
-        texture_cartoon_option,
-        "Cartoon Textures",
-        "Flattens the game's textures into areas of even colour with clean edges between them, like painted cartoon textures: noise and dither wash out and brightness falls into a few soft steps. Done once as each texture loads (a compute shader on the GPU), after Texture Upscaling, which gives it more to work with. Texture packs take priority. Goes well with Toon Shading's Hard style. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
         sharpen_option,
         "Sharpening",
         "Sharpens the picture's fine detail, most where it is soft. 0 is off.",
@@ -5864,6 +5859,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Toon Outline Thickness",
         "How thick the toon outlines are: 25 is a thin line, 100 a heavy one and 200 a very bold cartoon line. They keep the same thickness at any resolution.",
         10, 200, 5, 0, false, 25);
+    graphics.add_number_option(
+        texture_cartoon_option,
+        "Cartoon Textures",
+        "Flattens the game's textures into areas of even colour with clean edges between them, like painted cartoon textures: noise and dither wash out and brightness falls into a few soft steps. Done once as each texture loads (a compute shader on the GPU), after Texture Upscaling, which gives it more to work with. Texture packs take priority. Goes well with Toon Shading's Hard style. 0 is off.",
+        0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         three_point_option,
         "Retro: N64 3-Point Filtering",
