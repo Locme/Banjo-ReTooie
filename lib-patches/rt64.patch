@@ -2659,7 +2659,7 @@ index 69a82ac..f9a72b5 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..949cbec 100644
+index 9fae0d4..97f8205 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,23 @@
@@ -4329,7 +4329,7 @@ index 9fae0d4..949cbec 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +3151,1379 @@ namespace RT64 {
+@@ -1747,24 +3151,1384 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -5064,7 +5064,12 @@ index 9fae0d4..949cbec 100644
 +                        const uint32_t snapHeight = uint32_t((lt.lrt >> 2) - (lt.ult >> 2)) + 1;
 +                        const bool wrapS = !(lt.cms & (G_TX_CLAMP | G_TX_MIRROR)) && (lt.masks > 0) && ((1u << lt.masks) == snapWidth);
 +                        const bool wrapT = !(lt.cmt & (G_TX_CLAMP | G_TX_MIRROR)) && (lt.maskt > 0) && ((1u << lt.maskt) == snapHeight);
-+                        const bool fromFramebuffer = snapTile.tileCopyUsed || snapTile.syncRequired;
++                        // A load RT64 syncs from a framebuffer counts only in a framebuffer's own format (RGBA, 16 or 32 bits): syncRequired is
++                        // also set for any texture loaded where an earlier framebuffer load sat in TMEM, so it took Banjo's own colour-indexed
++                        // textures for pieces too, and snapping his corners to the quarter-pixel grid opened dotted cracks along the seams of
++                        // his chest and muzzle at high resolution (L, 2026-11-12; found by bisecting to 8c360c23).
++                        const bool framebufferFormat = (lt.fmt == G_IM_FMT_RGBA) && ((lt.siz == G_IM_SIZ_16b) || (lt.siz == G_IM_SIZ_32b));
++                        const bool fromFramebuffer = snapTile.tileCopyUsed || (snapTile.syncRequired && framebufferFormat);
 +                        snapVertices = (fromFramebuffer && wrapS && wrapT) ? RASTER_SNAP_VERTICES : 0u;
 +                        NoteSnapDraw(fromFramebuffer, wrapS && wrapT, snapVertices != 0u);
 +                    }
@@ -5710,7 +5715,7 @@ index 9fae0d4..949cbec 100644
          };
  
  #   if RT_ENABLED
-@@ -1816,8 +4575,12 @@ namespace RT64 {
+@@ -1816,8 +4580,12 @@ namespace RT64 {
          }
  #   endif
  
