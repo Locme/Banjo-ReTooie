@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- Point Lights moved from the WIP tab to Graphics, in the Lighting section after Rim Light.
 - The upscalers (Upscaler and its settings) moved from the WIP tab to Display, under Anti-Aliasing And Scaling after FSR 1.
 - Relighting: shadows on Banjo no longer flicker. The check that leaves caves to the game's own lighting took Banjo's own head and arms for a roof, so his shaded side switched between relit and not as he moved; characters are now left out of it. Sun shadows also no longer speckle his low-poly body where a shadow begins.
 - Relighting leaves caves, tunnels and rooms to the game's own lighting, as Traced Relighting does, instead of darkening them as if they were in the sun's shade. Terrydactyland, with its tunnels, caves and Inside the Mountain, looked darker with Relighting than with ray tracing because of it. A roof that is off screen isn't found, and the spot is relit as before.

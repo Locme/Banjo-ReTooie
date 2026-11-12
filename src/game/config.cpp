@@ -1239,12 +1239,12 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::start_menu_presets_option, "Start Menu");
     tooie::point_lights::add_options(graphics);
     {
-        // Point Lights are WIP (L, 2026-11-03): the WIP tab, under their own heading, off by default.
+        // Point Lights (L, 2026-11-12; WIP tab before): the Graphics tab's Lighting section, after Rim Light and before
+        // Reflections And Water. Off by default.
         namespace pl = tooie::point_lights;
         for (const std::string* id : { &pl::option, &pl::strength_option }) {
-            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+            recompui::config::set_option_display_before(*id, tooie::picture_filters::reflections_section_option);
         }
-        recompui::config::set_option_group(pl::option, "Point Lights");
     }
     {
         // Wet, snowy and dirty characters are WIP too (L, 2026-10-23): the WIP tab, under their own heading, off by default.
