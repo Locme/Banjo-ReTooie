@@ -5510,6 +5510,7 @@ RECOMP_FUNC void idlight_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
     // 0x80800280: sw          $a0, 0x18($sp)
     MEM_W(0X18, ctx->r29) = ctx->r4;
     after_0:
+    if (tooie_light_effect_skip(rdram, ctx)) { ctx->f0.fl = 0.0f; }
     // 0x80800284: lw          $a3, 0x18($sp)
     ctx->r7 = MEM_W(ctx->r29, 0X18);
     // 0x80800288: lui         $at, 0x3F80

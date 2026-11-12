@@ -1196,6 +1196,34 @@ func = "func_80800884_chfirefx"
 before_vram = 0x808008F4
 text = "if (tooie_fire_spawn_skip(rdram, ctx)) { goto L_80800A64; }"
 
+# idlight_entrypoint_3 steps a flickering world light (an idworld effect, $a0 = the effect, saved at 0x18($sp))
+# by a random amount (func_800DC264, $f0) once per game frame, so above 30 FPS the light flickered many times
+# faster (the green light at the mouth of Witchyworld's Haunted Cavern). Above 30 FPS the step is 0 until
+# 1/30 s of game time has gone by for that effect (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "idlight_entrypoint_3"
+before_vram = 0x80800284
+text = "if (tooie_light_effect_skip(rdram, ctx)) { ctx->f0.fl = 0.0f; }"
+
+# subaddiefade_entrypoint_7 fades an enemy in or out ($a0 = the enemy) by 7 of its 255 alpha (+0x9B) each game
+# frame unless it fades by time, and removes it when a fade-out ends: above 30 FPS a beaten enemy vanished in a
+# fraction of the time. Above 30 FPS the step is 7 for each 1/30 s of game time, the fraction kept for the
+# enemy (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "subaddiefade_entrypoint_7"
+before_vram = 0x80800220
+text = "ctx->r2 = ADD32(ctx->r2, tooie_fade_step(rdram, ctx) - 7);"
+
+[[patches.hook]]
+func = "subaddiefade_entrypoint_7"
+before_vram = 0x80800264
+text = "ctx->r2 = ADD32(ctx->r2, 7 - tooie_fade_step(rdram, ctx));"
+
+[[patches.hook]]
+func = "subaddiefade_entrypoint_7"
+before_vram = 0x808002AC
+text = "ctx->r2 = ADD32(ctx->r2, 7 - tooie_fade_step(rdram, ctx));"
+
 # suflamefx_entrypoint_2 updates a flame's puffs ($s1 = the flame, $s0 = the puff). Each puff's width and
 # depth shrink by a factor ($f18, then $f8) and its age goes up by a step ($f16) once per game frame, so
 # above 30 FPS the puffs died in a fraction of the time and torches burned short and flat. Above 30 FPS the

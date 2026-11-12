@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- Above 30 FPS, the green light at the mouth of Witchyworld's Haunted Cavern flickers at the 30 FPS pace instead of many times faster, and beaten enemies fade away over the same time as at 30 FPS (about a second) instead of vanishing at once; enemies that fade in do so at the 30 FPS pace too.
 - Above 30 FPS, torch and brazier fires burn as a steady stream again instead of rising and dying in waves: a puff that burned out was made again on the next frame, so the puffs came to the same age. New puffs now come at the 30 FPS pace (Witchyworld's Haunted Cavern and every fire of that kind). The torch light above 30 FPS also flickers a little more softly, and with Ray tracing the traced light round a fire no longer jumps on every frame. 30 FPS and Original are the game's own.
 - First-person shooter sections: QoL > Instant Shooter View (on by default) turns and tilts the view the moment you move the mouse, the gyro or the stick and stops it the moment you stop. The game's own view follows at a capped speed, so a quick flick of the mouse kept it turning for about 0.4 s.
 - Above 30 FPS, Sput Sput (the stone dart heads in Targitzan's Temple) no longer spins several times too fast when you shoot it, and turns toward Banjo at the 30 FPS speed too.

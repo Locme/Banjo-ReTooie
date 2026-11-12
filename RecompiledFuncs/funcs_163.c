@@ -7181,6 +7181,7 @@ L_80800218:
     ctx->r2 = MEM_BU(ctx->r4, 0X9B);
     // 0x8080021C: addiu       $t4, $zero, 0xFF
     ctx->r12 = ADD32(0, 0XFF);
+    ctx->r2 = ADD32(ctx->r2, tooie_fade_step(rdram, ctx) - 7);
     // 0x80800220: addiu       $v0, $v0, 0x7
     ctx->r2 = ADD32(ctx->r2, 0X7);
     // 0x80800224: slti        $at, $v0, 0x100
@@ -7233,6 +7234,7 @@ L_8080025C:
     ctx->r2 = MEM_BU(ctx->r4, 0X9B);
     // 0x80800260: addiu       $a1, $zero, 0x3
     ctx->r5 = ADD32(0, 0X3);
+    ctx->r2 = ADD32(ctx->r2, 7 - tooie_fade_step(rdram, ctx));
     // 0x80800264: addiu       $v0, $v0, -0x7
     ctx->r2 = ADD32(ctx->r2, -0X7);
     // 0x80800268: bgezl       $v0, L_8080027C
@@ -7299,6 +7301,7 @@ L_8080027C:
     // 0x808002A8: lbu         $v0, 0x9B($a0)
     ctx->r2 = MEM_BU(ctx->r4, 0X9B);
 L_808002AC:
+    ctx->r2 = ADD32(ctx->r2, 7 - tooie_fade_step(rdram, ctx));
     // 0x808002AC: addiu       $v0, $v0, -0x7
     ctx->r2 = ADD32(ctx->r2, -0X7);
     // 0x808002B0: bgezl       $v0, L_808002C4

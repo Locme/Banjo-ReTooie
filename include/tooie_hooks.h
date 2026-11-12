@@ -90,6 +90,8 @@ void tooie_fire_puff_whole(uint8_t* rdram, recomp_context* ctx, int which);
 int tooie_fire_count_skip(uint8_t* rdram, recomp_context* ctx);
 void tooie_fire_light_brightness(uint8_t* rdram, recomp_context* ctx);
 int tooie_fire_spawn_skip(uint8_t* rdram, recomp_context* ctx);
+int tooie_light_effect_skip(uint8_t* rdram, recomp_context* ctx);
+int tooie_fade_step(uint8_t* rdram, recomp_context* ctx);
 int tooie_storm_spawn_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_particle_spawn_skip(uint8_t* rdram, recomp_context* ctx);
 void tooie_particle_age_floor(uint8_t* rdram, recomp_context* ctx);

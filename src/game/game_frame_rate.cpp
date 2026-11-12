@@ -987,6 +987,7 @@ namespace {
     StepGate flame_flipbook_gate;
     StepGate fire_count_gate;
     StepGate fire_spawn_gate;
+    StepGate light_effect_gate;
 }
 
 // Talking-head portraits (the zoombox overlay): func_8080156C_gczoombox moves a
@@ -1693,9 +1694,53 @@ extern "C" void tooie_fire_light_brightness(uint8_t* rdram, recomp_context* ctx)
 // next frame, the puffs came to the same age, and the fire rose and died in waves and moved too fast (L,
 // 2026-11-12: braziers in Witchyworld's Haunted Cavern). Above 30 FPS new puffs are made once per 1/30 s of
 // game time for that fire.
-// TOOIE_FIRE_LOG=1 prints, twice a second, each fire's puff count, how many it holds and each puff's age/height (+0x4)/
-// +0xA/x (+0x8)/z (+0xC)
-// (0 new, 9 gone), for comparing the fires between frame rates.
+// Flickering world light (the idlight overlay, an effect of the map's idworld), such as the green light at the
+// mouth of Witchyworld's Haunted Cavern: idlight_entrypoint_3 adds a random step (func_800DC264, $f0) to the
+// effect's brightness (+0x0, the effect saved at 0x18($sp)), holds it between its limits and colours the map by
+// it, once per game frame, so above 30 FPS the light flickered 200 or more times a second instead of 30 (L,
+// 2026-11-12). Above 30 FPS the step is 0 until 1/30 s of game time has gone by for that effect; the map is still
+// coloured every frame.
+extern "C" int tooie_light_effect_skip(uint8_t* rdram, recomp_context* ctx) {
+    return light_effect_gate.skip(rdram, (uint32_t)MEM_W(0x18, ctx->r29)) ? 1 : 0;
+}
+
+// Enemies fading in and out (subaddiefade_entrypoint_7, $a0 = the enemy): unless the enemy enemy_fades by time, its
+// alpha (+0x9B) goes up or down by 7 each game frame, and a fade-out that ends removes it. That is about 1.2 s at
+// 30 FPS, but a beaten enemy vanished in a fraction of a second above it (L, 2026-11-12). Above 30 FPS the step is
+// 7 for each 1/30 s of game time, with the fraction kept for that enemy, so the fade takes as long as at 30 FPS.
+namespace {
+    struct EnemyFade {
+        uint32_t frame;
+        float carry;
+        int step;
+    };
+    std::mutex enemy_fade_mutex;
+    std::unordered_map<uint32_t, EnemyFade> enemy_fades;
+}
+
+extern "C" int tooie_fade_step(uint8_t* rdram, recomp_context* ctx) {
+    std::lock_guard lock{ enemy_fade_mutex };
+    if (!above_30()) {
+        enemy_fades.clear();
+        return 7;
+    }
+    const uint32_t frame = game_frames_stepped.load();
+    EnemyFade& fade = enemy_fades[(uint32_t)ctx->r4];
+    if (enemy_fades.size() > 2048) {
+        enemy_fades.clear();
+        return 7;
+    }
+    if (fade.frame != frame) {
+        fade.frame = frame;
+        fade.carry += 7.0f * 30.0f * read_float(rdram, delta_time_addr);
+        fade.step = (int)std::floor(fade.carry);
+        fade.carry -= (float)fade.step;
+    }
+    return fade.step;
+}
+
+// TOOIE_FIRE_LOG=1 prints, twice a second, each fire's puff count, how many it holds and each puff's
+// age (0 new, 9 gone)/height (+0x4)/+0xA/x (+0x8)/z (+0xC), for comparing the fires between frame rates.
 extern "C" int tooie_fire_spawn_skip(uint8_t* rdram, recomp_context* ctx) {
     static const bool log = std::getenv("TOOIE_FIRE_LOG") != nullptr;
     if (log) {
