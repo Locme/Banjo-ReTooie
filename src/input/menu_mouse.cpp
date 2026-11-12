@@ -177,7 +177,9 @@ namespace {
     }
 
     // A row of a gcnewoption menu under the cursor, or -1. Each row's zoombox is drawn spacing * (slot + 1)
-    // below y (func_80800D28); a row counts from half a spacing above that to half below.
+    // below y (func_80800D28); a row counts from half a spacing above that to half below, and across from its
+    // portrait, left of x, to well past its text (2026-11-12: from 8 left of x, the hand over a row's portrait
+    // missed the row).
     int option_row_at(uint8_t* rdram, uint32_t options, float x, float y) {
         const int visible = tooie::rdram::read_half(rdram, options + option_visible);
         const int count = tooie::rdram::read_half(rdram, options + option_count);
@@ -188,7 +190,7 @@ namespace {
         if (visible <= 0 || count <= 0 || !(spacing > 1.0f && spacing < 100.0f)) {
             return -1;
         }
-        if (x < left - 8.0f || x > left + 200.0f) {
+        if (x < left - 32.0f || x > left + 210.0f) {
             return -1;
         }
         const int slot = (int)std::floor((y - first) / spacing - 0.5f);

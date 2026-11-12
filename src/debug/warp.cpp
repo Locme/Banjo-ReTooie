@@ -53,6 +53,7 @@ namespace tooie::debug {
 #include "tooie_transform_anywhere.h"
 #include "tooie_transform_menu.h"
 #include "tooie_menu_pause.h"
+#include "tooie_menu_portraits.h"
 #include "tooie_music_player.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_honeycomb_glitter.h"
@@ -222,6 +223,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::photo_mode::tick(rdram, ctx);
     // After photo mode: the ESC menu's pause sets the frame's delta time too.
     tooie::menu_pause::tick(rdram, ctx);
+    tooie::menu_portraits::tick(rdram, ctx);
 
     // TOOIE_MAP_CHANGE_LOG=1: every map change the game asks for, with its exit, to find exit ids.
     static const bool map_change_log = std::getenv("TOOIE_MAP_CHANGE_LOG") != nullptr;

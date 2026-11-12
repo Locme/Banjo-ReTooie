@@ -173,6 +173,33 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   prompt context holds two panels, the plain one and one styled like the sidebar layout (brown, gold border, a Jiggy from `assets/icons/JiggyBadge.svg`, whose orange rim shows on brown,
   Luckiest Guy lettering, buttons that turn gold when picked); `open_choice_prompt`'s new `banjo_look` argument picks
   it, and the quit prompt is the only caller that does. `Button::get_label` lets the label's font be set.
+* **Esc menu slide** (`recompui/src/elements/ui_modal.{h,cpp}`, `recompui/include/recompui/config.h`, `ui_config.cpp`,
+  `ui_element.h`, `ui_style.{h,cpp}`): a modal made animated (`Modal::set_animated`) slides in from the left past its
+  place and back, its tabs following one after another and then the page's rows (`Modal::page_rows`: the children of
+  the element under the page with the most children), and slides out to the left; Esc while it slides out brings it
+  back. `config::set_slide_callback` is told each wave of rows starting in and landing (five waves, 0.095 s apart, as
+  the game's Start menu rows) and the slide out starting, for the game's sounds (`src/gameplay/menu_pause.cpp`).
+  `Element::get_children` and `Style::unset_opacity` are new. 2026-11-12, more of the Start menu: a page shown while
+  the menu is open (another tab) cascades in too (`Modal::start_page_slide`, one RowIn/RowLand pair at most every
+  0.25 s), the rows leave one after another on the slide out (`Modal::move_rows`), and the tabs stop at their place
+  and swell instead of passing it. In the sidebar layout each tab can show a portrait (`config::set_tab_portrait`: the still
+  picture and its blink frames, any thread, applied on the menu's update; `Tab::set_portrait`, `Tab::update_blink`
+  blinks each tab every 1.5 to 4 s): the picked one is full size, the rest smaller and
+  dimmer, and the newly picked tab's label and portrait pop (`Element::animate` with overshoot). Option descriptions
+  print in a word at a time (`ConfigPageOptionsMenu::print_in_rml` wraps each word in a `print-in` span, faded in
+  by `Element::print_in` once the queued text is set, all within `print_longest`). The tab's own sound: on a tab
+  change `config::notify_tab_sound(tab_id)` goes to the game (its character's voice), falling back to the
+  RowIn/RowLand pair when no callback is set; that page glides 48 dp in from the left while the settings list fades
+  in (`Modal::update_page_slide`, `Modal::page_list`). `Tab::set_fade` fades a sliding tab's portrait with it, as
+  RmlUi does not carry a parent's opacity onto a child that sets its own. The peek (`Modal::update_peek`): while a
+  slider in the page moves (`Slider::get_peek`: dragged, pressed or changed in the last 0.6 s) the box fades to 10%
+  and the backdrop away, the moved slider's row keeps opacity 1 (opacity is inherited in RmlUi, not multiplied),
+  and everything beside the row and beside its parents up to the page, the header's buttons and the hints under
+  the box are hidden (`visibility`), since some of them set their own opacity and would stay at full strength.
+  `Style::unset_visibility` is new.
+* **Hand cursor reach** (`recompui/src/base/ui_state.cpp`, `hand_reach`): when nothing focusable or no scroll bar is
+  under the mouse, its motion and clicks go to the nearest point within 22 pixels that has one, so the hand cursor
+  (64 pixels across, its click point in its middle) picks what it covers. A drag keeps the shift its press had.
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.

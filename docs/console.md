@@ -1264,6 +1264,44 @@ menupos reset
 
 Catch: a large move can put part of the menu off the screen. Works from the launcher on.
 
+### `portraits`
+
+Usage: `portraits dump [last hex id]`, `portraits voice <hex id>`
+
+`portraits voice` lists a portrait's voice sounds (each sound id, volume and pitch, as its character's dialogue
+chatters with them) and plays one of them, as the Esc menu does when that portrait's tab is picked.
+
+`portraits dump` writes every talking-head portrait from 0 to the last id (D1 when not given) to `Dev Files/portraits`: the sprite as
+`<id>_asset<asset>.bin` and, when it decodes, a PNG of its first frame. These are the portraits the Esc menu's tabs
+use (src/ui/menu_portraits.cpp), to pick others.
+
+```
+portraits dump
+portraits dump 40
+portraits voice C
+```
+
+Catch: needs the game running. The few large portraits that are cut into tiles don't decode, so they have no PNG.
+
+### `cursor`
+
+Usage: `cursor <x> <y> [click|right]`
+
+Points the mouse at `x`, `y` in the window, in pixels from its top left, and with `click` (left) or `right` clicks
+there. The motion and the click go in as the window's own mouse events, so the Esc menu and the launcher take them as
+they take the real mouse, the hand cursor's reach included: a point within about 22 pixels of a button that has
+nothing under it lands on that button. The real pointer does not move.
+
+```
+menu open
+wait 1s
+cursor 180 755 click
+screenshot ui
+```
+
+Catch: the window's size in pixels is what `screenshot ui` saves at 100% scaling; with Windows scaling the window's
+pixels are fewer. Points outside the window are refused.
+
 ### `uimove`
 
 Usage: `uimove list | uimove <entry> <x> <y> | uimove <entry> reset | uimove reset | uimove save`

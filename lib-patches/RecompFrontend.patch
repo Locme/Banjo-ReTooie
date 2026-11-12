@@ -1019,7 +1019,7 @@ index 4dce8e0..15bd9e3 100644
  endif()
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..f0ceaef 100644
+index 38b84f5..0ff287d 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
 @@ -1,6 +1,7 @@
@@ -1039,7 +1039,7 @@ index 38b84f5..f0ceaef 100644
              void toggle_fullscreen();
          }
  
-@@ -133,10 +136,63 @@ namespace recompui {
+@@ -133,10 +136,75 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
@@ -1093,12 +1093,24 @@ index 38b84f5..f0ceaef 100644
 +        bool is_open_allowed();
 +
 +        // The config menu's slide in and out (Banjo-Tooie, 2026-11-10). The enabled callback is asked each time
-+        // the menu opens or closes (unset means on); the slide callback is told when a slide in (true) or out
-+        // (false) starts, for its sounds. Both are called on the main thread with the menu's context open.
++        // the menu opens or closes (unset means on); the slide callback is told the slide's sounds as they come
++        // (2026-11-12): each wave of rows starting in and landing, and the slide out starting. Both are called on
++        // the main thread with the menu's context open.
++        enum class SlideSound { RowIn, RowLand, Out };
++        // A tab's portrait in the sidebar layout (Banjo-Tooie, 2026-11-12): the names of images registered with
++        // queue_image_from_bytes_rgba32, the still picture first and then its blink's frames, the eyes closing.
++        // Any thread; the menu shows it on its next update.
++        void set_tab_portrait(const std::string &tab_id, const std::vector<std::string> &frames);
++        // The portraits set so far and a count that goes up with each change (the menu's update reads them).
++        std::vector<std::pair<std::string, std::vector<std::string>>> get_tab_portraits(uint32_t *version);
 +        void set_slide_enabled_callback(bool (*callback)());
-+        void set_slide_callback(void (*callback)(bool opening));
++        void set_slide_callback(void (*callback)(SlideSound sound));
 +        bool slide_enabled();
-+        void notify_slide(bool opening);
++        void notify_slide(SlideSound sound);
++        // Told the id of the tab picked while the menu is open, for its sound (2026-11-12: its character's voice);
++        // unset, the page plays the RowIn and RowLand sounds. Main thread.
++        void set_tab_sound_callback(void (*callback)(const std::string &tab_id));
++        bool notify_tab_sound(const std::string &tab_id);
 +
          // Get the config modal instance. nullptr until created with init_modal() internally.
          // Will throw an error if it hasn't been created yet.
@@ -1342,10 +1354,18 @@ index eb8833e..8388dc1 100644
          Element *default_title_wrapper;
          GameOptionsMenu *game_options_menu = nullptr;
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..4d5de99 100644
+index 277a421..0582c15 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
-@@ -37,16 +37,17 @@ static std::atomic_bool cursor_enabled = true;
+@@ -5,6 +5,7 @@
+ #include <SDL2/SDL_video.h>
+ #endif
+ #include <chrono>
++#include <cmath>
+ 
+ #include "rt64_render_hooks.h"
+ 
+@@ -37,16 +38,17 @@ static std::atomic_bool cursor_enabled = true;
  
  void recompui::open_quit_game_prompt() {
      recompui::open_choice_prompt(
@@ -1366,7 +1386,7 @@ index 277a421..4d5de99 100644
          true
      );
  }
-@@ -202,6 +203,18 @@ struct ContextDetails {
+@@ -202,6 +204,18 @@ struct ContextDetails {
      Rml::ElementDocument* document;
  };
  
@@ -1385,7 +1405,7 @@ index 277a421..4d5de99 100644
  class UIState {
      bool mouse_is_active_changed = false;
      std::vector<ContextDetails> shown_contexts{};
-@@ -224,7 +237,7 @@ public:
+@@ -224,7 +238,7 @@ public:
  
      UIState(SDL_Window* window, plume::RenderInterface* interface, plume::RenderDevice* device) {
  
@@ -1394,7 +1414,7 @@ index 277a421..4d5de99 100644
          system_interface->SetWindow(window);
          render_interface.init(interface, device);
  
-@@ -244,7 +257,8 @@ public:
+@@ -244,7 +258,8 @@ public:
          
          context = Rml::CreateContext("main", Rml::Vector2i(width, height));
  
@@ -1404,7 +1424,7 @@ index 277a421..4d5de99 100644
          {
              struct FontFace {
                  const char* filename;
-@@ -311,6 +325,14 @@ public:
+@@ -311,6 +326,14 @@ public:
              recompui::set_cursor_visible(mouse_is_active);
          }
  
@@ -1419,7 +1439,7 @@ index 277a421..4d5de99 100644
          Rml::ElementDocument* current_document = top_mouse_document();
          if (current_document == nullptr) {
              return;
-@@ -346,6 +368,13 @@ public:
+@@ -346,6 +369,13 @@ public:
                  // Check if not focused or focused element is not focusable.
                  if (focused_el == nullptr || focused_el->is_focusable() != recompui::Element::CanFocus::Yes) {
                      auto recompui_doc = top_context.get_root_element();
@@ -1433,7 +1453,7 @@ index 277a421..4d5de99 100644
                      auto last_hovered = recompui_doc->get_last_focusable_hovered_element();
                      if (last_hovered && last_hovered->is_focusable() == recompui::Element::CanFocus::Yes) {
                          last_hovered->focus();
-@@ -484,7 +513,9 @@ public:
+@@ -484,7 +514,9 @@ public:
      }
  
      void update_contexts() {
@@ -1444,7 +1464,7 @@ index 277a421..4d5de99 100644
              context_details.context.open();
              context_details.context.process_updates();
              context_details.context.close();
-@@ -493,6 +524,7 @@ public:
+@@ -493,6 +525,7 @@ public:
  };
  
  std::unique_ptr<UIState> ui_state;
@@ -1452,7 +1472,7 @@ index 277a421..4d5de99 100644
  std::recursive_mutex ui_state_mutex{};
  
  // TODO make this not be global
-@@ -570,6 +602,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
+@@ -570,6 +603,132 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
      return identifier;
  }
  
@@ -1490,10 +1510,102 @@ index 277a421..4d5de99 100644
 +    context->ProcessKeyDown(key, 0);
 +}
 +
++// The hand cursor's reach (Banjo-Tooie, 2026-11-12). The cursor is a hand about 64 pixels across whose click
++// point is one pixel in its middle, so a click with the hand plainly over a button could land on the empty
++// space beside it. When nothing that takes the mouse is under that pixel, the mouse goes to the nearest thing
++// that does within the hand's reach: it lights up as hovered and the click lands on it.
++namespace hand_reach {
++    // In window pixels, about the palm's half width.
++    constexpr float reach = 22.0f;
++    constexpr int directions = 12;
++    constexpr int rings = 4;
++
++    // Something the mouse can use: a focusable element (buttons, tabs, options, sliders) or a scroll bar.
++    bool takes_mouse(Rml::Element *element) {
++        for (Rml::Element *e = element; e != nullptr; e = e->GetParentNode()) {
++            if (e->GetOwnerDocument() == nullptr || e == e->GetOwnerDocument()) {
++                return false;
++            }
++            const Rml::String &tag = e->GetTagName();
++            if (tag.rfind("scrollbar", 0) == 0 || tag.rfind("slider", 0) == 0) {
++                return true;
++            }
++            const Rml::ComputedValues &computed = e->GetComputedValues();
++            if (computed.tab_index() == Rml::Style::TabIndex::Auto && computed.focus() != Rml::Style::Focus::None) {
++                return true;
++            }
++        }
++        return false;
++    }
++
++    // Where the mouse at (x, y) goes: (x, y) itself, or the nearest point within reach over something that
++    // takes the mouse, tried on rings outwards.
++    void reach_point(Rml::Context *context, int x, int y, int &out_x, int &out_y) {
++        out_x = x;
++        out_y = y;
++        if (context == nullptr) {
++            return;
++        }
++        Rml::Element *under = context->GetElementAtPoint(Rml::Vector2f((float)x, (float)y));
++        if (under == nullptr || takes_mouse(under)) {
++            return;
++        }
++        for (int ring = 1; ring <= rings; ring++) {
++            const float r = reach * ring / rings;
++            for (int d = 0; d < directions; d++) {
++                const float angle = 6.2831853f * d / directions;
++                const int px = (int)std::lround(x + r * std::cos(angle));
++                const int py = (int)std::lround(y + r * std::sin(angle));
++                if (takes_mouse(context->GetElementAtPoint(Rml::Vector2f((float)px, (float)py)))) {
++                    out_x = px;
++                    out_y = py;
++                    return;
++                }
++            }
++        }
++    }
++
++    // How far the last motion or press was moved, so the release lands with its press.
++    int shift_x = 0;
++    int shift_y = 0;
++
++    // Moves the mouse event's point within reach. A drag (a button held) goes where the mouse is, shifted as its
++    // press was, so a slider's handle follows the hand without jumping.
++    void apply(Rml::Context *context, SDL_Event &event) {
++        switch (event.type) {
++        case SDL_EventType::SDL_MOUSEMOTION:
++            if (event.motion.state == 0) {
++                int nx, ny;
++                reach_point(context, event.motion.x, event.motion.y, nx, ny);
++                shift_x = nx - event.motion.x;
++                shift_y = ny - event.motion.y;
++            }
++            event.motion.x += shift_x;
++            event.motion.y += shift_y;
++            break;
++        case SDL_EventType::SDL_MOUSEBUTTONDOWN: {
++            int nx, ny;
++            reach_point(context, event.button.x, event.button.y, nx, ny);
++            shift_x = nx - event.button.x;
++            shift_y = ny - event.button.y;
++            event.button.x = nx;
++            event.button.y = ny;
++            break;
++        }
++        case SDL_EventType::SDL_MOUSEBUTTONUP:
++            event.button.x += shift_x;
++            event.button.y += shift_y;
++            break;
++        default:
++            break;
++        }
++    }
++}
++
  bool check_menu_button_pressed(int profile_index, recompinput::GameInput input, int32_t event_button) {
      auto menuBinding0 = recompinput::profiles::get_input_binding(profile_index, input, 0);
      auto menuBinding1 = recompinput::profiles::get_input_binding(profile_index, input, 1);
-@@ -696,6 +762,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -696,6 +855,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
          if (!all_input_is_disabled) {
              bool is_mouse_input = false;
@@ -1504,7 +1616,7 @@ index 277a421..4d5de99 100644
              // Implement some additional behavior for specific events on top of what RmlUi normally does with them.
              switch (cur_event.type) {
              case SDL_EventType::SDL_MOUSEMOTION: {
-@@ -705,6 +775,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -705,6 +868,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                      float xD = cur_event.motion.x - last_mouse_pos[0];
                      float yD = cur_event.motion.y - last_mouse_pos[1];
                      if (sqrt(xD * xD + yD * yD) < 100) {
@@ -1512,7 +1624,7 @@ index 277a421..4d5de99 100644
                          break;
                      }
                  }
-@@ -713,6 +784,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -713,6 +877,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                  // if controller is the primary input, don't use mouse movement to allow cursor to reactivate
                  if (recompui::get_cont_active()) {
@@ -1520,7 +1632,7 @@ index 277a421..4d5de99 100644
                      break;
                  }
              }
-@@ -731,7 +803,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -731,7 +896,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              case SDL_EventType::SDL_CONTROLLERBUTTONDOWN: {
                  int sdl_key = cont_button_to_key(cur_event.cbutton);
                  if (context_capturing_input && sdl_key) {
@@ -1529,7 +1641,7 @@ index 277a421..4d5de99 100644
                      latest_controller_key_pressed = sdl_key;
                      next_repeat_time = clock::now() + start_repeat_delay;
                  }
-@@ -747,6 +819,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -747,6 +912,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                      if (cur_event.key.keysym.scancode == SDL_Scancode::SDL_SCANCODE_F8) {
                          if (recompui::config::general::get_debug_mode_enabled()) {
@@ -1539,7 +1651,7 @@ index 277a421..4d5de99 100644
                              Rml::Debugger::SetVisible(!Rml::Debugger::IsVisible());
                          }
                      }
-@@ -776,7 +851,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -776,7 +944,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                          non_mouse_interacted = true;
                          int sdl_key = cont_axis_to_key(cur_event.caxis, axis_value);
                          if (context_capturing_input && sdl_key) {
@@ -1548,7 +1660,7 @@ index 277a421..4d5de99 100644
                              latest_controller_key_pressed = sdl_key;
                              next_repeat_time = clock::now() + start_repeat_delay;
                          }
-@@ -796,14 +871,30 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -796,14 +964,31 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
  
              // Send the event to RmlUi if this type of event is being captured.
@@ -1557,6 +1669,7 @@ index 277a421..4d5de99 100644
 +            }
 +            else if (is_mouse_input) {
                  if (context_capturing_mouse) {
++                    hand_reach::apply(ui_state->context, cur_event);
 +                    // Small moves after a key or controller press are not passed on (so a nudged mouse doesn't
 +                    // take over), so RmlUi's cursor can be out of date: move it to the click first. Without this,
 +                    // a click on a prompt opened from the keyboard (Alt+F4's quit prompt) could miss its button.
@@ -1581,7 +1694,7 @@ index 277a421..4d5de99 100644
                  }
              }
          }
-@@ -837,7 +928,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -837,7 +1022,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
              }
  
@@ -1590,7 +1703,7 @@ index 277a421..4d5de99 100644
                  recompui::config::open();
              }
          }
-@@ -847,7 +938,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -847,7 +1032,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      if (latest_controller_key_pressed != SDLK_UNKNOWN) {
          clock::time_point now = clock::now();
          if (now >= next_repeat_time) {
@@ -1599,7 +1712,7 @@ index 277a421..4d5de99 100644
              next_repeat_time += repeat_rate;
          }
      }
-@@ -893,7 +984,10 @@ void deinit_hook() {
+@@ -893,7 +1078,10 @@ void deinit_hook() {
      recompui::destroy_all_contexts();
  
      std::lock_guard lock {ui_state_mutex};
@@ -1871,11 +1984,12 @@ index 56a0b70..bec287f 100644
      prompt_state.prompt_header->set_text(header_text);
      prompt_state.prompt_label->set_text(content_text);
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..d7b06a7 100644
+index 6c84c05..9d4b45f 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
-@@ -1,7 +1,14 @@
+@@ -1,7 +1,15 @@
 +#include <atomic>
++#include <mutex>
 +#include <memory>
 +#include <unordered_map>
  #include "recompui/config.h"
@@ -1889,7 +2003,7 @@ index 6c84c05..d7b06a7 100644
  #include "recompinput/profiles.h"
  #include "util/file.h"
  #include "librecomp/game.hpp"
-@@ -16,6 +23,7 @@ struct PendingTab {
+@@ -16,6 +24,7 @@ struct PendingTab {
  };
  static std::vector<PendingTab> pending_tabs;
  static bool loaded_configs = false;
@@ -1897,7 +2011,7 @@ index 6c84c05..d7b06a7 100644
  
  namespace recompui {
      static recompui::TabbedModal *config_modal = nullptr;
-@@ -38,6 +46,102 @@ namespace recompui {
+@@ -38,6 +47,102 @@ namespace recompui {
          throw std::runtime_error("No config with ID '" + id + "' has been added to the config modal.");
      }
  
@@ -2000,7 +2114,7 @@ index 6c84c05..d7b06a7 100644
      void config::create_tab(
          const std::string &name,
          const std::string &id,
-@@ -121,7 +225,103 @@ namespace recompui {
+@@ -121,7 +226,103 @@ namespace recompui {
          loaded_configs = true;
      }
  
@@ -2104,7 +2218,7 @@ index 6c84c05..d7b06a7 100644
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
                  if (tab.id == id) {
-@@ -152,9 +352,12 @@ namespace recompui {
+@@ -152,9 +353,12 @@ namespace recompui {
                  config_modal->set_tab_visible(tab.id, false);
              }
          }
@@ -2117,7 +2231,7 @@ index 6c84c05..d7b06a7 100644
          quit_button->add_pressed_callback([]() {
              if (ultramodern::is_game_started()) {
                  recompui::open_quit_game_prompt();
-@@ -163,6 +366,7 @@ namespace recompui {
+@@ -163,6 +367,7 @@ namespace recompui {
              }
          });
          auto close_button = config_modal->modal_root_context.create_element<IconButton>(header_right, "icons/X.svg", ButtonStyle::Basic);
@@ -2125,7 +2239,7 @@ index 6c84c05..d7b06a7 100644
          close_button->add_pressed_callback([]() {
              config::close();
          });
-@@ -177,6 +381,14 @@ namespace recompui {
+@@ -177,6 +382,14 @@ namespace recompui {
          return config_modal->modal_root_context;
      }
  
@@ -2140,7 +2254,7 @@ index 6c84c05..d7b06a7 100644
      void config::set_tab(const std::string &id) {
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
-@@ -185,6 +397,37 @@ namespace recompui {
+@@ -185,6 +398,74 @@ namespace recompui {
          config_modal->set_selected_tab(id);
      }
  
@@ -2154,14 +2268,37 @@ index 6c84c05..d7b06a7 100644
 +        return open_allowed_callback == nullptr || open_allowed_callback();
 +    }
 +
++    static std::mutex tab_portraits_mutex;
++    static std::vector<std::pair<std::string, std::vector<std::string>>> tab_portraits;
++    static std::atomic<uint32_t> tab_portraits_version{ 0 };
++
++    void config::set_tab_portrait(const std::string &tab_id, const std::vector<std::string> &frames) {
++        std::lock_guard lock{ tab_portraits_mutex };
++        for (auto &entry : tab_portraits) {
++            if (entry.first == tab_id) {
++                entry.second = frames;
++                tab_portraits_version++;
++                return;
++            }
++        }
++        tab_portraits.emplace_back(tab_id, frames);
++        tab_portraits_version++;
++    }
++
++    std::vector<std::pair<std::string, std::vector<std::string>>> config::get_tab_portraits(uint32_t *version) {
++        std::lock_guard lock{ tab_portraits_mutex };
++        *version = tab_portraits_version.load();
++        return tab_portraits;
++    }
++
 +    static bool (*slide_enabled_callback)() = nullptr;
-+    static void (*slide_callback)(bool opening) = nullptr;
++    static void (*slide_callback)(config::SlideSound sound) = nullptr;
 +
 +    void config::set_slide_enabled_callback(bool (*callback)()) {
 +        slide_enabled_callback = callback;
 +    }
 +
-+    void config::set_slide_callback(void (*callback)(bool opening)) {
++    void config::set_slide_callback(void (*callback)(SlideSound sound)) {
 +        slide_callback = callback;
 +    }
 +
@@ -2169,9 +2306,23 @@ index 6c84c05..d7b06a7 100644
 +        return slide_enabled_callback == nullptr || slide_enabled_callback();
 +    }
 +
-+    void config::notify_slide(bool opening) {
++    static void (*tab_sound_callback)(const std::string &tab_id) = nullptr;
++
++    void config::set_tab_sound_callback(void (*callback)(const std::string &tab_id)) {
++        tab_sound_callback = callback;
++    }
++
++    bool config::notify_tab_sound(const std::string &tab_id) {
++        if (tab_sound_callback == nullptr) {
++            return false;
++        }
++        tab_sound_callback(tab_id);
++        return true;
++    }
++
++    void config::notify_slide(SlideSound sound) {
 +        if (slide_callback != nullptr) {
-+            slide_callback(opening);
++            slide_callback(sound);
 +        }
 +    }
 +
@@ -2758,7 +2909,7 @@ index f379a6f..7bbf136 100644
      recompui::GameInputRowsWrapper *last = nullptr;
      for (auto *wrapper : rows_wrappers) {
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..1990325 100644
+index 6ba64e2..8464ec4 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,10 @@
@@ -2789,7 +2940,7 @@ index 6ba64e2..1990325 100644
  {
      ContextId context = recompui::get_current_context();
      set_as_navigation_container(NavigationType::Vertical);
-@@ -21,19 +31,106 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
+@@ -21,19 +31,157 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
      description_container->set_line_height(28.0f);
      description_container->set_padding(8.0f);
      set_description_text("");
@@ -2810,8 +2961,6 @@ index 6ba64e2..1990325 100644
 -    if (description_container) {
 -        if (is_internal) {
 -            description_container->set_text_unsafe(text);
--        } else {
--            description_container->set_text(text);
 +    pending_description = text;
 +    description_pending = true;
 +    description_pending_since = std::chrono::steady_clock::now();
@@ -2829,11 +2978,63 @@ index 6ba64e2..1990325 100644
 +        return;
 +    }
 +    shown_description = pending_description;
-+    if (is_internal) {
-+        description_container->set_text_unsafe(shown_description);
-+    } else {
-+        description_container->set_text(shown_description);
++    // The text prints in a word at a time, as the game's dialogue does (Banjo-Tooie, 2026-11-12). Each word is set
++    // once in its own span that fades in, so the page is laid out once, not again for every word.
++    description_container->set_text_unsafe(print_in_rml(shown_description, is_internal));
++    // The text is set on a later update (queued): the words start printing once they are there.
++    print_pending = !shown_description.empty();
++}
++
++// The description as RML with each word in a span of the class "print-in", hidden until print_in shows it. Markup
++// in a description of the game's own (is_internal: colour spans) is kept; any other text is escaped first. Each
++// word's span ends with the space after it, so lines still break only between words.
++std::string ConfigPageOptionsMenu::print_in_rml(const std::string &text, bool markup) {
++    std::string out;
++    std::string word;
++    auto flush_word = [&]() {
++        if (!word.empty()) {
++            out += "<span class=\"print-in\" style=\"opacity: 0;\">" + word + "</span>";
++            word.clear();
++        }
++    };
++    for (size_t i = 0; i < text.size(); i++) {
++        const char ch = text[i];
++        if (markup && ch == '<') {
++            // A space waiting for its word goes on into the tag (the first word of a colour span).
++            if (word != " ") {
++                flush_word();
++            }
++            const size_t end = text.find('>', i);
++            if (end == std::string::npos) {
++                out += text.substr(i);
++                break;
++            }
++            out += text.substr(i, end - i + 1);
++            i = end;
++        } else if (ch == ' ' || ch == '\n' || ch == '\t') {
++            // The space goes inside the word's span: RmlUi drops a space standing alone between two spans. One
++            // with no word before it (after a colour span) starts the next word instead.
++            if (word.empty()) {
++                word += ' ';
++            } else if (word.back() == ' ') {
++                // A second space in a row adds nothing.
++            } else {
++                word += ' ';
++                flush_word();
++            }
++        } else if (!markup && ch == '<') {
++            word += "&lt;";
++        } else if (!markup && ch == '>') {
++            word += "&gt;";
++        } else if (!markup && ch == '&') {
++            word += "&amp;";
+         } else {
+-            description_container->set_text(text);
++            word += ch;
++        }
 +    }
++    flush_word();
++    return out;
 +}
 +
 +// With the sidebar layout (Settings > DEV > Sidebar menu), the description sits in a strip along the
@@ -2902,7 +3103,7 @@ index 6ba64e2..1990325 100644
          }
      }
  }
-@@ -59,7 +156,10 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
+@@ -59,7 +207,10 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
          std::string &option_id = schema.options[option_index].id;
          ConfigOptionElement* element = get_element_from_option_id(option_id);
          if (element == nullptr) {
@@ -2914,7 +3115,7 @@ index 6ba64e2..1990325 100644
              continue;
          }
          for (auto &update_type :option_update.updates) {
-@@ -109,6 +209,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -109,6 +260,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
          break;
      }
      case EventType::Update: {
@@ -2924,15 +3125,18 @@ index 6ba64e2..1990325 100644
          if (apply_button != nullptr) {
              bool apply_enabled = this->apply_button->is_enabled();
              bool is_dirty = config->is_dirty();
-@@ -117,6 +220,7 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -117,6 +271,10 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
              }
          }
          perform_option_render_updates();
++        if (print_pending && description_container != nullptr && description_container->print_in(print_step, print_fade, print_longest) > 0) {
++            print_pending = false;
++        }
 +        flush_description_text(false);
          break;
      }
      case EventType::MenuAction: {
-@@ -149,6 +253,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -149,6 +307,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -2943,7 +3147,7 @@ index 6ba64e2..1990325 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -172,8 +280,21 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -172,8 +334,21 @@ void ConfigPageOptionsMenu::render_config_options() {
          body_left_scroll->set_padding(16.0f);
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
@@ -2965,7 +3169,7 @@ index 6ba64e2..1990325 100644
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
          };
-@@ -181,8 +302,46 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +356,46 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
@@ -3012,7 +3216,7 @@ index 6ba64e2..1990325 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +392,10 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +446,10 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -3023,7 +3227,7 @@ index 6ba64e2..1990325 100644
              element->update_disabled();
              element->update_hidden();
              config_option_elements.push_back(element);
-@@ -240,7 +403,42 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -240,7 +457,42 @@ void ConfigPageOptionsMenu::render_config_options() {
      }
  }
  
@@ -3067,7 +3271,7 @@ index 6ba64e2..1990325 100644
          description_option_id = option_id;
          set_description_text(config->get_option(option_id).description);
 diff --git a/recompui/src/config/ui_config_page_options_menu.h b/recompui/src/config/ui_config_page_options_menu.h
-index 49e05db..b0d067b 100644
+index 49e05db..932aa33 100644
 --- a/recompui/src/config/ui_config_page_options_menu.h
 +++ b/recompui/src/config/ui_config_page_options_menu.h
 @@ -1,5 +1,7 @@
@@ -3104,7 +3308,7 @@ index 49e05db..b0d067b 100644
  
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "ConfigPageOptionsMenu"; }
-@@ -27,16 +43,21 @@ namespace recompui {
+@@ -27,16 +43,28 @@ namespace recompui {
          void render_config_options();
          void render_confirmation_footer();
          void on_option_hover(const std::string &option_id);
@@ -3114,6 +3318,13 @@ index 49e05db..b0d067b 100644
          void perform_option_render_updates();
          void set_description_text(const std::string &text);
 +        void flush_description_text(bool force);
++        static std::string print_in_rml(const std::string &text, bool markup);
++        bool print_pending = false;
++        // Seconds between the words of a description printing in (L, 2026-11-12: quicker), the longest the whole text
++        // takes to start, and each word's fade.
++        static constexpr float print_step = 0.012f;
++        static constexpr float print_longest = 0.35f;
++        static constexpr float print_fade = 0.06f;
 +        void apply_description_strip(bool strip);
      public:
          ConfigPageOptionsMenu(
@@ -3486,10 +3697,17 @@ index a60c585..cae83dd 100644
              if (next_top_element == nullptr) {
                  return false;
 diff --git a/recompui/src/elements/ui_element.cpp b/recompui/src/elements/ui_element.cpp
-index 4517152..984f1ae 100644
+index 4517152..ccadcba 100644
 --- a/recompui/src/elements/ui_element.cpp
 +++ b/recompui/src/elements/ui_element.cpp
-@@ -5,10 +5,30 @@
+@@ -1,14 +1,37 @@
+ #include "RmlUi/Core/StringUtilities.h"
++#include "RmlUi/Core/StyleSheetSpecification.h"
++#include "RmlUi/Core/PropertyDictionary.h"
++#include "RmlUi/Core/Tween.h"
+ 
+ #include "overloaded.h"
+ #include "recompui.h"
  #include "ui_element.h"
  #include "../core/ui_context.h"
  
@@ -3520,7 +3738,7 @@ index 4517152..984f1ae 100644
  Element::Element(ResourceId rid, Rml::Element *base) : Style(rid) {
      assert(resource_id != ResourceId::null());
      assert(base != nullptr);
-@@ -39,6 +59,17 @@ Element::Element(ResourceId rid, Element* parent, uint32_t events_enabled, Rml::
+@@ -39,6 +62,17 @@ Element::Element(ResourceId rid, Element* parent, uint32_t events_enabled, Rml::
  }
  
  Element::~Element() {
@@ -3538,7 +3756,7 @@ index 4517152..984f1ae 100644
      if (!shim) {
          clear_children();
          if (!base_owning) {
-@@ -306,7 +337,7 @@ void Element::ProcessEvent(Rml::Event &event) {
+@@ -306,7 +340,7 @@ void Element::ProcessEvent(Rml::Event &event) {
              if (events_enabled & Events(EventType::Text)) {
                  Rml::Variant *value_variant = base->GetAttribute("value");
                  if (value_variant != nullptr) {
@@ -3547,7 +3765,7 @@ index 4517152..984f1ae 100644
                  }
              }
  
-@@ -520,6 +551,10 @@ float Element::get_scroll_top() {
+@@ -520,6 +554,10 @@ float Element::get_scroll_top() {
      return base->GetScrollTop();
  }
  
@@ -3558,7 +3776,63 @@ index 4517152..984f1ae 100644
  float Element::get_client_left() {
      return base->GetClientLeft();
  }
-@@ -682,6 +717,44 @@ void Element::set_nav_wrapping(bool wrapping) {
+@@ -581,6 +619,55 @@ void Element::blur() {
+     base->Blur();
+ }
+ 
++static bool parse_rcss_property(const std::string &property, const std::string &value, Rml::Property *out) {
++    Rml::PropertyDictionary dictionary;
++    if (!Rml::StyleSheetSpecification::ParsePropertyDeclaration(dictionary, property, value)) {
++        return false;
++    }
++    const Rml::Property *parsed = dictionary.GetProperty(Rml::StyleSheetSpecification::GetPropertyId(property));
++    if (parsed == nullptr) {
++        return false;
++    }
++    *out = *parsed;
++    return true;
++}
++
++bool Element::animate(const std::string &property, const std::string &from, const std::string &to, float seconds, bool overshoot) {
++    Rml::Property start;
++    Rml::Property end;
++    if (!parse_rcss_property(property, from, &start) || !parse_rcss_property(property, to, &end)) {
++        return false;
++    }
++    Rml::Tween tween = overshoot ? Rml::Tween{ Rml::Tween::Back, Rml::Tween::Out } : Rml::Tween{ Rml::Tween::Cubic, Rml::Tween::Out };
++    return base->Animate(property, end, seconds, tween, 1, false, 0.0f, &start);
++}
++
++int Element::print_in(float step, float fade, float longest) {
++    // In reading order (RmlUi's GetElementsByClassName lists nested ones, such as a coloured word, after the rest).
++    Rml::ElementList pieces;
++    std::vector<Rml::Element *> pending{ base };
++    while (!pending.empty()) {
++        Rml::Element *e = pending.back();
++        pending.pop_back();
++        if (e != base && e->IsClassSet("print-in")) {
++            pieces.push_back(e);
++        }
++        for (int c = e->GetNumChildren() - 1; c >= 0; c--) {
++            pending.push_back(e->GetChild(c));
++        }
++    }
++    const Rml::Property hidden(0.0f, Rml::Unit::NUMBER);
++    const Rml::Property shown(1.0f, Rml::Unit::NUMBER);
++    if (pieces.size() > 1) {
++        step = std::min(step, longest / static_cast<float>(pieces.size() - 1));
++    }
++    for (size_t i = 0; i < pieces.size(); i++) {
++        pieces[i]->Animate("opacity", shown, fade, Rml::Tween{ Rml::Tween::Cubic, Rml::Tween::Out }, 1, false,
++            step * static_cast<float>(i), &hidden);
++    }
++    return static_cast<int>(pieces.size());
++}
++
+ void Element::queue_update() {
+     ContextId cur_context = get_current_context();
+ 
+@@ -682,6 +769,44 @@ void Element::set_nav_wrapping(bool wrapping) {
      is_nav_wrapping = wrapping;
  }
  
@@ -3603,7 +3877,7 @@ index 4517152..984f1ae 100644
  void Element::set_as_primary_focus(bool is_primary_focus) {
      this->is_primary_focus = is_primary_focus;
  }
-@@ -762,4 +835,97 @@ void Element::build_navigation(Element *nav_parent, Element *cur_focus_element)
+@@ -762,4 +887,97 @@ void Element::build_navigation(Element *nav_parent, Element *cur_focus_element)
      }
  }
  
@@ -3702,7 +3976,7 @@ index 4517152..984f1ae 100644
 +
  } // namespace recompui
 diff --git a/recompui/src/elements/ui_element.h b/recompui/src/elements/ui_element.h
-index 34eec3f..d9f0aa0 100644
+index 34eec3f..7c9e118 100644
 --- a/recompui/src/elements/ui_element.h
 +++ b/recompui/src/elements/ui_element.h
 @@ -6,8 +6,11 @@
@@ -3735,7 +4009,15 @@ index 34eec3f..d9f0aa0 100644
  
      std::vector<Element *> nav_children;
  
-@@ -129,6 +136,9 @@ public:
+@@ -114,6 +121,7 @@ public:
+     Element(ResourceId rid, Element* parent, uint32_t events_enabled = 0, Rml::String base_class = "div", bool can_set_text = false);
+     virtual ~Element();
+     void clear_children();
++    const std::vector<Element *> &get_children() const { return children; }
+     bool remove_child(ResourceId child, bool remove_from_context = true);
+     bool remove_child(Element *child, bool remove_from_context = true) { return remove_child(child->get_resource_id(), remove_from_context); }
+     void set_parent(Element *new_parent);
+@@ -129,6 +137,9 @@ public:
      std::string get_input_text();
      void set_input_text(std::string_view text);
      void set_src(std::string_view src);
@@ -3745,7 +4027,7 @@ index 34eec3f..d9f0aa0 100644
      void set_style_enabled(std::string_view style_name, bool enabled);
      bool is_style_enabled(std::string_view style_name);
      void apply_styles();
-@@ -141,6 +151,7 @@ public:
+@@ -141,6 +152,7 @@ public:
      float get_offset_top();
      float get_scroll_left();
      float get_scroll_top();
@@ -3753,7 +4035,23 @@ index 34eec3f..d9f0aa0 100644
      float get_client_left();
      float get_client_top();
      float get_client_width();
-@@ -175,6 +186,16 @@ public:
+@@ -150,6 +162,15 @@ public:
+     bool focus();
+     void blur();
+     void queue_update();
++    // Animates an RCSS property (such as "opacity" or "transform") from one value to another, both written as in
++    // RCSS, over the given seconds. With overshoot the value goes a little past the end and settles back, for a
++    // springy pop. The end value stays on the element afterwards. Returns false if either value does not parse.
++    bool animate(const std::string &property, const std::string &from, const std::string &to, float seconds, bool overshoot = false);
++    // Fades in the element's descendants marked with the class "print-in" one after another, `step` seconds apart
++    // but all started within `longest` seconds, each over `fade` seconds (Banjo-Tooie, 2026-11-12: text that prints
++    // in like the game's dialogue).
++    // Returns how many it found (none before queued text has been set, on the next update).
++    int print_in(float step, float fade, float longest);
+     void register_callback(ContextId context, PTR(void) callback, PTR(void) userdata);
+     uint32_t get_input_value_u32();
+     float get_input_value_float();
+@@ -175,6 +196,16 @@ public:
      // This is more used to decide which element to focus on when any element could be picked,
      // like vertically navigating to the selected tab in a tab list.
      void set_as_primary_focus(bool is_primary_focus = true);
@@ -3770,7 +4068,7 @@ index 34eec3f..d9f0aa0 100644
  
      Element *select_add_option(std::string_view text, std::string_view value);
      void select_set_selection(std::string_view option_value);
-@@ -187,4 +208,28 @@ public:
+@@ -187,4 +218,28 @@ public:
  
  void queue_ui_callback(recompui::ResourceId resource, const Event& e, const UICallback& callback);
  
@@ -3800,22 +4098,23 @@ index 34eec3f..d9f0aa0 100644
 +
  } // namespace recompui
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..697f666 100644
+index b057f46..15b18c8 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
-@@ -3,6 +3,11 @@
+@@ -3,6 +3,12 @@
  #include "ui_document.h"
  #include "recompinput/recompinput.h"
  #include "recompinput/profiles.h"
 +#include "recompui/config.h"
 +#include "ui_sidebar_style.h"
++#include "ui_slider.h"
 +#include <RmlUi/Core/Input.h>
 +#include <algorithm>
 +#include <cctype>
  
  namespace recompui {
  
-@@ -106,35 +111,102 @@ Modal::Modal(
+@@ -106,35 +112,140 @@ Modal::Modal(
      body->set_width(100.0f, Unit::Percent);
  
      set_menu_action_callback(MenuAction::Toggle, [this]() {
@@ -3835,11 +4134,48 @@ index b057f46..697f666 100644
 +// The slide (Banjo-Tooie, 2026-11-10), timed like the rows of the game's Start menu: the box comes in from
 +// the left past its place and settles back, the tabs following one after another, and leaves to the left,
 +// speeding up. The dark backdrop fades with it.
++//
++// 2026-11-12, closer to the Start menu: there each of the five rows comes in about 0.1 s after the one above,
++// playing one sound as it starts and another as it lands a quarter of a second later (traced in game: gczoombox
++// sounds 4 and 2). The tabs now come in at half that pace (there are about fourteen of them, not five), the
++// page's rows follow them in the same way, and the tabs play the Start menu's sounds in five waves, so the menu
++// sounds as the Start menu does.
 +namespace {
 +    constexpr float slide_in_time = 0.34f;
 +    constexpr float slide_out_time = 0.2f;
-+    constexpr float tab_gap = 0.03f;
++    constexpr float tab_start = 0.08f;
++    constexpr float tab_gap = 0.045f;
 +    constexpr float tab_time = 0.26f;
++    // From a row starting in to landing, as the Start menu's sounds are apart.
++    constexpr float land_time = 0.25f;
++    constexpr float row_start = 0.24f;
++    constexpr float row_gap = 0.035f;
++    constexpr float row_time = 0.26f;
++    // Rows further down the page come in with the last of these.
++    constexpr int row_steps = 14;
++    // The Start menu's rows, each a wave of sound, as far apart as its rows.
++    constexpr int sound_waves = 5;
++    constexpr float wave_gap = 0.095f;
++    // A page coming in: the Start menu's page box lands 0.09 s after it starts (traced in game), and its sounds
++    // play at most this often, so running down the tab list does not make a stream of them.
++    constexpr float page_land_time = 0.09f;
++    constexpr float page_sound_every = 0.25f;
++    // Another tab's page (L, 2026-11-12: the long fly-in was too much when going through tabs): its rows glide in
++    // from a little to the left, one after another, quickly, while the page fades in.
++    constexpr float page_row_distance = 48.0f;
++    constexpr float page_row_gap = 0.018f;
++    constexpr float page_row_time = 0.22f;
++    constexpr int page_row_steps = 10;
++    constexpr float page_fade_time = 0.16f;
++    // The peek: in over this long, back after the slider has rested this long, over this long; how much of the menu
++    // is left showing at its fullest.
++    constexpr float peek_in_time = 0.16f;
++    constexpr float peek_hold_time = 0.6f;
++    constexpr float peek_out_time = 0.32f;
++    constexpr float peek_left = 0.1f;
++    // Leaving, the rows go one after another too, quicker, within the box's own slide out.
++    constexpr float row_leave_gap = 0.006f;
++    constexpr float row_leave_time = 0.1f;
 +
 +    float slide_seconds(std::chrono::steady_clock::time_point since) {
 +        return std::chrono::duration<float>(std::chrono::steady_clock::now() - since).count();
@@ -3877,7 +4213,8 @@ index b057f46..697f666 100644
 +        if (!was_closing) {
 +            slide_from = 1.0f;
 +        }
-+        recompui::config::notify_slide(true);
++        waves_in = 0;
++        waves_landed = 0;
 +        update_slide();
 +    } else {
 +        slide = Slide::None;
@@ -3914,7 +4251,7 @@ index b057f46..697f666 100644
 +    if (shown && is_open && animated && recompui::config::slide_enabled()) {
 +        // Hidden when the slide ends (update_slide); still shown, and still taking the input, until then.
 +        start_slide(Slide::Out);
-+        recompui::config::notify_slide(false);
++        recompui::config::notify_slide(recompui::config::SlideSound::Out);
 +    } else {
 +        slide = Slide::None;
 +        if (shown) {
@@ -3923,7 +4260,7 @@ index b057f46..697f666 100644
      }
  
      is_open = false;
-@@ -146,7 +218,81 @@ bool Modal::close() {
+@@ -146,7 +257,297 @@ bool Modal::close() {
      return true;
  }
  
@@ -3942,15 +4279,164 @@ index b057f46..697f666 100644
 +    slide_start = std::chrono::steady_clock::now();
 +}
 +
-+void Modal::update_slide() {
-+    if (slide == Slide::None) {
++void Modal::update_peek() {
++    const auto now = std::chrono::steady_clock::now();
++    const float dt = std::clamp(std::chrono::duration<float>(now - peek_tick).count(), 0.0f, 0.1f);
++    peek_tick = now;
++    bool dragging = false;
++    std::chrono::steady_clock::time_point changed;
++    Element *slider = Slider::get_peek(&dragging, &changed);
++    const bool want = animated && is_open && slide == Slide::None && slider != nullptr && body != nullptr &&
++        body->contains_element(slider) &&
++        (dragging || std::chrono::duration<float>(now - changed).count() < peek_hold_time);
++    if (!want && !peek_shown) {
 +        return;
 +    }
++    peek = want ? std::min(1.0f, peek + dt / peek_in_time) : std::max(0.0f, peek - dt / peek_out_time);
++    // Eased both ways, so it starts and settles softly.
++    const float eased = peek * peek * (3.0f - 2.0f * peek);
++    const float keep = 1.0f - (1.0f - peek_left) * eased;
++
++    // The row the slider is in: its ancestor in the settings list.
++    if (want && peek_row == nullptr) {
++        Element *list = page_list();
++        for (Element *e = slider; e != nullptr && list != nullptr; e = e->get_parent()) {
++            if (e->get_parent() == list) {
++                peek_row = e;
++                break;
++            }
++        }
++    }
++    if (modal_element != nullptr) {
++        modal_element->set_opacity(keep);
++    }
++    if (modal_overlay != nullptr) {
++        const int alpha = get_theme_color(theme::color::BGOverlay).a;
++        modal_overlay->set_background_color(theme::color::BGOverlay, static_cast<int>(alpha * (1.0f - eased) + 0.5f));
++    }
++    for (int i = 0; i < slide_tab_count(); i++) {
++        fade_slide_tab(i, keep);
++    }
++    // RmlUi gives a child that sets its own opacity that opacity, whatever its parents' (opacity is inherited, not
++    // multiplied): the row stays whole. The same goes for the page's choices, switches and the printing help text,
++    // which set their own, so the rest of the page is hidden outright instead of faded: everything beside the row and
++    // beside each of its parents up to the page (RmlUi draws nothing inside a hidden element, so the page itself
++    // can't be hidden). At once going in, and only once the menu has mostly come back going out, so none of it
++    // shows at full strength over a faded box.
++    const bool hide_page = (want || peek > 0.4f) && peek_row != nullptr;
++    if (hide_page && !peek_page_hidden) {
++        for (Element *e = peek_row; e != nullptr && e != body && e->get_parent() != nullptr; e = e->get_parent()) {
++            for (Element *sibling : e->get_parent()->get_children()) {
++                if (sibling != e) {
++                    sibling->set_visibility(Visibility::Hidden);
++                    peek_hidden.push_back(sibling);
++                }
++            }
++        }
++        // The exit and close buttons and the hints under the box set their own looks too.
++        for (Element *extra : { header != nullptr ? static_cast<Element *>(header->get_right()) : nullptr, menu_actions_wrapper }) {
++            if (extra != nullptr) {
++                extra->set_visibility(Visibility::Hidden);
++                peek_hidden.push_back(extra);
++            }
++        }
++        peek_page_hidden = true;
++    } else if (!hide_page && peek_page_hidden) {
++        for (Element *e : peek_hidden) {
++            e->unset_visibility();
++        }
++        peek_hidden.clear();
++        peek_page_hidden = false;
++    }
++    if (peek_row != nullptr) {
++        peek_row->set_opacity(1.0f);
++    }
++    peek_shown = peek > 0.0f;
++    if (!peek_shown) {
++        if (modal_element != nullptr) {
++            modal_element->unset_opacity();
++        }
++        if (peek_row != nullptr) {
++            peek_row->unset_opacity();
++        }
++        peek_row = nullptr;
++    }
++}
++
++void Modal::start_page_slide(const std::string &tab_id) {
++    page_sliding = true;
++    page_slide_start = std::chrono::steady_clock::now();
++    page_sound_landed = true;
++    if (std::chrono::duration<float>(page_slide_start - last_page_sound).count() >= page_sound_every) {
++        last_page_sound = page_slide_start;
++        // The tab's own sound when the game gives one (its character's voice), else the Start menu's page pair.
++        if (!recompui::config::notify_tab_sound(tab_id)) {
++            recompui::config::notify_slide(recompui::config::SlideSound::RowIn);
++            page_sound_landed = false;
++        }
++    }
++    update_page_slide();
++}
++
++void Modal::update_page_slide() {
++    const float t = slide_seconds(page_slide_start);
++    if (!page_sound_landed && t >= page_land_time) {
++        recompui::config::notify_slide(recompui::config::SlideSound::RowLand);
++        page_sound_landed = true;
++    }
++    const bool done = t >= page_row_gap * page_row_steps + page_row_time;
++    Element *list = page_list();
++    if (done) {
++        move_rows(-1.0f);
++        if (list != nullptr) {
++            list->unset_opacity();
++        }
++        page_sliding = false;
++        return;
++    }
++    const std::vector<Element *> rows = page_rows();
++    for (int i = 0; i < static_cast<int>(rows.size()); i++) {
++        const float k = std::clamp((t - page_row_gap * std::min(i, page_row_steps)) / page_row_time, 0.0f, 1.0f);
++        // Ease out: quick at first, settling into place.
++        const float out = (1.0f - k) * (1.0f - k) * (1.0f - k);
++        rows[i]->set_translate_2D(-page_row_distance * out, 0.0f, Unit::Dp);
++    }
++    rows_moved = true;
++    if (list != nullptr) {
++        list->set_opacity(std::clamp(t / page_fade_time, 0.0f, 1.0f));
++    }
++}
++
++void Modal::update_slide() {
++    if (slide == Slide::None) {
++        if (page_sliding) {
++            update_page_slide();
++        }
++        return;
++    }
++    page_sliding = false;
 +    const float t = slide_seconds(slide_start);
 +    if (slide == Slide::In) {
 +        const float k = overshoot(t / slide_in_time);
 +        const float out = slide_from * (1.0f - k);
-+        const bool done = t >= slide_in_time + tab_gap * slide_tab_count() + tab_time;
++        const int tab_count = slide_tab_count();
++        // When each wave of sound starts: with the first tab, then as far apart as the Start menu's rows. A slide
++        // turned round half way out plays one wave, as the rows are in place already.
++        const int waves = slide_tabs ? sound_waves : 1;
++        auto wave_start = [](int wave) {
++            return tab_start + wave_gap * wave;
++        };
++        while (waves_in < waves && t >= wave_start(waves_in)) {
++            recompui::config::notify_slide(recompui::config::SlideSound::RowIn);
++            waves_in++;
++        }
++        while (waves_landed < waves && t >= wave_start(waves_landed) + land_time) {
++            recompui::config::notify_slide(recompui::config::SlideSound::RowLand);
++            waves_landed++;
++        }
++        const float tabs_done = tab_start + tab_gap * tab_count + tab_time;
++        const float rows_done = row_start + row_gap * row_steps + row_time;
++        const bool done = t >= std::max({ slide_in_time, tabs_done, rows_done }) && waves_landed >= waves;
 +        set_slide_position(out, std::clamp(1.0f - out, 0.0f, 1.0f), done ? -1.0f : t);
 +        if (done) {
 +            slide = Slide::None;
@@ -3961,6 +4447,8 @@ index b057f46..697f666 100644
 +        set_slide_position(out, 1.0f - out, -1.0f);
 +        if (k >= 1.0f) {
 +            finish_close();
++        } else {
++            move_rows(t, true);
 +        }
 +    }
 +}
@@ -3989,13 +4477,78 @@ index b057f46..697f666 100644
 +        if (tab == nullptr) {
 +            continue;
 +        }
-+        float tab_out = 0.0f;
++        // A tab stops at its place instead of going past it over the page (2026-11-12); what would have gone past
++        // swells it a little instead, as a Start menu row's box zooms as it lands.
++        float tab_in = 1.0f;
 +        if (tabs_t >= 0.0f && slide_tabs) {
-+            tab_out = 1.0f - overshoot((tabs_t - 0.08f - tab_gap * i) / tab_time);
++            tab_in = overshoot((tabs_t - tab_start - tab_gap * i) / tab_time);
 +        }
-+        tab->set_translate_2D(-120.0f * tab_out, 0.0f, Unit::Percent);
-+        tab->set_opacity(std::clamp(1.0f - tab_out, 0.0f, 1.0f));
++        const float swell = 1.0f + 2.5f * std::max(0.0f, tab_in - 1.0f);
++        tab->set_translate_2D(-120.0f * std::max(0.0f, 1.0f - tab_in), 0.0f, Unit::Percent);
++        tab->set_scale_2D(swell, swell);
++        fade_slide_tab(i, std::clamp(tab_in, 0.0f, 1.0f));
 +    }
++    // The page's rows, top to bottom, as the Start menu's rows come in: from past the page's left edge, which
++    // clips them, so a row waiting its turn is out of sight. The clip stays where the page rests while the box
++    // overshoots its place, so they wait a sixth of their width further out than that. Only moved, as some rows set their own opacity
++    // (a disabled mod). Their transform is taken off again once they are in place.
++    if (tabs_t >= 0.0f && slide_tabs) {
++        move_rows(std::max(0.0f, tabs_t - row_start));
++    } else if (!page_sliding && slide != Slide::Out) {
++        move_rows(-1.0f);
++    }
++}
++
++void Modal::move_rows(float row_t, bool leaving) {
++    const bool moving = row_t >= 0.0f;
++    if (!moving && !rows_moved) {
++        return;
++    }
++    const std::vector<Element *> rows = page_rows();
++    for (int i = 0; i < static_cast<int>(rows.size()); i++) {
++        const int step = std::min(i, row_steps);
++        if (!moving) {
++            rows[i]->unset_transform();
++        } else if (leaving) {
++            const float k = std::clamp((row_t - row_leave_gap * step) / row_leave_time, 0.0f, 1.0f);
++            rows[i]->set_translate_2D(-115.0f * k * k, 0.0f, Unit::Percent);
++        } else {
++            const float row_out = 1.0f - overshoot((row_t - row_gap * step) / row_time);
++            rows[i]->set_translate_2D(-115.0f * row_out, 0.0f, Unit::Percent);
++        }
++    }
++    rows_moved = moving;
++}
++
++std::vector<Element *> Modal::page_rows() {
++    Element *list = page_list();
++    return list != nullptr ? list->get_children() : std::vector<Element *>{};
++}
++
++// The element under the page with the most children holds its rows (the settings list); a page built this frame
++// has none yet, and is caught on a later frame of the slide.
++Element *Modal::page_list() {
++    Element *list = nullptr;
++    size_t most = 2;
++    std::vector<std::pair<Element *, int>> pending{ { body, 0 } };
++    while (!pending.empty()) {
++        auto [element, depth] = pending.back();
++        pending.pop_back();
++        if (element == nullptr) {
++            continue;
++        }
++        const std::vector<Element *> &children = element->get_children();
++        if (children.size() > most) {
++            most = children.size();
++            list = element;
++        }
++        if (depth < 8) {
++            for (Element *child : children) {
++                pending.push_back({ child, depth + 1 });
++            }
++        }
++    }
++    return list;
 +}
 +
  bool TabbedModal::close() {
@@ -4005,7 +4558,7 @@ index b057f46..697f666 100644
      if (current_tab_index < tab_contexts.size() && current_tab_index >= 0) {
          if (tab_contexts[current_tab_index].can_close(TabCloseContext::ModalClose)) {
              tab_contexts[current_tab_index].on_close(TabCloseContext::ModalClose);
-@@ -155,6 +301,9 @@ bool TabbedModal::close() {
+@@ -155,6 +556,9 @@ bool TabbedModal::close() {
          }
      }
  
@@ -4015,15 +4568,16 @@ index b057f46..697f666 100644
      return Modal::close();
  }
  
-@@ -178,6 +327,7 @@ static std::pair<recompinput::InputDevice, int> get_last_input_info() {
+@@ -178,6 +582,8 @@ static std::pair<recompinput::InputDevice, int> get_last_input_info() {
  void Modal::process_event(const Event &e) {
      switch (e.type) {
          case EventType::Update: {
 +            update_slide();
++            update_peek();
              if (is_open) {
                  bool update_action_labels = false;
                  auto [current_device, current_profile] = get_last_input_info();
-@@ -283,6 +433,13 @@ void Modal::render_menu_actions() {
+@@ -283,6 +689,13 @@ void Modal::render_menu_actions() {
          }
  
          auto action_wrapper = context.create_element<Element>(menu_actions_wrapper, 0, "span", false);
@@ -4037,7 +4591,7 @@ index b057f46..697f666 100644
          action_wrapper->set_display(Display::Flex);
          action_wrapper->set_flex_direction(FlexDirection::Row);
          action_wrapper->set_align_items(AlignItems::Center);
-@@ -299,6 +456,24 @@ void Modal::render_menu_actions() {
+@@ -299,6 +712,24 @@ void Modal::render_menu_actions() {
      }
  }
  
@@ -4062,7 +4616,7 @@ index b057f46..697f666 100644
  void Modal::set_on_close_callback(std::function<void()> callback) {
      on_close_callback = callback;
  }
-@@ -311,6 +486,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
+@@ -311,6 +742,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
      return modal;
  }
  
@@ -4151,7 +4705,7 @@ index b057f46..697f666 100644
  TabbedModal::TabbedModal(
      ResourceId rid,
      Document *parent,
-@@ -319,6 +576,12 @@ TabbedModal::TabbedModal(
+@@ -319,6 +832,12 @@ TabbedModal::TabbedModal(
  ) : Modal(rid, parent, modal_root_context, modal_type)
  {
      set_menu_action_callback(MenuAction::Back, [this]() {
@@ -4164,7 +4718,7 @@ index b057f46..697f666 100644
          if (this->tabs != nullptr) {
              this->tabs->focus_on_active_tab();
          }
-@@ -331,9 +594,124 @@ TabbedModal::TabbedModal(
+@@ -331,15 +850,156 @@ TabbedModal::TabbedModal(
      }, "Next Tab");
  }
  
@@ -4286,20 +4840,42 @@ index b057f46..697f666 100644
 +                    get_current_context().set_autofocus_element(autofocus);
 +                }
 +            }
++            if (tabs != nullptr) {
++                uint32_t version = 0;
++                const auto portraits = recompui::config::get_tab_portraits(&version);
++                if (version != portraits_version) {
++                    portraits_version = version;
++                    for (const auto &[tab_id, frames] : portraits) {
++                        const int index = get_tab_index(tab_id);
++                        if (index >= 0) {
++                            tabs->set_tab_portrait(index, frames);
++                        }
++                    }
++                }
++            }
              if (previous_tab_index != current_tab_index) {
++                const bool changed_while_open = previous_tab_index >= 0 && is_open && slide == Slide::None;
                  body->clear_children();
++                rows_moved = false;
++                peek_row = nullptr;
++                peek_hidden.clear();
++                peek_page_hidden = false;
                  if (current_tab_index >= 0 && current_tab_index < tab_contexts.size()) {
-@@ -341,6 +719,9 @@ void TabbedModal::process_event(const Event &e) {
+                     tab_contexts[current_tab_index].create_contents(modal_root_context, body);
                  }
                  previous_tab_index = current_tab_index;
-             }
++                // Another tab while the menu is open: its page comes in as the Start menu's pages do.
++                if (changed_while_open && animated && recompui::config::slide_enabled() &&
++                    current_tab_index >= 0 && current_tab_index < static_cast<int>(tab_contexts.size())) {
++                    start_page_slide(tab_contexts[current_tab_index].id);
++                }
++            }
 +            else if (page_focus_pending > 0 && --page_focus_pending == 0) {
 +                body->focus_first_nav_element();
-+            }
+             }
              queue_update();
              break;
-         }
-@@ -362,7 +743,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
+@@ -362,7 +1022,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
          return;
      }
      int next_index = tabs->get_next_tab_in_direction(tabs->get_active_tab(), direction);
@@ -4320,7 +4896,7 @@ index b057f46..697f666 100644
      // Only focus if the tab changed to the intended tab, otherwise the tab change was cancelled.
      if (current_tab_index == next_index) {
          tabs->focus_on_active_tab();
-@@ -404,12 +798,21 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+@@ -404,12 +1077,21 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
      ContextId context = get_current_context();
      if (tabs == nullptr) {
          header->set_padding_left(0.0f); // tabs hug to left side
@@ -4344,7 +4920,7 @@ index b057f46..697f666 100644
  
  void TabbedModal::add_tab(TabContext &&tab_context) {
 diff --git a/recompui/src/elements/ui_modal.h b/recompui/src/elements/ui_modal.h
-index d065a14..a426a16 100644
+index d065a14..f2b6246 100644
 --- a/recompui/src/elements/ui_modal.h
 +++ b/recompui/src/elements/ui_modal.h
 @@ -8,6 +8,8 @@
@@ -4356,7 +4932,7 @@ index d065a14..a426a16 100644
  namespace recompui {
  
      class Modal;
-@@ -74,6 +76,25 @@ namespace recompui {
+@@ -74,6 +76,61 @@ namespace recompui {
          recompinput::InputDevice last_input_device = recompinput::InputDevice::COUNT;
          int last_input_profile = -1;
  
@@ -4371,6 +4947,36 @@ index d065a14..a426a16 100644
 +        float slide_from = 0.0f;
 +        float slide_out_now = 0.0f;
 +        bool slide_tabs = true;
++        // Of the slide in's waves of rows (sound_waves), how many have started and landed, for their sounds.
++        int waves_in = 0;
++        int waves_landed = 0;
++        // The page's rows have a transform from the slide to take off.
++        bool rows_moved = false;
++        // The page's rows (headings and settings), which follow the tabs in (page_rows finds them).
++        std::vector<Element *> page_rows();
++        Element *page_list();
++        // Moves the page's rows: row_t seconds into their slide in (each row_gap after the one above); `leaving`
++        // instead for the slide out, row_t seconds into it; below 0 puts them back in place.
++        void move_rows(float row_t, bool leaving = false);
++        // A page shown while the menu is open (another tab) comes in row by row too (2026-11-12), with the Start
++        // menu's two sounds for a page coming in, at most every quarter second.
++        bool page_sliding = false;
++        bool page_sound_landed = true;
++        std::chrono::steady_clock::time_point page_slide_start;
++        std::chrono::steady_clock::time_point last_page_sound;
++        // The page of the tab with this id comes in; its sound plays (at most every quarter second).
++        void start_page_slide(const std::string &tab_id);
++        void update_page_slide();
++        // The peek (Banjo-Tooie, 2026-11-12, L: "if you adjust a slider, hide most of the menu"): while a slider in
++        // the page is moved, the menu fades nearly away but for that slider's row, so the game shows behind it.
++        float peek = 0.0f;
++        bool peek_shown = false;
++        bool peek_page_hidden = false;
++        // What the peek hid beside the row, to show again.
++        std::vector<Element *> peek_hidden;
++        Element *peek_row = nullptr;
++        std::chrono::steady_clock::time_point peek_tick;
++        void update_peek();
 +        void start_slide(Slide to);
 +        void update_slide();
 +        void set_slide_position(float out, float overlay_opacity, float tabs_t);
@@ -4378,11 +4984,17 @@ index d065a14..a426a16 100644
 +        // The tab buttons, which follow the box in one after another (TabbedModal's).
 +        virtual int slide_tab_count() { return 0; }
 +        virtual Element *slide_tab(int index) { return nullptr; }
++        // Fades a tab as it slides (its opacity, and its portrait's, which RmlUi does not fade with it).
++        virtual void fade_slide_tab(int index, float fade) {
++            if (Element *tab = slide_tab(index)) {
++                tab->set_opacity(fade);
++            }
++        }
 +
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "Modal"; }
  
-@@ -85,8 +106,18 @@ namespace recompui {
+@@ -85,8 +142,18 @@ namespace recompui {
          virtual void open();
          virtual bool close();
          bool is_open_now() const { return is_open; }
@@ -4401,7 +5013,7 @@ index d065a14..a426a16 100644
          Element *get_body() { return body; }
  
          void set_on_close_callback(std::function<void()> callback);
-@@ -102,11 +133,23 @@ namespace recompui {
+@@ -102,11 +169,30 @@ namespace recompui {
          TabSet *tabs = nullptr;
          int previous_tab_index = -1;
          int current_tab_index = -1;
@@ -4412,6 +5024,8 @@ index d065a14..a426a16 100644
 +        int page_focus_pending = 0;
 +        // The menu was closed from a controller while it was on an entry inside the page.
 +        bool reopen_in_page = false;
++        // The tab portraits' version last shown (config::get_tab_portraits).
++        uint32_t portraits_version = 0;
 +        void enter_page();
 +        int get_tab_index(const std::string &id) const;
 +        void apply_sidebar_layout(bool sidebar);
@@ -4422,6 +5036,11 @@ index d065a14..a426a16 100644
          void initialize_tab(TabContext &tab_context);
 +        int slide_tab_count() override { return static_cast<int>(tab_contexts.size()); }
 +        Element *slide_tab(int index) override { return tabs != nullptr ? tabs->get_tab(index) : nullptr; }
++        void fade_slide_tab(int index, float fade) override {
++            if (Tab *tab = tabs != nullptr ? tabs->get_tab(index) : nullptr) {
++                tab->set_fade(fade);
++            }
++        }
      public:
          virtual void open() override;
          virtual bool close() override;
@@ -4575,21 +5194,177 @@ index 0000000..e5b6a0c
 +    // Luckiest Guy (Apache 2.0, assets/LuckiestGuy-LICENSE.txt), registered by the game.
 +    inline constexpr const char *font = "Luckiest Guy";
 +}
+diff --git a/recompui/src/elements/ui_slider.cpp b/recompui/src/elements/ui_slider.cpp
+index 7a50da4..d3fa50c 100644
+--- a/recompui/src/elements/ui_slider.cpp
++++ b/recompui/src/elements/ui_slider.cpp
+@@ -7,6 +7,16 @@
+ 
+ namespace recompui {
+ 
++    Slider *Slider::peek_slider = nullptr;
++    bool Slider::peek_dragging = false;
++    std::chrono::steady_clock::time_point Slider::peek_changed{};
++
++    Slider *Slider::get_peek(bool *dragging, std::chrono::steady_clock::time_point *changed) {
++        *dragging = peek_dragging;
++        *changed = peek_changed;
++        return peek_slider;
++    }
++
+     void Slider::set_value_internal(double v, bool setup, bool trigger_callbacks) {
+         if (step_value != 0.0) {
+             v = std::lround(v / step_value) * step_value;
+@@ -18,6 +28,9 @@ namespace recompui {
+             update_label_text();
+ 
+             if (trigger_callbacks) {
++                // Changed by the player (a drag, a click or a step): the menu peeks while it moves.
++                peek_slider = this;
++                peek_changed = std::chrono::steady_clock::now();
+                 for (auto callback : value_changed_callbacks) {
+                     callback(v);
+                 }
+@@ -26,17 +39,28 @@ namespace recompui {
+     }
+ 
+     void Slider::bar_pressed(float x, float) {
++        // A press counts as moving it, even onto the value it has.
++        peek_slider = this;
++        peek_changed = std::chrono::steady_clock::now();
+         update_value_from_mouse(x);
+     }
+ 
+-    void Slider::bar_dragged(float x, float, DragPhase) {
++    void Slider::bar_dragged(float x, float, DragPhase phase) {
++        note_drag(phase);
+         update_value_from_mouse(x);
+     }
+ 
+-    void Slider::circle_dragged(float x, float, DragPhase) {
++    void Slider::circle_dragged(float x, float, DragPhase phase) {
++        note_drag(phase);
+         update_value_from_mouse(x);
+     }
+ 
++    void Slider::note_drag(DragPhase phase) {
++        peek_slider = this;
++        peek_dragging = phase == DragPhase::Start || phase == DragPhase::Move;
++        peek_changed = std::chrono::steady_clock::now();
++    }
++
+     void Slider::update_value_from_mouse(float x) {
+         double left = slider_element->get_absolute_left();
+         double width = slider_element->get_client_width();
+@@ -185,6 +209,10 @@ namespace recompui {
+     }
+ 
+     Slider::~Slider() {
++        if (peek_slider == this) {
++            peek_slider = nullptr;
++            peek_dragging = false;
++        }
+ 
+     }
+ 
+diff --git a/recompui/src/elements/ui_slider.h b/recompui/src/elements/ui_slider.h
+index 4d8c41e..11fdc79 100644
+--- a/recompui/src/elements/ui_slider.h
++++ b/recompui/src/elements/ui_slider.h
+@@ -3,6 +3,8 @@
+ #include "ui_clickable.h"
+ #include "ui_label.h"
+ 
++#include <chrono>
++
+ namespace recompui {
+     
+     enum SliderType {
+@@ -13,6 +15,11 @@ namespace recompui {
+ 
+     class Slider : public Element {
+     private:
++        // The slider the player is moving (Banjo-Tooie, 2026-11-12, for the menu's peek): dragged now, or changed
++        // last and when. Main thread.
++        static Slider *peek_slider;
++        static bool peek_dragging;
++        static std::chrono::steady_clock::time_point peek_changed;
+         SliderType type = SliderType::Percent;
+         Label *value_label = nullptr;
+         Clickable *slider_element = nullptr;
+@@ -30,6 +37,7 @@ namespace recompui {
+         void bar_pressed(float x, float y);
+         void bar_dragged(float x, float y, DragPhase phase);
+         void circle_dragged(float x, float y, DragPhase phase);
++        void note_drag(DragPhase phase);
+         void update_value_from_mouse(float x);
+         void update_circle_position();
+         void update_label_text();
+@@ -56,6 +64,8 @@ namespace recompui {
+         void add_value_changed_callback(std::function<void(double)> callback);
+         void do_step(bool increment);
+         void set_focus_callback(std::function<void(bool)> callback);
++        // The slider the player moved last (nullptr for none), whether it is being dragged, and when it last changed.
++        static Slider *get_peek(bool *dragging, std::chrono::steady_clock::time_point *changed);
+     };
+ 
+ } // namespace recompui
+diff --git a/recompui/src/elements/ui_style.cpp b/recompui/src/elements/ui_style.cpp
+index 99c8e61..29749c2 100644
+--- a/recompui/src/elements/ui_style.cpp
++++ b/recompui/src/elements/ui_style.cpp
+@@ -829,6 +829,14 @@ namespace recompui {
+         set_property(Rml::PropertyId::Transform, Rml::Property(Rml::Variant(std::move(transform)), Rml::Unit::TRANSFORM));
+     }
+ 
++    void Style::unset_visibility() {
++        remove_property(Rml::PropertyId::Visibility);
++    }
++
++    void Style::unset_opacity() {
++        remove_property(Rml::PropertyId::Opacity);
++    }
++
+     void Style::unset_transform() {
+         remove_property(Rml::PropertyId::Transform);
+     }
+diff --git a/recompui/src/elements/ui_style.h b/recompui/src/elements/ui_style.h
+index 3fe8e04..647a2d3 100644
+--- a/recompui/src/elements/ui_style.h
++++ b/recompui/src/elements/ui_style.h
+@@ -32,6 +32,7 @@ namespace recompui {
+         Style() : Style(ResourceId::null()) {}
+         virtual ~Style();
+         void set_visibility(Visibility visibility);
++        void unset_visibility();
+         void set_position(Position position);
+         void set_left(float left, Unit unit = Unit::Dp);
+         void unset_left();
+@@ -93,6 +94,7 @@ namespace recompui {
+         void set_image_color(recompui::theme::color color, int opacity = ThemeDefaultOpacity);
+         void set_cursor(Cursor cursor);
+         void set_opacity(float opacity);
++        void unset_opacity();
+         void set_display(Display display);
+         Display get_display();
+         // Sets display property to hidden, and remembers the previous display value when calling display_show().
 diff --git a/recompui/src/elements/ui_tab_set.cpp b/recompui/src/elements/ui_tab_set.cpp
-index 2c5dc52..396c645 100644
+index 2c5dc52..f415e57 100644
 --- a/recompui/src/elements/ui_tab_set.cpp
 +++ b/recompui/src/elements/ui_tab_set.cpp
-@@ -1,5 +1,9 @@
+@@ -1,5 +1,11 @@
  #include "ui_tab_set.h"
  #include "ui_utils.h"
 +#include "ui_svg.h"
++#include "ui_image.h"
++#include <algorithm>
 +#include "ui_sidebar_style.h"
 +#include "recompui/recompui.h"
 +#include <RmlUi/Core/Input.h>
  
  namespace recompui {
  
-@@ -49,6 +53,60 @@ Tab::Tab(ResourceId rid, Element *parent, int tab_index, std::string_view text,
+@@ -49,6 +55,168 @@ Tab::Tab(ResourceId rid, Element *parent, int tab_index, std::string_view text,
      add_style(&disabled_style, { disabled_state });
  }
  
@@ -4605,11 +5380,12 @@ index 2c5dc52..396c645 100644
 +            jiggy->set_height(30.0f);
 +            jiggy->set_margin_top(-15.0f);
 +        }
-+        jiggy->set_display(is_selected ? Display::Block : Display::None);
++        jiggy->set_display(is_selected && portrait == nullptr ? Display::Block : Display::None);
 +        set_padding_top(10.0f);
 +        set_padding_bottom(8.0f);
-+        set_padding_left(48.0f);
-+        set_padding_right(16.0f);
++        // Room for the portrait (2026-11-12: drawn larger than the Jiggy was).
++        set_padding_left(70.0f);
++        set_padding_right(12.0f);
 +        set_border_radius(theme::border::radius_md);
 +        set_border_width(2.0f);
 +        set_border_color(theme::color::Transparent);
@@ -4628,6 +5404,9 @@ index 2c5dc52..396c645 100644
 +        if (jiggy != nullptr) {
 +            jiggy->set_display(Display::None);
 +        }
++        if (portrait != nullptr) {
++            portrait->set_display(Display::None);
++        }
 +        set_padding_top(tab_vertical_padding);
 +        set_padding_bottom(tab_vertical_padding);
 +        set_padding_left(tab_horizontal_padding);
@@ -4644,13 +5423,117 @@ index 2c5dc52..396c645 100644
 +        checked_style.set_border_color(theme::color::Transparent);
 +        pulsing_style.set_border_color(theme::color::Transparent);
 +    }
++    show_portrait();
 +    apply_styles();
++}
++
++void Tab::set_portrait(const std::vector<std::string> &frames) {
++    portrait_frames = frames;
++    const std::string src = frames.empty() ? std::string{} : frames[0];
++    portrait_src = src;
++    blink_step = -1;
++    next_blink = std::chrono::steady_clock::now() + blink_wait();
++    if (frames.size() > 1) {
++        queue_update();
++    }
++    if (src.empty()) {
++        if (portrait != nullptr) {
++            portrait->set_display(Display::None);
++        }
++    } else {
++        if (portrait == nullptr) {
++            portrait = get_current_context().create_element<Image>(this, src);
++            portrait->set_position(Position::Absolute);
++            // The sprites leave a margin round the face, so the picture is drawn larger than the Jiggy was.
++            // About as large as the Start menu's (a face some 60 pixels across in a 900 pixel high window): the
++            // picked tab's at full size reaches past its row a little, as the Start menu's highlighted box does.
++            portrait->set_left(-12.0f);
++            portrait->set_top(50.0f, Unit::Percent);
++            portrait->set_width(80.0f);
++            portrait->set_height(80.0f);
++            portrait->set_margin_top(-40.0f);
++            portrait->set_pointer_events(PointerEvents::None);
++        } else {
++            portrait->set_src(src);
++        }
++    }
++    show_portrait();
++}
++
++// How long a portrait keeps its eyes open: 1.5 to 4 s, different for each tab, as the Start menu's portraits blink
++// each on their own (seen in game, 2026-11-12).
++std::chrono::steady_clock::duration Tab::blink_wait() {
++    blink_seed = blink_seed * 1103515245u + 12345u + static_cast<uint32_t>(tab_index) * 7919u;
++    const int ms = 1500 + static_cast<int>((blink_seed >> 8) % 2500u);
++    return std::chrono::milliseconds(ms);
++}
++
++// The blink: the eyes close over the sprite's blink frames and open again, a frame each game update at 30 a second
++// (about a quarter of a second), as the game's portraits do. Called on each update while the sidebar shows.
++void Tab::update_blink() {
++    if (!vertical || portrait == nullptr || portrait_frames.size() < 2) {
++        return;
++    }
++    queue_update();
++    const auto now = std::chrono::steady_clock::now();
++    const int closing = static_cast<int>(portrait_frames.size()) - 1;
++    constexpr auto frame_time = std::chrono::milliseconds(33);
++    if (blink_step < 0) {
++        if (now < next_blink) {
++            return;
++        }
++        blink_step = 0;
++        blink_frame_at = now;
++    } else if (now - blink_frame_at < frame_time) {
++        return;
++    } else {
++        blink_step++;
++        blink_frame_at = now;
++    }
++    // Steps 0 .. closing-1 close the eyes (frames 1 .. closing), the next ones open them again, then the still.
++    const int steps = 2 * closing;
++    if (blink_step >= steps) {
++        blink_step = -1;
++        next_blink = now + blink_wait();
++        portrait->set_src(portrait_frames[0]);
++        return;
++    }
++    const int frame = blink_step < closing ? blink_step + 1 : steps - blink_step;
++    portrait->set_src(portrait_frames[frame]);
++}
++
++void Tab::set_fade(float value) {
++    value = std::clamp(value, 0.0f, 1.0f);
++    if (value == fade) {
++        return;
++    }
++    fade = value;
++    set_opacity(fade);
++    if (portrait != nullptr && vertical && !portrait_src.empty()) {
++        portrait->set_opacity((is_selected ? 1.0f : 0.65f) * fade);
++    }
++}
++
++// The picked tab's portrait is full size and bright, the others smaller and dimmer, as the Start menu's
++// highlighted row stands out from the rest.
++void Tab::show_portrait() {
++    const bool shown = vertical && !portrait_src.empty() && portrait != nullptr;
++    if (portrait != nullptr) {
++        portrait->set_display(shown ? Display::Block : Display::None);
++        if (shown) {
++            portrait->set_opacity((is_selected ? 1.0f : 0.65f) * fade);
++            portrait->set_scale_2D(is_selected ? 1.0f : 0.7f, is_selected ? 1.0f : 0.7f);
++        }
++    }
++    if (jiggy != nullptr) {
++        jiggy->set_display(vertical && is_selected && !shown ? Display::Block : Display::None);
++    }
 +}
 +
  void Tab::set_visible(bool is_visible) {
      visible = is_visible;
      set_enabled(visible);
-@@ -66,6 +124,9 @@ void Tab::process_event(const Event &e) {
+@@ -66,6 +234,9 @@ void Tab::process_event(const Event &e) {
      switch (e.type) {
      case EventType::Click:
          on_select_tab(tab_index);
@@ -4660,7 +5543,7 @@ index 2c5dc52..396c645 100644
          break;
      case EventType::Hover:
          set_style_enabled(hover_state, std::get<EventHover>(e.variant).active);
-@@ -82,12 +143,24 @@ void Tab::process_event(const Event &e) {
+@@ -82,12 +253,25 @@ void Tab::process_event(const Event &e) {
              set_style_enabled(focus_state, active);
              if (active) {
                  queue_update();
@@ -4672,6 +5555,7 @@ index 2c5dc52..396c645 100644
          }
          break;
      case EventType::Update:
++        update_blink();
          if (is_style_enabled(focus_state)) {
              recompui::Color pulse_color = recompui::get_pulse_color(750);
 +            if (vertical) {
@@ -4685,17 +5569,44 @@ index 2c5dc52..396c645 100644
              pulsing_style.set_color(pulse_color);
              if (is_selected) {
                  indicator->set_background_color(pulse_color);
-@@ -105,6 +178,9 @@ void Tab::process_event(const Event &e) {
+@@ -104,7 +288,24 @@ void Tab::process_event(const Event &e) {
+ }
  
  void Tab::set_selected(bool enable) {
++    const bool newly_picked = enable && !is_selected;
++    const bool newly_left = !enable && is_selected;
      is_selected = enable;
-+    if (jiggy != nullptr) {
-+        jiggy->set_display(vertical && enable ? Display::Block : Display::None);
++    show_portrait();
++    // Sidebar layout: the newly picked tab pops, its portrait swelling past its size and settling back and
++    // brightening, as a Start menu row's box zooms when the highlight reaches it; the tab left fades down over a
++    // quarter of a second, as the Start menu's rows do (Banjo-Tooie, 2026-11-12).
++    const bool has_portrait = vertical && portrait != nullptr && !portrait_src.empty();
++    if (newly_picked && vertical) {
++        label->animate("transform", "scale(0.9)", "scale(1)", 0.28f, true);
++        if (has_portrait) {
++            portrait->animate("transform", "scale(0.6)", "scale(1)", 0.32f, true);
++            portrait->animate("opacity", "0.65", "1", 0.25f);
++        }
++    } else if (newly_left && has_portrait) {
++        portrait->animate("transform", "scale(1)", "scale(0.7)", 0.25f);
++        portrait->animate("opacity", "1", "0.65", 0.25f);
 +    }
      set_as_primary_focus(enable);
      set_style_enabled(checked_state, enable);
      indicator->set_background_color(enable ? theme::color::BorderSolid : theme::color::Transparent);
-@@ -131,6 +207,9 @@ int TabSet::add_tab(std::string_view text) {
+@@ -125,12 +326,21 @@ void TabSet::set_change_tab_callback(on_change_tab_callback callback) {
+     change_tab_callback = std::move(callback);
+ }
+ 
++void TabSet::set_tab_portrait(int tab_index, const std::vector<std::string> &frames) {
++    if (tab_index >= 0 && tab_index < static_cast<int>(tabs.size())) {
++        tabs[tab_index]->set_portrait(frames);
++    }
++}
++
+ int TabSet::add_tab(std::string_view text) {
+     ContextId context = get_current_context();
+     Tab *tab = context.create_element<Tab>(this, tabs.size(), text, [this](int tab_index) {
          set_active_tab(tab_index, true);
      });
      tabs.push_back(tab);
@@ -4705,7 +5616,7 @@ index 2c5dc52..396c645 100644
      if (active_tab < 0) {
          active_tab = 0;
          tab->set_selected(true);
-@@ -194,6 +273,39 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
+@@ -194,6 +404,39 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
      return new_index;
  }
  
@@ -4746,30 +5657,62 @@ index 2c5dc52..396c645 100644
      if (tab_index < 0 || tab_index >= static_cast<int>(tabs.size())) {
          return;
 diff --git a/recompui/src/elements/ui_tab_set.h b/recompui/src/elements/ui_tab_set.h
-index b8d3783..0da0ca7 100644
+index b8d3783..256a059 100644
 --- a/recompui/src/elements/ui_tab_set.h
 +++ b/recompui/src/elements/ui_tab_set.h
-@@ -18,6 +18,8 @@ namespace recompui {
+@@ -1,6 +1,10 @@
+ #pragma once
+ 
+ #include "ui_element.h"
++
++#include <chrono>
++#include <string>
++#include <vector>
+ #include "ui_label.h"
+ 
+ namespace recompui {
+@@ -18,6 +22,23 @@ namespace recompui {
          on_change_tab_callback on_select_tab;
          Element *label = nullptr;
          Element *indicator = nullptr;
 +        Element *jiggy = nullptr;
++        // Sidebar layout: the tab's talking-head portrait (Banjo-Tooie, 2026-11-12), shown in the Jiggy's place on
++        // every tab, as each row of the game's Start menu has one.
++        Element *portrait = nullptr;
++        std::string portrait_src;
++        // The portrait's pictures: the still one, then the blink's, the eyes closing (the sprite's own frames).
++        std::vector<std::string> portrait_frames;
++        int blink_step = -1;
++        uint32_t blink_seed = 0x2545F491u;
++        std::chrono::steady_clock::time_point next_blink;
++        std::chrono::steady_clock::time_point blink_frame_at;
++        std::chrono::steady_clock::duration blink_wait();
++        void update_blink();
++        void show_portrait();
++        // How far the tab has faded in as the menu slides in (1 in place).
++        float fade = 1.0f;
 +        bool vertical = false;
  
          bool visible = true;
  
-@@ -32,6 +34,10 @@ namespace recompui {
+@@ -32,6 +53,16 @@ namespace recompui {
          void set_selected(bool selected);
          void set_visible(bool is_visible);
          bool get_visible() { return visible; }
 +        // Sidebar layout: a row of a vertical list, its selected mark down the left edge.
 +        void set_vertical(bool vertical);
++        // Sidebar layout: a portrait (registered images' names: the still picture, then the blink's frames, the eyes
++        // closing) shown before the name, instead of the Jiggy on the picked tab. Empty takes it away.
++        void set_portrait(const std::vector<std::string> &frames);
++        // The tab's fade as it slides in (0 hidden, 1 shown). The portrait sets its own opacity, which RmlUi does
++        // not multiply by the tab's, so it is faded here too: it stayed in sight beside the box (L, 2026-11-12).
++        void set_fade(float value);
 +        // Sidebar layout: called on A (click) and on Right, to move into the tab's page.
 +        std::function<void()> on_enter;
      };
  
      class TabSet : public Element {
-@@ -47,10 +53,20 @@ namespace recompui {
+@@ -47,10 +78,21 @@ namespace recompui {
          int add_tab(std::string_view text);
          void set_active_tab(int tab_index, bool report_change = true);
          void focus_on_active_tab();
@@ -4777,6 +5720,7 @@ index b8d3783..0da0ca7 100644
          Element *get_active_tab_element() const { return active_tab >= 0 && active_tab < static_cast<int>(tabs.size()) ? tabs[active_tab] : nullptr; };
          int get_active_tab() const { return active_tab; }
          void set_tab_visible(int tab_index, bool is_visible);
++        void set_tab_portrait(int tab_index, const std::vector<std::string> &frames);
          int get_next_tab_in_direction(int index, int direction);
 +        // Lays the tabs out top to bottom (the settings sidebar) instead of in a row.
 +        void set_vertical(bool vertical);

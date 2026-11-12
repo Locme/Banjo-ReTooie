@@ -51,6 +51,7 @@
 #include "tooie_level_box.h"
 #include "tooie_sun_control.h"
 #include "tooie_day_night.h"
+#include "tooie_menu_portraits.h"
 
 // rt64-ext (rt64_scene_effects.cpp), for farshadows.
 namespace RT64 {
@@ -2193,6 +2194,79 @@ void cmd_menupos(Ctx& c) {
     print(format("Esc menu moved by %.0f %.0f from the middle", x, y));
 }
 
+// portraits dump [last hex id]: every talking-head portrait's sprite to Dev Files/portraits (src/ui/menu_portraits.cpp).
+// portraits voice <hex id>: a portrait's voice sounds (sound, volume, pitch), and one of them played.
+void cmd_portraits(Ctx& c) {
+    if (c.w.size() >= 3 && lower(c.w[1]) == "voice") {
+        if (c.ctx == nullptr) { error("no game update is running"); return; }
+        char* end = nullptr;
+        const int portrait = (int)std::strtol(c.w[2].c_str(), &end, 16);
+        if (*end != ' ' || portrait < 0 || portrait > 0x3FF) { error("portraits voice <portrait id in hex>"); return; }
+        const auto list = tooie::menu_portraits::voices(c.rdram, c.ctx, portrait);
+        std::string text = format("portrait 0x%X: %zu voice sounds", portrait, list.size());
+        for (const auto& v : list) {
+            text += format(" [0x%X, %d, %.3f]", (uint32_t)v.sound & 0xFFFF, v.volume, v.pitch);
+        }
+        print(text);
+        tooie::menu_portraits::speak(c.rdram, c.ctx, portrait);
+        return;
+    }
+    if (c.w.size() < 2 || lower(c.w[1]) != "dump") { error("portraits dump [last id in hex, D1 when not given] | portraits voice <id>"); return; }
+    if (c.ctx == nullptr) { error("no game update is running"); return; }
+    int last = 0xD1;
+    if (c.w.size() >= 3) {
+        char* end = nullptr;
+        last = (int)std::strtol(c.w[2].c_str(), &end, 16);
+        if (*end != ' ' || last < 0 || last > 0x3FF) { error("the last id is hex, 0 to 3FF"); return; }
+    }
+    std::string folder;
+    const int written = tooie::menu_portraits::dump(c.rdram, c.ctx, last, folder);
+    print(format("%d portraits written to %s", written, folder.c_str()));
+}
+
+// cursor <x> <y> [click|right]: the mouse pointer to (x, y) in the window's pixels, from its top left, and a click
+// there, as SDL events from the window, so the menus take them as they take the real mouse's (the hand cursor's
+// reach included). The real pointer is not moved.
+void cmd_cursor(Ctx& c) {
+    double x = 0, y = 0;
+    const std::string button = c.w.size() == 4 ? lower(c.w[3]) : "";
+    if ((c.w.size() != 3 && c.w.size() != 4) || !parse_double(c.w[1], &x) || !parse_double(c.w[2], &y) ||
+        (c.w.size() == 4 && button != "click" && button != "right")) {
+        error("cursor <x> <y> [click|right] (window pixels from the top left)");
+        return;
+    }
+    if (window == nullptr) { error("no window yet"); return; }
+    int w = 0, h = 0;
+    SDL_GetWindowSize(window, &w, &h);
+    if (x < 0 || y < 0 || x >= w || y >= h) {
+        error(format("outside the window (%d x %d)", w, h));
+        return;
+    }
+    const Uint32 id = SDL_GetWindowID(window);
+    SDL_Event motion{};
+    motion.type = SDL_MOUSEMOTION;
+    motion.motion.windowID = id;
+    motion.motion.x = (Sint32)x;
+    motion.motion.y = (Sint32)y;
+    SDL_PushEvent(&motion);
+    if (!button.empty()) {
+        SDL_Event press{};
+        press.type = SDL_MOUSEBUTTONDOWN;
+        press.button.windowID = id;
+        press.button.button = button == "right" ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
+        press.button.state = SDL_PRESSED;
+        press.button.clicks = 1;
+        press.button.x = (Sint32)x;
+        press.button.y = (Sint32)y;
+        SDL_PushEvent(&press);
+        SDL_Event lift = press;
+        lift.type = SDL_MOUSEBUTTONUP;
+        lift.button.state = SDL_RELEASED;
+        SDL_PushEvent(&lift);
+    }
+    print(format("cursor at %.0f %.0f%s", x, y, button.empty() ? "" : (" with a " + button + (button == "right" ? " click" : "")).c_str()));
+}
+
 // The layout file: the committed default is assets/ui_layout.json in the repo, which the build copies next to the exe.
 // { "menu": [x, y], "entries": { "row.foo": [x, y], ... } }
 std::filesystem::path ui_layout_path() { return recompui::file::get_asset_path("ui_layout.json"); }
@@ -4311,6 +4385,8 @@ const std::vector<Command>& commands() {
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
         { "menu", {}, false, "menu open | menu close | menu tab <id> | menu expand <setting> [off]", "open or shut the Esc menu, show a tab, open a setting's arrow", cmd_menu },
         { "menupos", {}, false, "menupos [<x> <y> | reset]", "move the Esc menu from the middle by x, y (dp), at once", cmd_menupos },
+        { "portraits", {}, true, "portraits dump [last hex id] | portraits voice <hex id>", "voice: list a portrait's voice sounds and play one; dump: write every talking-head portrait (0 to D1) to Dev Files/portraits as pictures, to pick them for the Esc menu's tabs", cmd_portraits },
+        { "cursor", {}, false, "cursor <x> <y> [click|right]", "point the mouse at x, y in the window (pixels from its top left) and click there, as the real mouse would", cmd_cursor },
         { "uimove", {}, false, "uimove list | <entry> <x> <y> | <entry> reset | reset | save", "move single tabs, rows and buttons of the Esc menu by x, y (dp), at once; save writes assets/ui_layout.json", cmd_uimove },
         { "cam", {}, true, "cam", "the camera's position and angles as drawn, and its mode", cmd_cam },
         { "kill", {}, true, "kill [radius] [model hex]", "remove the nearest object (or the nearest with that model) as a beaten enemy is removed", cmd_kill },

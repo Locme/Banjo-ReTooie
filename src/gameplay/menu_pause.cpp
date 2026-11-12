@@ -21,12 +21,18 @@
 // Menu Slide (QOL > Menu, 2026-11-10, on by default): the Esc menu slides in from the left and out again
 // (RecompFrontend's Modal, lib-patches/RecompFrontend.patch), and plays the sounds the Start menu's rows make
 // as they slide in and out. Those rows are gczoombox boxes, which play their sounds through
-// gcaudiolist_entrypoint_1(sound, 0x4650): 2 as a box slides in, 3 as it slides out. The menu asks for the
-// sound on the main thread; tick() plays it on the game thread, through the overlay's thunk as the game does.
+// gcaudiolist_entrypoint_1(sound, 0x4650). Traced in game (2026-11-12): opening, each of the five rows plays 4
+// as it starts in and 2 as it lands 0.25 s later, a row about 0.1 s after the one above; closing plays 3, and 5
+// about 0.28 s later; moving the highlight plays nothing. The Esc menu tells us each wave of rows starting and
+// landing, and the slide out starting; 5 follows the slide out here. The menu asks for the sounds on the main
+// thread; tick() plays them on the game thread, through the overlay's thunk as the game does.
 //
 // Headless: TOOIE_MENU_PAUSE_LOG=1 logs `[menu-pause]` when the pause starts and ends, and each slide sound.
 
 #include <atomic>
+#include <chrono>
+#include <deque>
+#include <mutex>
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
@@ -55,14 +61,23 @@ namespace {
     constexpr uint32_t slot_size = 0x50;
     constexpr uint32_t slot_count = 6;
 
-    // gcaudiolist's sounds for a Start menu row sliding in and out, at the volume the pause menu gives them.
-    constexpr int32_t slide_in_sound = 2;
-    constexpr int32_t slide_out_sound = 3;
+    // gcaudiolist's sounds for a Start menu row, at the volume the pause menu gives them: starting in, landing,
+    // starting out, and the end of the slide out.
+    constexpr int32_t row_in_sound = 4;
+    constexpr int32_t row_land_sound = 2;
+    constexpr int32_t out_sound = 3;
+    constexpr int32_t out_end_sound = 5;
     constexpr uint32_t slide_sound_volume = 0x4650;
+    constexpr auto out_end_delay = std::chrono::milliseconds(280);
 
     std::atomic<bool> menu_open{false};
-    // The slide sound to play next game frame, or -1.
-    std::atomic<int32_t> pending_sound{-1};
+    // The slide sounds to play, each from its time on (main thread in, game thread out).
+    struct PendingSound {
+        std::chrono::steady_clock::time_point due;
+        int32_t sound;
+    };
+    std::mutex pending_mutex;
+    std::deque<PendingSound> pending_sounds;
     std::atomic<bool> allowed{true};
     bool paused = false;
     // The tracks the pause faded out, to fade back in.
@@ -105,12 +120,32 @@ bool tooie::menu_pause::slide_enabled() {
     }
 }
 
-void tooie::menu_pause::slide_sound(bool opening) {
+void tooie::menu_pause::slide_sound(recompui::config::SlideSound sound) {
     // The menu also opens from the launcher, before the game runs: no sound then, and none left over for later.
     if (!ultramodern::is_game_started()) {
         return;
     }
-    pending_sound = opening ? slide_in_sound : slide_out_sound;
+    using recompui::config::SlideSound;
+    const auto now = std::chrono::steady_clock::now();
+    std::lock_guard lock(pending_mutex);
+    switch (sound) {
+    case SlideSound::RowIn:
+        // Opened again during the slide out: the end of the slide out doesn't come.
+        while (!pending_sounds.empty() && pending_sounds.back().sound == out_end_sound) {
+            pending_sounds.pop_back();
+        }
+        pending_sounds.push_back({ now, row_in_sound });
+        break;
+    case SlideSound::RowLand:
+        pending_sounds.push_back({ now, row_land_sound });
+        break;
+    case SlideSound::Out:
+        // Shut while still coming in: the rows' sounds still to come are dropped.
+        pending_sounds.clear();
+        pending_sounds.push_back({ now, out_sound });
+        pending_sounds.push_back({ now + out_end_delay, out_end_sound });
+        break;
+    }
 }
 
 void tooie::menu_pause::set_menu_open(bool open) {
@@ -126,8 +161,16 @@ bool tooie::menu_pause::pausing() {
 }
 
 void tooie::menu_pause::tick(uint8_t* rdram, recomp_context* ctx) {
-    const int32_t sound = pending_sound.exchange(-1);
-    if (sound >= 0) {
+    std::vector<int32_t> sounds;
+    {
+        const auto now = std::chrono::steady_clock::now();
+        std::lock_guard lock(pending_mutex);
+        while (!pending_sounds.empty() && pending_sounds.front().due <= now) {
+            sounds.push_back(pending_sounds.front().sound);
+            pending_sounds.pop_front();
+        }
+    }
+    for (const int32_t sound : sounds) {
         call_game(rdram, ctx, _gcaudiolist_entrypoint_1, (uint32_t)sound, slide_sound_volume);
         if (log_on()) {
             std::fprintf(stderr, "[menu-pause] slide sound %d\n", sound);

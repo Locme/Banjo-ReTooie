@@ -421,6 +421,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/debug/heap_check.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/aim_trace.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/toast.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/menu_portraits.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/launcher_background.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/launcher_title.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/shader_progress.cpp

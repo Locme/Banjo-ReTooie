@@ -5,6 +5,7 @@
 #include <string>
 
 #include "recomp.h"
+#include "recompui/config.h"
 
 // Pause Special Menu (src/gameplay/menu_pause.cpp, L 2026-10-19): QOL option, on by default. While the
 // ESC menu is open during play, gameplay stands still as if Start were pressed, without the pause
@@ -12,14 +13,15 @@
 namespace tooie::menu_pause {
     inline const std::string option = "pause_special_menu";
     // QOL > Menu > Menu Slide (2026-11-10, on by default): the Esc menu slides in and out like the rows of the
-    // Start menu, with the Start menu's sounds.
+    // Start menu, with the Start menu's sounds (2026-11-12: a pair for each wave of rows coming in, and the two
+    // the Start menu plays as it shuts).
     inline const std::string slide_option = "esc_menu_slide";
 
     // Whether Menu Slide is on (any thread).
     bool slide_enabled();
-    // The Esc menu started sliding in (true) or out (false): queues the Start menu's slide sound, played on the
-    // game thread by tick(). Called by the menu on the main thread.
-    void slide_sound(bool opening);
+    // A sound of the Esc menu's slide: queues the Start menu's sound for it (and, for the slide out, the one
+    // that follows it), played on the game thread by tick(). Called by the menu on the main thread.
+    void slide_sound(recompui::config::SlideSound sound);
 
     // Called by the main thread's event loop with whether a menu takes the input (update_gfx in main.cpp).
     void set_menu_open(bool open);

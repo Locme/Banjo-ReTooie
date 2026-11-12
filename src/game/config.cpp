@@ -49,6 +49,7 @@
 #include "tooie_transform_anywhere.h"
 #include "tooie_transform_menu.h"
 #include "tooie_menu_pause.h"
+#include "tooie_menu_portraits.h"
 #include "tooie_totals_checklist.h"
 #include "tooie_canary_mary.h"
 #include "tooie_game_frame_rate.h"
@@ -1074,6 +1075,12 @@ void tooie::init_config() {
         true);
     recompui::config::set_slide_enabled_callback(tooie::menu_pause::slide_enabled);
     recompui::config::set_slide_callback(tooie::menu_pause::slide_sound);
+    // Another tab picked: its portrait's character speaks; a tab with none gets the Start menu's page sound.
+    recompui::config::set_tab_sound_callback([](const std::string& tab_id) {
+        if (!tooie::menu_portraits::tab_voice(tab_id)) {
+            tooie::menu_pause::slide_sound(recompui::config::SlideSound::RowIn);
+        }
+    });
     qol.add_bool_option(
         tooie::totals_checklist::option,
         "Totals Checklist",

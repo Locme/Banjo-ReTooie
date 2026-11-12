@@ -41,6 +41,9 @@ namespace {
         try {
             recompui::ContextId ctx = recompui::create_context();
             ctx.open();
+            // The page's own body covers the whole window: without this it took the clicks meant for the Esc
+            // menu under it for as long as a notice showed (found 2026-11-12, "Screenshot saved").
+            ctx.get_root_element()->set_pointer_events(recompui::PointerEvents::None);
             recompui::Element* root = ctx.create_element<recompui::Element>(ctx.get_root_element());
             root->set_display(recompui::Display::Flex);
             root->set_background_color(recompui::theme::color::Transparent);
