@@ -5,6 +5,8 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- Relighting: shadows on Banjo no longer flicker. The check that leaves caves to the game's own lighting took Banjo's own head and arms for a roof, so his shaded side switched between relit and not as he moved; characters are now left out of it. Sun shadows also no longer speckle his low-poly body where a shadow begins.
+- No more dotted cracks along the seams of Banjo and other characters (across Banjo's chest, down his muzzle) at high resolutions. Where two of a model's bones meet, the vertices of one side are now pinned to the other side's edges, so no gap can open as the joint bends.
 - Relighting leaves caves, tunnels and rooms to the game's own lighting, as Traced Relighting does, instead of darkening them as if they were in the sun's shade. Terrydactyland, with its tunnels, caves and Inside the Mountain, looked darker with Relighting than with ray tracing because of it. A roof that is off screen isn't found, and the spot is relit as before.
 - Ray traced sun shadows: their soft edges are smoother, traced with up to twelve rays where the shadow begins instead of four. Away from the edges as many rays as before are traced.
 - Relighting is brighter in pale levels: light bounced off bright surroundings now fills the shade and middle tones, as ray tracing's bounce light does. In Cloud Cuckooland Relighting's shaded and middle tones were about a third darker than Ray Tracing's; darker levels, which already matched, are unchanged.

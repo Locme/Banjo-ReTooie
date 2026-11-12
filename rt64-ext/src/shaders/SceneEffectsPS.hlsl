@@ -1008,6 +1008,7 @@ float3 RelitGround(int2 pixel) {
 
 // (Further down, with the other masks.)
 bool LoadShiny(int2 pixel);
+bool LoadCharacter(int2 pixel);
 
 // Relighting: a surface's own colour (own) lit by the sun where it gets through (sunBlocked, from SunShadow), by how
 // squarely the surface faces it, and by the sky from above (the ground's bounce from below). See Relit.
@@ -1054,6 +1055,12 @@ float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float su
 // which leaves such spots to the game's own lighting (L, 2026-11-12). A march that leaves the screen counts as open, so a
 // roof that isn't on screen isn't found and the spot is relit as before.
 bool EnclosedOnScreen(int2 pixel, float3 center, float3 normal) {
+    // Banjo and the other characters are never shut in, and never a roof: marching up from his belly met his own head
+    // and arms, so his shaded side switched between relit and not from pixel to pixel as he moved (L, 2026-11-12:
+    // "shadows on Banjo freak out").
+    if (LoadCharacter(pixel) || InsideBanjo(ViewToWorldPoint(center))) {
+        return false;
+    }
     const float3 worldDirections[5] = { float3(0.0f, 1.0f, 0.0f), float3(0.82f, 0.57f, 0.0f), float3(-0.82f, 0.57f, 0.0f), float3(0.0f, 0.57f, 0.82f), float3(0.0f, 0.57f, -0.82f) };
     const float distance = -center.z;
     const float bias = 3.0f + distance * 0.004f;
@@ -1083,9 +1090,10 @@ bool EnclosedOnScreen(int2 pixel, float3 center, float3 normal) {
                 // The sky: this way is open.
                 return false;
             }
-            const float inFront = -p.z + ViewPosition(at, sceneDepth).z;
-            // Something drawn in front of the step, within a roof's or a wall's thickness.
-            met = (inFront > bias) && (inFront < 300.0f + distance * 0.05f);
+            const float3 occluder = ViewPosition(at, sceneDepth);
+            const float inFront = -p.z + occluder.z;
+            // Something drawn in front of the step, within a roof's or a wall's thickness, that isn't a character.
+            met = (inFront > bias) && (inFront < 300.0f + distance * 0.05f) && !LoadCharacter(at) && !InsideBanjo(ViewToWorldPoint(occluder));
         }
         if (!met) {
             return false;
@@ -4772,7 +4780,9 @@ float SunMapLookup(SunMapFrame mapFrame, int offsetX, float3 worldCenter, float3
     }
     const float casterDistance = (blockers > 0.0f) ? max(m.z - blockerDepth / blockers, 0.0f) * depthToWorld : 0.0f;
     const float radius = clamp(casterDistance * spread / texel, 1.0f, 12.0f);
-    const float depthBias = texel * (1.5f + sunTan * (radius + 1.0f)) / depthToWorld;
+    // The bias keeps the width the taps had before (1 + 2.5 softness texels) as its least: with only a texel at a
+    // shadow's start, low-poly characters (Banjo) shadowed their own faces in specks that crawled as they moved.
+    const float depthBias = texel * (1.5f + sunTan * (max(radius, 1.0f + softness * 2.5f) + 1.0f)) / depthToWorld;
     float blocked = 0.0f;
     [unroll] for (int k = 0; k < Taps; k++) {
         const int2 at = clamp(int2(floor(base + mul(turn, disk[k]) * radius)), int2(0, 0), int2(last, last));
