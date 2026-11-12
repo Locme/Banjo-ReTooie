@@ -66,6 +66,7 @@ void tooie_shooter_follow(uint8_t* rdram, recomp_context* ctx, int which);
 // Sput Sput's turn (func_80800364_chstonedartgunhead) at the 30 FPS pace (src/game/game_frame_rate.cpp).
 void tooie_sput_turn_before(uint8_t* rdram, recomp_context* ctx);
 void tooie_sput_turn_after(uint8_t* rdram, recomp_context* ctx);
+void tooie_sput_aim_count(uint8_t* rdram, recomp_context* ctx);
 void tooie_audio_list_queued(uint8_t* rdram, recomp_context* ctx);
 int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx);
 void tooie_face_slot_log(uint8_t* rdram, recomp_context* ctx);

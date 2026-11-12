@@ -2312,6 +2312,7 @@ L_80800548:
     ctx->f10.u32l = MEM_W(ctx->r16, 0X1C);
     // 0x8080058C: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
+    tooie_sput_aim_count(rdram, ctx);
     // 0x80800590: add.s       $f6, $f18, $f4
     CHECK_FR(ctx, 6);
     CHECK_FR(ctx, 18);

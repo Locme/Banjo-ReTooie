@@ -985,6 +985,13 @@ func = "func_80800364_chstonedartgunhead"
 before_vram = 0x808006CC
 text = "tooie_sput_turn_after(rdram, ctx);"
 
+# Sput Sput adds 1.0 ($f4) to its aim count (+0x20) each game frame it is lined up on Banjo and fires when it reaches +0x1C;
+# above 30 FPS the 1.0 becomes the frame's share of 1/30 s (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_80800364_chstonedartgunhead"
+before_vram = 0x80800590
+text = "tooie_sput_aim_count(rdram, ctx);"
+
 # func_8080156C_gczoombox steps a talking-head portrait's mouth and blink once
 # per game frame ($a0 = the box). Above 30 FPS it is skipped until 1/30 s of
 # game time has gone by for that box (src/game/game_frame_rate.cpp).

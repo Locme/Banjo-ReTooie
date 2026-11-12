@@ -1209,6 +1209,19 @@ extern "C" void tooie_sput_turn_after(uint8_t* rdram, recomp_context* ctx) {
     write_float(rdram, ctx->r16 + 0x48, yaw);
 }
 
+// While Sput Sput is lined up on Banjo (within 15 degrees of its target), it adds 1.0 ($f4) to a count
+// (+0x20) once per game frame and fires when the count reaches its limit (+0x1C): 0.2 s after it lines up at
+// 30 FPS (measured in Targitzan's Temple). Above 30 FPS the count filled in
+// far less time, so it fired before it had finished turning toward Banjo. The 1.0 becomes the frame's
+// share of 1/30 s.
+extern "C" void tooie_sput_aim_count(uint8_t* rdram, recomp_context* ctx) {
+    static const bool off = std::getenv("TOOIE_NO_SPUT_FIX") != nullptr;
+    const float dt = read_float(rdram, delta_time_addr);
+    if (!off && above_30() && dt > 0.0f && dt < 1.0f / 30.0f) {
+        ctx->f4.fl = dt * 30.0f;
+    }
+}
+
 // Character blinking: func_80101A50 runs an object's blink ($a0, state in the
 // bits of +0x78 and +0x7A): each frame a random chance to start a blink, then
 // the eyelid frame goes 0 to 3 and back one step a frame. It ends by giving the
