@@ -2209,8 +2209,9 @@ namespace RT64 {
         const auto started = std::chrono::steady_clock::now();
         std::vector<float> touches;
         // The see-through draws' (Chilly Willy's ice balls, SceneSnowTouchDraw's soft): each lands with a great round
-        // ball, and pressed in full it blasted a crater as deep as the snow with banks round it. They press no lower than
-        // a quarter of the snow's depth below its top (softFloor), and raise no banks: a soft dent where each one fell.
+        // ball some 160 units across, and pressed in full it blasted a crater as deep as the snow with banks round it (and
+        // a quarter of the way down, still a wide dent). They press no lower than a tenth of the snow's depth below its top
+        // (softFloor), and raise no banks: a faint imprint where each one landed.
         std::vector<float> softTouches;
         {
             const std::scoped_lock lock(snowTouchMutex);
@@ -2225,14 +2226,23 @@ namespace RT64 {
                     // of as many triangles the frame after).
                     static const bool movingLog = (std::getenv("TOOIE_SNOW_LOG") != nullptr) && (std::getenv("TOOIE_SNOW_LOG")[0] == '2');
                     static uint32_t movingLogged = 0;
-                    if (movingLog && ((movingLogged++ % 997) < 12)) {
+                    if (movingLog && ((movingLogged++ % 97) < 12)) {
                         float nearest = 1e30f;
                         for (const auto &[q, r] : snowTouchNow.draws) {
                             if (q.count == place.count) {
                                 nearest = std::min(nearest, std::max({ std::abs(q.x - place.x), std::abs(q.y - place.y), std::abs(q.z - place.z) }));
                             }
                         }
-                        fprintf(stderr, "[snow] moving draw: %u triangles at %.1f %.1f %.1f, nearest the frame after %.2f\n", place.count, place.x, place.y, place.z, nearest);
+                        // (And whether it is see-through, soft, and how wide and tall it is.)
+                        float lo[3] = { FLT_MAX, FLT_MAX, FLT_MAX }, hi[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+                        for (size_t v = range.first; v < range.first + range.second; v += 3) {
+                            for (int c = 0; c < 3; c++) {
+                                lo[c] = std::min(lo[c], snowTouchHeld.triangles[v + c]);
+                                hi[c] = std::max(hi[c], snowTouchHeld.triangles[v + c]);
+                            }
+                        }
+                        fprintf(stderr, "[snow] moving draw: %u triangles at %.1f %.1f %.1f, nearest the frame after %.2f%s, %.0f x %.0f x %.0f\n", place.count, place.x, place.y, place.z, nearest,
+                            place.soft ? ", see-through" : "", hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
                     }
                 }
                 else {
@@ -2258,7 +2268,7 @@ namespace RT64 {
         // slopes round him), or every creature walking or flying about near him marks the trail (Terrydactyland).
         const float ceiling = effectsSettings.snowSand ? (y + full + 20.0f) : (y + 50.0f + full + 10.0f);
         const float spacing = trail.cell;
-        const float softFloor = y + full / (1.0f + SnowBank) * 0.75f;
+        const float softFloor = y + full / (1.0f + SnowBank) * 0.9f;
         auto touch = [&](float px, float py, float pz, bool soft) {
             const int32_t cx = int32_t(std::floor(px / trail.cell)) - originX;
             const int32_t cz = int32_t(std::floor(pz / trail.cell)) - originZ;

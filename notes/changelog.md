@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- Tessellated Snow: Chilly Willy's ice balls leave only a faint imprint where they land (a tenth of the snow's depth, was a quarter).
 - Tessellated Snow and Sand keep their trails: a print is no longer lost when something presses the snow 1,280 units away (the trail's grid wraps round), and a map's trail is kept when Banjo dies and starts again, goes in and out of a hut or warps, and is there again when he comes back (the last six maps). Footprints keep their own shape and the snow is smoothed a little less, so the trail shows more detail.
 - Tessellated Snow costs far less on a busy snowfield: shaping the trench walls now takes under a millisecond a frame (it reached several), with the walls a little less gentle than in the last change but softer than before it.
 - Tessellated Snow is softer: the trail is smoothed over a wider area with a smoother filter, trench walls slope more gently and round off into the floor, and the shading eases in down a wall instead of starting hard at its rim. The thin pale line that ran along every trench's walls is gone (the flat ground under the snow poked through there).
