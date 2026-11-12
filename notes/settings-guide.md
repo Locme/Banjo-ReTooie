@@ -437,7 +437,7 @@ size, as at Ray tracing resolution Half: a quarter of the rays, with softer edge
 same way for the texture effects. A texture can have several effects at once.
 The label lists the texture's effects ("yours" or "built-in") and the effect
 you have chosen. **Right click** chooses the effect (Disable, Deep Snow,
-Ice Reflection, Shiny Reflection, Text, Lamp, Slight Glow, Light Source, Disable RT; **Shift +
+Ice Reflection, Shiny Reflection, Text, Lamp, Slight Glow, Light Source, Disable RT, Fire; **Shift +
 right click** goes back one) and **left click** turns it on or off for the
 texture under the cursor. The **number keys 1 to 9** choose effect 1 to 9 in
 that order and turn it on or off in one press; **Shift + 1 to 9** do the same
@@ -451,9 +451,14 @@ lit from inside. **Light Source** lights the scene from the texture like a Lamp
 (needs Graphics > Ray tracing), with no glow in the air round it; **Shift +
 mouse wheel** over it sets its strength from 10% to 500% (up is stronger; 100%
 reaches as far as a lamp), saved as `light:<percent>`; on a built-in Light
-Source it makes your own pick at the new strength. **Disable RT** (Shift + 1)
+Source it makes your own pick at the new strength. **Disable RT** (key 9)
 leaves the texture out of the ray traced scene: it casts no traced shadow and
-blocks no traced light. The port ships some picks of its own (L's tag file of
+blocks no traced light. **Fire** (Shift + 1) is for flames (needs Graphics >
+Ray tracing): the fire lights the scene from the middle of its flames, and what
+it burns on shadows what is under it, so the game's own glow round a fire is
+darkened where the flames can't reach (the sides of a bonfire's pillar) and a
+little warm light is added where they can. The fire itself is left out of the
+ray traced scene. The port's fires, torches and candles have it built in. The port ships some picks of its own (L's tag file of
 2026-10-22: explosions, lamps, the lanterns' glass); your own pick of a texture
 replaces them. The first left click starts from the built-in effects, so adding Ice
 to built-in grass keeps the grass. Disable (no texture effect on it) turns the

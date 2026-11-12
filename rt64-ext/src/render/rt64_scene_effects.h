@@ -382,6 +382,14 @@ namespace RT64 {
     void SetSceneLampLights(const float *xyzr, uint32_t count);
     void SetSceneLampTextures(const uint64_t *hashes, size_t count);
     bool SceneLampTexture(uint64_t hash);
+    // Banjo-Tooie: fires' textures (the Fire pick). A draw with one lights the traced scene from its flames as a lamp
+    // does, its w marked as a fire's (SceneFireW): the rays go right up to the light, so what the fire burns on shadows
+    // what is under it, and the fire is left out of the traced scene itself.
+    void SetSceneFireTextures(const uint64_t *hashes, size_t count);
+    bool SceneFireTexture(uint64_t hash);
+    // A fire's light's w: its reach, a whole number, and 0.005 over (a Light Source's fraction is 0.05 to 0.95, a lamp's
+    // 0; LightIsFire in SceneEffectsPS.hlsl).
+    float SceneFireW();
     // Banjo-Tooie: Banjo's fur jiggle, the tips' lag behind his movement (world x, y, z in shares of the fur's
     // length; zeros when off). The game steps the spring (src/gameplay/snout_jiggle.cpp).
     void SetSceneFurSway(float x, float y, float z);

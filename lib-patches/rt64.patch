@@ -2659,7 +2659,7 @@ index 69a82ac..f9a72b5 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..2164bba 100644
+index 9fae0d4..23bb897 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,23 @@
@@ -4330,7 +4330,7 @@ index 9fae0d4..2164bba 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +3152,1384 @@ namespace RT64 {
+@@ -1747,24 +3152,1388 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4474,7 +4474,9 @@ index 9fae0d4..2164bba 100644
 +                            materialFlags = SceneMaterialTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID) << SceneRayDrawMaterialShift;
 +                        }
 +                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && !rayOff; t++) {
-+                            rayOff = SceneRayOffTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
++                            // A fire stays out too: its light goes from its flames (SceneFireTexture below), not through them.
++                            const uint64_t tileHash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
++                            rayOff = SceneRayOffTexture(tileHash) || SceneFireTexture(tileHash);
 +                        }
 +                    }
 +                    if (!excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
@@ -4519,22 +4521,24 @@ index 9fae0d4..2164bba 100644
 +                    targetDrawCall.reactiveInstances.push_back(instanceIndex);
 +                }
 +
-+                // Banjo-Tooie: a lit lamp (a lamp texture) lights the traced scene from where it hangs, and with Point Lights
++                // Banjo-Tooie: a lit lamp (a lamp texture) or a fire lights the traced scene from where it hangs, and with Point Lights
 +                // the vertices round it (rt64_scene_lights.h).
 +                if (!excluded && worldOpen && (RayTracingActive() || ScenePointLights()) && (proj.type == Projection::Type::Perspective) && (call.callDesc.tileCount > 0) &&
 +                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.triangleCount > 0))
 +                {
 +                    bool lamp = false;
++                    bool fire = false;
 +                    float sourceReach = 0.0f;
-+                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !lamp; t++) {
++                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !lamp && !fire; t++) {
 +                        const uint64_t tileHash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
 +                        lamp = SceneLampTexture(tileHash);
++                        fire = !lamp && SceneFireTexture(tileHash);
 +                        sourceReach = (sourceReach > 0.0f) ? sourceReach : SceneLightSourceReach(tileHash);
 +                    }
 +                    hlslpp::float3 centre;
 +                    float radius = 0.0f;
-+                    if ((lamp || (sourceReach > 0.0f)) && drawCentre(drawData, call, centre, &radius)) {
-+                        addLampLight(targetDrawCall.lampLights, centre, lamp ? 900.0f : SceneLightSourceW(sourceReach, radius));
++                    if ((lamp || fire || (sourceReach > 0.0f)) && drawCentre(drawData, call, centre, &radius)) {
++                        addLampLight(targetDrawCall.lampLights, centre, lamp ? 900.0f : (fire ? SceneFireW() : SceneLightSourceW(sourceReach, radius)));
 +                    }
 +                }
 +
@@ -5716,7 +5720,7 @@ index 9fae0d4..2164bba 100644
          };
  
  #   if RT_ENABLED
-@@ -1816,8 +4581,12 @@ namespace RT64 {
+@@ -1816,8 +4585,12 @@ namespace RT64 {
          }
  #   endif
  

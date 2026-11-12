@@ -118,6 +118,7 @@ namespace RT64 {
     void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand);
     void SetSceneSandTextures(const uint64_t *hashes, size_t count);
     void SetSceneLampTextures(const uint64_t *hashes, size_t count);
+    void SetSceneFireTextures(const uint64_t *hashes, size_t count);
     void SetSceneParallax(float depth, bool original, bool all);
     void SetSceneParallaxSmoothness(float amount);
     void SetSceneTextureSeams(bool blend);
@@ -395,19 +396,25 @@ namespace {
         // Picked by eye on 2026-10-21 from the 7,259-texture dump (textures/banjo-tooie-textures.zip), warm and bright
         // ones first (L: a sweep to add light sources). The glow round Jinjo Village's lanterns.
         0xe18f96f57e5f4241,
-        // Torch and candle flames.
-        0xcec58574a22efd1f, 0x6c297cad1c8edbbf, 0x2ccf00e0c31ed884, 0x910453acfb90f339, 0x2a0bcff2df52fe7e,
+        // A lamp's lit shade. (The torch and candle flames and the fires once here are in fire_textures[] now.)
+        0x2a0bcff2df52fe7e,
         // Strip and ceiling lamps.
         0xfe7ebd28c377b54f, 0x6f59260c143a2e31, 0xfbbb2214e197d33e,
-        // The second sweep, 2026-10-21 (L: everything relevant to ray tracing). Small flames.
-        0xdac402b2c6689462, 0x398b65ffa9ca4c95,
-        // Fires and a furnace's glowing door. (Lava and Hailfire Peaks' burning walls and edges are left out: they
-        // cover the lava side, and a light per piece used up all 32 lights there, headless.)
-        0xcde1f307e74ccd61, 0xacdd8a64c72db73b, 0xe330c9e79570e5d6, 0xc4b1866b2ad526fa,
+        // A furnace's glowing door. (Lava and Hailfire Peaks' burning walls and edges are left out: they cover the lava
+        // side, and a light per piece used up all 32 lights there, headless.)
+        0xc4b1866b2ad526fa,
         // (Not lit windows, 0xdf5bda9c967f0cf8, 0x4ace91a7ca4d04f7, 0x7982df0b74a1b2f5, 0xa8c70f9559367755,
         // 0x45b7432c37b52e79: a light's glow showed as a ball in each pane, and Window Light Beams light them.)
         // Panel and round ceiling lamps, and a small warm glow.
         0x0850e871a6ef8d8b, 0x89a3b176a1fec7d3, 0xd6288b4fa0525df4, 0x082b687364b25694, 0xd7aa28a361f6a24d,
+    };
+
+    // Fires' textures (RT64 hashes): with Graphics > Ray tracing on, each draw with one lights the traced scene from its
+    // flames, shadowed by what it burns on (effect_fire). The flames with a shipped pick have Fire in it, below; these
+    // are the ones without: a torch's flame cone, once a lamp, and Terrydactyland's bonfire puffs (a red palette over pale
+    // puffs, which the game tints orange; Bonfire Cavern's pillar beside the first platform burns with them).
+    constexpr uint64_t fire_textures[] = {
+        0x910453acfb90f339, 0x822607dffde4bad0,
     };
 
     // Shader Effects picks that ship with the port, as if picked (a player's own pick of the texture replaces it): L's
@@ -447,20 +454,22 @@ namespace {
         // into black squares round each lantern (L's screenshot, 2026-10-22).
         { 0xc330b27b1c24cb3d, fx(effect_rt_off) },
         // Fire (L, 2026-10-22: light source and glow on fire), picked by eye from the texture dump: flames, torch and
-        // candle flames, fire walls. (Most were Lamps, whose glow in the air drew a ball; these light with none.)
-        { 0xff7cbfcbb9802b27, fx(effect_glow, effect_light) },
-        { 0xdac402b2c6689462, fx(effect_glow, effect_light) },
-        { 0xa995bc282a7d4f6c, fx(effect_glow, effect_light) },
-        { 0x6c297cad1c8edbbf, fx(effect_glow, effect_light) },
-        { 0xd65734810b0d40e3, fx(effect_glow, effect_light) },
-        { 0x92aa7b146c40b48e, fx(effect_glow, effect_light) },
-        { 0xcec58574a22efd1f, fx(effect_glow, effect_light) },
-        { 0x927ef8d07ab0a7ac, fx(effect_glow, effect_light) },
-        { 0x398b65ffa9ca4c95, fx(effect_glow, effect_light) },
-        { 0x2ccf00e0c31ed884, fx(effect_glow, effect_light) },
-        { 0xcde1f307e74ccd61, fx(effect_glow, effect_light) },
-        { 0xacdd8a64c72db73b, fx(effect_glow, effect_light) },
-        { 0xe330c9e79570e5d6, fx(effect_glow, effect_light) },
+        // candle flames, fire walls. (Most were Lamps, whose glow in the air drew a ball; then Light Sources, which lit
+        // nothing round them, so the game's own glow round a fire was never shadowed: a fire on top of a pillar lit the
+        // pillar's sides, Terrydactyland's Bonfire Cavern, L 2026-11-12. Fire now.)
+        { 0xff7cbfcbb9802b27, fx(effect_glow, effect_fire) },
+        { 0xdac402b2c6689462, fx(effect_glow, effect_fire) },
+        { 0xa995bc282a7d4f6c, fx(effect_glow, effect_fire) },
+        { 0x6c297cad1c8edbbf, fx(effect_glow, effect_fire) },
+        { 0xd65734810b0d40e3, fx(effect_glow, effect_fire) },
+        { 0x92aa7b146c40b48e, fx(effect_glow, effect_fire) },
+        { 0xcec58574a22efd1f, fx(effect_glow, effect_fire) },
+        { 0x927ef8d07ab0a7ac, fx(effect_glow, effect_fire) },
+        { 0x398b65ffa9ca4c95, fx(effect_glow, effect_fire) },
+        { 0x2ccf00e0c31ed884, fx(effect_glow, effect_fire) },
+        { 0xcde1f307e74ccd61, fx(effect_glow, effect_fire) },
+        { 0xacdd8a64c72db73b, fx(effect_glow, effect_fire) },
+        { 0xe330c9e79570e5d6, fx(effect_glow, effect_fire) },
         // Embers: glow only (many small ones would use up the lights).
         { 0xd8d30fc16d3c2078, fx(effect_glow) },
         // Likely explosion frames from the dump (a fiery burst, a flash, a burst disc); the explosions L picked are not
@@ -4381,6 +4390,8 @@ namespace {
         RT64::SetMirrorTextTextures(mirror_text.data(), mirror_text.size());
         std::vector<uint64_t> lamps = build(std::begin(lamp_textures), std::end(lamp_textures), tooie::effect_pick::effect_lamp, true);
         RT64::SetSceneLampTextures(lamps.data(), lamps.size());
+        std::vector<uint64_t> fires = build(std::begin(fire_textures), std::end(fire_textures), tooie::effect_pick::effect_fire, true);
+        RT64::SetSceneFireTextures(fires.data(), fires.size());
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
         // Light Source picks make the object itself shine (Slight Glow) and light nothing round it: a light of its own
         // drew a ball of light round the object however it was cast (L, 2026-10-22: "Object glows only").
@@ -4411,7 +4422,7 @@ namespace {
             std::vector<uint32_t> metalness_emissive;
             // Textures a shader effect owns (ice, lamps, glow) get no built-in material; picks of the player's win.
             std::vector<uint64_t> effect_owned = ice;
-            for (const std::vector<uint64_t>* owned : { &ice_anywhere, &lamps, &glow }) {
+            for (const std::vector<uint64_t>* owned : { &ice_anywhere, &lamps, &fires, &glow }) {
                 effect_owned.insert(effect_owned.end(), owned->begin(), owned->end());
             }
             std::vector<uint64_t> parallax_owned;
@@ -4448,6 +4459,7 @@ namespace {
             set_list(tooie::effect_pick::effect_shiny, shiny);
             set_list(tooie::effect_pick::effect_text, mirror_text);
             set_list(tooie::effect_pick::effect_lamp, lamps);
+            set_list(tooie::effect_pick::effect_fire, fires);
             set_list(tooie::effect_pick::effect_glow, glow);
             set_list(tooie::effect_pick::effect_light, light_sources);
             set_list(tooie::effect_pick::effect_rt_off, ray_off);

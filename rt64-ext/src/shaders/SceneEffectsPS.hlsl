@@ -1533,6 +1533,22 @@ float LightSourceRadius(float w) {
     return (f > 0.01f) ? (f - 0.05f) / 0.9f * 1000.0f : 0.0f;
 }
 
+// A fire's light (the Fire pick, SceneFireW): its w's fraction is 0.005 (a lamp's is 0, a Light Source's 0.05 to 0.95),
+// so it has no object size. The rays to it go right up to the flames, with no fitting round the light to let them
+// through: what the fire burns on shadows what is under it.
+bool LightIsFire(float w) {
+    const float f = frac(w);
+    return (f > 0.001f) && (f < 0.01f);
+}
+
+// A fire mostly shadows the game's own glow round it, where its flames can't reach: up to FireShadow of it (the game
+// lights what is round a fire itself, so the light the fire adds is kept low; a stronger one drew a bright ball round
+// each fire, L 2026-10-22), fading out evenly over its reach (fading as the square of the distance, as a lamp's light
+// does, left most of the glow on a bonfire pillar's sides). Its colour is a deeper orange than a lamp's.
+static const float FireShadow = 0.6f;
+static const float FireLight = 0.35f;
+static const float3 FireColour = float3(1.0f, 0.62f, 0.3f);
+
 // A lamp's light, traced from a surface towards it: blocked by anything solid on the way (a cut-out only where
 // solid). The lamp's own fitting (within 90 units of the light, or of a Light Source's object) lets it all out, so
 // the lamp lights up as normal.
@@ -1901,12 +1917,17 @@ bool Enclosed(float3 worldStart) {
 // rays to it get through and the surface faces it, falling off with distance. So a lamp throws hard-edged shadows of
 // what stands between (two rays a pixel over a small disc at the light, turned from pixel to pixel, a soft edge), not just a glow over the room
 // (L, 2026-10-20: "they don't emit ray traced light").
-// Half-resolution ray tracing: 2 leaves the lamps' traced light out (lamp stays 0; TracedHalfLamp reads it from the
-// indirect pass's third band) and only works out the shade.
+// A fire (LightIsFire) dims none of the room's light where its flames reach, only where they don't: the surfaces facing
+// away from it and the ones something stands in front of. Its shade is in the returned keep, and also left in
+// gFireKeep on its own.
+// Half-resolution ray tracing: 2 leaves the lamps' traced light and the fires' shade out (lamp stays 0, gFireKeep 1;
+// TracedHalfLamp reads them from the indirect pass's third band) and only works out the lamps' shade.
 static int gLampHalf = 0;
+static float gFireKeep = 1.0f;
 
 float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
     lamp = 0.0f;
+    gFireKeep = 1.0f;
     const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
     if (count == 0u) {
         return 1.0f;
@@ -1927,8 +1948,13 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
     const uint detail = RayDetail(-center.z);
     const uint mostTraced = (detail == 0u) ? 6u : ((detail == 1u) ? 3u : 1u);
     const int rays = RayResolutionHigh() ? 4 : ((detail == 0u) ? 2 : 1);
+    float fireKeep = 1.0f;
     [loop] for (uint i = 0u; i < count; i++) {
         const float4 light = asfloat(gLights.Load4(16u * (i + 4u)));
+        const bool fire = LightIsFire(light.w);
+        if (fire && (gLampHalf == 2)) {
+            continue;
+        }
         const float3 toLight = light.xyz - start;
         const float distance = length(toLight);
         const float radius = LightSourceRadius(light.w);
@@ -1942,19 +1968,27 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
         // smoothly, so what is round the object is just lit a little more, evenly.
         const bool source = radius > 0.0f;
         const float reachHere = source ? (0.45f * falloff * falloff * falloff) : (falloff * falloff);
-        if (!source) {
+        if (!source && !fire) {
             influence = max(influence, reachHere);
         }
         const float3 direction = toLight / distance;
         const float facing = dot(worldNormal, direction);
+        // A surface facing away from a fire is in its shadow without a ray: the side of the pillar it burns on.
+        if (fire && (facing <= 0.0f)) {
+            fireKeep = min(fireKeep, 1.0f - FireShadow * falloff);
+            continue;
+        }
         // At most six lights traced a pixel (a room full of lamps traced every one). A light that would add less than a
         // step of the picture's colour here isn't traced (nor counted, so a nearer one gets its turn).
-        if ((facing <= 0.0f) || (traced >= mostTraced) || (gLampHalf == 2) || (1.3f * reachHere * facing * distanceFade < 0.002f)) {
+        // A fire is traced while its shadow would show, however little the surface faces it.
+        const float worth = fire ? (FireShadow * falloff) : (1.3f * reachHere * facing);
+        if ((facing <= 0.0f) || (traced >= mostTraced) || (gLampHalf == 2) || (worth * distanceFade < 0.002f)) {
             continue;
         }
         traced++;
         // Two points (four at Ray tracing resolution High) on a small disc round the light. The rays go right up to the flame, through its fitting
-        // (TraceLampVisible); a Light Source's stop at its object.
+        // (TraceLampVisible); a Light Source's stop at its object; a fire's go right up to it, through nothing (the fire
+        // itself is left out of the traced scene).
         const float stopShort = max(3.0f, radius);
         const float discRadius = 3.0f;
         const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
@@ -1978,12 +2012,27 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
             ray.TMin = 0.0f;
             ray.TMax = reach;
             // Banjo casts his shadow from the lamps too.
-            visible += TraceLampVisible(ray, light.xyz, radius) / float(rays);
+            if (fire) {
+                visible += TraceOccluded(ray, PlayerShadowsOff() ? 1u : 0u) ? 0.0f : 1.0f / float(rays);
+            }
+            else {
+                visible += TraceLampVisible(ray, light.xyz, radius) / float(rays);
+            }
         }
-        lamp += float3(1.0f, 0.8f, 0.55f) * (1.3f * reachHere * saturate(facing) * visible);
+        if (fire) {
+            // Lit only as much as the surface turns towards the fire: a hard edge where it turned away showed as a line
+            // across a floor.
+            const float lit = visible * saturate(facing * 4.0f);
+            fireKeep = min(fireKeep, 1.0f - FireShadow * falloff * (1.0f - lit));
+            lamp += FireColour * (FireLight * reachHere * saturate(facing) * visible);
+        }
+        else {
+            lamp += float3(1.0f, 0.8f, 0.55f) * (1.3f * reachHere * saturate(facing) * visible);
+        }
     }
     lamp *= distanceFade;
-    return lerp(1.0f, 1.0f - 0.55f * influence, distanceFade);
+    gFireKeep = lerp(1.0f, fireKeep, distanceFade);
+    return lerp(1.0f, 1.0f - 0.55f * influence, distanceFade) * gFireKeep;
 }
 
 // Banjo's contact shadow, traced: while the sun shadows leave him out (the HD shadows give him one), the ground and
@@ -2364,7 +2413,8 @@ float3 PathDirectLight(float3 at, float3 normal) {
         ray.Origin = worldStart;
         ray.Direction = toLight / distance;
         ray.TMin = 0.0f;
-        ray.TMax = max(distance - max(60.0f, radius), 1.0f);
+        // A fire's right up to its flames (LightIsFire).
+        ray.TMax = max(distance - (LightIsFire(lamp.w) ? 3.0f : max(60.0f, radius)), 1.0f);
         RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
         query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
         query.Proceed();
@@ -2372,9 +2422,25 @@ float3 PathDirectLight(float3 at, float3 normal) {
             continue;
         }
         const float falloff = saturate(1.0f - fromSurface / lamp.w);
-        light += float3(1.0f, 0.8f, 0.55f) * ((radius > 0.0f) ? (0.45f * falloff * falloff * falloff) : (1.3f * falloff * falloff)) * facing;
+        light += LightIsFire(lamp.w) ? (FireColour * (FireLight * falloff * falloff * facing)) :
+            (float3(1.0f, 0.8f, 0.55f) * ((radius > 0.0f) ? (0.45f * falloff * falloff * falloff) : (1.3f * falloff * falloff)) * facing);
     }
     return light;
+}
+
+// How much light a surface that gives off light sends back on top of its colour, as a share of the colour the picture
+// shows there. The traced light gathers it from the few rays a pixel that meet such a surface, so it has to be strong
+// for a lamp or a lit window to light up what is round it.
+static const float EmitterLight = 8.0f;
+
+// The light a traced geometry gives off (RayGeometryEmission times its colour): full for a lamp or a Light Source or
+// Slight Glow pick (SceneRayDrawEmissive), and for a ray tracing material by its emissive, full at Glow's 150% (the
+// lit windows and lamps the texture sweep gave Glow), a little for a Gem's 15%.
+float RayGeometryEmission(uint geometry) {
+    if ((RayGeometryFlags(geometry) & 8u) != 0u) {
+        return EmitterLight;
+    }
+    return EmitterLight * saturate(RayGeometryPbr(geometry).emissive / 1.5f);
 }
 
 // Traced light (path traced): from the surface, two rays a pixel (32 over a 4x4 block) over the hemisphere, far enough
@@ -2494,7 +2560,7 @@ float3 TracedSubsurface(float3 center, float3 normal) {
         ray.Origin = worldBehind;
         ray.Direction = toLight / distance;
         ray.TMin = 0.0f;
-        ray.TMax = max(distance - max(60.0f, radius), 1.0f);
+        ray.TMax = max(distance - (LightIsFire(lamp.w) ? 3.0f : max(60.0f, radius)), 1.0f);
         RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
         query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
         query.Proceed();
@@ -2502,7 +2568,7 @@ float3 TracedSubsurface(float3 center, float3 normal) {
             continue;
         }
         const float falloff = saturate(1.0f - fromSurface / lamp.w);
-        light += float3(1.0f, 0.8f, 0.55f) * (1.3f * falloff * falloff * back);
+        light += LightIsFire(lamp.w) ? (FireColour * (FireLight * falloff * falloff * back)) : (float3(1.0f, 0.8f, 0.55f) * (1.3f * falloff * falloff * back));
     }
     return light;
 }
@@ -4960,13 +5026,14 @@ float3 TracedHalfBeams(int2 pixel) {
     return sum * 0.25f;
 }
 
-// The lamps' and fires' traced light (LightShadows' lamp), from the third band, on the same surface as TracedHalfShadow.
-float3 TracedHalfLamp(int2 pixel, float3 center, float3 normal) {
+// The lamps' and fires' traced light (LightShadows' lamp), from the third band, on the same surface as TracedHalfShadow,
+// and the fires' shade (gFireKeep) in alpha.
+float4 TracedHalfLamp(int2 pixel, float3 center, float3 normal) {
     const int2 halfSize = TracedHalfSize();
     const int2 base = int2(floor((float2(pixel) - 1.0f) * 0.5f));
     const float2 f = (float2(pixel) - float2(base * 2)) * 0.5f;
     const float tolerance = max(-center.z * 0.03f, 2.0f);
-    float3 sum = 0.0f;
+    float4 sum = 0.0f;
     float weight = 0.0f;
     [unroll] for (int k = 0; k < 4; k++) {
         const int2 corner = int2(k & 1, k >> 1);
@@ -5511,11 +5578,14 @@ float4 IndirectRaw(float4 pos) {
         const int2 lampPixel = int2(int(pos.x), int(pos.y) - halfSize.y * 2) * 2;
         const float lampDepth = LoadDepth(lampPixel);
         float3 lamps = 0.0f;
+        float fireKeep = 1.0f;
         if ((lampDepth < 0.99999f) && (gConstants.view.x < 1.5f)) {
             const float3 lampCenter = ViewPosition(lampPixel, lampDepth);
             LightShadows(lampPixel, lampCenter, ViewNormal(lampPixel, lampCenter), lamps);
+            fireKeep = gFireKeep;
         }
-        return float4(lamps, 1.0f);
+        // The fires' shade in alpha.
+        return float4(lamps, fireKeep);
     }
     if (int(pos.y) >= halfSize.y) {
         const int2 lowerPixel = int2(int(pos.x), int(pos.y) - halfSize.y) * 2;

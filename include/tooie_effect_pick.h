@@ -6,7 +6,7 @@
 // right click chooses an effect (Disable, Deep Snow, Ice Reflection, Shiny Reflection, Text (Mirror Mode flips it
 // back so it reads normally), Lamp (a lit lamp: Graphics > Ray tracing lights the scene from it), Slight Glow, Light Source (lights the
 // scene like a lamp, with no glow in the air round it; Shift + wheel sets its strength), Disable RT (left out of
-// the traced scene)) and left
+// the traced scene), Fire (lights the traced scene from its flames, shadowed by what it burns on)) and left
 // click turns it on or off for that texture (or keys 1 to 9 choose and turn on or off in one; hold left click and sweep
 // to paint it over more textures; middle click shows every texture with it); Disable turns the others off, and Shift + left click goes back to the built-in
 // choice. The picks
@@ -30,7 +30,12 @@ namespace tooie::effect_pick {
         effect_light = 7,
         // Left out of the traced scene (Graphics > Ray tracing): casts no traced shadow and blocks no traced light.
         effect_rt_off = 8,
-        effect_count = 9
+        // A fire (Graphics > Ray tracing): lights the traced scene from its flames like a lamp, but with no fitting round
+        // the light for the rays to pass through, so what the fire stands on shadows what is under it, and the game's own
+        // glow round the fire is darkened where the flames can't reach (a fire on a pillar no longer lights the pillar's
+        // sides). It is left out of the traced scene itself.
+        effect_fire = 9,
+        effect_count = 10
     };
 
     // A texture's effects, one bit each (1 << Effect). A picked texture gets exactly these, none of its built-in ones.

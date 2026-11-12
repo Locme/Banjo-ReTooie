@@ -753,7 +753,8 @@ namespace RT64 {
     // with Ray tracing, L 2026-11-12). With frames shorter than 1/30 s such a light now moves toward where its draw is by
     // the frame's share of LightSourceSettle, from the nearest one of the frame before, so it flickers at about the 30 FPS
     // pace and a little more softly (L asked for a slight flicker). A frame of 1/30 s or longer (30 FPS, Original) takes
-    // it all, as the game shows it. Lamps (whole reaches) stand still and are taken as they are.
+    // it all, as the game shows it. Fires (SceneFireW) are made of puffs too and move the same way. Lamps (whole
+    // reaches) stand still and are taken as they are.
     static constexpr float LightSourceSettle = 0.05f;
     static float lampLightsBefore[SceneMaxLights * 4] = {};
     static uint32_t lampLightCountBefore = 0;
@@ -763,6 +764,59 @@ namespace RT64 {
         const std::scoped_lock lock(lampMutex);
         lampLightCount = std::min(count, SceneMaxLights);
         memcpy(lampLights, xyzr, size_t(lampLightCount) * 4 * sizeof(float));
+        // A fire's puffs (SceneFireW), found one light each, are made one light at their middle: the puffs at a bonfire's
+        // rim stood level with the top of the pillar it burns on, so the pillar's sides saw them and stayed lit, where
+        // one light at the middle of the fire is above the top and the sides face away from it (Terrydactyland's Bonfire
+        // Cavern, L 2026-11-12).
+        {
+            constexpr float SameFire = 500.0f;
+            auto isFire = [](float w) {
+                const float f = w - std::floor(w);
+                return (f > 0.001f) && (f < 0.01f);
+            };
+            uint32_t kept = 0;
+            bool merged[SceneMaxLights] = {};
+            for (uint32_t i = 0; i < lampLightCount; i++) {
+                if (merged[i]) {
+                    continue;
+                }
+                float *light = lampLights + i * 4;
+                if (isFire(light[3])) {
+                    float sum[3] = { light[0], light[1], light[2] };
+                    float puffs = 1.0f;
+                    for (uint32_t j = i + 1; j < lampLightCount; j++) {
+                        const float *other = lampLights + j * 4;
+                        const float dx = other[0] - light[0], dy = other[1] - light[1], dz = other[2] - light[2];
+                        if (!merged[j] && isFire(other[3]) && ((dx * dx + dy * dy + dz * dz) < (SameFire * SameFire))) {
+                            merged[j] = true;
+                            sum[0] += other[0];
+                            sum[1] += other[1];
+                            sum[2] += other[2];
+                            puffs += 1.0f;
+                        }
+                    }
+                    light[0] = sum[0] / puffs;
+                    light[1] = sum[1] / puffs;
+                    light[2] = sum[2] / puffs;
+                }
+                memmove(lampLights + kept * 4, light, 4 * sizeof(float));
+                kept++;
+            }
+            lampLightCount = kept;
+            // TOOIE_LIGHT_LOG: the fires' merged lights every 2 s.
+            static const bool fireLog = getenv("TOOIE_LIGHT_LOG") != nullptr;
+            static auto lastFireLog = std::chrono::steady_clock::now();
+            if (fireLog && (std::chrono::steady_clock::now() - lastFireLog > std::chrono::seconds(2))) {
+                lastFireLog = std::chrono::steady_clock::now();
+                for (uint32_t i = 0; i < lampLightCount; i++) {
+                    const float *light = lampLights + i * 4;
+                    if (isFire(light[3])) {
+                        fprintf(stdout, "[fires] %.0f %.0f %.0f reach %.3f\n", light[0], light[1], light[2], light[3]);
+                    }
+                }
+                fflush(stdout);
+            }
+        }
         const auto now = std::chrono::steady_clock::now();
         const float seconds = std::chrono::duration<float>(now - lampLightsTime).count();
         lampLightsTime = now;
@@ -793,6 +847,10 @@ namespace RT64 {
                     for (int k = 0; k < 3; k++) {
                         light[k] = nearest[k] + (light[k] - nearest[k]) * share;
                     }
+                    // A fire's fraction (SceneFireW) is only its mark, not a size: kept as it is.
+                    if ((light[3] - reach) < 0.01f) {
+                        continue;
+                    }
                     // The fraction holds the object's size; both have the same whole reach.
                     const float sizeBefore = nearest[3] - reach;
                     const float size = sizeBefore + ((light[3] - reach) - sizeBefore) * share;
@@ -813,6 +871,24 @@ namespace RT64 {
     bool SceneLampTexture(uint64_t hash) {
         const std::scoped_lock lock(lampMutex);
         return lampTextures.count(hash) != 0;
+    }
+
+    static std::unordered_set<uint64_t> fireTextures;
+
+    void SetSceneFireTextures(const uint64_t *hashes, size_t count) {
+        std::unordered_set<uint64_t> textures(hashes, hashes + count);
+        const std::scoped_lock lock(lampMutex);
+        fireTextures.swap(textures);
+    }
+
+    bool SceneFireTexture(uint64_t hash) {
+        const std::scoped_lock lock(lampMutex);
+        return fireTextures.count(hash) != 0;
+    }
+
+    // A fire reaches less far than a lamp's 900: it mostly shadows the game's own glow round it, which doesn't reach far.
+    float SceneFireW() {
+        return 700.0f + 0.005f;
     }
 
     void SetSceneRayTracingHitColours(bool enabled) {
