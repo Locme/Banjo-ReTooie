@@ -1011,7 +1011,7 @@ bool LoadShiny(int2 pixel);
 
 // Relighting: a surface's own colour (own) lit by the sun where it gets through (sunBlocked, from SunShadow), by how
 // squarely the surface faces it, and by the sky from above (the ground's bounce from below). See Relit.
-float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float sunBlocked) {
+float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float sunBlocked, float3 fill = float3(0.0f, 0.0f, 0.0f)) {
     const float3 luma = float3(0.299f, 0.587f, 0.114f);
     // Smoothed over a few pixels of the same surface (more at higher resolutions), so the low-poly level's faces don't
     // show in the sun's shading, and wrapped a little round the side turned away, so a ridge between two faces turns
@@ -1029,7 +1029,7 @@ float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float su
     // The day and night cycle's light: its brightest channel dims the sun and the sky (its colour is already in the picture).
     float3 tint;
     const float daylight = DayTint(tint) ? max(tint.r, max(tint.g, tint.b)) : 1.0f;
-    float3 lit = own * (sky + sun * (facing * (1.0f - sunBlocked))) * daylight;
+    float3 lit = own * (sky + fill + sun * (facing * (1.0f - sunBlocked))) * daylight;
     // Shiny surfaces (the shiny list) catch the sun as a highlight where it gets through: Blinn-Phong's, round the
     // direction halfway between the sun and the eye.
     if (LoadShiny(pixel)) {
@@ -1046,6 +1046,35 @@ float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float su
 }
 
 #ifndef RAY_TRACED
+// Relighting without ray tracing: light bounced off bright surroundings, which Traced Relighting's traced bounce light
+// gives and the sky and ground terms leave out. In a pale level (Cloud Cuckooland's white and pastel) the traced picture's
+// shade and middle tones came out a third brighter than without ray tracing (median 163 against 126 out of 255), while in
+// darker levels (Spiral Mountain, Mayahem Temple) the two matched. So it is the picture's colour round about (eight taps of
+// the half-size picture a tenth of the screen out, leaving out the sky) only as far as it is brighter than those levels'
+// (a brightness of 0.3), 1.6 times that: nothing in a dark or middling level, about 0.4 in Cloud Cuckooland.
+float3 RelitBounce(int2 pixel) {
+    const float3 luma = float3(0.299f, 0.587f, 0.114f);
+    const float2 size = gConstants.projection.zw;
+    const float2 uv = (float2(pixel) + 0.5f) / size;
+    const float aspect = size.x / size.y;
+    float3 sum = 0.0f;
+    float count = 0.0f;
+    [unroll] for (int k = 0; k < 8; k++) {
+        const float angle = float(k) * 0.785398f + 0.39f;
+        const float2 at = uv + float2(cos(angle), sin(angle) * aspect) * 0.1f;
+        if (all(at > 0.0f) && all(at < 1.0f) && (LoadDepth(int2(at * size)) < 0.99999f)) {
+            sum += gColorHalf.SampleLevel(LinearSampler, at, 0).rgb;
+            count += 1.0f;
+        }
+    }
+    if (count < 0.5f) {
+        return 0.0f;
+    }
+    const float3 average = sum / count;
+    const float brightness = dot(average, luma);
+    return average / max(brightness, 0.02f) * (1.6f * max(brightness - 0.3f, 0.0f));
+}
+
 // Relighting without ray tracing: there is no ray to read the surface's texture, so the game's shading is guessed from the
 // picture round the pixel: 1.3 times the square root of its brightness averaged over about a hundredth of the screen's
 // width, kept within what Traced Relighting keeps it to. Fitted to Traced Relighting's own shading in 24 views of eight
@@ -1075,7 +1104,7 @@ float3 Relit(int2 pixel, float3 center, float3 normal, float3 scene, float sunBl
         }
     }
     const float shade = clamp(1.3f * sqrt(max(around / weights, 1e-3f)), 0.45f, 1.5f);
-    return RelitLight(pixel, center, normal, scene / shade, sunBlocked);
+    return RelitLight(pixel, center, normal, scene / shade, sunBlocked, RelitBounce(pixel));
 }
 #endif
 

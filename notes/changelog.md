@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- Relighting is brighter in pale levels: light bounced off bright surroundings now fills the shade and middle tones, as ray tracing's bounce light does. In Cloud Cuckooland Relighting's shaded and middle tones were about a third darker than Ray Tracing's; darker levels, which already matched, are unchanged.
 - Sun shadows without ray tracing soften like the ray traced ones: sharp where a shadow meets what casts it and softer the further it falls (a tree's shadow is crisp at the trunk and soft at the crown), with Sun Shadow Softness working as it does for the traced shadows. Before, every edge had the same blur. Both already took the sun's place and the level's shapes from the same data.
 - Sun Shadows is now part of Relighting: it and its settings show only with Lighting at Relighting, right under Relighting Strength, and are on with it (set to 100 if it was at 0, and kept at full strength even if turned down to 0). With Lighting at None there are no sun shadows; Ray Tracing's traced shadows are unchanged.
 - Relighting and Traced relighting: what faces down (overhangs, the undersides of ledges, Banjo's chin) is lit by the ground's own colour, so grass bounces green and snow white instead of the same grey everywhere. A sun low in the sky lights warmer and weaker. Shiny surfaces catch a highlight from the sun where it gets through.
