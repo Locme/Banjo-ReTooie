@@ -1163,6 +1163,52 @@ extern "C" void tooie_shooter_follow(uint8_t* rdram, recomp_context* ctx, int wh
     }
 }
 
+// Sput Sput (func_80800364_chstonedartgunhead, the stone dart head in Targitzan's Temple) turns with
+// func_80102B2C(actor, 4): its yaw (+0x48) moves up to 4 whole degrees toward the target yaw (+0x54)
+// once per game frame, or snaps to the target when the gap is 50 degrees or more and the actor asks for
+// that. When it is shot, the target is kept 4 degrees ahead of the yaw, so it spins at 4 degrees a game
+// frame: 120 a second at 30 FPS, and several times that above 30 FPS (L, 2026-11-12). The turn toward
+// Banjo used the same step. tooie_sput_turn_before keeps the yaw before each of its two turn calls, and
+// tooie_sput_turn_after puts the turn back to the frame's share of 4 degrees per 1/30 s, as a float so
+// short frames still turn. A snap is left alone. TOOIE_NO_SPUT_FIX=1 turns it off for A/B tests.
+namespace {
+    float sput_yaw_before = 0.0f;
+    gpr sput_actor = 0;
+
+    float wrap_degrees_180(float d) {
+        d = std::fmod(d, 360.0f);
+        if (d > 180.0f) d -= 360.0f;
+        if (d < -180.0f) d += 360.0f;
+        return d;
+    }
+}
+
+extern "C" void tooie_sput_turn_before(uint8_t* rdram, recomp_context* ctx) {
+    sput_actor = ctx->r16;
+    sput_yaw_before = read_float(rdram, ctx->r16 + 0x48);
+}
+
+extern "C" void tooie_sput_turn_after(uint8_t* rdram, recomp_context* ctx) {
+    static const bool off = std::getenv("TOOIE_NO_SPUT_FIX") != nullptr;
+    const float dt = read_float(rdram, delta_time_addr);
+    if (off || ctx->r16 != sput_actor || !above_30() || !(dt > 0.0f && dt < 1.0f / 30.0f)) {
+        return;
+    }
+    const float before = sput_yaw_before;
+    const float after = read_float(rdram, ctx->r16 + 0x48);
+    const float target = read_float(rdram, ctx->r16 + 0x54);
+    constexpr float step = 4.0f;
+    // The game's turn moved more than its step: it snapped to the target.
+    if (std::fabs(wrap_degrees_180(after - before)) > step + 0.01f) {
+        return;
+    }
+    const float limit = step * dt * 30.0f;
+    const float turn = std::clamp(wrap_degrees_180(target - before), -limit, limit);
+    float yaw = std::fmod(before + turn, 360.0f);
+    if (yaw < 0.0f) yaw += 360.0f;
+    write_float(rdram, ctx->r16 + 0x48, yaw);
+}
+
 // Character blinking: func_80101A50 runs an object's blink ($a0, state in the
 // bits of +0x78 and +0x7A): each frame a random chance to start a blink, then
 // the eyelid frame goes 0 to 3 and back one step a frame. It ends by giving the

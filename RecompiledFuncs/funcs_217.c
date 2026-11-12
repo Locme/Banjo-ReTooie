@@ -2138,6 +2138,7 @@ L_808004A8:
 L_808004C0:
     // 0x808004C0: mfc1        $a1, $f0
     ctx->r5 = (int32_t)ctx->f0.u32l;
+    tooie_sput_turn_before(rdram, ctx);
     // 0x808004C4: jal         0x80102B2C
     // 0x808004C8: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
@@ -2146,6 +2147,7 @@ L_808004C0:
     // 0x808004C8: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
     after_9:
+    tooie_sput_turn_after(rdram, ctx);
     // 0x808004CC: lwc1        $f16, 0x48($s0)
     ctx->f16.u32l = MEM_W(ctx->r16, 0X48);
     // 0x808004D0: lw          $t9, 0x4C($sp)
@@ -2549,6 +2551,7 @@ L_80800694:
     CHECK_FR(ctx, 4);
     NAN_CHECK(ctx->f18.fl); NAN_CHECK(ctx->f4.fl); 
     ctx->f6.fl = ctx->f18.fl + ctx->f4.fl;
+    tooie_sput_turn_before(rdram, ctx);
     // 0x808006C4: jal         0x80102B2C
     // 0x808006C8: swc1        $f6, 0x54($s0)
     MEM_W(0X54, ctx->r16) = ctx->f6.u32l;
@@ -2557,6 +2560,7 @@ L_80800694:
     // 0x808006C8: swc1        $f6, 0x54($s0)
     MEM_W(0X54, ctx->r16) = ctx->f6.u32l;
     after_22:
+    tooie_sput_turn_after(rdram, ctx);
     // 0x808006CC: lwc1        $f8, 0x48($s0)
     ctx->f8.u32l = MEM_W(ctx->r16, 0X48);
     // 0x808006D0: lw          $t2, 0x38($sp)

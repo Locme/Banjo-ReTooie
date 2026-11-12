@@ -961,6 +961,30 @@ func = "func_8080056C_bsfirstp"
 before_vram = 0x808006BC
 text = "tooie_shooter_follow(rdram, ctx, 1);"
 
+# func_80800364_chstonedartgunhead (Sput Sput) turns its yaw 4 whole degrees toward its target once per
+# game frame with func_80102B2C, at two calls: toward Banjo, and the spin when it is shot. Above 30 FPS it
+# spun several times too fast. The first hook keeps the yaw before the call, the second puts the turn
+# back to the frame's share of 4 degrees per 1/30 s (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_80800364_chstonedartgunhead"
+before_vram = 0x808004C4
+text = "tooie_sput_turn_before(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_80800364_chstonedartgunhead"
+before_vram = 0x808004CC
+text = "tooie_sput_turn_after(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_80800364_chstonedartgunhead"
+before_vram = 0x808006C4
+text = "tooie_sput_turn_before(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_80800364_chstonedartgunhead"
+before_vram = 0x808006CC
+text = "tooie_sput_turn_after(rdram, ctx);"
+
 # func_8080156C_gczoombox steps a talking-head portrait's mouth and blink once
 # per game frame ($a0 = the box). Above 30 FPS it is skipped until 1/30 s of
 # game time has gone by for that box (src/game/game_frame_rate.cpp).
