@@ -5438,9 +5438,13 @@ float4 DenoiseBlend(int2 halfPixel, int band, float4 raw) {
     }
     const float4 history = sum / weight;
     float keepNew = (band == 0) ? 0.1f : ((band == 1) ? 0.15f : 0.25f);
+    // Round the player: a column under him reaching from just over his head all the way down, so the ground under him
+    // takes his shade's new place at once when he jumps. It reached only 300 below his height, so a jump took the ground
+    // out of it and the shade he cast there faded over a third of a second, a dark patch left behind (L,
+    // burst-2026-11-12_11-12-07). A little wider (400) so the spot he has just left is still in it.
     if (gConstants.rippleAge.w > -1e8f) {
         const float2 across = world.xz - float2(gConstants.rippleX.w, gConstants.rippleZ.w);
-        if ((dot(across, across) < 300.0f * 300.0f) && (abs(world.y - gConstants.rippleAge.w - 60.0f) < 300.0f)) {
+        if ((dot(across, across) < 400.0f * 400.0f) && (world.y < gConstants.rippleAge.w + 360.0f) && (world.y > gConstants.rippleAge.w - 4000.0f)) {
             keepNew = max(keepNew, 0.5f);
         }
     }

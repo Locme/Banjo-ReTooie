@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- Ray traced denoising: when Banjo jumps up onto a ledge, the shade he cast on the ground below no longer stays behind as a dark Banjo-shaped patch that fades over a third of a second.
 - Relighting: the light bounced off the surroundings and up from the ground carries a third of their colour instead of all or half of it, so green levels no longer tint grey stone green.
 - Ray Tracing: the SSGI slider sets how strong the ray traced bounce light is again. Ray Tracing Strength used to hold it at 83 or more (at a strength of 100), so the slider did nothing. Ambient occlusion and sun shadows still show at least at Ray Tracing Strength.
 - SSGI without ray tracing (Lighting at None or Relighting) now does its job outdoors: rays that reach the open sky bring the sky's light, as the ray traced ones do, where before they brought nothing, so SSGI hardly showed except in corners. At 100 the picture is about a quarter brighter in Spiral Mountain's shade, close to what the ray traced SSGI gives. The ray traced SSGI's sky light no longer changes colour as the camera turns.
