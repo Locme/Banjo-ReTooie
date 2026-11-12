@@ -2129,6 +2129,10 @@ bool tooie::game_frame_rate::pad_on_game_time() {
     return on;
 }
 
+bool tooie::game_frame_rate::demo_playing() {
+    return demo_frames.load() > 0;
+}
+
 void tooie::game_frame_rate::add_option(recomp::config::Config& graphics) {
     created = true;
     graphics.add_enum_option(

@@ -29,6 +29,8 @@ namespace tooie::game_frame_rate {
     // The same in seconds, unrounded (src/gameplay/snout_jiggle.cpp steps its swing by it).
     double game_seconds();
     bool pad_on_game_time();
+    // True while an attract demo replays its recorded inputs.
+    bool demo_playing();
 }
 
 #endif

@@ -47,6 +47,7 @@
 #include "tooie_free_camera.h"
 #include "tooie_photo_mode.h"
 #include "tooie_game.h"
+#include "tooie_game_frame_rate.h"
 #include "tooie_hotkeys.h"
 #include "tooie_motion_aim.h"
 #include "tooie_hooks.h"
@@ -433,10 +434,11 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     const bool gameplay = updating && mode == mode_dynamic && valid_ptr(camera) && valid_ptr(transform) && valid_ptr(dynamic);
     // First person and the like: leave the camera alone but keep the held yaw for afterwards. So too while
     // the game has Banjo (tooie::fine_aim::game_has_player: a scripted walk, Jiggywiggy's jigsaw puzzle, talking,
-    // a cutscene): its camera is the game's then, mouse and stick alike.
+    // a cutscene): its camera is the game's then, mouse and stick alike. So too in an attract demo: its
+    // recorded stick moves Banjo relative to the camera, so turning the camera there would steer him.
     const bool paused = gameplay &&
         (read_byte(rdram, dynamic + dynamic_override) != 0 || read_byte(rdram, dynamic + dynamic_frozen) != 0 ||
-         tooie::fine_aim::game_has_player());
+         tooie::fine_aim::game_has_player() || tooie::game_frame_rate::demo_playing());
     // While the free camera is on and the game's own camera is running, the right stick
     // is the free camera's, not C buttons.
     recompinput::set_right_analog_suppressed(on && gameplay && !paused);
