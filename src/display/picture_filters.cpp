@@ -171,6 +171,14 @@ namespace {
     std::atomic<bool> light_source_models{false};
     std::atomic<bool> sun_shadows{false};
     std::atomic<float> sun_shadow_distance_set{3000.0f};
+    // Lighting at Relighting, its strength and its sun shadows' (strength 0 to 1, Banjo's, softness) as the settings set
+    // them, and set when they change, for Icy Side's override (it keeps the game's own lighting under Relighting).
+    std::atomic<bool> relighting_on{false};
+    std::atomic<float> relighting_set{0.0f};
+    std::atomic<float> sun_shadows_set{0.0f};
+    std::atomic<bool> sun_shadow_banjo_set{true};
+    std::atomic<float> sun_shadow_softness_set{0.6f};
+    std::atomic<bool> relighting_changed{true};
     std::atomic<float> sun_shadow_reach{0.0f};
     std::atomic<bool> kazooie_feathers{false};
     std::atomic<bool> npc_fur{false};
@@ -4617,6 +4625,12 @@ void tooie::picture_filters::apply() {
     sun_shadow_distance_set.store(shadow_distance);
     RT64::SetSceneSunShadowDistance(shadow_distance);
     RT64::SetSceneRelighting(relighting ? (float)(value<double>(relighting_option, 100.0) / 100.0) : 0.0f);
+    relighting_on = relighting;
+    relighting_set = relighting ? (float)(value<double>(relighting_option, 100.0) / 100.0) : 0.0f;
+    sun_shadows_set = (float)(sun_shadow_strength / 100.0);
+    sun_shadow_banjo_set = value<bool>(sun_shadow_banjo_option, true);
+    sun_shadow_softness_set = (float)(value<double>(sun_shadow_softness_option, 60.0) / 100.0);
+    relighting_changed = true;
     send_effect_textures();
     // The Character Shaders switch turns all of the character shaders off; their settings stay as they are.
     const bool character_on = value<bool>(character_section_option, true);
@@ -5061,6 +5075,25 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
             icy_sent = icy;
             RT64::SetSceneModernWater(modern_water && !icy, stylised_water);
             RT64::SetSceneWaterReflections(water_reflections_set.load());
+        }
+    }
+
+    // Icy Side keeps the game's own lighting under Relighting (L, 2026-11-12), as Relighting already leaves caves and rooms
+    // to it. The level is painted dusky, dark teal ice and snow shaded lilac under its overhangs, and Relighting, which
+    // without rays guesses a surface's own colour from the picture's brightness round it, took the dim paint for shade:
+    // it about doubled the ice's colour to a neon cyan and pushed the snow past white under its high noon sun. Its sun
+    // shadows go too there, as without the relit sun they only darkened the snow in great grey wedges under the overhangs.
+    // Ray Tracing is left as it is.
+    {
+        const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
+        const bool keep = relighting_on && (map == 0x128);
+        static bool keep_sent = false;
+        if ((keep != keep_sent) || relighting_changed.exchange(false)) {
+            keep_sent = keep;
+            RT64::SetSceneRelighting(keep ? 0.0f : relighting_set.load());
+            if (relighting_on) {
+                RT64::SetSceneSunShadows(keep ? 0.0f : sun_shadows_set.load(), sun_shadow_banjo_set.load(), sun_shadow_softness_set.load());
+            }
         }
     }
 

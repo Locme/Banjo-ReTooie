@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- Relighting leaves Hailfire Peaks' Icy Side to the game's own lighting, as it does caves: the ice turned neon cyan and the snow went flat white there under Relighting's noon sun. Ray Tracing is unchanged.
 - Tessellated Snow and Tessellated Sand: footprints are easier to see. A print's floor is darker the deeper it goes (bluer in snow, browner in sand, as packed snow and damp sand under the dry top are), the wall turned from the light falls into clearer shade, and sand's print walls catch the light more. Close to Banjo the trail is cut twice as finely, so his footprints show one by one instead of running together into a furrow.
 - No more dotted lines along the seams of Banjo's chest and muzzle (and other characters') at high resolutions. Since the jigsaw puzzle fix of 2026-11-03, his model was mistaken for a piece of the puzzle board and its corners were snapped to the N64's pixel grid, so neighbouring pieces stopped meeting. Only textures really drawn from the screen are snapped now.
 - Tessellated Snow: the trench walls are rounder and softer, curving into the trench floor instead of meeting it in a crease, and round prints get round walls instead of eight-sided ones. They also cost less: the walls are worked out on a coarser grid and only round new prints, and the snow is cut finely only where a wall actually lies, so busy snowfields (yetis walking in their own trails) no longer cause spikes of work.
