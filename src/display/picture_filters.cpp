@@ -4260,17 +4260,17 @@ namespace {
             // and a little distance blur, with thin outlines.
             graphics.update_option_value(tooie::smaa::option, (uint32_t)tooie::smaa::Quality::High);
             graphics.update_option_value(texture_upscale_option, (uint32_t)TextureUpscale::Double);
-            graphics.update_option_value(texture_cartoon_option, 70.0);
+            graphics.update_option_value(texture_cartoon_option, 60.0);
             graphics.update_option_value(toon_section_option, true);
             graphics.update_option_value(toon_style_option, (uint32_t)ToonStyle::Hard);
-            graphics.update_option_value(toon_characters_option, 85.0);
-            graphics.update_option_value(toon_world_option, 50.0);
+            graphics.update_option_value(toon_characters_option, 70.0);
+            graphics.update_option_value(toon_world_option, 35.0);
             graphics.update_option_value(outlines_option, 25.0);
-            graphics.update_option_value(rim_light_option, 30.0);
-            graphics.update_option_value(bloom_option, 35.0);
+            graphics.update_option_value(rim_light_option, 20.0);
+            graphics.update_option_value(bloom_option, 20.0);
             graphics.update_option_value(gameplay_dof_option, 15.0);
             graphics.update_option_value(cutscene_dof_option, 40.0);
-            graphics.update_option_value(saturation_option, 25.0);
+            graphics.update_option_value(saturation_option, 10.0);
         }
         applying_preset = false;
     }

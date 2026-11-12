@@ -57,7 +57,7 @@ float Luma(float3 c) {
 //   picked, which keeps the blocky look of the plain filter away. Pixels are weighted by alpha, so a cut-out's empty
 //   part doesn't darken its edge.
 // - Brightness is then pulled towards a few even steps (softly, so a gradient becomes bands without hard stairs)
-//   and colour made a little stronger.
+//   and colour made slightly stronger.
 // strength blends it from the texture.
 float4 Cartoon(int2 pixel) {
     const int2 one = int2(1, 1);
@@ -105,8 +105,9 @@ float4 Cartoon(int2 pixel) {
     const float luma = Luma(flat);
     const float level = luma * steps;
     const float stepped = (floor(level) + smoothstep(0.3f, 0.7f, frac(level))) / steps;
-    flat *= lerp(1.0f, stepped / max(luma, 0.004f), 0.75f);
-    flat = lerp(Luma(flat).xxx, flat, 1.0f + 0.3f * strength);
+    // Half way to the steps: fully stepped, the dark parts of a texture became dark blotches.
+    flat *= lerp(1.0f, stepped / max(luma, 0.004f), 0.5f);
+    flat = lerp(Luma(flat).xxx, flat, 1.0f + 0.1f * strength);
 
     return float4(lerp(centre.rgb, saturate(flat), strength), centre.a);
 }

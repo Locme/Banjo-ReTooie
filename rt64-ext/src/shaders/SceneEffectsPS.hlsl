@@ -5271,18 +5271,19 @@ float3 ToonShade(float3 scene, float strength) {
     return lerp(scene, min(flatChroma * banded * tint * 1.1f, 1.5f), strength);
 }
 
-// Toon shading's Hard style: two flat tones, light and shadow, with one sharp line between them where the brightness
-// crosses a quarter, as cel-shaded games light their models. Each side keeps a little of its own brightness (a third
-// of the contrast or less) so the texture's detail still shows. The shadow tone is a cool blue-violet and the lit one
-// warm, colour kept and pulled a little towards flat.
+// Toon shading's Hard style: light and shadow as two tones with one sharp line between them where the brightness
+// crosses a fifth, as cel-shaded games light their models. The picture keeps its own brightness and colour: each side
+// is only pulled a third of the way towards its own even tone (so it reads flatter without washing out), and the
+// shadow side is darkened a little more, so the line shows. The shadow takes a slight cool tint, the lit side a slight
+// warm one.
 float3 ToonShadeHard(float3 scene, float strength) {
     const float luma = dot(scene, float3(0.299f, 0.587f, 0.114f));
-    const float lit = smoothstep(0.24f, 0.26f, luma);
-    const float level = lerp(0.36f + 0.35f * luma, 0.8f + 0.22f * luma, lit);
-    const float3 tint = lerp(float3(0.8f, 0.83f, 1.0f), float3(1.0f, 0.98f, 0.93f), lit);
-    const float3 chroma = scene / max(luma, 0.02f);
-    const float3 flatChroma = lerp(chroma, float3(1.0f, 1.0f, 1.0f), 0.15f);
-    return lerp(scene, min(flatChroma * level * tint, 1.5f), strength);
+    const float lit = smoothstep(0.19f, 0.21f, luma);
+    const float shadowLuma = lerp(luma, 0.12f, 0.33f) * 0.85f;
+    const float litLuma = lerp(luma, 0.45f, 0.33f);
+    const float level = lerp(shadowLuma, litLuma, lit);
+    const float3 tint = lerp(float3(0.92f, 0.94f, 1.04f), float3(1.02f, 1.0f, 0.97f), lit);
+    return lerp(scene, scene * (level / max(luma, 0.004f)) * tint, strength);
 }
 
 // Rim light: near the edge of something in front of what's behind it, the more the surface turns away
