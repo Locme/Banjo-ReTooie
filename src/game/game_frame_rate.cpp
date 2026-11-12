@@ -986,7 +986,7 @@ namespace {
     StepGate vertex_flicker_gate;
     StepGate flame_flipbook_gate;
     StepGate fire_count_gate;
-    StepGate fire_light_gate;
+    StepGate fire_spawn_gate;
 }
 
 // Talking-head portraits (the zoombox overlay): func_8080156C_gczoombox moves a
@@ -1636,13 +1636,90 @@ extern "C" int tooie_fire_count_skip(uint8_t* rdram, recomp_context* ctx) {
 }
 
 // A fire's light (chfirefx): func_80800C18_chfirefx moves the light with the fire, then multiplies its
-// colour by a new random brightness (func_800DC178) and sets it ($s0 = the light's holder), once per game
-// frame. The map's lit walls round the torch take that colour, so at Uncapped they flickered 300 or more
-// times a second instead of 30 (Witchyworld's Haunted Cavern; L, 2026-11-12). Above 30 FPS the new
-// brightness is skipped until 1/30 s of game time has gone by for that light, which keeps its last colour;
-// the light still follows the fire every frame.
-extern "C" int tooie_fire_light_skip(uint8_t* rdram, recomp_context* ctx) {
-    return fire_light_gate.skip(rdram, (uint32_t)ctx->r16) ? 1 : 0;
+// colour by a new random brightness (func_800DC178, $f0) and sets it ($s0 = the light's holder), once per
+// game frame. The map's lit walls round the torch take that colour, so at Uncapped they flickered 300 or more
+// times a second instead of 30 (Witchyworld's Haunted Cavern; L, 2026-11-12). Above 30 FPS a new brightness
+// is taken once per 1/30 s of game time for each light, as at 30 FPS, and the light goes toward it by the
+// frame's share of fire_light_settle, so it flickers at the 30 FPS pace a little more softly (L asked for a
+// slight flicker: jumping straight there was "too aggressive", 0.1 s took the flicker away). At 30 FPS and
+// Original the game's own brightness is used as it is.
+namespace {
+    struct FireLight {
+        uint32_t frame;
+        float time;
+        float target;
+        float now;
+    };
+    std::mutex fire_light_mutex;
+    std::unordered_map<uint32_t, FireLight> fire_lights;
+    constexpr float fire_light_settle = 0.05f;
+}
+
+extern "C" void tooie_fire_light_brightness(uint8_t* rdram, recomp_context* ctx) {
+    std::lock_guard lock{ fire_light_mutex };
+    if (!above_30()) {
+        fire_lights.clear();
+        return;
+    }
+    const uint32_t key = (uint32_t)ctx->r16;
+    const float fresh = ctx->f0.fl;
+    const uint32_t frame = game_frames_stepped.load();
+    auto found = fire_lights.find(key);
+    if (found == fire_lights.end()) {
+        if (fire_lights.size() > 1024) {
+            fire_lights.clear();
+        }
+        fire_lights.emplace(key, FireLight{ frame, 0.0f, fresh, fresh });
+        return;
+    }
+    FireLight& light = found->second;
+    // Called again in the same game frame (another of the fire's updates): the same brightness.
+    if (light.frame != frame) {
+        light.frame = frame;
+        const float delta = read_float(rdram, delta_time_addr);
+        light.time += delta;
+        if (light.time >= 1.0f / 30.0f - 0.001f) {
+            light.time = std::min(light.time - 1.0f / 30.0f, 1.0f / 30.0f);
+            light.target = fresh;
+        }
+        light.now += (light.target - light.now) * std::clamp(delta / fire_light_settle, 0.0f, 1.0f);
+    }
+    ctx->f0.fl = light.now;
+}
+
+// A fire's new puffs (chfirefx): func_80800884_chfirefx makes up to 2 each game frame while the fire has fewer
+// than it holds ($s1 = the fire's data). A puff lives 0.6 s of game time, so at 30 FPS the puffs are made a
+// few frames apart and the fire burns as a steady stream. Above 30 FPS a puff that died was made again on the
+// next frame, the puffs came to the same age, and the fire rose and died in waves and moved too fast (L,
+// 2026-11-12: braziers in Witchyworld's Haunted Cavern). Above 30 FPS new puffs are made once per 1/30 s of
+// game time for that fire.
+// TOOIE_FIRE_LOG=1 prints, twice a second, each fire's puff count, how many it holds and each puff's age/height (+0x4)/
+// +0xA/x (+0x8)/z (+0xC)
+// (0 new, 9 gone), for comparing the fires between frame rates.
+extern "C" int tooie_fire_spawn_skip(uint8_t* rdram, recomp_context* ctx) {
+    static const bool log = std::getenv("TOOIE_FIRE_LOG") != nullptr;
+    if (log) {
+        static std::mutex log_mutex;
+        static std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> last;
+        std::lock_guard lock{ log_mutex };
+        const uint32_t fire = (uint32_t)ctx->r17;
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last[fire] >= std::chrono::milliseconds(500)) {
+            last[fire] = now;
+            const int count = std::clamp((int)MEM_H(0x8, (int32_t)fire), 0, 64);
+            std::string ages;
+            for (int i = 0; i < count; i++) {
+                const int32_t puff = (int32_t)(fire + 0x20 + i * 0x14);
+                char text[64];
+                std::snprintf(text, sizeof(text), " %.1f/%d/%d/%d/%d", read_float(rdram, puff), (int)MEM_H(0x4, puff),
+                    (int)MEM_H(0xA, puff), (int)MEM_H(0x8, puff), (int)MEM_H(0xC, puff));
+                ages += text;
+            }
+            std::printf("[fire] %08X puffs %d of %d, ages%s\n", fire, count, (int)MEM_H(0xA, (int32_t)fire), ages.c_str());
+            std::fflush(stdout);
+        }
+    }
+    return fire_spawn_gate.skip(rdram, (uint32_t)ctx->r17) ? 1 : 0;
 }
 
 // Flames (the suflamefx overlay: torches and braziers, such as the ones in Witchyworld's Haunted Cavern

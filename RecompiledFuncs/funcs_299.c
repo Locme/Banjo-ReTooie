@@ -1507,7 +1507,6 @@ L_80800E08:
     ctx->r4 = MEM_W(ctx->r16, 0X0);
     after_13:
 L_80800E50:
-    if (tooie_fire_light_skip(rdram, ctx)) { goto L_80800E88; }
     // 0x80800E50: lui         $at, 0x8080
     ctx->r1 = S32(RELOC_HI16(1104, 0X11F0) << 16);
     // 0x80800E54: lwc1        $f12, 0x11F0($at)
@@ -1524,6 +1523,7 @@ L_80800E50:
     // 0x80800E64: nop
 
     after_14:
+    tooie_fire_light_brightness(rdram, ctx);
     // 0x80800E68: lui         $a1, 0x8080
     ctx->r5 = S32(RELOC_HI16(1104, 0X12A8) << 16);
     // 0x80800E6C: mfc1        $a2, $f0

@@ -742,10 +742,61 @@ namespace RT64 {
     static float lampLights[SceneMaxLights * 4] = {};
     static uint32_t lampLightCount = 0;
 
+    // A Light Source pick (a reach with a fraction, SceneLightSourceW) is lit from the centre and size of the draw that showed
+    // it, and a fire is many puffs that the game moves, makes and ends on every frame, so the light jumped about on every
+    // frame: above 30 FPS the walls round a torch flickered many times faster than at 30 FPS (Witchyworld's Haunted Cavern
+    // with Ray tracing, L 2026-11-12). With frames shorter than 1/30 s such a light now moves toward where its draw is by
+    // the frame's share of LightSourceSettle, from the nearest one of the frame before, so it flickers at about the 30 FPS
+    // pace and a little more softly (L asked for a slight flicker). A frame of 1/30 s or longer (30 FPS, Original) takes
+    // it all, as the game shows it. Lamps (whole reaches) stand still and are taken as they are.
+    static constexpr float LightSourceSettle = 0.05f;
+    static float lampLightsBefore[SceneMaxLights * 4] = {};
+    static uint32_t lampLightCountBefore = 0;
+    static std::chrono::steady_clock::time_point lampLightsTime;
+
     void SetSceneLampLights(const float *xyzr, uint32_t count) {
         const std::scoped_lock lock(lampMutex);
         lampLightCount = std::min(count, SceneMaxLights);
         memcpy(lampLights, xyzr, size_t(lampLightCount) * 4 * sizeof(float));
+        const auto now = std::chrono::steady_clock::now();
+        const float seconds = std::chrono::duration<float>(now - lampLightsTime).count();
+        lampLightsTime = now;
+        const float share = (seconds >= 1.0f / 30.0f - 0.001f) ? 1.0f : std::clamp(seconds / LightSourceSettle, 0.0f, 1.0f);
+        if (share < 1.0f) {
+            constexpr float SameLight = 150.0f;
+            for (uint32_t i = 0; i < lampLightCount; i++) {
+                float *light = lampLights + i * 4;
+                const float reach = std::floor(light[3]);
+                if (light[3] == reach) {
+                    continue;
+                }
+                const float *nearest = nullptr;
+                float nearestDist2 = SameLight * SameLight;
+                for (uint32_t j = 0; j < lampLightCountBefore; j++) {
+                    const float *before = lampLightsBefore + j * 4;
+                    if (std::floor(before[3]) != reach) {
+                        continue;
+                    }
+                    const float dx = before[0] - light[0], dy = before[1] - light[1], dz = before[2] - light[2];
+                    const float dist2 = dx * dx + dy * dy + dz * dz;
+                    if (dist2 < nearestDist2) {
+                        nearestDist2 = dist2;
+                        nearest = before;
+                    }
+                }
+                if (nearest != nullptr) {
+                    for (int k = 0; k < 3; k++) {
+                        light[k] = nearest[k] + (light[k] - nearest[k]) * share;
+                    }
+                    // The fraction holds the object's size; both have the same whole reach.
+                    const float sizeBefore = nearest[3] - reach;
+                    const float size = sizeBefore + ((light[3] - reach) - sizeBefore) * share;
+                    light[3] = reach + std::clamp(size, 0.05f, 0.95f);
+                }
+            }
+        }
+        lampLightCountBefore = lampLightCount;
+        memcpy(lampLightsBefore, lampLights, size_t(lampLightCount) * 4 * sizeof(float));
     }
 
     void SetSceneLampTextures(const uint64_t *hashes, size_t count) {

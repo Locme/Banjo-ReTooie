@@ -1091,6 +1091,7 @@ RECOMP_FUNC void func_80800884_chfirefx(uint8_t* rdram, recomp_context* ctx) {
     // 0x808008F0: lh          $t8, 0xE($v0)
     ctx->r24 = MEM_H(ctx->r2, 0XE);
 L_808008F4:
+    if (tooie_fire_spawn_skip(rdram, ctx)) { goto L_80800A64; }
     // 0x808008F4: addiu       $at, $zero, 0x1
     ctx->r1 = ADD32(0, 0X1);
     // 0x808008F8: addiu       $s6, $sp, 0x8C
