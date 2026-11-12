@@ -84,7 +84,7 @@ namespace {
         { "Only: heat haze and underwater distortion", 16, Solo::None },
         { "Only: depth of field", 17, Solo::None },
         { "GTAO occlusion (white open, dark shaded)", 19, Solo::None },
-        { "SSGI added light (four times as bright)", 20, Solo::None },
+        { "SSGI bounced light", 20, Solo::None },
         { "Screen-space reflections (red: nothing to reflect)", 21, Solo::None },
         { "Ray traced scene (green traced, yellow cut-out, blue light passes through, red blocked in front, magenta near lights)", 22, Solo::None },
         { "All effects off", scene_none, Solo::None },
