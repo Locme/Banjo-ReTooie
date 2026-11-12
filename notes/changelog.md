@@ -5,6 +5,8 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-12
 
+- Relighting leaves caves, tunnels and rooms to the game's own lighting, as Traced Relighting does, instead of darkening them as if they were in the sun's shade. Terrydactyland, with its tunnels, caves and Inside the Mountain, looked darker with Relighting than with ray tracing because of it. A roof that is off screen isn't found, and the spot is relit as before.
+- Ray traced sun shadows: their soft edges are smoother, traced with up to twelve rays where the shadow begins instead of four. Away from the edges as many rays as before are traced.
 - Relighting is brighter in pale levels: light bounced off bright surroundings now fills the shade and middle tones, as ray tracing's bounce light does. In Cloud Cuckooland Relighting's shaded and middle tones were about a third darker than Ray Tracing's; darker levels, which already matched, are unchanged.
 - Sun shadows without ray tracing soften like the ray traced ones: sharp where a shadow meets what casts it and softer the further it falls (a tree's shadow is crisp at the trunk and soft at the crown), with Sun Shadow Softness working as it does for the traced shadows. Before, every edge had the same blur. Both already took the sun's place and the level's shapes from the same data.
 - Sun Shadows is now part of Relighting: it and its settings show only with Lighting at Relighting, right under Relighting Strength, and are on with it (set to 100 if it was at 0, and kept at full strength even if turned down to 0). With Lighting at None there are no sun shadows; Ray Tracing's traced shadows are unchanged.

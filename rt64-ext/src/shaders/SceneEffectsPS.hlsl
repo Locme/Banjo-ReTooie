@@ -1046,6 +1046,54 @@ float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float su
 }
 
 #ifndef RAY_TRACED
+// Whether a spot is shut in (a cave, a room, under a big roof), for Relighting without ray tracing: Enclosed's test with
+// the depth buffer for the level, five marches through the picture, straight up and four ways up at a slant (the same
+// directions), each of which has to meet something drawn in front of it. Relighting without it lit caves by the sun
+// shadow map alone, and as the roof blocks the sun everywhere inside, a cave came out as dark as open shade: in
+// Terrydactyland, with its tunnels, caves and Inside the Mountain, Relighting looked darker than Traced Relighting,
+// which leaves such spots to the game's own lighting (L, 2026-11-12). A march that leaves the screen counts as open, so a
+// roof that isn't on screen isn't found and the spot is relit as before.
+bool EnclosedOnScreen(int2 pixel, float3 center, float3 normal) {
+    const float3 worldDirections[5] = { float3(0.0f, 1.0f, 0.0f), float3(0.82f, 0.57f, 0.0f), float3(-0.82f, 0.57f, 0.0f), float3(0.0f, 0.57f, 0.82f), float3(0.0f, 0.57f, -0.82f) };
+    const float distance = -center.z;
+    const float bias = 3.0f + distance * 0.004f;
+    const float3 start = center + normal * bias;
+    const float2 size = gConstants.projection.zw;
+    const float jitter = InterleavedNoise(pixel);
+    const int Steps = 10;
+    [loop] for (int k = 0; k < 5; k++) {
+        const float3 w = worldDirections[k];
+        // A world direction in view space (worldX, Y and Z are the world's axes there).
+        const float3 direction = normalize(w.x * gConstants.worldX.xyz + w.y * gConstants.worldY.xyz + w.z * gConstants.worldZ.xyz);
+        bool met = false;
+        [loop] for (int i = 0; (i < Steps) && !met; i++) {
+            // Steps grow with the distance travelled, out to 2500 units: a cave's roof can be far overhead.
+            const float t = (float(i) + jitter) / float(Steps);
+            const float3 p = start + direction * (2500.0f * t * t + 4.0f);
+            if (p.z > -1.0f) {
+                return false;
+            }
+            const float2 ndc = float2(p.x * gConstants.projection.x / -p.z, p.y * gConstants.projection.y / -p.z);
+            if (any(abs(ndc) > 1.0f)) {
+                return false;
+            }
+            const int2 at = int2(float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size);
+            const float sceneDepth = LoadDepth(at);
+            if (sceneDepth >= 0.99999f) {
+                // The sky: this way is open.
+                return false;
+            }
+            const float inFront = -p.z + ViewPosition(at, sceneDepth).z;
+            // Something drawn in front of the step, within a roof's or a wall's thickness.
+            met = (inFront > bias) && (inFront < 300.0f + distance * 0.05f);
+        }
+        if (!met) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // Relighting without ray tracing: light bounced off bright surroundings, which Traced Relighting's traced bounce light
 // gives and the sky and ground terms leave out. In a pale level (Cloud Cuckooland's white and pastel) the traced picture's
 // shade and middle tones came out a third brighter than without ray tracing (median 163 against 126 out of 255), while in
@@ -4995,7 +5043,10 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         const float3 side = normalize(cross(sunDirection, (abs(sunDirection.y) < 0.9f) ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f)));
         const float3 up = cross(sunDirection, side);
         const float spread = lerp(0.006f, 0.04f, softness);
-        const int Rays = 4;
+        // Twelve rays at most: the edge of a shadow (where the first rays disagree) gets them all, which smooths the grain
+        // four left there (L, 2026-11-12: "the edges of RT shadows are too grainy"); elsewhere the first two (four at High
+        // ray tracing resolution) settle it, as before.
+        const int Rays = 12;
         const bool onBanjo = OnBanjoTraced(center);
         const uint sunDetail = RayDetail(distance);
         float blocked = 0.0f;
@@ -5023,7 +5074,8 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         }
         gSawLevelCutout = false;
         [loop] for (int k = 0; (k < Rays) && (gSunHalf != 2) && !turnedFromSun; k++) {
-            if ((k == 2) && !RayResolutionHigh() && ((blocked == 0.0f) || (blocked == 2.0f))) {
+            const int settled = RayResolutionHigh() ? 4 : 2;
+            if ((k == settled) && ((blocked == 0.0f) || (blocked == float(settled)))) {
                 break;
             }
             // Far off (Ray detail distances) one ray.
@@ -5033,8 +5085,11 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
             traced++;
             // Steadier on Banjo with the noise smoothing: a different turn each pixel speckled his fur.
             // Noise smoothing turns all pixels' rays the same way (on Banjo even more): smoother, the edge in steps.
-            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f * (1.0f - RtSmoothing() * (onBanjo ? 1.0f : 0.8f));
-            const float radius = sqrt((float(k) + 0.5f) / float(Rays)) * spread;
+            // The first two lie where four spread over the cone had them, so they still find the edge across its whole
+            // width; the rest spiral over the cone between them.
+            const float turn = jitter * 6.28318531f * (1.0f - RtSmoothing() * (onBanjo ? 1.0f : 0.8f));
+            const float angle = (k < 2) ? (float(k) * 2.39996323f + turn) : (float(k - 2) * 2.39996323f + 1.2f + turn);
+            const float radius = ((k < 2) ? sqrt((float(k) + 0.5f) / 4.0f) : sqrt((float(k - 2) + 0.5f) / float(Rays - 2))) * spread;
             const float3 direction = normalize(sunDirection + (side * cos(angle) + up * sin(angle)) * radius);
             RayDesc ray;
             ray.Origin = ViewToWorldPoint(start);
@@ -5765,10 +5820,18 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 #ifdef RAY_TRACED
             gSunHalf = HalfTraced() ? 2 : 0;
 #endif
-            const float sunKeep = SunShadow(pixel, center, normal, lamp);
+            float sunKeep = SunShadow(pixel, center, normal, lamp);
             // SunShadow returns 1 - strength * 0.55 * blocked. Relit lights the surface by what gets through, so the
             // picture keeps the shadow only as much as it is not relit.
             sunBlocked = saturate((1.0f - sunKeep) / max(gConstants.shadows.x * 0.55f, 1e-3f));
+#ifndef RAY_TRACED
+            // Relighting without ray tracing leaves a cave or a room to the game's own lighting, as the traced version
+            // does (Enclosed): only asked where the sun is mostly blocked, as a roofed spot always is.
+            if ((relight > 0.0f) && (sunBlocked > 0.5f) && EnclosedOnScreen(pixel, center, normal)) {
+                relight = 0.0f;
+                sunKeep = 1.0f;
+            }
+#endif
             keep *= lerp(sunKeep, 1.0f, relight);
 #ifdef RAY_TRACED
             gSunHalf = 0;
