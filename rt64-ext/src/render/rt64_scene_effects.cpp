@@ -1944,6 +1944,15 @@ namespace RT64 {
             // the same), which the copy catches up on less often.
             std::vector<uint64_t> tilePressed = std::vector<uint64_t>((SnowGridSize / 8) * (SnowGridSize / 8), 0);
             std::vector<uint64_t> tileHeld = std::vector<uint64_t>((SnowGridSize / 8) * (SnowGridSize / 8), 0);
+            // Prints put out of the grid by another world cell's that shares their place in it (the grid wraps round every
+            // SnowGridSize cells), by world cell (SnowWorldKey): both words, as the grid holds them. They come back when
+            // Banjo does (SnowPageWindow), so a trail is kept for as long as he stays on the map, however far he goes.
+            std::unordered_map<uint64_t, uint64_t> away;
+            // The window SnowPageWindow last brought back to (world cells, as SnowTakeTouches' origin).
+            int32_t windowX = INT32_MIN;
+            int32_t windowZ = INT32_MIN;
+            // The map the trail is of (SceneEffectsSettings::snowMap), UINT32_MAX before the first.
+            uint32_t map = UINT32_MAX;
             // When something was last pressed into each block of the grid (seconds, as `seconds`).
             std::vector<double> blockPressed = std::vector<double>(SnowBlocks * SnowBlocks, -1e9);
             // This frame's touches round Banjo (a window of the grid's size centred on him): the lowest a model
@@ -1966,7 +1975,18 @@ namespace RT64 {
             double seconds = 0.0;
         };
 
+        // The trails of the maps Banjo has left, kept for when he comes back (dying and starting again, a hut and back
+        // out, a warp), with their cells' size: a few maps, the one left longest ago let go first.
+        struct SnowKeptTrail {
+            float cell = 0.0f;
+            std::vector<uint32_t> cells;
+            std::unordered_map<uint64_t, uint64_t> away;
+            double left = 0.0;
+        };
+
         SnowTrail snowTrail;
+        std::unordered_map<uint32_t, SnowKeptTrail> snowKeptTrails;
+        constexpr size_t SnowKeptMost = 6;
         // The model triangles drawn since the trail last took them (SceneSnowTouch): nine floats each, x y z three times.
         std::mutex snowTouchMutex;
         std::vector<float> snowTouches;
@@ -2020,6 +2040,78 @@ namespace RT64 {
     // (0 to 1) beside where a model reached down to y. The cell's first uint holds the bank (bits 0 to 6), whether the
     // cell only holds a bank (bit 7) and y in sixteenths (8 to 31, signed); the second when (0 to 15, in twentieths of
     // a second) and which world cell it is (the tag: x in 16 to 23, z in 24 to 31).
+    // A world cell as SnowTrail::away's key.
+    static uint64_t SnowWorldKey(int32_t worldX, int32_t worldZ) {
+        return (uint64_t(uint32_t(worldX)) << 32) | uint64_t(uint32_t(worldZ));
+    }
+
+    // The world cell a grid slot's cell belongs to, from its tag (b's bits 16 to 31: how many grid widths from the slot,
+    // signed, eight bits each way).
+    static void SnowCellWorld(int32_t slotX, int32_t slotZ, uint32_t b, int32_t &worldX, int32_t &worldZ) {
+        const int32_t n = int32_t(SnowGridSize);
+        worldX = slotX + n * int32_t(int8_t(uint8_t((b >> 16) & 0xFFu)));
+        worldZ = slotZ + n * int32_t(int8_t(uint8_t(b >> 24)));
+    }
+
+    // Puts a slot's cell (another world cell's print or bank) away in SnowTrail::away before the slot is given to another.
+    static void SnowPutAway(SnowTrail &trail, int32_t slotX, int32_t slotZ) {
+        const size_t k = (size_t(slotZ) * SnowGridSize + size_t(slotX)) * 2;
+        const uint32_t a = trail.cells[k], b = trail.cells[k + 1];
+        if (b == 0) {
+            return;
+        }
+        int32_t worldX, worldZ;
+        SnowCellWorld(slotX, slotZ, b, worldX, worldZ);
+        trail.away[SnowWorldKey(worldX, worldZ)] = (uint64_t(b) << 32) | uint64_t(a);
+    }
+
+    // Brings the prints put away back into the grid round Banjo: over the window SnowTakeTouches presses in (the grid's
+    // size, centred on him at originX and originZ, in world cells), each world cell with a print put away takes its slot
+    // back, and the cell there, belonging to a world cell further off, is put away in its place. Only the strips the
+    // window moved into since it last looked are gone over (a few rows a frame as Banjo walks; all of it after a jump).
+    static void SnowPageWindow(SnowTrail &trail, int32_t originX, int32_t originZ) {
+        const int32_t n = int32_t(SnowGridSize);
+        const int32_t lastX = trail.windowX, lastZ = trail.windowZ;
+        trail.windowX = originX;
+        trail.windowZ = originZ;
+        if (trail.away.empty()) {
+            return;
+        }
+        const bool all = (lastX == INT32_MIN) || (std::abs(originX - lastX) >= n) || (std::abs(originZ - lastZ) >= n);
+        auto bring = [&](int32_t worldX, int32_t worldZ) {
+            const auto found = trail.away.find(SnowWorldKey(worldX, worldZ));
+            if (found == trail.away.end()) {
+                return;
+            }
+            const int32_t slotX = ((worldX % n) + n) % n, slotZ = ((worldZ % n) + n) % n;
+            const uint64_t kept = found->second;
+            trail.away.erase(found);
+            SnowPutAway(trail, slotX, slotZ);
+            const size_t k = (size_t(slotZ) * SnowGridSize + size_t(slotX)) * 2;
+            trail.cells[k] = uint32_t(kept);
+            trail.cells[k + 1] = uint32_t(kept >> 32);
+            trail.rowPressed[slotZ] = trail.frame;
+            trail.tilePressed[(uint32_t(slotZ) / 8) * (SnowGridSize / 8) + uint32_t(slotX) / 8] = trail.frame;
+            trail.blockPressed[(uint32_t(slotZ) / SnowBlockCells) * SnowBlocks + uint32_t(slotX) / SnowBlockCells] = trail.seconds;
+        };
+        for (int32_t z = originZ; z < originZ + n; z++) {
+            const bool newRow = all || (z < lastZ) || (z >= lastZ + n);
+            if (newRow) {
+                for (int32_t x = originX; x < originX + n; x++) {
+                    bring(x, z);
+                }
+            }
+            else {
+                // (Only the columns new to the window on a row it already held.)
+                for (int32_t x = originX; x < originX + n; x++) {
+                    if ((x < lastX) || (x >= lastX + n)) {
+                        bring(x, z);
+                    }
+                }
+            }
+        }
+    }
+
     static void SnowTouchCell(SnowTrail &trail, int32_t worldX, int32_t worldZ, float y, float bank, uint32_t now, float recover) {
         const int32_t n = int32_t(SnowGridSize);
         const int32_t slotX = ((worldX % n) + n) % n;
@@ -2028,6 +2120,10 @@ namespace RT64 {
         const uint32_t tagZ = uint32_t((worldZ - slotZ) / n) & 0xFFu;
         uint32_t &a = trail.cells[(uint32_t(slotZ) * SnowGridSize + uint32_t(slotX)) * 2];
         uint32_t &b = trail.cells[(uint32_t(slotZ) * SnowGridSize + uint32_t(slotX)) * 2 + 1];
+        // (A print of another world cell sharing the slot is kept, not lost: SnowPageWindow brings it back.)
+        if ((b != 0) && ((((b >> 16) & 0xFFu) != tagX) || ((b >> 24) != tagZ))) {
+            SnowPutAway(trail, slotX, slotZ);
+        }
         const bool bankOnly = (bank > 0.0f);
         bool again = false;
         if ((b != 0) && (((b >> 16) & 0xFFu) == tagX) && ((b >> 24) == tagZ)) {
@@ -2551,7 +2647,7 @@ namespace RT64 {
     //
     // It is worked out on a grid of SnowWallBlock x SnowWallBlock cells (5 units a side; each the lowest print in it),
     // a sixteenth of the work, and blended back to the cells between them, as the walls are some 55 units wide and the
-    // shader smooths the trail over at least 6 (SnowTrailBlur); the distance passes on from neighbour to
+    // shader smooths the trail over at least 5 (SnowTrailBlur); each cell's wall is measured from where its print lies; the distance passes on from neighbour to
     // neighbour in two sweeps (a chamfer distance transform) through steps of 1, the square root of 2 and of 5 cells,
     // which keeps the walls of round prints within about 2% of round (one and the root of 2 alone give octagons) with
     // additions only. A cell given a floor takes the time and world cell of the print it came from, so it fills back in
@@ -2584,6 +2680,11 @@ namespace RT64 {
         away.assign(count, 0.0f);
         source.assign(count, 0u);
         ownTag.assign(count, 0u);
+        // (And where that print lies, in cells from the box's corner, so each cell's wall is measured from the print
+        // itself, not from the middle of its coarse cell: a print keeps its own outline.)
+        static thread_local std::vector<int32_t> printZ, printX;
+        printZ.assign(count, 0);
+        printX.assign(count, 0);
         bool any = false;
         for (int32_t z = 0; z < rows; z++) {
             for (int32_t x = 0; x < cols; x++) {
@@ -2599,6 +2700,8 @@ namespace RT64 {
                         if (y < printY[i]) {
                             printY[i] = floorY[i] = y;
                             source[i] = cell[1];
+                            printZ[i] = z * B + f / B;
+                            printX[i] = x * B + f % B;
                             any = true;
                         }
                     }
@@ -2632,6 +2735,8 @@ namespace RT64 {
                 printY[i] = y;
                 away[i] = d;
                 source[i] = source[j];
+                printZ[i] = printZ[j];
+                printX[i] = printX[j];
             };
             for (int32_t z = 0; z < rows; z++) {
                 for (int32_t x = 0; x < cols; x++) {
@@ -2663,10 +2768,9 @@ namespace RT64 {
         wallBlocks.assign(SnowBlocks * SnowBlocks, -1e9);
         bool walls = false;
         for (int32_t r = writeRow0; r < writeRow1; r++) {
-            // The coarse cells either side of this cell's middle, and how far between them (as a bilinear lookup).
+            // The coarse cells either side of this cell's middle.
             const float gz = (float(r - readRow0) + 0.5f) / float(B) - 0.5f;
             const int32_t z0 = std::clamp(int32_t(std::floor(gz)), 0, rows - 1), z1 = std::min(z0 + 1, rows - 1);
-            const float tz = std::clamp(gz - float(z0), 0.0f, 1.0f);
             for (int32_t c = writeCol0; c < writeCol1; c++) {
                 const size_t k = (size_t(r) * SnowGridSize + size_t(c)) * 2;
                 copy.cells[k] = trail.cells[k];
@@ -2676,31 +2780,47 @@ namespace RT64 {
                 }
                 const float gx = (float(c - readCol0) + 0.5f) / float(B) - 0.5f;
                 const int32_t x0 = std::clamp(int32_t(std::floor(gx)), 0, cols - 1), x1 = std::min(x0 + 1, cols - 1);
-                const float tx = std::clamp(gx - float(x0), 0.0f, 1.0f);
                 const size_t own = size_t((r - readRow0) / B) * cols + size_t((c - readCol0) / B);
                 if (floorY[own] == FLT_MAX) {
                     continue;
                 }
-                // (Blended from the four round it that have a floor; one without counts as this cell's own.)
+                // (The lowest of the walls from the prints the four coarse cells round it found, each measured from where
+                // that print lies: the wall starts at a print's own edge, so a footprint keeps its shape.)
                 const size_t corner[4] = { size_t(z0) * cols + x0, size_t(z0) * cols + x1, size_t(z1) * cols + x0, size_t(z1) * cols + x1 };
-                const float weight[4] = { (1.0f - tx) * (1.0f - tz), tx * (1.0f - tz), (1.0f - tx) * tz, tx * tz };
-                float y = 0.0f;
+                float y = FLT_MAX;
+                size_t from = own;
                 for (int32_t q = 0; q < 4; q++) {
-                    y += weight[q] * ((floorY[corner[q]] != FLT_MAX) ? floorY[corner[q]] : floorY[own]);
+                    const size_t e = corner[q];
+                    if (floorY[e] == FLT_MAX) {
+                        continue;
+                    }
+                    const float dz = float(r - readRow0 - printZ[e]), dx = float(c - readCol0 - printX[e]);
+                    const float d = std::sqrt(dz * dz + dx * dx) * trail.cell;
+                    if (d > reachUnits) {
+                        continue;
+                    }
+                    const float raised = printY[e] + SnowWallRiseAt(d);
+                    if (raised < y) {
+                        y = raised;
+                        from = e;
+                    }
+                }
+                if (y == FLT_MAX) {
+                    continue;
                 }
                 const bool print = (trail.cells[k + 1] != 0) && ((trail.cells[k] & 0x80u) == 0);
                 if (print && (float(int32_t(trail.cells[k]) >> 8) / 16.0f <= y + 0.05f)) {
                     continue;
                 }
-                if ((trail.cells[k + 1] != 0) && ((trail.cells[k + 1] & 0xFFFF0000u) != (source[own] & 0xFFFF0000u))) {
+                if ((trail.cells[k + 1] != 0) && ((trail.cells[k + 1] & 0xFFFF0000u) != (source[from] & 0xFFFF0000u))) {
                     continue;
                 }
                 const int32_t fixedY = std::clamp(int32_t(std::lround(y * 16.0f)), -(1 << 23), (1 << 23) - 1);
                 // (A bank-only cell's bank kept, without its bank-only bit: SnowCell reads both.)
                 const uint32_t bank = ((trail.cells[k] & 0x80u) != 0) ? (trail.cells[k] & 0x7Fu) : 0u;
                 copy.cells[k] = bank | (uint32_t(fixedY) << 8);
-                copy.cells[k + 1] = source[own];
-                if (away[own] > 0.0f) {
+                copy.cells[k + 1] = source[from];
+                if (y > printY[from]) {
                     const size_t block = size_t(r / int32_t(SnowBlockCells)) * SnowBlocks + size_t(c / int32_t(SnowBlockCells));
                     wallBlocks[block] = std::max(wallBlocks[block], trail.seconds);
                     walls = true;
@@ -2861,7 +2981,26 @@ namespace RT64 {
                 trail.started = false;
             }
             if (!trail.started) {
-                // A new map (going in and out of a hut, too): the old trail is gone.
+                // A new map (going in and out of a hut, too): the trail of the one left is kept, and the new one's given
+                // back if Banjo was here before (with cells of the same size), or starts afresh.
+                if (trail.map != UINT32_MAX) {
+                    if ((snowKeptTrails.size() >= SnowKeptMost) && (snowKeptTrails.find(trail.map) == snowKeptTrails.end())) {
+                        auto oldest = snowKeptTrails.begin();
+                        for (auto it = snowKeptTrails.begin(); it != snowKeptTrails.end(); it++) {
+                            if (it->second.left < oldest->second.left) {
+                                oldest = it;
+                            }
+                        }
+                        snowKeptTrails.erase(oldest);
+                    }
+                    SnowKeptTrail &kept = snowKeptTrails[trail.map];
+                    kept.cell = trail.cell;
+                    kept.cells.swap(trail.cells);
+                    kept.away.swap(trail.away);
+                    kept.left = trail.seconds;
+                    trail.cells.assign(SnowGridSize * SnowGridSize * 2, 0u);
+                }
+                trail.map = settings.snowMap;
                 std::fill(trail.cells.begin(), trail.cells.end(), 0u);
                 std::fill(trail.rowPressed.begin(), trail.rowPressed.end(), trail.frame);
                 std::fill(trail.tilePressed.begin(), trail.tilePressed.end(), trail.frame);
@@ -2870,6 +3009,24 @@ namespace RT64 {
                     std::fill(snowWallBlocks.begin(), snowWallBlocks.end(), -1e9);
                 }
                 std::fill(trail.blockPressed.begin(), trail.blockPressed.end(), -1e9);
+                trail.away.clear();
+                trail.windowX = trail.windowZ = INT32_MIN;
+                const auto kept = snowKeptTrails.find(trail.map);
+                if (kept != snowKeptTrails.end()) {
+                    if (kept->second.cell == trail.cell) {
+                        trail.cells.swap(kept->second.cells);
+                        trail.away.swap(kept->second.away);
+                        // (The blocks holding prints cut finely again.)
+                        for (uint32_t r = 0; r < SnowGridSize; r++) {
+                            for (uint32_t c = 0; c < SnowGridSize; c++) {
+                                if (trail.cells[(size_t(r) * SnowGridSize + c) * 2 + 1] != 0) {
+                                    trail.blockPressed[(r / SnowBlockCells) * SnowBlocks + c / SnowBlockCells] = trail.seconds;
+                                }
+                            }
+                        }
+                    }
+                    snowKeptTrails.erase(kept);
+                }
                 trail.started = true;
                 trail.groundY = y;
             }
@@ -2879,6 +3036,8 @@ namespace RT64 {
             trail.last[0] = x;
             trail.last[1] = y;
             trail.last[2] = z;
+            // (The prints round Banjo brought back first, so this frame's touches land on them.)
+            SnowPageWindow(trail, int32_t(std::floor(x / trail.cell)) - int32_t(SnowGridSize) / 2, int32_t(std::floor(z / trail.cell)) - int32_t(SnowGridSize) / 2);
             SnowTakeTouches(trail, x, trail.groundY, z, full, now, recover);
         }
         else {
@@ -3004,8 +3163,8 @@ namespace RT64 {
             for (uint32_t k = 0; k < SnowBlocks * SnowBlocks; k++) {
                 activeBlocks += (trail.seconds - trail.blockPressed[k] < double(trail.hold) + SnowRecoverSeconds + 2.0) ? 1 : 0;
             }
-            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f%s, %u cells pressed, %u of %u blocks cut finely, depth %.1f, recover %.0f s, %u model triangles from %u of %u draws (the rest standing still) (%.1f ms), walls sloped in %.2f ms at most\n", settings.player[0], settings.player[1], settings.player[2], settings.playerGrounded ? "" : " (in the air)",
-                pressed, activeBlocks, SnowBlocks * SnowBlocks, depth, recover, trail.lastTouches, trail.lastDraws - trail.lastStillDraws, trail.lastDraws, trail.lastTouchMs, snowWallMsMost.exchange(0.0f));
+            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f%s, %u cells pressed, %u of %u blocks cut finely, depth %.1f, recover %.0f s, %u model triangles from %u of %u draws (the rest standing still) (%.1f ms), walls sloped in %.2f ms at most, %zu prints kept away\n", settings.player[0], settings.player[1], settings.player[2], settings.playerGrounded ? "" : " (in the air)",
+                pressed, activeBlocks, SnowBlocks * SnowBlocks, depth, recover, trail.lastTouches, trail.lastDraws - trail.lastStillDraws, trail.lastDraws, trail.lastTouchMs, snowWallMsMost.exchange(0.0f), trail.away.size());
         }
         // (Sand banks up less round a print than snow.)
         frameParams.snowSpring = { trail.hold, recover, settings.snowSand ? SnowBank * 0.6f : SnowBank, float(now) };
