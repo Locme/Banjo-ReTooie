@@ -125,6 +125,8 @@ namespace {
         uint32_t tint = 0;
         uint8_t rougher = 0;
     };
+    // Rock, wood, dirt and stone the sweep took for metal, gold or glaze were taken out on a re-check by eye
+    // (L, 2026-11-12: things shiny that shouldn't be).
     const BuiltIn built_ins[] = {
 #include "ray_material_defaults.inc"
     };
