@@ -976,6 +976,39 @@ bool RelightShadeView() {
     return asfloat(gDust.Load(32u + 32u * 16u + 84u)) > 0.5f;
 }
 
+// The light bounced up off the ground for Relighting, which lights what faces down. It takes the colour of the ground in
+// the picture, as screen-space directional occlusion (Ritschel, Grosch and Seidel 2009) takes its bounce from the picture:
+// four taps of the half-size picture below the pixel, a twentieth of the screen's width out, leaving out the sky. Only the
+// hue is taken, half as strong, at the brightness the fit to Traced Relighting used (about 0.27). So grass bounces green and
+// lava red without the shading's level changing.
+float3 RelitGround(int2 pixel) {
+    const float3 luma = float3(0.299f, 0.587f, 0.114f);
+    const float3 neutral = float3(0.30f, 0.27f, 0.24f);
+    const float2 size = gConstants.projection.zw;
+    const float2 uv = (float2(pixel) + 0.5f) / size;
+    const float aspect = size.x / size.y;
+    const float2 taps[4] = { float2(-0.05f, 0.03f), float2(0.05f, 0.03f), float2(-0.025f, 0.07f), float2(0.025f, 0.07f) };
+    float3 sum = 0.0f;
+    float count = 0.0f;
+    [unroll] for (int k = 0; k < 4; k++) {
+        const float2 at = uv + float2(taps[k].x, taps[k].y * aspect);
+        if (all(at > 0.0f) && all(at < 1.0f) && (LoadDepth(int2(at * size)) < 0.99999f)) {
+            sum += gColorHalf.SampleLevel(LinearSampler, at, 0).rgb;
+            count += 1.0f;
+        }
+    }
+    if (count < 0.5f) {
+        return neutral;
+    }
+    const float3 average = sum / count;
+    const float level = dot(neutral, luma);
+    const float3 hue = min(average / max(dot(average, luma), 0.02f), 2.0f);
+    return level * lerp(neutral / level, hue, 0.5f);
+}
+
+// (Further down, with the other masks.)
+bool LoadShiny(int2 pixel);
+
 // Relighting: a surface's own colour (own) lit by the sun where it gets through (sunBlocked, from SunShadow), by how
 // squarely the surface faces it, and by the sky from above (the ground's bounce from below). See Relit.
 float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float sunBlocked) {
@@ -984,14 +1017,25 @@ float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float su
     // show in the sun's shading, and wrapped a little round the side turned away, so a ridge between two faces turns
     // from lit to shaded softly instead of along a line.
     const float3 smooth = SmoothedNormal(pixel, center, normal, max(3, int(gConstants.projection.w / 270.0f)));
-    const float facing = saturate((dot(smooth, normalize(gConstants.sun.xyz)) + 0.25f) / 1.25f);
-    const float skyward = dot(smooth, normalize(gConstants.worldY.xyz)) * 0.5f + 0.5f;
-    const float3 sky = lerp(float3(0.30f, 0.27f, 0.24f), float3(0.42f, 0.47f, 0.56f), skyward);
-    const float3 sun = float3(1.0f, 0.95f, 0.86f) * 0.9f;
+    const float3 sunDirection = normalize(gConstants.sun.xyz);
+    const float facing = saturate((dot(smooth, sunDirection) + 0.25f) / 1.25f);
+    const float3 up = normalize(gConstants.worldY.xyz);
+    const float skyward = dot(smooth, up) * 0.5f + 0.5f;
+    // A low sun (under about 35 degrees) is redder and weaker and the sky round it greyer, as sunlight crosses more air
+    // near the horizon (Preetham, Shirley and Smits 1999). Every built-in sun is higher, so they light as fitted.
+    const float low = saturate((0.57f - dot(sunDirection, up)) / 0.5f);
+    const float3 sky = lerp(RelitGround(pixel), lerp(float3(0.42f, 0.47f, 0.56f), float3(0.46f, 0.44f, 0.46f), low * 0.6f), skyward);
+    const float3 sun = lerp(float3(1.0f, 0.95f, 0.86f), float3(1.0f, 0.70f, 0.42f), low) * (0.9f * lerp(1.0f, 0.65f, low));
     // The day and night cycle's light: its brightest channel dims the sun and the sky (its colour is already in the picture).
     float3 tint;
     const float daylight = DayTint(tint) ? max(tint.r, max(tint.g, tint.b)) : 1.0f;
-    const float3 lit = own * (sky + sun * (facing * (1.0f - sunBlocked))) * daylight;
+    float3 lit = own * (sky + sun * (facing * (1.0f - sunBlocked))) * daylight;
+    // Shiny surfaces (the shiny list) catch the sun as a highlight where it gets through: Blinn-Phong's, round the
+    // direction halfway between the sun and the eye.
+    if (LoadShiny(pixel)) {
+        const float3 halfway = normalize(sunDirection + normalize(-center));
+        lit += sun * (pow(saturate(dot(smooth, halfway)), 60.0f) * 0.5f * saturate(dot(smooth, sunDirection)) * (1.0f - sunBlocked) * daylight);
+    }
     // A soft shoulder on the brightness above three quarters, so sunlit snow and sand roll off towards white instead of
     // clipping flat. On the brightness and not each channel, so a bright colour keeps its hue (per channel, sunlit grass
     // went neon).
@@ -1007,18 +1051,30 @@ float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float su
 // width, kept within what Traced Relighting keeps it to. Fitted to Traced Relighting's own shading in 24 views of eight
 // outdoor levels (2026-11-11), it was off by about a fifth on a typical pixel, against a third for the traced version's
 // fallback (0.85) used everywhere: the game paints dim corners and shaded sides darker, and they are darker in the picture.
+// The fit's 1.5 came out about an eighth darker than Traced Relighting in seven views under L's picked suns, so it is 1.3.
 // The sun shadow map's shadows then light it again.
+// The average takes only the taps on the pixel's own surface (within a fiftieth of its distance of its plane), as Retinex
+// with bilateral filters does (Elad 2005; Durand and Dorsey 2002). The game's shading changes smoothly over a surface and
+// its textures change sharply, and averaging across a silhouette took in the sky or the wall behind: a tree against a
+// bright sky was guessed brightly shaded and came out dark, and the guess bled into a ring round it.
 float3 Relit(int2 pixel, float3 center, float3 normal, float3 scene, float sunBlocked) {
     const float3 luma = float3(0.299f, 0.587f, 0.114f);
-    const float2 uv = (float2(pixel) + 0.5f) / gConstants.projection.zw;
-    const float2 step = float2(0.012f, 0.012f * gConstants.projection.z / gConstants.projection.w);
+    const float2 size = gConstants.projection.zw;
+    const float2 uv = (float2(pixel) + 0.5f) / size;
+    const float2 step = float2(0.012f, 0.012f * size.x / size.y);
+    const float tolerance = 4.0f - center.z * 0.02f;
     float around = 0.0f;
+    float weights = 0.0f;
     [unroll] for (int y = -1; y <= 1; y++) {
         [unroll] for (int x = -1; x <= 1; x++) {
-            around += dot(gColorHalf.SampleLevel(LinearSampler, uv + float2(x, y) * step, 0).rgb, luma);
+            const float2 at = uv + float2(x, y) * step;
+            const float3 there = ViewPositionAt(int2(clamp(at, 0.0f, 1.0f) * size));
+            const float weight = ((x == 0) && (y == 0)) ? 1.0f : saturate(1.0f - abs(dot(there - center, normal)) / tolerance);
+            around += dot(gColorHalf.SampleLevel(LinearSampler, at, 0).rgb, luma) * weight;
+            weights += weight;
         }
     }
-    const float shade = clamp(1.3f * sqrt(max(around / 9.0f, 1e-3f)), 0.45f, 1.5f);
+    const float shade = clamp(1.3f * sqrt(max(around / weights, 1e-3f)), 0.45f, 1.5f);
     return RelitLight(pixel, center, normal, scene / shade, sunBlocked);
 }
 #endif

@@ -3,6 +3,11 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-12
+
+- Relighting and Traced relighting: what faces down (overhangs, the undersides of ledges, Banjo's chin) is lit by the ground's own colour, so grass bounces green and snow white instead of the same grey everywhere. A sun low in the sky lights warmer and weaker. Shiny surfaces catch a highlight from the sun where it gets through.
+- Relighting: the game's painted shading is now guessed only from the same surface round each spot, so a tree or a post against the bright sky no longer comes out too dark with a pale ring round it.
+
 ## 2026-11-11
 
 - Parallax and Displaced Ground: textures whose depth is in thin lines (cracked walls, metal seams, tile grout, the gaps between stones and planks) no longer come out flat with Parallax Smoothness up, most of all with HD texture packs, whose lines are thinner and crisper. The smoothing now softens the depth after the cracks are found instead of blurring them away first, and gives them back their full depth.
