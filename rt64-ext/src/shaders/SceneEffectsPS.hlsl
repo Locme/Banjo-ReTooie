@@ -994,7 +994,7 @@ bool RelightShadeView() {
 // The light bounced up off the ground for Relighting, which lights what faces down. It takes the colour of the ground in
 // the picture, as screen-space directional occlusion (Ritschel, Grosch and Seidel 2009) takes its bounce from the picture:
 // four taps of the half-size picture below the pixel, a twentieth of the screen's width out, leaving out the sky. Only the
-// hue is taken, half as strong, at the brightness the fit to Traced Relighting used (about 0.27). So grass bounces green and
+// hue is taken, a third as strong, at the brightness the fit to Traced Relighting used (about 0.27). So grass bounces green and
 // lava red without the shading's level changing.
 float3 RelitGround(int2 pixel) {
     const float3 luma = float3(0.299f, 0.587f, 0.114f);
@@ -1018,7 +1018,8 @@ float3 RelitGround(int2 pixel) {
     const float3 average = sum / count;
     const float level = dot(neutral, luma);
     const float3 hue = min(average / max(dot(average, luma), 0.02f), 2.0f);
-    return level * lerp(neutral / level, hue, 0.5f);
+    // A third of the ground's colour (it was half: with the bounce from round about, green levels went green all over).
+    return level * lerp(neutral / level, hue, 0.33f);
 }
 
 // (Further down, with the other masks.)
@@ -1143,7 +1144,10 @@ float3 RelitBounce(int2 pixel) {
     }
     const float3 average = sum / count;
     const float brightness = dot(average, luma);
-    return average / max(brightness, 0.02f) * (1.6f * max(brightness - 0.3f, 0.0f));
+    // A third of the surroundings' colour, the rest white: at full colour the grass round about turned everything green,
+    // the grey stone paths in Mayahem Temple as green as the grass (L, burst-2026-11-12_11-09-25).
+    const float3 hue = lerp(float3(1.0f, 1.0f, 1.0f), min(average / max(brightness, 0.02f), 2.0f), 0.33f);
+    return hue * (1.6f * max(brightness - 0.3f, 0.0f));
 }
 
 // Relighting without ray tracing: there is no ray to read the surface's texture, so the game's shading is guessed from the
