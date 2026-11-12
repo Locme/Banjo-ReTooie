@@ -5292,7 +5292,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                 graphics_config().save_config();
             }
         });
-
     graphics.add_number_option(
         brightness_option,
         "Brightness",
@@ -5306,64 +5305,152 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     // A button (L, 2026-10-24): it turns the test pattern on and the ESC menu steps aside for the brightness and colour grading panel (src/ui/brightness_panel.cpp).
     graphics.set_option_button(brightness_pattern_option, "Show Brightness & Colour Grading Menu", "Hide Brightness & Colour Grading Menu");
     graphics.add_enum_option(
-        colourblind_option,
-        "Colourblind Filter",
-        "Moves the colours you can't tell apart into ones you can. <recomp-color primary>Deuteranopia</recomp-color> and <recomp-color primary>Protanopia</recomp-color> are red-green, <recomp-color primary>Tritanopia</recomp-color> is blue-yellow.",
+        lighting_option,
+        "Lighting",
+        "How the outdoor levels are lit. <recomp-color primary>None</recomp-color> keeps the game's own shading. <recomp-color primary>Relighting</recomp-color> lights the level again by the sun and the sky without ray tracing, for graphics cards and phones without it (it needs Sun Shadows on). <recomp-color primary>Ray Tracing</recomp-color> turns on the ray traced effects: reflections, sun and lamp shadows, ambient occlusion, bounce and sky light, found by tracing rays through the level's triangles; it needs the Vulkan renderer and a graphics card with hardware ray tracing, and is heavy on the graphics card. Each choice shows its own settings under it.",
         {
-            {Colourblind::Off, "Off", "Off"},
-            {Colourblind::Deuteranopia, "Deuteranopia", "Deuteranopia"},
-            {Colourblind::Protanopia, "Protanopia", "Protanopia"},
-            {Colourblind::Tritanopia, "Tritanopia", "Tritanopia"},
+            {Lighting::None, "None", "None"},
+            {Lighting::Relighting, "Relighting", "Relighting"},
+            {Lighting::RayTracing, "RayTracing", "Ray Tracing"},
         },
-        Colourblind::Off);
+        Lighting::None);
     graphics.add_number_option(
-        colourblind_strength_option,
-        "Colourblind Filter Strength",
-        "How strongly the colourblind filter shifts the colours.",
-        0, 100, 10, 0, true, 100);
-    graphics.add_option_hidden_dependency(colourblind_strength_option, colourblind_option, Colourblind::Off);
-    // Brightness and the four Colour Grading settings (contrast, saturation, vignette, film grain) are hidden from this
-    // page: the Brightness & Colour Grading panel (src/ui/brightness_panel.cpp) edits them (L, 2026-10-24).
-
+        relighting_option,
+        "Relighting Strength",
+        "Experimental. Traced Relighting without ray tracing, for graphics cards and phones without it: the sun and the sky light the level again from the sun shadow map, so sunlit ground facing the sun is brighter and the side turned from it and what is in shadow darker. Without rays to read each texture, the game's painted shading is guessed from the picture around each spot, so it is close to Traced Relighting but not the same. Needs Sun Shadows on, and only works outdoors. Shown when Lighting is Relighting.",
+        0, 100, 5, 0, false, 100);
+    // The old Ray Tracing switch: Lighting sets it, and it is kept out of the menu (below) but not the console, whose
+    // "set ray_tracing on" still works.
     graphics.add_bool_option(
-        three_point_option,
-        "Retro: N64 3-Point Filtering",
-        "The N64's own texture smoothing, as on the console. Off uses plain bilinear smoothing instead.",
-        true);
-    graphics.add_enum_option(
-        dither16_option,
-        "Retro: N64 16-Bit Colour",
-        "Cuts the colours down to the N64's 16-bit colour, with its dither pattern at the game's original resolution. <recomp-color primary>Console</recomp-color> smooths the dither as the N64 does on its way to the TV, leaving its colour banding. <recomp-color primary>Raw dither</recomp-color> shows the dither pattern itself.",
-        {
-            {Colour16::Off, "Off", "Off"},
-            {Colour16::Console, "Console", "Console"},
-            {Colour16::Raw, "Raw dither", "Raw dither"},
-        },
-        Colour16::Off);
-    graphics.add_bool_option(
-        crt_option,
-        "Retro: CRT",
-        "Draws 240 scanlines and the stripes of a CRT TV's aperture grille over the picture.",
+        ray_tracing_option,
+        "Ray Tracing",
+        "Ray traced effects: reflections on shiny surfaces and water, sun shadows and shadows from lamps and fires, ambient occlusion, and bounce and sky light, all found by tracing rays through the level's triangles instead of marching the picture. It is a switch of its own, apart from the shader effects: while it is on each of those shows at least as strongly as Ray tracing strength says, even with its own setting at 0 (a higher setting wins). Needs the Vulkan renderer and a graphics card with hardware ray tracing (ray queries): without them this shows a notice and the effects carry on as you have set them. Heavy on the graphics card.",
         false);
-
-    graphics.add_enum_option(
-        texture_upscale_option,
-        "Texture Upscaling",
-        "Draws the game's textures at 2 or 4 times their size, smoothing the stair steps on their edges and lines while keeping them sharp. Texture packs take priority."
-        "<br /><br />"
-        "<recomp-color primary>2x</recomp-color> runs one pass of an xBR-style edge-directed filter (a compute shader on the GPU). <recomp-color primary>4x</recomp-color> runs the same filter twice, so it is sharper on lines but uses more video memory and loading time. Neither uses AI; both only smooth edges.",
-        {
-            {TextureUpscale::Off, "Off", "Off"},
-            {TextureUpscale::Double, "2x", "2x"},
-            {TextureUpscale::Quadruple, "4x", "4x"},
-        },
-        TextureUpscale::Off);
     graphics.add_number_option(
-        sharpen_option,
-        "Sharpening",
-        "Sharpens the picture's fine detail, most where it is soft. 0 is off.",
+        ray_tracing_strength_option,
+        "Ray Tracing Strength",
+        "How strongly the ray traced effects show while Ray tracing is on: the least each of them is drawn at (sun shadows at this, ambient occlusion and bounce light a little under it; the reflections have sliders of their own below). An effect's own slider still wins when it is higher. 60 is the default; 100 makes them plain.",
+        0, 100, 5, 0, false, 60);
+    graphics.add_enum_option(
+        ray_tracing_resolution_option,
+        "Ray Tracing Resolution",
+        "How many rays the traced shadows, lamp light and light beams use. <recomp-color primary>Half</recomp-color> traces them once for every 2x2 pixels and fills in each pixel from the ones round it on the same surface: about a quarter of the rays, for higher frame rates; shadow edges a little softer. <recomp-color primary>Medium</recomp-color> (the default) traces every pixel, with fewer rays far off (Ray detail distances). <recomp-color primary>High</recomp-color> traces every pixel with all its rays at any distance: the sun's four rays everywhere, four rays a lamp and the beams' eight steps, so less noise and finer shadow edges, at a lower frame rate. Needs Ray tracing on.",
+        {
+            {RayResolution::Half, "Half", "Half"},
+            {RayResolution::Medium, "Medium", "Medium"},
+            {RayResolution::High, "High", "High"},
+        },
+        RayResolution::Medium);
+    graphics.add_bool_option(
+        ray_tracing_denoise_option,
+        "Ray Traced Denoising",
+        "Experimental. Calms the grain of the traced light: the sun's and lamps' shadows, the bounce light and the occlusion are kept from frame to frame and each new frame's rays are blended in, following the world as the camera moves (newly seen ground, and whatever moves across it, start afresh). The shadows and lamps are then traced at half size (as Ray tracing resolution Half), a quarter of their rays, so it is lighter on the graphics card too; their edges are a little softer. Off by default. Needs Ray tracing on.",
+        false);
+    graphics.add_number_option(
+        ray_tracing_smoothing_option,
+        "Ray Tracing Noise Smoothing",
+        "How much the ray traced light and shadows are smoothed out where they get grainy: the soft edges of sun, lamp and model shadows everywhere (higher turns every pixel's rays more alike: calmer, the edge in fine steps), and most on Banjo's fur (whose surface turns every pixel, so each pixel caught different rays and the fur crawled as he moved). 0 is the raw rays. 50 is the default. Needs Ray tracing on.",
+        0, 100, 5, 0, false, 50);
+    graphics.add_number_option(
+        ray_tracing_reflections_option,
+        "Traced Reflections",
+        "How much shiny surfaces reflect while Ray tracing is on: metal, tiles and the other shiny textures, and whatever Parallax pick mode marks Metal, Tiles or Smooth. The Screen-space reflections slider still wins when it is higher. 0 turns the traced reflections off. 60 is the default.",
+        0, 100, 5, 0, false, 60);
+    graphics.add_number_option(
+        ray_tracing_water_reflections_option,
+        "Traced Water Reflections",
+        "How much water reflects while Ray tracing is on (traced, so what is off screen shows too). The Water reflections slider still wins when it is higher. 60 is the default.",
+        0, 100, 5, 0, false, 60);
+    graphics.add_number_option(
+        ray_tracing_metal_option,
+        "Metal Reflection",
+        "How mirror-like the surfaces Parallax calls Metal are, in percent of Traced reflections. 100 is the default.",
+        0, 100, 5, 0, false, 100);
+    graphics.add_number_option(
+        ray_tracing_tiles_option,
+        "Tiles Reflection",
+        "How much the surfaces Parallax calls Tiles reflect, in percent of Traced reflections. 60 is the default.",
+        0, 100, 5, 0, false, 60);
+    graphics.add_number_option(
+        ray_tracing_smooth_option,
+        "Smooth Surface Reflection",
+        "How much the surfaces Parallax calls Smooth reflect, in percent of Traced reflections. 35 is the default; stone, wood, dirt and the rest never reflect.",
+        0, 100, 5, 0, false, 35);
+    graphics.add_number_option(
+        ray_tracing_brdf_option,
+        "Ray Traced BRDF",
+        "Every traced reflection becomes a physically based one: rays are scattered over a GGX lobe (Smith visibility, weighted by the BRDF over each ray's probability), as wide as this setting, so reflections go from a sharp mirror to a soft brushed blur on shiny surfaces and on materials from Ray Tracing Material Pick Mode (which set their own roughness). Turns the screen-space Stochastic reflections off while it is above 0. Grainier the higher it goes. Needs Ray tracing on. 0 is off: mirror reflections.",
         0, 100, 5, 0, false, 0);
-
+    graphics.add_number_option(
+        ray_tracing_subsurface_option,
+        "Ray Traced Subsurface Scattering",
+        "Light that gets into a thin or soft surface and comes out the other side: leaves and grass glow with the sun or a lamp behind them (traced rays check the light reaches the back of the surface and how much solid there is to pass through), and shadowed parts keep a soft coloured glow instead of going flat dark. Textures given Subsurface in Ray Tracing Material Pick Mode use it at their own strength whatever this is set to. Needs Ray tracing on. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        ray_tracing_relighting_option,
+        "Traced Relighting",
+        "Experimental. Lights the level again with the traced light instead of only darkening the game's picture: the game's own painted shading is taken out of each surface (its texture is read where the camera's ray meets it) and the sun, the sky and the bounce light light it again, so sunlit ground is brighter, the side turned from the sun and what is in shadow darker, and traced shadows no longer land on top of painted ones. 0 keeps the game's shading (the default); 100 is all traced. Needs Ray tracing on.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_bool_option(
+        path_tracing_option,
+        "Path Tracing",
+        "The traced bounce light goes on bouncing: a ray that lands on a surface turns off it and carries on, picking up the colours along the way, so light reaches round corners and deeper into rooms and caves. Needs Ray tracing on and the bounce light showing (Ray tracing strength above 0 or Screen-space GI on). Heavy on the graphics card: each bounce traces three more rays a pixel.",
+        false);
+    graphics.add_number_option(
+        path_tracing_bounces_option,
+        "Path Tracing Bounces",
+        "How many more times light bounces with Path tracing on, after the first. More reaches further into shadowed places but costs more. 2 is the default.",
+        1, 4, 1, 0, false, 2);
+    graphics.add_number_option(
+        traced_beams_option,
+        "Traced Light Beams",
+        "Shafts of light through the air, found by tracing rays towards the light: in a room the light only gets in at the windows, so the beams take the windows' shapes and anything standing in them (Banjo too) cuts its shadow through them; outdoors it is a thin haze with shafts between trees and under arches. Where beams are drawn (Mumbo's Skulls, and the rooms Window Light Beams covers while it is on), those are kept instead. Needs Ray tracing on. 0 is off. Costs a dozen rays a pixel.",
+        0, 100, 5, 0, false, 60);
+    graphics.add_bool_option(
+        ray_tracing_player_shadows_option,
+        "Traced Shadows Of The Player",
+        "Whether Banjo and Kazooie (or whoever you are playing) cast traced shadows: from the sun, the lamps and fires, and straight down on the ground. Off, the player casts none of them, and light and shadows go on through as if they weren't there; everything else keeps its traced shadows. Use it with HD shadows for the game's own shadow under the player. Needs Ray tracing on.",
+        true);
+    graphics.add_bool_option(
+        ray_tracing_parallax_option,
+        "Ray Tracing Uses Parallax Materials",
+        "Lets ray tracing read what Parallax knows of each texture: metal, glazed tiles and smooth surfaces reflect (the Metal, Tiles and Smooth sliders), and leaves and grass let light through (Ray traced subsurface). Off (the default), ray tracing ignores the Parallax list; Ray Tracing Material picks still apply. Needs Ray tracing on.",
+        false);
+    graphics.add_bool_option(
+        ray_tracing_hit_colours_option,
+        "Ray Tracing Hit Colours",
+        "Experimental. A traced reflection or bounce that lands on something the picture can't see (off the screen, or hidden behind something) uses the colour that spot had when it was last on screen, remembered in the world as you look around, instead of smearing the nearest colour from the picture. Adds a small cost every frame. Needs Ray tracing on. Starts off: if you see flicker, wrong colours or a crash, leave it off and tell me.",
+        false);
+    graphics.add_number_option(
+        ray_detail_half_option,
+        "Ray Detail Distance (Half)",
+        "Past this far from the camera, the traced shadows and light beams use half their rays (the sun one ray instead of two to four, the lamps one ray each and at most three, the beams half their steps): far shadows are only a few pixels wide, so it hardly shows. 0 keeps all the rays at any distance. Needs Ray tracing on.",
+        0, 8000, 250, 0, false, 2000);
+    graphics.add_number_option(
+        ray_detail_quarter_option,
+        "Ray Detail Distance (Quarter)",
+        "Past this far, a quarter of the rays (one lamp, one ray). The traced shadows fade out from 4000 to 7000 anyway. 0 for never. Needs Ray tracing on.",
+        0, 8000, 250, 0, false, 4000);
+    graphics.add_number_option(
+        sun_shadows_option,
+        "Sun Shadows",
+        "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. The whole level casts one, on screen or not. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_bool_option(
+        sun_shadow_banjo_option,
+        "Sun Shadow On Banjo",
+        "Whether Banjo casts a sun shadow too. Off leaves his to HD shadows or the game's own. With Ray tracing on, Traced shadows of the player decides instead.",
+        true);
+    graphics.add_number_option(
+        sun_shadow_softness_option,
+        "Sun Shadow Softness",
+        "How smooth the sun shadows are. Higher blends the light across a character's body instead of shading it face by face, and gives shadow edges a softer fade. 0 is the sharpest.",
+        0, 100, 5, 0, false, 60);
+    graphics.add_number_option(
+        sun_shadow_distance_option,
+        "Sun Shadow Distance",
+        "How far from the camera sun shadows are sharp, in game units; past it the level's shadows carry on, softer. The whole level casts, and characters and objects within this distance, on screen or not, so shadows stay put as the camera turns. Past 6000 each shadow is a little blurrier, and higher costs more.",
+        1500, 20000, 500, 0, false, 3000);
     graphics.add_number_option(
         ambient_occlusion_option,
         "Ambient Occlusion",
@@ -5380,50 +5467,40 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Light bounced off nearby surfaces: colourful walls and floors tint and brighten what is next to them a little. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
-        outlines_option,
-        "Toon Outlines",
-        "Draws dark outlines around characters and objects, on the edge in front of whatever is behind them, and lighter ones along ridges and the top edges of cliffs. 0 is off.",
+        light_shafts_option,
+        "Light Shafts",
+        "Sunlight streams through gaps between trees, cliffs and buildings where they stand against a bright sky. Indoors and under night skies there is none. 0 is off.",
         0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        outline_thickness_option,
-        "Toon Outline Thickness",
-        "How thick the toon outlines are: 25 is a thin line, 100 a heavy one and 200 a very bold cartoon line. They keep the same thickness at any resolution.",
-        10, 200, 5, 0, false, 25);
     graphics.add_number_option(
         rim_light_option,
         "Rim Light",
         "A soft light along the edges of nearby characters and objects, so they stand out from what is behind them. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
-        toon_section_option,
-        "Toon Shading",
-        "Cel shading for characters and for the world: the two sliders below. Off turns it off; the sliders keep their values.",
+        reflections_section_option,
+        "Reflections",
+        "Turns the screen-space, stochastic, water and ice reflections on or off. Off also hides their settings below.",
         true);
     graphics.add_number_option(
-        toon_characters_option,
-        "Toon Shading: Characters",
-        "Cel shading for Banjo, Kazooie and the game's other characters and enemies (not rocks or other objects, which follow World): the lit picture is split into a few flat bands of light and shadow with soft steps between them, shadows cool and lit parts warm. Works well with the toon outlines and Rim light. 0 is off.",
+        ssr_option,
+        "Screen-Space Reflections",
+        "Shiny surfaces (metal and tiles, and water and ice when their own reflections are off) reflect what is on screen, most at grazing angles. Only what is on screen can be reflected, so reflections fade out near the edges of the picture. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
-        toon_world_option,
-        "Toon Shading: World",
-        "The same cel shading for everything that isn't a character: the ground, walls, buildings, rocks, other objects and the sky. Set it apart from the characters' to have one without the other. 0 is off.",
+        ssr_stochastic_option,
+        "Stochastic Reflections",
+        "Makes Screen-space reflections glossy instead of mirror-sharp (a port of simeonradivoev's Compute Stochastic Reflections, MIT): each pixel sends a few rays spread over a lobe that widens with this setting, and blends what they find. The result is slightly grainy and blurrier the higher it goes. Needs Screen-space reflections above 0. Starts at 0, which keeps the mirror reflections.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
-        underwater_tint_option,
-        "Underwater Tint",
-        "While under water, the 3D world turns light blue. The HUD isn't changed. 0 is off, 100 strongest.",
-        0, 100, 5, 0, false, 25);
+        water_reflections_option,
+        "Water Reflections",
+        "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
+        0, 100, 5, 0, false, 0);
     graphics.add_number_option(
-        underwater_haze_option,
-        "Underwater Haze",
-        "While under water, things further away fade into a light blue haze. Works with Underwater tint at 0 too. 0 is off.",
-        0, 100, 5, 0, false, 15);
-    graphics.add_number_option(
-        underwater_distortion_option,
-        "Underwater Distortion",
-        "While under water, the 3D world wobbles gently, more in the distance. 0 is off.",
-        0, 100, 5, 0, false, 30);
+        ice_reflections_option,
+        "Ice Reflections",
+        "Ice mirrors what is around it: frozen water, ice floors and walls, and the blocks of ice round notes, from any camera height. Only what is on screen can be reflected. 0 is off.",
+        0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         water_waves_option,
         "Water Waves",
@@ -5454,42 +5531,84 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Shore Foam",
         "With Water on <recomp-color primary>Original</recomp-color>: a broken white line of foam drifts along the edges of the game's water, where it gets shallow, as in Modern water. Modern water always has it.",
         false);
-    // Tessellation (L, 2026-10-23): a switch over Tessellated Snow (with its settings under it) and Tessellated Sand.
-    graphics.add_bool_option(
-        tessellation_section_option,
-        "Tessellation",
-        "Turns the tessellated snow and sand on or off. Off also hides their settings below. Needs a graphics card with tessellation.",
-        true);
-    graphics.add_bool_option(
-        deep_snow_option,
-        "Tessellated Snow",
-        "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and the dents stay (or fill back in, with Snow fills back in). Untouched, it lies in soft drifts and wind-carved ridges, and grains of it glint in the sun as the camera moves. Drawn on the picture, so nothing in the game changes.",
-        false);
-    graphics.add_bool_option(
-        tessellated_sand_option,
-        "Tessellated Sand",
-        "Sandy ground takes footprints: Banjo, the NPCs and the enemies press shallow, detailed prints into it wherever they touch it, and the wind has left ripples over it, big and small, with grains glittering in the sun and a sheen off the ripples seen low across them. As Tessellated Snow, with its detail, fills back in and distance settings. Needs a graphics card with tessellation.",
-        false);
     graphics.add_number_option(
-        snow_height_option,
-        "Snow Height",
-        "How deep the deep snow is, in percent. 100 is about ankle deep on Banjo, 300 up to his knees. Deeper snow costs a little more.",
-        25, 300, 5, 0, false, 100);
+        underwater_tint_option,
+        "Underwater Tint",
+        "While under water, the 3D world turns light blue. The HUD isn't changed. 0 is off, 100 strongest.",
+        0, 100, 5, 0, false, 25);
     graphics.add_number_option(
-        snow_detail_option,
-        "Snow Detail",
-        "How fine the dents in the deep snow are, in percent. 100 is the finest; 50 is as coarse as it first was, and lower still is coarser. Lower is lighter on weaker graphics cards.",
-        25, 100, 5, 0, false, 100);
+        underwater_haze_option,
+        "Underwater Haze",
+        "While under water, things further away fade into a light blue haze. Works with Underwater tint at 0 too. 0 is off.",
+        0, 100, 5, 0, false, 15);
     graphics.add_number_option(
-        snow_refill_option,
-        "Snow Fills Back In",
-        "How many seconds prints in the deep snow stay before they fill back in (then sooner while it snows). 0 is off: they stay until you leave the area (going into a hut counts). On is a little lighter on the graphics card, as the snow is only cut finely where prints still show.",
-        0, 600, 5, 0, false, 0);
+        underwater_distortion_option,
+        "Underwater Distortion",
+        "While under water, the 3D world wobbles gently, more in the distance. 0 is off.",
+        0, 100, 5, 0, false, 30);
     graphics.add_number_option(
-        snow_lod_option,
-        "Snow LOD Distance",
-        "How far from the camera the deep snow and sand keep their full detail. Further away they are drawn smoother and smoother, which is cheaper, and their drifts and ripples fade out by twice this far. Higher shows the dents, drifts and ripples in full from further off.",
-        250, 10000, 250, 0, false, 2000);
+        fog_option,
+        "Fog",
+        "Distance fog over the 3D world, measured from Banjo, so moving the camera doesn't change it. It thickens past its start distance. The game's own fog stays as it is. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        fog_start_option,
+        "Fog Start Distance",
+        "How far from Banjo the fog begins, in the game's units (Banjo is about 150 tall).",
+        0, 6000, 250, 0, false, 1500);
+    graphics.add_enum_option(
+        fog_colour_option,
+        "Fog Colour",
+        "The fog's colour.",
+        {
+            {FogColour::Haze, "Haze", "Haze"},
+            {FogColour::Mist, "Mist", "Mist"},
+            {FogColour::Dusk, "Dusk", "Dusk"},
+            {FogColour::Gloom, "Gloom", "Gloom"},
+        },
+        FogColour::Haze);
+    graphics.add_number_option(
+        heat_haze_option,
+        "Heat Haze",
+        "Near lava (Hailfire Peaks' lava side, Chilli Billi, inside the volcano), the air shimmers above hot things such as lava and fire, more in the distance. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        bloom_option,
+        "Bloom",
+        "A glow around the brightest parts of the 3D world: a tight one close to them and a wide soft one around it, easing in rather than switching on. The HUD doesn't glow. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        eye_adaptation_option,
+        "Eye Adaptation",
+        "Like your eyes adjusting: coming out into daylight glares for a moment, going into a cave is dark for a few seconds and then opens up. Once settled, dark places stay a little brighter and very bright ones a little darker. Fades between areas don't set it off. The HUD isn't changed. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        gameplay_dof_option,
+        "Depth Of Field",
+        "While you play, Banjo stays in focus and what is well in front of or behind him blurs, more the further it is. In first person the middle of the picture is in focus. Gentler than the cutscene one at the same number. The HUD stays sharp. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        cutscene_dof_option,
+        "Cutscene Depth Of Field",
+        "In letterboxed cutscenes, blurs what is nearer or further than the middle of the picture, like a film camera. Text and the HUD stay sharp. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_enum_option(
+        texture_upscale_option,
+        "Texture Upscaling",
+        "Draws the game's textures at 2 or 4 times their size, smoothing the stair steps on their edges and lines while keeping them sharp. Texture packs take priority."
+        "<br /><br />"
+        "<recomp-color primary>2x</recomp-color> runs one pass of an xBR-style edge-directed filter (a compute shader on the GPU). <recomp-color primary>4x</recomp-color> runs the same filter twice, so it is sharper on lines but uses more video memory and loading time. Neither uses AI; both only smooth edges.",
+        {
+            {TextureUpscale::Off, "Off", "Off"},
+            {TextureUpscale::Double, "2x", "2x"},
+            {TextureUpscale::Quadruple, "4x", "4x"},
+        },
+        TextureUpscale::Off);
+    graphics.add_number_option(
+        sharpen_option,
+        "Sharpening",
+        "Sharpens the picture's fine detail, most where it is soft. 0 is off.",
+        0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         parallax_option,
         "Parallax",
@@ -5515,153 +5634,42 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Displaced Ground Distance",
         "How far from the camera the ground is displaced, in the game's units. The dips fade out over the last quarter. Further costs more: every displaced floor in reach is cut into fine triangles.",
         2000, 20000, 500, 0, false, 8000);
-    graphics.add_enum_option(
-        lighting_option,
-        "Lighting",
-        "How the outdoor levels are lit. <recomp-color primary>None</recomp-color> keeps the game's own shading. <recomp-color primary>Relighting</recomp-color> lights the level again by the sun and the sky without ray tracing, for graphics cards and phones without it (it needs Sun Shadows on). <recomp-color primary>Ray Tracing</recomp-color> turns on the ray traced effects: reflections, sun and lamp shadows, ambient occlusion, bounce and sky light, found by tracing rays through the level's triangles; it needs the Vulkan renderer and a graphics card with hardware ray tracing, and is heavy on the graphics card. Each choice shows its own settings under it.",
-        {
-            {Lighting::None, "None", "None"},
-            {Lighting::Relighting, "Relighting", "Relighting"},
-            {Lighting::RayTracing, "RayTracing", "Ray Tracing"},
-        },
-        Lighting::None);
-    // The old Ray Tracing switch: Lighting sets it, and it is kept out of the menu (below) but not the console, whose
-    // "set ray_tracing on" still works.
+    // Tessellation (L, 2026-10-23): a switch over Tessellated Snow (with its settings under it) and Tessellated Sand.
     graphics.add_bool_option(
-        ray_tracing_option,
-        "Ray Tracing",
-        "Ray traced effects: reflections on shiny surfaces and water, sun shadows and shadows from lamps and fires, ambient occlusion, and bounce and sky light, all found by tracing rays through the level's triangles instead of marching the picture. It is a switch of its own, apart from the shader effects: while it is on each of those shows at least as strongly as Ray tracing strength says, even with its own setting at 0 (a higher setting wins). Needs the Vulkan renderer and a graphics card with hardware ray tracing (ray queries): without them this shows a notice and the effects carry on as you have set them. Heavy on the graphics card.",
-        false);
-    graphics.add_number_option(
-        ray_tracing_strength_option,
-        "Ray Tracing Strength",
-        "How strongly the ray traced effects show while Ray tracing is on: the least each of them is drawn at (sun shadows at this, ambient occlusion and bounce light a little under it; the reflections have sliders of their own below). An effect's own slider still wins when it is higher. 60 is the default; 100 makes them plain.",
-        0, 100, 5, 0, false, 60);
-    graphics.add_number_option(
-        ray_tracing_reflections_option,
-        "Traced Reflections",
-        "How much shiny surfaces reflect while Ray tracing is on: metal, tiles and the other shiny textures, and whatever Parallax pick mode marks Metal, Tiles or Smooth. The Screen-space reflections slider still wins when it is higher. 0 turns the traced reflections off. 60 is the default.",
-        0, 100, 5, 0, false, 60);
-    graphics.add_number_option(
-        ray_tracing_water_reflections_option,
-        "Traced Water Reflections",
-        "How much water reflects while Ray tracing is on (traced, so what is off screen shows too). The Water reflections slider still wins when it is higher. 60 is the default.",
-        0, 100, 5, 0, false, 60);
-    graphics.add_number_option(
-        ray_tracing_metal_option,
-        "Metal Reflection",
-        "How mirror-like the surfaces Parallax calls Metal are, in percent of Traced reflections. 100 is the default.",
-        0, 100, 5, 0, false, 100);
-    graphics.add_number_option(
-        ray_tracing_tiles_option,
-        "Tiles Reflection",
-        "How much the surfaces Parallax calls Tiles reflect, in percent of Traced reflections. 60 is the default.",
-        0, 100, 5, 0, false, 60);
-    graphics.add_number_option(
-        ray_tracing_smooth_option,
-        "Smooth Surface Reflection",
-        "How much the surfaces Parallax calls Smooth reflect, in percent of Traced reflections. 35 is the default; stone, wood, dirt and the rest never reflect.",
-        0, 100, 5, 0, false, 35);
-    graphics.add_number_option(
-        ray_tracing_smoothing_option,
-        "Ray Tracing Noise Smoothing",
-        "How much the ray traced light and shadows are smoothed out where they get grainy: the soft edges of sun, lamp and model shadows everywhere (higher turns every pixel's rays more alike: calmer, the edge in fine steps), and most on Banjo's fur (whose surface turns every pixel, so each pixel caught different rays and the fur crawled as he moved). 0 is the raw rays. 50 is the default. Needs Ray tracing on.",
-        0, 100, 5, 0, false, 50);
-    graphics.add_number_option(
-        ray_tracing_brdf_option,
-        "Ray Traced BRDF",
-        "Every traced reflection becomes a physically based one: rays are scattered over a GGX lobe (Smith visibility, weighted by the BRDF over each ray's probability), as wide as this setting, so reflections go from a sharp mirror to a soft brushed blur on shiny surfaces and on materials from Ray Tracing Material Pick Mode (which set their own roughness). Turns the screen-space Stochastic reflections off while it is above 0. Grainier the higher it goes. Needs Ray tracing on. 0 is off: mirror reflections.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        ray_tracing_subsurface_option,
-        "Ray Traced Subsurface Scattering",
-        "Light that gets into a thin or soft surface and comes out the other side: leaves and grass glow with the sun or a lamp behind them (traced rays check the light reaches the back of the surface and how much solid there is to pass through), and shadowed parts keep a soft coloured glow instead of going flat dark. Textures given Subsurface in Ray Tracing Material Pick Mode use it at their own strength whatever this is set to. Needs Ray tracing on. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        ray_tracing_relighting_option,
-        "Traced Relighting",
-        "Experimental. Lights the level again with the traced light instead of only darkening the game's picture: the game's own painted shading is taken out of each surface (its texture is read where the camera's ray meets it) and the sun, the sky and the bounce light light it again, so sunlit ground is brighter, the side turned from the sun and what is in shadow darker, and traced shadows no longer land on top of painted ones. 0 keeps the game's shading (the default); 100 is all traced. Needs Ray tracing on.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_bool_option(
-        ray_tracing_denoise_option,
-        "Ray Traced Denoising",
-        "Experimental. Calms the grain of the traced light: the sun's and lamps' shadows, the bounce light and the occlusion are kept from frame to frame and each new frame's rays are blended in, following the world as the camera moves (newly seen ground, and whatever moves across it, start afresh). The shadows and lamps are then traced at half size (as Ray tracing resolution Half), a quarter of their rays, so it is lighter on the graphics card too; their edges are a little softer. Off by default. Needs Ray tracing on.",
-        false);
-    graphics.add_bool_option(
-        path_tracing_option,
-        "Path Tracing",
-        "The traced bounce light goes on bouncing: a ray that lands on a surface turns off it and carries on, picking up the colours along the way, so light reaches round corners and deeper into rooms and caves. Needs Ray tracing on and the bounce light showing (Ray tracing strength above 0 or Screen-space GI on). Heavy on the graphics card: each bounce traces three more rays a pixel.",
-        false);
-    graphics.add_number_option(
-        path_tracing_bounces_option,
-        "Path Tracing Bounces",
-        "How many more times light bounces with Path tracing on, after the first. More reaches further into shadowed places but costs more. 2 is the default.",
-        1, 4, 1, 0, false, 2);
-    graphics.add_number_option(
-        traced_beams_option,
-        "Traced Light Beams",
-        "Shafts of light through the air, found by tracing rays towards the light: in a room the light only gets in at the windows, so the beams take the windows' shapes and anything standing in them (Banjo too) cuts its shadow through them; outdoors it is a thin haze with shafts between trees and under arches. Where beams are drawn (Mumbo's Skulls, and the rooms Window Light Beams covers while it is on), those are kept instead. Needs Ray tracing on. 0 is off. Costs a dozen rays a pixel.",
-        0, 100, 5, 0, false, 60);
-    graphics.add_bool_option(
-        ray_tracing_player_shadows_option,
-        "Traced Shadows Of The Player",
-        "Whether Banjo and Kazooie (or whoever you are playing) cast traced shadows: from the sun, the lamps and fires, and straight down on the ground. Off, the player casts none of them, and light and shadows go on through as if they weren't there; everything else keeps its traced shadows. Use it with HD shadows for the game's own shadow under the player. Needs Ray tracing on.",
+        tessellation_section_option,
+        "Tessellation",
+        "Turns the tessellated snow and sand on or off. Off also hides their settings below. Needs a graphics card with tessellation.",
         true);
     graphics.add_bool_option(
-        ray_tracing_hit_colours_option,
-        "Ray Tracing Hit Colours",
-        "Experimental. A traced reflection or bounce that lands on something the picture can't see (off the screen, or hidden behind something) uses the colour that spot had when it was last on screen, remembered in the world as you look around, instead of smearing the nearest colour from the picture. Adds a small cost every frame. Needs Ray tracing on. Starts off: if you see flicker, wrong colours or a crash, leave it off and tell me.",
-        false);
-    graphics.add_enum_option(
-        ray_tracing_resolution_option,
-        "Ray Tracing Resolution",
-        "How many rays the traced shadows, lamp light and light beams use. <recomp-color primary>Half</recomp-color> traces them once for every 2x2 pixels and fills in each pixel from the ones round it on the same surface: about a quarter of the rays, for higher frame rates; shadow edges a little softer. <recomp-color primary>Medium</recomp-color> (the default) traces every pixel, with fewer rays far off (Ray detail distances). <recomp-color primary>High</recomp-color> traces every pixel with all its rays at any distance: the sun's four rays everywhere, four rays a lamp and the beams' eight steps, so less noise and finer shadow edges, at a lower frame rate. Needs Ray tracing on.",
-        {
-            {RayResolution::Half, "Half", "Half"},
-            {RayResolution::Medium, "Medium", "Medium"},
-            {RayResolution::High, "High", "High"},
-        },
-        RayResolution::Medium);
-    graphics.add_bool_option(
-        ray_tracing_parallax_option,
-        "Ray Tracing Uses Parallax Materials",
-        "Lets ray tracing read what Parallax knows of each texture: metal, glazed tiles and smooth surfaces reflect (the Metal, Tiles and Smooth sliders), and leaves and grass let light through (Ray traced subsurface). Off (the default), ray tracing ignores the Parallax list; Ray Tracing Material picks still apply. Needs Ray tracing on.",
+        deep_snow_option,
+        "Tessellated Snow",
+        "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and the dents stay (or fill back in, with Snow fills back in). Untouched, it lies in soft drifts and wind-carved ridges, and grains of it glint in the sun as the camera moves. Drawn on the picture, so nothing in the game changes.",
         false);
     graphics.add_number_option(
-        ray_detail_half_option,
-        "Ray Detail Distance (Half)",
-        "Past this far from the camera, the traced shadows and light beams use half their rays (the sun one ray instead of two to four, the lamps one ray each and at most three, the beams half their steps): far shadows are only a few pixels wide, so it hardly shows. 0 keeps all the rays at any distance. Needs Ray tracing on.",
-        0, 8000, 250, 0, false, 2000);
+        snow_height_option,
+        "Snow Height",
+        "How deep the deep snow is, in percent. 100 is about ankle deep on Banjo, 300 up to his knees. Deeper snow costs a little more.",
+        25, 300, 5, 0, false, 100);
     graphics.add_number_option(
-        ray_detail_quarter_option,
-        "Ray Detail Distance (Quarter)",
-        "Past this far, a quarter of the rays (one lamp, one ray). The traced shadows fade out from 4000 to 7000 anyway. 0 for never. Needs Ray tracing on.",
-        0, 8000, 250, 0, false, 4000);
+        snow_detail_option,
+        "Snow Detail",
+        "How fine the dents in the deep snow are, in percent. 100 is the finest; 50 is as coarse as it first was, and lower still is coarser. Lower is lighter on weaker graphics cards.",
+        25, 100, 5, 0, false, 100);
+    graphics.add_number_option(
+        snow_refill_option,
+        "Snow Fills Back In",
+        "How many seconds prints in the deep snow stay before they fill back in (then sooner while it snows). 0 is off: they stay until you leave the area (going into a hut counts). On is a little lighter on the graphics card, as the snow is only cut finely where prints still show.",
+        0, 600, 5, 0, false, 0);
+    graphics.add_number_option(
+        snow_lod_option,
+        "Snow LOD Distance",
+        "How far from the camera the deep snow and sand keep their full detail. Further away they are drawn smoother and smoother, which is cheaper, and their drifts and ripples fade out by twice this far. Higher shows the dents, drifts and ripples in full from further off.",
+        250, 10000, 250, 0, false, 2000);
     graphics.add_bool_option(
-        reflections_section_option,
-        "Reflections",
-        "Turns the screen-space, stochastic, water and ice reflections on or off. Off also hides their settings below.",
-        true);
-    graphics.add_number_option(
-        ssr_option,
-        "Screen-Space Reflections",
-        "Shiny surfaces (metal and tiles, and water and ice when their own reflections are off) reflect what is on screen, most at grazing angles. Only what is on screen can be reflected, so reflections fade out near the edges of the picture. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        ssr_stochastic_option,
-        "Stochastic Reflections",
-        "Makes Screen-space reflections glossy instead of mirror-sharp (a port of simeonradivoev's Compute Stochastic Reflections, MIT): each pixel sends a few rays spread over a lobe that widens with this setting, and blends what they find. The result is slightly grainy and blurrier the higher it goes. Needs Screen-space reflections above 0. Starts at 0, which keeps the mirror reflections.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        water_reflections_option,
-        "Water Reflections",
-        "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        ice_reflections_option,
-        "Ice Reflections",
-        "Ice mirrors what is around it: frozen water, ice floors and walls, and the blocks of ice round notes, from any camera height. Only what is on screen can be reflected. 0 is off.",
-        0, 100, 5, 0, false, 0);
+        tessellated_sand_option,
+        "Tessellated Sand",
+        "Sandy ground takes footprints: Banjo, the NPCs and the enemies press shallow, detailed prints into it wherever they touch it, and the wind has left ripples over it, big and small, with grains glittering in the sun and a sheen off the ripples seen low across them. As Tessellated Snow, with its detail, fills back in and distance settings. Needs a graphics card with tessellation.",
+        false);
     graphics.add_bool_option(
         character_section_option,
         "Character Shaders",
@@ -5782,82 +5790,70 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "NPC Feather Transparency",
         "How see-through the NPCs' feathers are, so more of their own colours show through them. 0 is solid.",
         0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        heat_haze_option,
-        "Heat Haze",
-        "Near lava (Hailfire Peaks' lava side, Chilli Billi, inside the volcano), the air shimmers above hot things such as lava and fire, more in the distance. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        sun_shadows_option,
-        "Sun Shadows",
-        "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. The whole level casts one, on screen or not. 0 is off.",
-        0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
-        sun_shadow_banjo_option,
-        "Sun Shadow On Banjo",
-        "Whether Banjo casts a sun shadow too. Off leaves his to HD shadows or the game's own. With Ray tracing on, Traced shadows of the player decides instead.",
+        toon_section_option,
+        "Toon Shading",
+        "Cel shading for characters and for the world: the two sliders below. Off turns it off; the sliders keep their values.",
         true);
     graphics.add_number_option(
-        sun_shadow_softness_option,
-        "Sun Shadow Softness",
-        "How smooth the sun shadows are. Higher blends the light across a character's body instead of shading it face by face, and gives shadow edges a softer fade. 0 is the sharpest.",
-        0, 100, 5, 0, false, 60);
-    graphics.add_number_option(
-        sun_shadow_distance_option,
-        "Sun Shadow Distance",
-        "How far from the camera sun shadows are sharp, in game units; past it the level's shadows carry on, softer. The whole level casts, and characters and objects within this distance, on screen or not, so shadows stay put as the camera turns. Past 6000 each shadow is a little blurrier, and higher costs more.",
-        1500, 20000, 500, 0, false, 3000);
-    graphics.add_number_option(
-        relighting_option,
-        "Relighting Strength",
-        "Experimental. Traced Relighting without ray tracing, for graphics cards and phones without it: the sun and the sky light the level again from the sun shadow map, so sunlit ground facing the sun is brighter and the side turned from it and what is in shadow darker. Without rays to read each texture, the game's painted shading is guessed from the picture around each spot, so it is close to Traced Relighting but not the same. Needs Sun Shadows on, and only works outdoors. Shown when Lighting is Relighting.",
-        0, 100, 5, 0, false, 100);
-    graphics.add_number_option(
-        light_shafts_option,
-        "Light Shafts",
-        "Sunlight streams through gaps between trees, cliffs and buildings where they stand against a bright sky. Indoors and under night skies there is none. 0 is off.",
+        toon_characters_option,
+        "Toon Shading: Characters",
+        "Cel shading for Banjo, Kazooie and the game's other characters and enemies (not rocks or other objects, which follow World): the lit picture is split into a few flat bands of light and shadow with soft steps between them, shadows cool and lit parts warm. Works well with the toon outlines and Rim light. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
-        bloom_option,
-        "Bloom",
-        "A glow around the brightest parts of the 3D world: a tight one close to them and a wide soft one around it, easing in rather than switching on. The HUD doesn't glow. 0 is off.",
+        toon_world_option,
+        "Toon Shading: World",
+        "The same cel shading for everything that isn't a character: the ground, walls, buildings, rocks, other objects and the sky. Set it apart from the characters' to have one without the other. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
-        eye_adaptation_option,
-        "Eye Adaptation",
-        "Like your eyes adjusting: coming out into daylight glares for a moment, going into a cave is dark for a few seconds and then opens up. Once settled, dark places stay a little brighter and very bright ones a little darker. Fades between areas don't set it off. The HUD isn't changed. 0 is off.",
+        outlines_option,
+        "Toon Outlines",
+        "Draws dark outlines around characters and objects, on the edge in front of whatever is behind them, and lighter ones along ridges and the top edges of cliffs. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
-        cutscene_dof_option,
-        "Cutscene Depth Of Field",
-        "In letterboxed cutscenes, blurs what is nearer or further than the middle of the picture, like a film camera. Text and the HUD stay sharp. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        gameplay_dof_option,
-        "Depth Of Field",
-        "While you play, Banjo stays in focus and what is well in front of or behind him blurs, more the further it is. In first person the middle of the picture is in focus. Gentler than the cutscene one at the same number. The HUD stays sharp. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        fog_option,
-        "Fog",
-        "Distance fog over the 3D world, measured from Banjo, so moving the camera doesn't change it. It thickens past its start distance. The game's own fog stays as it is. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        fog_start_option,
-        "Fog Start Distance",
-        "How far from Banjo the fog begins, in the game's units (Banjo is about 150 tall).",
-        0, 6000, 250, 0, false, 1500);
+        outline_thickness_option,
+        "Toon Outline Thickness",
+        "How thick the toon outlines are: 25 is a thin line, 100 a heavy one and 200 a very bold cartoon line. They keep the same thickness at any resolution.",
+        10, 200, 5, 0, false, 25);
+    graphics.add_bool_option(
+        three_point_option,
+        "Retro: N64 3-Point Filtering",
+        "The N64's own texture smoothing, as on the console. Off uses plain bilinear smoothing instead.",
+        true);
     graphics.add_enum_option(
-        fog_colour_option,
-        "Fog Colour",
-        "The fog's colour.",
+        dither16_option,
+        "Retro: N64 16-Bit Colour",
+        "Cuts the colours down to the N64's 16-bit colour, with its dither pattern at the game's original resolution. <recomp-color primary>Console</recomp-color> smooths the dither as the N64 does on its way to the TV, leaving its colour banding. <recomp-color primary>Raw dither</recomp-color> shows the dither pattern itself.",
         {
-            {FogColour::Haze, "Haze", "Haze"},
-            {FogColour::Mist, "Mist", "Mist"},
-            {FogColour::Dusk, "Dusk", "Dusk"},
-            {FogColour::Gloom, "Gloom", "Gloom"},
+            {Colour16::Off, "Off", "Off"},
+            {Colour16::Console, "Console", "Console"},
+            {Colour16::Raw, "Raw dither", "Raw dither"},
         },
-        FogColour::Haze);
+        Colour16::Off);
+    graphics.add_bool_option(
+        crt_option,
+        "Retro: CRT",
+        "Draws 240 scanlines and the stripes of a CRT TV's aperture grille over the picture.",
+        false);
+    graphics.add_enum_option(
+        colourblind_option,
+        "Colourblind Filter",
+        "Moves the colours you can't tell apart into ones you can. <recomp-color primary>Deuteranopia</recomp-color> and <recomp-color primary>Protanopia</recomp-color> are red-green, <recomp-color primary>Tritanopia</recomp-color> is blue-yellow.",
+        {
+            {Colourblind::Off, "Off", "Off"},
+            {Colourblind::Deuteranopia, "Deuteranopia", "Deuteranopia"},
+            {Colourblind::Protanopia, "Protanopia", "Protanopia"},
+            {Colourblind::Tritanopia, "Tritanopia", "Tritanopia"},
+        },
+        Colourblind::Off);
+    graphics.add_number_option(
+        colourblind_strength_option,
+        "Colourblind Filter Strength",
+        "How strongly the colourblind filter shifts the colours.",
+        0, 100, 10, 0, true, 100);
+    graphics.add_option_hidden_dependency(colourblind_strength_option, colourblind_option, Colourblind::Off);
+    // Brightness and the four Colour Grading settings (contrast, saturation, vignette, film grain) are hidden from this
+    // page: the Brightness & Colour Grading panel (src/ui/brightness_panel.cpp) edits them (L, 2026-10-24).
     graphics.add_number_option(
         contrast_option,
         "Contrast",

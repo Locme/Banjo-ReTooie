@@ -1159,11 +1159,6 @@ void tooie::init_config() {
         recompui::config::set_option_group(tooie::dive::option, "Dive");
     }
     graphics.add_bool_option(
-        tooie::high_detail_models_option,
-        "Always High-Detail Models",
-        "Models that switch to a simpler version far away always use the detailed one. Banjo always uses his close-up model (with his necklace).",
-        true);
-    graphics.add_bool_option(
         tooie::hd_shadows_option,
         "HD Shadows (Experimental)",
         "Shadows are shaped like the full model on screen, with its pose. Covers the player (instead of the game's simpler shadow model) and enemies and NPCs, which have none on N64.",
@@ -1259,6 +1254,27 @@ void tooie::init_config() {
         }
         recompui::config::set_option_group(pf::char_wet_option, "Character Surface");
     }
+    tooie::smaa::add_option(graphics);
+    tooie::fxaa::add_option(graphics);
+    tooie::api_restart::add_prompt(graphics);
+    tooie::fsr::add_option(graphics);
+    // Game View (L, 2026-11-12): what the camera shows, at the bottom of the Display tab after the anti-aliasing. Added
+    // after them, as the options set to show last keep the order they were added in.
+    graphics.add_bool_option(
+        tooie::high_detail_models_option,
+        "Always High-Detail Models",
+        "Models that switch to a simpler version far away always use the detailed one. Banjo always uses his close-up model (with his necklace).",
+        true);
+    graphics.add_number_option(
+        tooie::fov_offset_option,
+        "Field Of View",
+        "Degrees added to the normal gameplay camera's field of view. Higher shows more around Banjo.",
+        -10, 30, 1, 0, false, 0);
+    graphics.add_number_option(
+        tooie::cutscene_fov_offset_option,
+        "Cutscene Field Of View",
+        "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
+        -10, 20, 1, 0, false, 0);
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
@@ -1270,20 +1286,6 @@ void tooie::init_config() {
                 recompui::config::get_graphics_config().save_config();
             }
         });
-    graphics.add_number_option(
-        tooie::fov_offset_option,
-        "Field Of View",
-        "Degrees added to the normal gameplay camera's field of view. Higher shows more around Banjo.",
-        -10, 30, 1, 0, false, 0);
-    graphics.add_number_option(
-        tooie::cutscene_fov_offset_option,
-        "Cutscene Field Of View",
-        "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
-        -10, 20, 1, 0, false, 0);
-    tooie::smaa::add_option(graphics);
-    tooie::fxaa::add_option(graphics);
-    tooie::api_restart::add_prompt(graphics);
-    tooie::fsr::add_option(graphics);
     tooie::upscaler::add_option(graphics);
     // The Water entry (Original, Modern, Stylised) is WIP (L, 2026-10-23): it sits in the WIP tab.
     recompui::config::set_option_page(tooie::picture_filters::water_option, tooie::work_in_progress_tab_id);
@@ -1303,47 +1305,27 @@ void tooie::init_config() {
     // Section headings in the Graphics tab. The options of a group sit next to each other above, and a
     // heading hides with its option.
     recompui::config::set_option_group(recompui::config::graphics::options::res_option, "Display");
-    recompui::config::set_option_group(tooie::picture_filters::preset_option, "Picture And Effects");
-    // HD Shadows sits in the Sun shadows part of the Shaders group, with its own toggle (L, 2026-10-16).
-    recompui::config::set_option_display_before(tooie::hd_shadows_option, tooie::picture_filters::sun_shadows_option);
-    recompui::config::set_option_display_before(tooie::hd_shadows::enemy_direction_option, tooie::picture_filters::sun_shadows_option);
-    recompui::config::set_option_display_before(tooie::hd_shadows::banjo_direction_option, tooie::picture_filters::sun_shadows_option);
-    // Character Shaders (L, 2026-10-16): Banjo's fur and Kazooie's feathers, after the Shaders group.
-    for (const std::string* option : { &tooie::picture_filters::character_section_option, &tooie::picture_filters::banjo_fur_option,
-                                       &tooie::picture_filters::banjo_fur_length_option, &tooie::picture_filters::banjo_fur_density_option,
-                                       &tooie::picture_filters::banjo_fur_noisiness_option, &tooie::picture_filters::kazooie_feathers_option,
-                                       &tooie::picture_filters::kazooie_feather_size_option, &tooie::picture_filters::kazooie_feather_length_option,
-                                       &tooie::picture_filters::kazooie_feather_density_option, &tooie::picture_filters::kazooie_feather_noisiness_option,
-                                       &tooie::picture_filters::kazooie_feather_transparency_option, &tooie::picture_filters::npc_fur_option,
-                                       &tooie::picture_filters::npc_fur_length_option, &tooie::picture_filters::npc_fur_density_option,
-                                       &tooie::picture_filters::npc_fur_noisiness_option, &tooie::picture_filters::npc_feathers_option,
-                                       &tooie::picture_filters::npc_feather_size_option, &tooie::picture_filters::npc_feather_length_option,
-                                       &tooie::picture_filters::npc_feather_density_option, &tooie::picture_filters::npc_feather_noisiness_option,
-                                       &tooie::picture_filters::npc_feather_transparency_option }) {
-        recompui::config::set_option_display_before(*option, tooie::picture_filters::three_point_option);
+    // The Graphics tab (L, 2026-11-12): its options are added in the order shown (picture_filters::add_options), under
+    // these headings; the options added here are moved into place.
+    {
+        namespace pf = tooie::picture_filters;
+        recompui::config::set_option_group(pf::preset_option, "Preset");
+        recompui::config::set_option_group(pf::lighting_option, "Lighting");
+        recompui::config::set_option_group(pf::reflections_section_option, "Reflections And Water");
+        recompui::config::set_option_group(pf::fog_option, "Atmosphere And Camera Effects");
+        recompui::config::set_option_group(pf::texture_upscale_option, "Surfaces And Textures");
+        recompui::config::set_option_group(pf::character_section_option, "Characters");
+        recompui::config::set_option_group(pf::toon_section_option, "Toon Style");
+        recompui::config::set_option_group(pf::three_point_option, "Retro And Demake");
+        recompui::config::set_option_group(pf::colourblind_option, "Accessibility");
+        // HD Shadows goes to the WIP tab, at its bottom under Redundant (L, 2026-11-12): Sun Shadows, Relighting and Ray
+        // Tracing already give characters a shadow from the sun, so with them it adds a second one.
+        for (const std::string* option : { &tooie::hd_shadows_option, &tooie::hd_shadows::enemy_direction_option, &tooie::hd_shadows::banjo_direction_option }) {
+            recompui::config::set_option_page(*option, tooie::work_in_progress_tab_id);
+            recompui::config::set_option_display_last(*option);
+        }
+        recompui::config::set_option_group(tooie::hd_shadows_option, "Redundant");
     }
-    recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");
-    // Tessellation (L, 2026-10-23): its switch sits above Tessellated Snow; Tessellated Sand comes after Tessellated
-    // Snow's settings, before Parallax.
-    recompui::config::set_option_display_before(tooie::picture_filters::tessellation_section_option, tooie::picture_filters::deep_snow_option);
-    recompui::config::set_option_display_before(tooie::picture_filters::tessellated_sand_option, tooie::picture_filters::parallax_option);
-    // Lighting has its own section after the colour grading, always shown (L, 2026-10-21, as Ray Tracing): the choice,
-    // then Relighting's strength and Ray Tracing's settings, each shown only when picked (L, 2026-11-12).
-    for (const std::string* option : { &tooie::picture_filters::lighting_option, &tooie::picture_filters::relighting_option,
-                                       &tooie::picture_filters::ray_tracing_option, &tooie::picture_filters::ray_tracing_strength_option,
-                                       &tooie::picture_filters::ray_tracing_reflections_option, &tooie::picture_filters::ray_tracing_water_reflections_option,
-                                       &tooie::picture_filters::ray_tracing_metal_option, &tooie::picture_filters::ray_tracing_tiles_option,
-                                       &tooie::picture_filters::ray_tracing_smooth_option, &tooie::picture_filters::ray_tracing_smoothing_option,
-                                       &tooie::picture_filters::ray_tracing_brdf_option, &tooie::picture_filters::ray_tracing_subsurface_option,
-                                       &tooie::picture_filters::ray_tracing_relighting_option, &tooie::picture_filters::ray_tracing_denoise_option,
-                                       &tooie::picture_filters::path_tracing_option, &tooie::picture_filters::path_tracing_bounces_option,
-                                       &tooie::picture_filters::traced_beams_option, &tooie::picture_filters::ray_tracing_player_shadows_option,
-                                       &tooie::picture_filters::ray_tracing_hit_colours_option, &tooie::picture_filters::ray_tracing_resolution_option,
-                                       &tooie::picture_filters::ray_tracing_parallax_option,
-                                       &tooie::picture_filters::ray_detail_half_option, &tooie::picture_filters::ray_detail_quarter_option }) {
-        recompui::config::set_option_display_before(*option, tooie::high_detail_models_option);
-    }
-    recompui::config::set_option_group(tooie::picture_filters::lighting_option, "Lighting");
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game View");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
     // Anti-Aliasing and Scaling sit at the bottom of the Display tab (L, 2026-10-24), in this order.
@@ -1351,8 +1333,12 @@ void tooie::init_config() {
     recompui::config::set_option_display_last(tooie::smaa::option);
     recompui::config::set_option_display_last(tooie::fxaa::option);
     recompui::config::set_option_display_last(tooie::fsr::option);
-    // Game View (its heading and Always High-Detail Models) moves to the Display tab, at the very bottom (L, 2026-10-24).
-    recompui::config::set_option_display_last(tooie::high_detail_models_option);
+    // Game View moves to the Display tab, at the very bottom (L, 2026-10-24): Always High-Detail Models, and the fields of
+    // view and Extended Draw Distance with it (L, 2026-11-12).
+    for (const std::string* option : { &tooie::high_detail_models_option, &tooie::fov_offset_option, &tooie::cutscene_fov_offset_option,
+                                       &tooie::draw_distance_option }) {
+        recompui::config::set_option_display_last(*option);
+    }
     recompui::config::set_option_group(recompui::config::graphics::options::msaa_option, "Anti-Aliasing And Scaling");
     recompui::config::set_option_group(tooie::game_frame_rate::option, "Frame Rate And Overlay");
     recompui::config::set_option_group(tooie::effect_views::option, "Debug");
@@ -1362,8 +1348,8 @@ void tooie::init_config() {
         "Simple Circle Shadow",
         "Banjo (and whoever you play as) gets the game's own round blob shadow under his feet, the one most other characters have, instead of the shadow shaped like him. Replaces HD Shadows for the player.",
         false);
-    recompui::config::set_option_display_last(tooie::circle_shadow::option);
-    recompui::config::set_option_group(tooie::circle_shadow::option, "Demake");
+    // Under Retro And Demake, after the retro options (L, 2026-11-12).
+    recompui::config::set_option_display_before(tooie::circle_shadow::option, tooie::picture_filters::colourblind_option);
 
     // Display tab under Graphics (L, 2026-10-23; was Performance, L 2026-10-16): the Display section, Anti-Aliasing
     // and Scaling, and the frame rate and latency options. They stay in the graphics config (graphics.json), so
@@ -1376,7 +1362,8 @@ void tooie::init_config() {
             &recompui::config::graphics::options::ar_option, &recompui::config::graphics::options::wm_option,
             &recompui::config::graphics::options::hr_option, &recompui::config::graphics::options::api_option,
             &recompui::config::graphics::options::msaa_option, &tooie::smaa::option, &tooie::fxaa::option,
-            &tooie::fsr::option, &tooie::high_detail_models_option }) {
+            &tooie::fsr::option, &tooie::high_detail_models_option, &tooie::fov_offset_option, &tooie::cutscene_fov_offset_option,
+            &tooie::draw_distance_option }) {
         recompui::config::set_option_page(*id, tooie::performance_tab_id);
     }
     // Brightness & Colour Grading (L, 2026-10-24): the button for its panel is on top of the Display tab.
