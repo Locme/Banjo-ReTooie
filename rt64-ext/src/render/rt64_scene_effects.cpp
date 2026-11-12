@@ -683,7 +683,9 @@ namespace RT64 {
     static float userSunShadows = 0.0f;
 
     // The settings the traced effects take over: reflections and sun shadows show at 60 at least, ambient occlusion at 50
-    // bounce light at 50 and water reflections at 60, while ray tracing is active (the settings themselves are kept apart, and come back when it is off).
+    // and water reflections at 60, while ray tracing is active (the settings themselves are kept apart, and come back when
+    // it is off). SSGI is the slider's own (L, 2026-11-12: "sliders win"): at Ray tracing strength 100 it was always at 83,
+    // whatever SSGI said.
     static void RefreshReflections() {
         float strength = userReflections;
         effectsSettings.sunShadows = userSunShadows;
@@ -692,12 +694,11 @@ namespace RT64 {
         effectsSettings.waterReflections = userWaterReflections;
         if (rayTracingWanted.load() && (rayTracingSupport.load() == 2)) {
             // The least each shows at: the strength (0.6 by default) for reflections, sun shadows and water, a little under it
-            // for ambient occlusion and bounce light (the game's own lighting already has some of both).
+            // for ambient occlusion (the game's own lighting already has some).
             const float least = rayTracingStrength;
             strength = std::max(strength, rayTracingReflections);
             effectsSettings.sunShadows = std::max(userSunShadows, least);
             effectsSettings.ambientOcclusion = std::max(userAmbientOcclusion, least * 0.83f);
-            effectsSettings.screenSpaceGI = std::max(userSsgi, least * 0.83f);
             effectsSettings.waterReflections = std::max(userWaterReflections, rayTracingWaterReflections);
         }
         effectsSettings.screenSpaceReflections = strength;

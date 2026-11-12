@@ -5341,7 +5341,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         ray_tracing_strength_option,
         "Ray Tracing Strength",
-        "How strongly the ray traced effects show while Ray tracing is on: the least each of them is drawn at (sun shadows at this, ambient occlusion and bounce light a little under it; the reflections have sliders of their own below). An effect's own slider still wins when it is higher. 60 is the default; 100 makes them plain.",
+        "How strongly the ray traced effects show while Ray tracing is on: the least each of them is drawn at (sun shadows at this, ambient occlusion a little under it; the reflections have sliders of their own below). An effect's own slider still wins when it is higher. SSGI isn't set by it: its own slider decides how strong the traced bounce light is. 60 is the default; 100 makes them plain.",
         0, 100, 5, 0, false, 60);
     graphics.add_enum_option(
         ray_tracing_resolution_option,
