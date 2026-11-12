@@ -4330,7 +4330,7 @@ index 9fae0d4..23bb897 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +3152,1388 @@ namespace RT64 {
+@@ -1747,24 +3152,1396 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4478,6 +4478,14 @@ index 9fae0d4..23bb897 100644
 +                            const uint64_t tileHash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
 +                            rayOff = SceneRayOffTexture(tileHash) || SceneFireTexture(tileHash);
 +                        }
++                        // A lamp, a Light Source or a Slight Glow pick gives off light into the traced light where its rays
++                        // meet it (L, 2026-11-12: path tracing had no light from lamps or lit windows).
++                        bool emissive = false;
++                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && !emissive; t++) {
++                            const uint64_t tileHash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
++                            emissive = SceneLampTexture(tileHash) || SceneGlowTexture(tileHash) || SceneShineModelTexture(tileHash) || (SceneLightSourceReach(tileHash) > 0.0f);
++                        }
++                        materialFlags |= emissive ? SceneRayDrawEmissive : 0u;
 +                    }
 +                    if (!excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
@@ -5720,7 +5728,7 @@ index 9fae0d4..23bb897 100644
          };
  
  #   if RT_ENABLED
-@@ -1816,8 +4585,12 @@ namespace RT64 {
+@@ -1816,8 +4593,12 @@ namespace RT64 {
          }
  #   endif
  

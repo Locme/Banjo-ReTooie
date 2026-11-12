@@ -2478,7 +2478,10 @@ float3 TracedGI(float3 center, float3 normal, uint cell, out float2 distances) {
             const RayPbr hitMaterial = RayGeometryPbr(hitGeometry);
             hitColour = hitColour * DiffuseAlbedo(hitMaterial) + hitMaterial.albedo * (hitMaterial.emissive * 0.35f);
         }
-        light += hitColour * trust * far;
+        // A lamp or a lit window gives off light: what the ray meets there counts several times over, so the light falls
+        // round it (with path tracing on, on into what the path reaches from there too).
+        const float emits = RayGeometryEmission(hitGeometry);
+        light += hitColour * (trust * far * (1.0f + emits));
         // The path's further hops. Each spot the path lands on also brings the sun's and the lamps' traced light
         // (PathDirectLight) on its own colour, so path tracing carries real light round corners, not only the colours
         // the picture shows.
@@ -2509,7 +2512,7 @@ float3 TracedGI(float3 center, float3 normal, uint cell, out float2 distances) {
             }
             float nextTrust;
             const float3 nextColour = HitColour(nextHit, nextTrust);
-            light += throughput * nextColour * nextTrust;
+            light += throughput * nextColour * (nextTrust * (1.0f + RayGeometryEmission(atGeometry)));
             throughput *= nextColour * 0.8f;
             if (max(throughput.r, max(throughput.g, throughput.b)) < 0.02f) {
                 break;

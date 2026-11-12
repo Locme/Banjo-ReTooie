@@ -308,6 +308,9 @@ namespace RT64 {
     constexpr uint32_t SceneRayDrawTextured = 2;
     // A model (drawn with a transform of its own, not the level's geometry): it casts a soft shadow straight down.
     constexpr uint32_t SceneRayDrawModel = 4;
+    // Banjo-Tooie: a draw that gives off light (a lamp, a Light Source or a Slight Glow pick): the traced light takes what
+    // its rays meet there as light given off, not only the colour shown (an emissive ray tracing material does too).
+    constexpr uint32_t SceneRayDrawEmissive = 8;
     // Banjo-Tooie: bits 8 to 15 of a ray draw's flags carry its material (SceneMaterialTexture), which the traced
     // effects read where they meet it (metal and tiles reflect, L 2026-10-21).
     constexpr uint32_t SceneRayDrawMaterialShift = 8;
