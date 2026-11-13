@@ -33,9 +33,18 @@ namespace RT64 {
     // present thread. Only one request is kept; a newer one replaces it.
     typedef std::function<void(uint32_t width, uint32_t height, std::vector<uint8_t> &&rgba)> ScreenshotCallback;
     void RequestScreenshot(ScreenshotCallback callback);
+    // The same for a part of the game image only: x0 to x1 and y0 to y1 as parts of its width and height (0 to 1).
+    // Only that part is copied back from the GPU and converted, so it is far quicker than the whole image when the
+    // part is small (photo mode's pose cards take one a frame).
+    void RequestScreenshotRegion(float x0, float y0, float x1, float y1, ScreenshotCallback callback);
     // The same for the whole window as it is presented: the picture with the menus, the console and notices drawn over
     // it, at the window's size (the console's screenshot ui).
     void RequestWindowScreenshot(ScreenshotCallback callback);
+    // A picture the game draws off screen (photo mode's pose cards, src/gameplay/pose_puppets.cpp): while set, the
+    // first time each game frame draws a colour image at this RDRAM address, its render target (the size RT64 drew it
+    // at, not the N64 size) is copied back and handed to the callback as packed 8-bit RGBA rows with their alpha, on a
+    // thread of its own. nativeWidth and nativeHeight are the colour image's N64 size. Address 0 stops it.
+    void SetTargetCapture(uint32_t address, uint32_t nativeWidth, uint32_t nativeHeight, ScreenshotCallback callback);
 
     // Present counts and time since the last call (then reset): presents shown and skipped, time asleep to hold the
     // target rate, in vkQueuePresent, and waiting for the renderer to finish a frame.
@@ -107,8 +116,22 @@ namespace RT64 {
     void NoteInputRead(int64_t steadyNs);
     int64_t TakeInputRead();
 
+    struct RenderWorker;
+    struct RenderTarget;
+    struct ShaderLibrary;
+
     // State shared with rt64_present_queue.cpp, defined in rt64_present_queue_ext.cpp.
     namespace presentext {
+        // SetTargetCapture's side in the workload queue (rt64_workload_queue.cpp, lib-patches/rt64.patch), all on its
+        // thread: a new game frame is about to be drawn (it may be drawn several times, for frame interpolation; only
+        // the first draw is taken); a framebuffer pair was just drawn into colorTarget for the colour image at
+        // address (its target in the shader read layout, contentWidth x contentHeight of it drawn), so the copy
+        // is recorded when it is the one asked for; the command list has run, so a recorded copy can be read.
+        void targetCaptureBeginFrame();
+        void targetCaptureRecord(RenderWorker *worker, RenderTarget *colorTarget, uint32_t address, uint32_t contentWidth,
+            uint32_t contentHeight, const ShaderLibrary *shaderLibrary);
+        void targetCaptureFinish();
+
         extern std::mutex backlogMutex;
         extern uint64_t presentsQueued;
         // Repainting an open menu while the game sends no frames (SetIdleRepaint).
@@ -131,6 +154,9 @@ namespace RT64 {
 
         extern std::mutex screenshotMutex;
         extern ScreenshotCallback screenshotCallback;
+        // The part of the image the pending screenshot wants (x0, y0, x1, y1), the whole of it unless
+        // RequestScreenshotRegion asked for less. Under screenshotMutex.
+        extern float screenshotRegion[4];
         struct ScreenshotReadback {
             std::unique_ptr<RenderBuffer> buffer;
             ScreenshotCallback callback;

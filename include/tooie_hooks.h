@@ -213,6 +213,7 @@ void tooie_shooter_tilt_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_shooter_instant_view(uint8_t* rdram, recomp_context* ctx);
 // Whether photo mode has the players hidden (src/gameplay/photo_mode.cpp).
 int tooie_players_hidden(void);
+void tooie_players_draw(uint8_t* rdram, recomp_context* ctx);
 // A player's draw alpha, faded while the free camera is pulled in close (src/gameplay/free_camera.cpp).
 int tooie_free_camera_player_alpha(int alpha);
 // Whether photo mode has everything else (enemies, NPCs, items) hidden.

@@ -1536,12 +1536,13 @@ func = "func_800A73F4"
 before_vram = 0x800A7404
 text = "tooie_scene_begin(rdram, ctx);"
 
+# Pose puppets (src/gameplay/pose_puppets.cpp) draw their extra copies of Banjo first, in the 3D scene.
 # Photo mode's Hide Banjo (src/gameplay/photo_mode.cpp): func_800F5008 draws the players, listing the
 # faded ones (count byte at 0x801354D8) for func_800F50D0 to draw after the see-through scenery.
 [[patches.hook]]
 func = "func_800F5008"
 before_vram = 0x800F5008
-text = "if (tooie_players_hidden()) { MEM_B(0x48, (gpr)(int32_t)0x80135490) = 0; return; }"
+text = "tooie_players_draw(rdram, ctx); if (tooie_players_hidden()) { MEM_B(0x48, (gpr)(int32_t)0x80135490) = 0; return; }"
 
 [[patches.hook]]
 func = "func_800F50D0"

@@ -46,6 +46,7 @@
 #include "tooie_achievements.h"
 #include "tooie_gfx_budget.h"
 #include "tooie_photo_mode.h"
+#include "tooie_pose_puppets.h"
 #include "tooie_texture_sweep.h"
 #include "tooie_vram_log.h"
 #include "tooie_level_box.h"
@@ -2459,7 +2460,29 @@ void cmd_anim(Ctx& c) {
     const uint32_t state = tooie::rdram::valid_ptr(block) ? read_ram(c.rdram, block + 4, 4) : 0;
     const uint32_t forms = read_ram(c.rdram, player + 0xA0, 4);
     const uint32_t form = tooie::rdram::valid_ptr(forms) ? tooie::rdram::read_byte(c.rdram, forms + 0x29) : 0;
-    print(format("animation 0x%X, duration %.3f s, form 0x%X, player state %u", index, tooie::rdram::read_float(c.rdram, ctrl + 0xC), form, state));
+    // The model the player's draw uses now: its id in the player's model state (+0x50) at +0xC.
+    const uint32_t model_state = read_ram(c.rdram, player + 0x50, 4);
+    const uint32_t model = tooie::rdram::valid_ptr(model_state) ? read_ram(c.rdram, model_state + 0xC, 2) : 0;
+    print(format("animation 0x%X, duration %.3f s, form 0x%X, model 0x%X, player state %u", index, tooie::rdram::read_float(c.rdram, ctrl + 0xC), form, model, state));
+}
+
+// puppet <hex anim> [t] [dx dz] | puppet list | puppet clear: extra copies of Banjo's model, each with an animation
+// controller of its own held at t (0 to 1), drawn dx, dz from him (src/gameplay/pose_puppets.cpp; research for pose cards).
+void cmd_puppet(Ctx& c) {
+    if (c.ctx == nullptr) { error("no game update is running"); return; }
+    const std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "list";
+    if (what == "list") { print(tooie::pose_puppets::list()); return; }
+    if (what == "clear") { tooie::pose_puppets::clear(c.rdram, c.ctx); print("puppets cleared"); return; }
+    const char* usage = "puppet <hex animation id> [t 0 to 1] [dx dz] | puppet list | puppet clear";
+    char* end = nullptr;
+    const unsigned long anim = std::strtoul(c.w[1].c_str(), &end, 16);
+    if (end == nullptr || *end != ' ' || anim == 0 || anim > 0xFFFF) { error(usage); return; }
+    double t = 0.5, dx = 120.0, dz = 0.0;
+    if (c.w.size() >= 3 && !parse_double(c.w[2], &t)) { error(usage); return; }
+    if (c.w.size() >= 5 && (!parse_double(c.w[3], &dx) || !parse_double(c.w[4], &dz))) { error(usage); return; }
+    const std::string err = tooie::pose_puppets::add(c.rdram, c.ctx, (uint32_t)anim, (float)t, (float)dx, (float)dz);
+    if (!err.empty()) { error(err); return; }
+    print(format("puppet added: animation 0x%lX at %.3f, %.0f %.0f from Banjo", anim, t, dx, dz));
 }
 
 // objects [radius]: the live objects within radius of Banjo (default 1500), nearest first: the object's address, its
@@ -3417,9 +3440,63 @@ void cmd_sweep(Ctx& c) {
     print(tooie::texture_sweep::sweeping() ? "sweeping" : "not sweeping (sweep start | fast | more | stop)");
 }
 
-void cmd_photo(Ctx&) {
-    tooie::photo_mode::request_toggle();
-    print(std::string("photo mode ") + (tooie::photo_mode::active() ? "off" : "on") + " (on the next frame)");
+// photo | photo pose list|<n>|<name> | photo cards [open|close] | photo develop [hex ids]
+void cmd_photo(Ctx& c) {
+    const std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
+    if (what.empty()) {
+        tooie::photo_mode::request_toggle();
+        print(std::string("photo mode ") + (tooie::photo_mode::active() ? "off" : "on") + " (on the next frame)");
+        return;
+    }
+    if (what == "pose") {
+        const std::string arg = squash(join(c.w, 2));
+        if (arg.empty() || arg == "list") { print(tooie::photo_mode::pose_list()); return; }
+        int index = -1;
+        if (!parse_int(c.w[2], &index)) {
+            for (int i = 0; i < tooie::photo_mode::pose_count(); i++) {
+                if (squash(tooie::photo_mode::pose_name(i)) == arg) { index = i; break; }
+            }
+        }
+        if (index < 0 || index >= tooie::photo_mode::pose_count()) { error("photo pose list | photo pose <n | name>"); return; }
+        if (!tooie::photo_mode::request_pose(index)) { error("photo mode is off (photo turns it on)"); return; }
+        print("pose " + std::to_string(index) + ": " + tooie::photo_mode::pose_name(index) + " (on the next frame)");
+        return;
+    }
+    if (what == "character" || what == "char") {
+        const std::string arg = squash(join(c.w, 2));
+        if (arg.empty() || arg == "list") { print(tooie::photo_mode::character_list()); return; }
+        int index = -1;
+        if (!parse_int(c.w[2], &index)) {
+            for (int i = 0; i < tooie::photo_mode::character_count(); i++) {
+                if (squash(tooie::photo_mode::character_name(i)) == arg) { index = i; break; }
+            }
+        }
+        if (index < 0 || index >= tooie::photo_mode::character_count()) { error("photo character list | photo character <n | name>"); return; }
+        if (!tooie::photo_mode::request_character(index)) { error("photo mode is off (photo turns it on)"); return; }
+        print("character " + std::to_string(index) + ": " + tooie::photo_mode::character_name(index) + " (on the next frame)");
+        return;
+    }
+    if (what == "cards" || what == "grid") {
+        const bool open = c.w.size() < 3 || lower(c.w[2]) != "close";
+        if (!tooie::photo_mode::request_pose_grid(open)) { error("photo mode is off (photo turns it on)"); return; }
+        print(std::string("pose grid ") + (open ? "open" : "shut") + " (on the next frame)");
+        return;
+    }
+    if (what == "develop") {
+        std::vector<uint32_t> anims;
+        for (size_t i = 2; i < c.w.size(); i++) {
+            // Single ids or ranges, in hex: 3 1B 40-48.
+            unsigned first = 0, last = 0;
+            const int got = std::sscanf(c.w[i].c_str(), "%x-%x", &first, &last);
+            if (got < 1 || first == 0 || first > 0xFFFF) { error("photo develop [hex animation ids or ranges, e.g. 3 40-48]"); return; }
+            if (got < 2) last = first;
+            for (unsigned id = first; id <= last && id <= 0xFFFF; id++) anims.push_back(id);
+        }
+        if (!tooie::photo_mode::request_develop(anims)) { error("photo mode is off (photo turns it on)"); return; }
+        print(anims.empty() ? std::string("taking every pose card again") : format("taking %d pose cards", (int)anims.size()));
+        return;
+    }
+    error("photo | photo character list|<n>|<name> | photo pose list|<n>|<name> | photo cards [open|close] | photo develop [hex ids]");
 }
 
 void cmd_ach(Ctx& c) {
@@ -4392,6 +4469,7 @@ const std::vector<Command>& commands() {
         { "kill", {}, true, "kill [radius] [model hex]", "remove the nearest object (or the nearest with that model) as a beaten enemy is removed", cmd_kill },
         { "playerfade", {}, false, "playerfade <0 to 1> | playerfade off", "hold Banjo at a fade, as the free camera fades him when pulled in close (0 gone, 1 whole)", cmd_playerfade },
         { "anim", {}, true, "anim", "the animation Banjo plays now, with his form and state", cmd_anim },
+        { "puppet", {}, true, "puppet <hex anim> [t] [dx dz] | puppet list | puppet clear", "draw an extra copy of Banjo with its own animation held at t (0 to 1), dx, dz from him (default 0.5, 120 0); research for pose cards", cmd_puppet },
         { "objects", {}, true, "objects [radius]", "the live objects near Banjo, nearest first (address, marker, model, actor entry, position)", cmd_objects },
         { "face", {}, true, "face <x> <z>", "turn Banjo to face a point", cmd_face },
         { "levelbox", {}, true, "levelbox [save]", "measure the current level with the game's collision and print its extent (look overview frames on it); save writes its height grid as logs/levelbox_<map>.pgm", cmd_levelbox },
@@ -4417,7 +4495,7 @@ const std::vector<Command>& commands() {
         { "save", {}, false, "save backup | save list", "copy the save file into save_backups", cmd_save },
         { "profile", {}, false, "profile save|load <name> | profile list", "keep every setting's value under a name and set them again", cmd_profile },
         { "sweep", {}, true, "sweep [start|fast|more|stop]", "the texture sweep (Texture dump > Sweep all maps); fast and more are the quick passes", cmd_sweep },
-        { "photo", {}, true, "photo", "photo mode on or off, as its key", cmd_photo },
+        { "photo", {}, true, "photo | photo character list|<n>|<name> | photo pose list|<n>|<name> | photo cards [open|close] | photo develop [hex ids]", "photo mode on or off, as its key; who is photographed; their pose; the pose grid; take pose cards (all, or any animation ids)", cmd_photo },
         { "ach", { "achievements" }, false, "ach [filter]", "the achievements and which are unlocked", cmd_ach },
         { "item", { "give", "items" }, true, "item [list] | item <name|n> [value|+n|-n]", "read or set an item counter (eggs, feathers, Glowbos...) through the game's own functions", cmd_item },
         { "sfx", {}, true, "sfx <hex id> [volume]", "play a sound effect on Banjo (the game's func_8009DE38)", cmd_sfx },

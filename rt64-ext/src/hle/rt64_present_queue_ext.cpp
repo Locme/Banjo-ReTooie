@@ -12,8 +12,13 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <thread>
 
 #include "rt64_vi.h"
+#include "render/rt64_render_target.h"
+#include "render/rt64_render_worker.h"
 
 namespace RT64 {
     namespace presentext {
@@ -65,6 +70,7 @@ namespace RT64 {
     namespace presentext {
         std::mutex screenshotMutex;
         ScreenshotCallback screenshotCallback;
+        float screenshotRegion[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
 
         bool screenshotFormatSupported(RenderFormat format) {
             return (format == RenderFormat::R8G8B8A8_UNORM) || (format == RenderFormat::B8G8R8A8_UNORM) || (format == RenderFormat::R16G16B16A16_UNORM);
@@ -220,6 +226,19 @@ namespace RT64 {
     void RequestScreenshot(ScreenshotCallback callback) {
         const std::scoped_lock lock(screenshotMutex);
         screenshotCallback = std::move(callback);
+        screenshotRegion[0] = 0.0f;
+        screenshotRegion[1] = 0.0f;
+        screenshotRegion[2] = 1.0f;
+        screenshotRegion[3] = 1.0f;
+    }
+
+    void RequestScreenshotRegion(float x0, float y0, float x1, float y1, ScreenshotCallback callback) {
+        const std::scoped_lock lock(screenshotMutex);
+        screenshotCallback = std::move(callback);
+        screenshotRegion[0] = std::clamp(std::min(x0, x1), 0.0f, 1.0f);
+        screenshotRegion[1] = std::clamp(std::min(y0, y1), 0.0f, 1.0f);
+        screenshotRegion[2] = std::clamp(std::max(x0, x1), 0.0f, 1.0f);
+        screenshotRegion[3] = std::clamp(std::max(y0, y1), 0.0f, 1.0f);
     }
 
     void RequestWindowScreenshot(ScreenshotCallback callback) {
@@ -293,5 +312,157 @@ namespace RT64 {
         repainting = true;
         threadPresent(lastPresent, swapChainValid);
         repainting = false;
+    }
+}
+
+// Banjo-Tooie: SetTargetCapture, a picture the game draws off screen copied back from its render target (photo mode's
+// pose cards). The copy is recorded in the workload queue's own command list right after the framebuffer pair that
+// drew it, and read once that list has run, all on the workload queue's thread, so it never meets the GPU drawing
+// into the same target. Turning the rows into RGBA8 and the callback run on a thread of their own.
+namespace RT64 {
+    namespace presentext {
+        std::mutex captureMutex;
+        uint32_t captureAddress = 0;
+        uint32_t captureNativeWidth = 0;
+        uint32_t captureNativeHeight = 0;
+        ScreenshotCallback captureCallback;
+
+        // The workload queue's thread only.
+        bool captureArmed = false;
+        std::unique_ptr<RenderBuffer> captureBuffer;
+        uint64_t captureBufferSize = 0;
+        struct CaptureRecorded {
+            bool recorded = false;
+            RenderFormat format = RenderFormat::UNKNOWN;
+            uint32_t width = 0;
+            uint32_t height = 0;
+            uint32_t rowWidth = 0;
+            ScreenshotCallback callback;
+        } captureRecorded;
+
+        void targetCaptureBeginFrame() {
+            captureArmed = true;
+        }
+
+        void targetCaptureRecord(RenderWorker *worker, RenderTarget *colorTarget, uint32_t address, uint32_t contentWidth,
+            uint32_t contentHeight, const ShaderLibrary *shaderLibrary)
+        {
+            // A picture can take several framebuffer pairs (its clear, then the draws once the depth image is set): each
+            // one at the address copies it again, over the last, so what is read is the picture as the frame left it.
+            if (!captureArmed || (colorTarget == nullptr)) {
+                return;
+            }
+
+            ScreenshotCallback callback;
+            {
+                const std::scoped_lock lock(captureMutex);
+                // TOOIE_PUPPET_LOG=1: the colour images drawn while a capture is wanted.
+                static const bool log = std::getenv("TOOIE_PUPPET_LOG") != nullptr;
+                if (log && (captureAddress != 0)) {
+                    fprintf(stderr, "[capture] colour image %06X (%ux%u drawn), want %06X\n", address, contentWidth, contentHeight, captureAddress);
+                }
+                if ((captureAddress == 0) || (address != captureAddress) || !captureCallback) {
+                    return;
+                }
+
+                callback = captureCallback;
+            }
+
+            RenderTexture *texture = colorTarget->texture.get();
+            if (colorTarget->usesResolve()) {
+                colorTarget->resolveTarget(worker, shaderLibrary);
+                texture = colorTarget->getResolvedTexture();
+            }
+
+            const uint32_t width = std::min(contentWidth, colorTarget->width);
+            const uint32_t height = std::min(contentHeight, colorTarget->height);
+            if ((texture == nullptr) || (width == 0) || (height == 0) || !screenshotFormatSupported(colorTarget->format)) {
+                return;
+            }
+
+            // Rows padded to 256 bytes, as D3D12 requires.
+            const uint32_t texelSize = RenderFormatSize(colorTarget->format);
+            const uint32_t rowBytes = ((width * texelSize) + 255) & ~255U;
+            const uint64_t bufferSize = uint64_t(rowBytes) * height;
+            if (!captureBuffer || (captureBufferSize < bufferSize)) {
+                captureBuffer = worker->device->createBuffer(RenderBufferDesc::ReadbackBuffer(bufferSize));
+                captureBufferSize = bufferSize;
+            }
+
+            RenderCommandList *commandList = worker->commandList.get();
+            commandList->barriers(RenderBarrierStage::COPY, RenderTextureBarrier(texture, RenderTextureLayout::COPY_SOURCE));
+            const RenderBox box(0, 0, int32_t(width), int32_t(height));
+            commandList->copyTextureRegion(
+                RenderTextureCopyLocation::PlacedFootprint(captureBuffer.get(), colorTarget->format, width, height, 1, rowBytes / texelSize),
+                RenderTextureCopyLocation::Subresource(texture), 0, 0, 0, &box);
+            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(texture, RenderTextureLayout::SHADER_READ));
+            captureRecorded.recorded = true;
+            captureRecorded.format = colorTarget->format;
+            captureRecorded.width = width;
+            captureRecorded.height = height;
+            captureRecorded.rowWidth = rowBytes / texelSize;
+            captureRecorded.callback = std::move(callback);
+        }
+
+        void targetCaptureFinish() {
+            if (!captureRecorded.recorded) {
+                return;
+            }
+
+            // Only the first draw of a game frame is taken (the others are its frame interpolation).
+            captureArmed = false;
+
+            CaptureRecorded taken = std::move(captureRecorded);
+            captureRecorded = CaptureRecorded();
+            const uint32_t texelSize = RenderFormatSize(taken.format);
+            const size_t rowBytes = size_t(taken.rowWidth) * texelSize;
+            std::vector<uint8_t> raw(rowBytes * taken.height);
+            const uint8_t *mapped = reinterpret_cast<const uint8_t *>(captureBuffer->map());
+            if (mapped != nullptr) {
+                std::memcpy(raw.data(), mapped, raw.size());
+            }
+
+            captureBuffer->unmap();
+            if (mapped == nullptr) {
+                return;
+            }
+
+            std::thread([taken = std::move(taken), raw = std::move(raw), texelSize]() mutable {
+                std::vector<uint8_t> rgba(size_t(taken.width) * taken.height * 4);
+                for (uint32_t y = 0; y < taken.height; y++) {
+                    const uint8_t *row = raw.data() + size_t(y) * taken.rowWidth * texelSize;
+                    uint8_t *out = rgba.data() + size_t(y) * taken.width * 4;
+                    for (uint32_t x = 0; x < taken.width; x++) {
+                        const uint8_t *texel = row + size_t(x) * texelSize;
+                        if (taken.format == RenderFormat::R16G16B16A16_UNORM) {
+                            const uint16_t *wide = reinterpret_cast<const uint16_t *>(texel);
+                            for (int c = 0; c < 4; c++) {
+                                out[x * 4 + c] = uint8_t(wide[c] >> 8);
+                            }
+                        }
+                        else if (taken.format == RenderFormat::B8G8R8A8_UNORM) {
+                            out[x * 4 + 0] = texel[2];
+                            out[x * 4 + 1] = texel[1];
+                            out[x * 4 + 2] = texel[0];
+                            out[x * 4 + 3] = texel[3];
+                        }
+                        else {
+                            std::memcpy(&out[x * 4], texel, 4);
+                        }
+                    }
+                }
+
+                taken.callback(taken.width, taken.height, std::move(rgba));
+            }).detach();
+        }
+    }
+
+    void SetTargetCapture(uint32_t address, uint32_t nativeWidth, uint32_t nativeHeight, ScreenshotCallback callback) {
+        const std::scoped_lock lock(presentext::captureMutex);
+        // RT64 keeps framebuffers by their address in the N64's 16 MB (RDP_ADDRESS_MASK).
+        presentext::captureAddress = address & 0xFFFFFF;
+        presentext::captureNativeWidth = nativeWidth;
+        presentext::captureNativeHeight = nativeHeight;
+        presentext::captureCallback = (address != 0) ? std::move(callback) : ScreenshotCallback();
     }
 }

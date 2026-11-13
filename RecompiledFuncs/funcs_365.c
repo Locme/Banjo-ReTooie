@@ -3487,7 +3487,7 @@ L_80800108:
 RECOMP_FUNC void func_800F5008(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
-    if (tooie_players_hidden()) { MEM_B(0x48, (gpr)(int32_t)0x80135490) = 0; return; }
+    tooie_players_draw(rdram, ctx); if (tooie_players_hidden()) { MEM_B(0x48, (gpr)(int32_t)0x80135490) = 0; return; }
     // 0x800F5008: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x800F500C: sw          $s6, 0x30($sp)

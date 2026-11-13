@@ -330,6 +330,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/music_player.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/mix_rate.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/photo_mode.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/pose_puppets.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/bottles_revenge.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/torch_enemy.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/save_state.cpp

@@ -1379,7 +1379,7 @@ Catch: anything can be removed, not only enemies, and some objects may not like 
 Usage: `anim`
 
 Prints the animation Banjo's animation controller is playing (its asset id, in hex), its length in seconds, his form
-(the form id the Cheats tab's Transformation row uses) and his player state. Standing still, it shows the form's idle
+(the form id the Cheats tab's Transformation row uses), the model his draw uses (its id, in hex) and his player state. Standing still, it shows the form's idle
 animation.
 
 ```
@@ -1389,6 +1389,27 @@ anim
 ```
 
 Catch: needs a player in the game, and the game running.
+
+### `puppet`
+
+Usage: `puppet <hex animation id> [t] [dx dz]` | `puppet list` | `puppet clear`
+
+Draws an extra copy of Banjo's model beside him, with an animation controller of its own playing that animation, held
+at `t` (0 to 1, default 0.5), `dx`, `dz` world units from him (default 120 0), facing as he does. Each `puppet` adds
+one more (up to 16); `list` shows them, `clear` removes them. The same copies film photo mode's pose cards, off
+screen (src/gameplay/pose_puppets.cpp); this shows them in the level, to look at.
+
+```
+anim
+puppet AB 0.5 120 0
+puppet 3 0.25 -120 0
+screenshot
+puppet clear
+```
+
+Catch: they wear Banjo's model as it is now, so a form other than Banjo and Kazooie draws that form, and Kazooie is in
+the backpack only when she is on Banjo. A map change drops them. Animation ids are the ones `anim` prints and
+`photo pose list` uses.
 
 ### `objects`
 
@@ -2094,16 +2115,42 @@ Catch: needs the game running, so `sweep start` waits in the queue until then.
 
 ### `photo`
 
-Usage: `photo`
+Usage: `photo | photo character list|<n>|<name> | photo pose list|<n>|<name> | photo cards [open|close] | photo develop [hex ids]`
 
-Turns photo mode on or off, as its key does. The change happens on the next frame, and the message gives the state it is
-switching to.
+`photo` turns photo mode on or off, as its key does. The change happens on the next frame, and the message gives the
+state it is switching to.
+
+`photo character list` lists who can be photographed (the Character row): each one's place, name, form and model
+(hex), how many poses it has, which is picked and which this save has not unlocked yet. `photo character <n>` or
+`photo character <name>` picks one, as the row does (names without spaces or capitals, as `banjo&kazooie` or
+`washingmachine`). Dragon Kazooie shows its form as 0x10B: Kazooie's 0x0B, which the game keeps as the dragon by a
+save flag (0x3EC), so she is her own form when that flag is set. Another form than the player's own is drawn as a stand-in where Banjo stands, and he is hidden
+meanwhile; leaving photo mode takes it away. `TOOIE_PHOTO_ALL_CHARACTERS=1` offers every character whatever the save.
+
+`photo pose list` lists the picked character's poses: their place in the list, animation id (hex) and name.
+`photo pose <n>` or `photo pose <name>` puts the character in that pose, as picking its card does (`photo pose 0` gives
+the player back his own animation, or a stand-in its standing one). `photo cards` opens the pose grid, as A on the Pose row does, and `photo cards close` shuts it.
+
+`photo develop` takes every pose card again, as Start in the grid does. Given animation ids in hex (single ones or
+ranges), it takes cards of those instead, whether or not they are in the list: each is written to
+`pose_cards_v2/<model>/<id>.png` in the app-data folder (the picked character's model, in hex) as 30 frames side by side (one loop at 30 a second, with a transparent
+background), which is how new poses are found. The cards are filmed off screen with copies of Banjo (see `puppet`),
+15 frames at a time, while photo mode goes on as before; the log says `[photo] pose cards done: ... in ... s
+(puppets)`. When the game's heap has no room for the off-screen picture (about 0.4 MB), or with `TOOIE_POSE_OLD=1`,
+they are taken the old way: Banjo posed in front of the card camera under the darkroom curtain, keyed against a plate.
 
 ```
 photo
+photo character list
+photo character mumbo
+photo pose list
+photo pose 4
+photo cards
+photo develop 1-20
 ```
 
-Catch: needs the game running.
+Catch: needs the game running; everything but `photo` itself needs photo mode on. Taken the old way, the picture
+jumps about under the darkroom curtain while the cards are taken; that is the card camera.
 
 ### `sfx`
 

@@ -25,6 +25,13 @@
 //   L               show / hide the photo panel
 //   Start           frozen, 1/167 speed, 1/8 speed, 1/4 speed
 //   B / Photo Mode  back to the game, with the camera and HUD as they were
+//   mouse           looks (as the right stick), the wheel zooms, a left click is A (unless a game button is
+//                   bound to that mouse button)
+//
+// Pose grid (A on the Pose row): a 4 x 5 page of pose cards, each a short film of Banjo in the pose; the D-pad
+// (or the wheel) moves over them and Banjo wears the one under the cursor, L / R turn the page, A keeps it, B puts
+// back the pose he had, Start takes the cards again. The cards are taken by photo mode on this PC (see "Pose cards"
+// below); the photo panel draws the grid.
 //
 // Shutter (QOL > Photo shutter, on by default): each photo plays a camera click (synthesised, mixed into
 // the game's sound by mix_shutter from main.cpp) and the photo panel flashes the screen white; the flash
@@ -63,9 +70,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <variant>
 
@@ -87,13 +99,33 @@
 #include "tooie_game.h"
 #include "tooie_hide_hud.h"
 #include "tooie_photo_mode.h"
+#include "tooie_pose_puppets.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_picture_filters.h"
 #include "tooie_screenshot.h"
 #include "tooie_toast.h"
 #include "tooie_hotkeys.h"
+#include "tooie_progress_cheats.h"
+#include "tooie_motion_aim.h"
+#include "librecomp/game.hpp"
+#include "recompui/recompui.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_STATIC
+#define STBI_ONLY_PNG
+#include "../../lib/rt64/src/contrib/stb/stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_STATIC
+#include "../../lib/rt64/src/contrib/stb/stb_image_write.h"
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#define STB_IMAGE_RESIZE_STATIC
+#include "../../lib/rt64/src/contrib/stb/stb_image_resize2.h"
 
 namespace RT64 {
+    // lib/rt64/src/hle/rt64_present_queue.h (from lib-patches/rt64.patch): the next frame's game picture.
+    typedef std::function<void(uint32_t width, uint32_t height, std::vector<uint8_t> &&rgba)> ScreenshotCallback;
+    void RequestScreenshot(ScreenshotCallback callback);
+    void RequestScreenshotRegion(float x0, float y0, float x1, float y1, ScreenshotCallback callback);
     // rt64-ext/src/render/rt64_photo_grade.h.
     void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
     void SetPhotoFrame(float cropAspect, bool grid);
@@ -164,7 +196,7 @@ namespace {
 
     // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
     // thread (-1 or +1 on the picked row).
-    enum class Row { Zoom, Camera, Collision, Time, Hud, Banjo, Pose, PoseFrame, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
+    enum class Row { Zoom, Camera, Collision, Time, Hud, Banjo, Character, Pose, PoseFrame, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
         Vignette, Grain, Focus, FocusPoint, Tilt, Crop, Border, Grid, Album, Count };
     constexpr int row_count = (int)Row::Count;
     std::atomic<int> picked{0};
@@ -186,7 +218,8 @@ namespace {
         const char* name;
         uint32_t anim;
     };
-    constexpr PoseChoice poses[] = {
+    // Banjo and Kazooie together (the game's own form 0x1).
+    constexpr PoseChoice bk_poses[] = {
         { "Game", 0 },
         // Picked from a headless sweep of animations 0x1-0x17E on Banjo (names describe the look).
         { "Walk", 0x3 },
@@ -198,14 +231,277 @@ namespace {
         { "Lie down", 0x5A },
         { "Jiggy jig", 0x2E },
         { "Wings out", 0x14 },
-        { "Wings spread", 0x9F },
-        { "Fly", 0xFB },
         { "Kazooie up", 0x1B },
         { "Kazooie dash", 0x47 },
         { "Kazooie lunge", 0x166 },
         { "Talon trot", 0x3C },
+        // More from photo mode's own pose cards of every animation 0x1-0x17E (`photo develop`, 2026-11-12): the ones
+        // that read clearly as Banjo and Kazooie (most above 0xC0 are other forms' and show him in his bind pose).
+        { "Look around", 0x1 },
+        { "Cheer", 0x6 },
+        { "Roll", 0x9 },
+        { "Swim", 0x10 },
+        { "Somersault", 0x1C },
+        { "Backflip", 0x1D },
+        { "Slide", 0x1F },
+        { "Swipe", 0x21 },
+        { "Ta-da", 0x25 },
+        { "Peck", 0x2B },
+        { "Crawl", 0x3F },
+        { "Dive", 0x46 },
+        { "High kick", 0x48 },
+        { "Sit", 0x49 },
+        { "Kneel", 0x59 },
+        { "Break dance", 0x7D },
+        { "Cartwheel", 0x97 },
+        { "Handstand", 0x9C },
+        { "Lift high", 0xB0 },
+        { "Lie back", 0xBA },
+        { "Victory", 0xCC },
+        { "Scratch head", 0xF6 },
     };
-    constexpr int pose_count = (int)std::size(poses);
+
+    // Each character's own animations only: those its own player states play (the constant each bs<form> state passes to
+    // baanim_playForDuration_*, read from RecompiledFuncs), and ids inside its own run of them that no other form's code
+    // plays, plus the other animation ids its state code sets up (found by looking at every constant those functions pass,
+    // then checked on each form's own pose cards). An animation is not tied to one skeleton (Banjo's play on Mumbo and
+    // the Bee too), so how well it moves a model says nothing of whose it is; small ids (under about 0x60) that turn up
+    // in a form's code are Banjo and Kazooie's own and are left out.
+    //
+    // Banjo alone (after Split Up): Pack Whack, the Shack Pack, the Snooze Pack, the sack and swimming (bsban*).
+    constexpr PoseChoice banjo_poses[] = {
+        { "Standing", 0 },
+        { "Jump", 0x27B },
+        { "Pack Whack", 0xAF },
+        { "Shack Pack", 0x145 },
+        { "In The Pack", 0x293 },
+        { "Snooze In", 0x276 },
+        { "Snooze Pack", 0x278 },
+        { "Sack In", 0x143 },
+        { "Sack Hop", 0x289 },
+        { "Sack Jump", 0x28A },
+        { "Sack Stand", 0x28B },
+        { "Sack Turn", 0x28C },
+        { "Swim", 0x27D },
+        { "Swim Kick", 0x27E },
+        { "Backflip", 0x27B },
+        { "Sack Shuffle", 0x144 },
+        { "Peek From The Pack", 0x294 },
+        { "Out Of The Pack", 0x295 },
+    };
+    // Kazooie alone: her own states (bskaz*): standing, flying, gliding, Wing Whack, paddling, jumping, hatching,
+    // springing, the stilts, Torpedo and the egg shots.
+    constexpr PoseChoice kazooie_poses[] = {
+        { "Standing", 0 },
+        { "Look About", 0xA5 },
+        { "Preen", 0xAC },
+        { "Stretch", 0xAD },
+        { "Look Around", 0x24B },
+        { "Shake", 0x24E },
+        { "Take Off", 0xAA },
+        { "Fly Up", 0xAB },
+        { "Fly", 0x11D },
+        { "Dive", 0x11E },
+        { "Glide", 0x11C },
+        { "Swoop", 0x13D },
+        { "Flap", 0x13E },
+        { "Flutter", 0x29D },
+        { "Breathe Fire", 0xE1 },
+        { "Wing Whack", 0x137 },
+        { "Wing Spin", 0x138 },
+        { "Paddle", 0x139 },
+        { "Paddle About", 0x13A },
+        { "Jump", 0x13B },
+        { "Leap", 0x13C },
+        { "Hatch", 0x13F },
+        { "Hatching", 0x140 },
+        { "Crouch", 0x141 },
+        { "Low Crouch", 0x28F },
+        { "Spring", 0x142 },
+        { "Spring Jump", 0x24C },
+        { "Wings Up", 0x288 },
+        { "Stilts", 0x149 },
+        { "Stilt Step", 0x27F },
+        { "Stilt Walk", 0x280 },
+        { "Torpedo", 0x133 },
+        { "Torpedo Turn", 0x134 },
+        { "Egg Shot", 0x28D },
+        { "Egg Drop", 0x28E },
+    };
+    // Mumbo: his own states (bsmum*: still, walking, his staff, casting, falling flat).
+    constexpr PoseChoice mumbo_poses[] = {
+        { "Standing", 0 },
+        { "Look About", 0xB6 },
+        { "Walk", 0xBB },
+        { "Run", 0xBC },
+        { "Jump", 0xBD },
+        { "Staff Swing", 0x9F },
+        { "Cast A Spell", 0xFB },
+        { "Mumbo Magic", 0xFC },
+        { "Big Spell", 0x4A1 },
+        { "Fall Flat", 0xCB },
+        { "Stretch", 0xB7 },
+        { "Twirl", 0xB8 },
+        { "Tiptoe", 0xB3 },
+        { "Stride", 0xB4 },
+        { "Swim", 0x9C },
+        { "Paddle", 0x9D },
+    };
+    // The Bee (Humba Wumba's, Cloud Cuckooland): its own states (bsbee*).
+    constexpr PoseChoice bee_poses[] = {
+        { "Hovering", 0 },
+        { "Take Off", 0x1DC },
+        { "Buzz", 0x1DD },
+        { "Fly", 0x1DF },
+        { "Stung", 0x1E1 },
+        { "Hat Off", 0x1E2 },
+    };
+    // Humba Wumba's other forms: their own states' animations (bsstonehead, bstnt, bsvan, bssub, bstrex*, bswasher,
+    // bssnowball).
+    constexpr PoseChoice stony_poses[] = {
+        { "Standing", 0 },
+        { "Hop", 0x62 },
+        { "Leap", 0x64 },
+        { "Stomp", 0x122 },
+    };
+    constexpr PoseChoice detonator_poses[] = {
+        { "Standing", 0 },
+        { "Walk", 0xE2 },
+        { "Fuse", 0xE3 },
+        { "Spin", 0xE6 },
+        { "Swim", 0xE7 },
+        { "Paddle", 0xE8 },
+        { "Wobble", 0x107 },
+        { "Hop", 0x108 },
+        { "Tip Over", 0x10E },
+        { "Bounce", 0x111 },
+    };
+    constexpr PoseChoice van_poses[] = {
+        { "Parked", 0 },
+        { "Drive", 0xEC },
+        { "Honk", 0xF1 },
+        { "Bounce", 0xF2 },
+        { "Float", 0xE7 },
+        { "Paddle", 0xE8 },
+        { "Tumble", 0xD7 },
+        { "Wheelie", 0xED },
+        { "Rev", 0x115 },
+        { "Head On", 0x116 },
+        { "Rock", 0x11A },
+        { "Squash", 0x11D },
+    };
+    constexpr PoseChoice sub_poses[] = {
+        { "Floating", 0 },
+        { "Dive", 0x12F },
+        { "Surface", 0x130 },
+    };
+    constexpr PoseChoice baby_trex_poses[] = {
+        { "Standing", 0 },
+        { "Walk", 0x1CE },
+        { "Run", 0x1CF },
+        { "Roar", 0x1D0 },
+        { "Big Roar", 0x1D1 },
+        { "Tumble", 0x148 },
+    };
+    constexpr PoseChoice daddy_trex_poses[] = {
+        { "Standing", 0 },
+        { "Walk", 0x1CE },
+        { "Run", 0x1CF },
+        { "Roar", 0x1D0 },
+        { "Big Roar", 0x1D1 },
+    };
+    constexpr PoseChoice washer_poses[] = {
+        { "Standing", 0 },
+        { "Spin", 0x354 },
+        { "Hop", 0x357 },
+        { "Wash", 0x359 },
+        { "Shuffle", 0x355 },
+    };
+    constexpr PoseChoice snowball_poses[] = {
+        { "Rolling", 0 },
+        { "Roll", 0x5F },
+    };
+    // Golden Goliath (Mumbo's, Mayahem Temple): its own states (bsstatue).
+    constexpr PoseChoice goliath_poses[] = {
+        { "Standing", 0 },
+        { "Walk", 0x1E5 },
+        { "Arm Swing", 0x1EF },
+        { "Kick", 0x1F0 },
+        { "Look About", 0x1F1 },
+    };
+
+    // Characters (the Character row): who is photographed. The player's own form is posed as before; any other is a
+    // stand-in, drawn where the player stands by tooie::pose_puppets::stand_in while photo mode hides him, so nothing
+    // changes in the game and there is nothing to undo on leaving (the game's own way to change form reloads the area
+    // and sends Banjo back to its entrance). Each has its own animations only. A character shows once the save has
+    // unlocked it (the flags transform_menu.cpp reads, gameflags.h's for Mumbo's pad and Golden Goliath, and 0x3EC for Dragon Kazooie), and the
+    // player's own form always does.
+    struct Character {
+        const char* name;
+        uint16_t form;          // the game's form id (the player's +0xA0 block +0x29); Dragon Kazooie is Kazooie's
+                                // (0x0B) with dragon_form added, since the game keeps her in a save flag, not a form
+        uint16_t model;         // the form's model asset, as the Transform menu's statues use them (not always the id in the
+                                // player's model state: Banjo alone has 0x607 there, which is no model to draw)
+        uint16_t idle;          // its standing animation, worn by a stand-in on "Game"
+        int32_t flag;           // the save-file flag that unlocks it, -1 for always
+        const PoseChoice* poses;
+        int pose_count;
+        float card_size;        // the card camera's distance and height for it, times Banjo's
+    };
+#define TOOIE_POSES(list) list, (int)std::size(list)
+    constexpr Character characters[] = {
+        { "Banjo & Kazooie", 0x01, 0x61F, 0x6F, -1, TOOIE_POSES(bk_poses), 1.0f },
+        { "Banjo", 0x0A, 0x62A, 0x6F, 0x4F5, TOOIE_POSES(banjo_poses), 1.0f },
+        { "Kazooie", 0x0B, 0x61C, 0xA4, 0x4F5, TOOIE_POSES(kazooie_poses), 1.0f },
+        { "Mumbo", 0x0D, 0x665, 0xB5, 0x09A, TOOIE_POSES(mumbo_poses), 1.1f },
+        { "Stony", 0x08, 0x61D, 0x63, 0x346, TOOIE_POSES(stony_poses), 1.3f },
+        { "Detonator", 0x0F, 0x623, 0xE5, 0x347, TOOIE_POSES(detonator_poses), 1.0f },
+        { "Van", 0x10, 0x624, 0xEE, 0x348, TOOIE_POSES(van_poses), 1.6f },
+        { "Submarine", 0x0C, 0x626, 0x12E, 0x349, TOOIE_POSES(sub_poses), 1.5f },
+        { "Baby T-Rex", 0x12, 0x609, 0x1D2, 0x34A, TOOIE_POSES(baby_trex_poses), 1.3f },
+        { "Daddy T-Rex", 0x13, 0x60D, 0x1D2, 0x345, TOOIE_POSES(daddy_trex_poses), 3.5f },
+        { "Washing Machine", 0x07, 0x60C, 0x356, 0x34B, TOOIE_POSES(washer_poses), 1.2f },
+        { "Snowball", 0x02, 0x60B, 0x5E, 0x34C, TOOIE_POSES(snowball_poses), 1.3f },
+        { "Bee", 0x06, 0x613, 0x1DE, 0x34D, TOOIE_POSES(bee_poses), 0.9f },
+        { "Golden Goliath", 0x0E, 0x673, 0x1EE, 0x050, TOOIE_POSES(goliath_poses), 5.0f },
+        { "Dragon Kazooie", 0x0B | 0x100, 0x62E, 0xA4, 0x3EC, TOOIE_POSES(kazooie_poses), 1.0f },
+    };
+#undef TOOIE_POSES
+    constexpr int character_count = (int)std::size(characters);
+    std::atomic<int> character{0};
+    std::atomic<uint32_t> unlocked_characters{1};     // a bit per character, worked out on entering
+    std::atomic<int> player_form_now{1};
+    // Added to Kazooie's form id while the save has her as the dragon (flag 0x3EC, set and cleared by Humba's Isle o'
+    // Hags pool), which is read on entering photo mode.
+    constexpr int dragon_form = 0x100;
+    constexpr int32_t dragon_kazooie_flag = 0x3EC;
+    bool player_dragon = false;
+    std::atomic<int> character_request{-1};          // from the row or the console, taken by tick
+    bool characters_checked = false;
+
+    const Character& current_character() {
+        return characters[std::clamp(character.load(), 0, character_count - 1)];
+    }
+    // Whether the picked character is another form than the player's own, so drawn by a stand-in.
+    bool stand_in_wanted() {
+        return current_character().form != (uint16_t)player_form_now.load();
+    }
+    int pose_total() {
+        return current_character().pose_count;
+    }
+    const PoseChoice& pose_at(int i) {
+        const Character& c = current_character();
+        return c.poses[std::clamp(i, 0, c.pose_count - 1)];
+    }
+    // The animation a pose plays on a stand-in: its own, or on "Game" the character's standing animation.
+    uint32_t stand_in_anim(int i) {
+        const uint32_t anim = pose_at(i).anim;
+        return anim != 0 ? anim : current_character().idle;
+    }
+    // The animation a pose's card shows (0: none, "Game" on the player's own form).
+    uint32_t card_anim(int i) {
+        return stand_in_wanted() ? stand_in_anim(i) : pose_at(i).anim;
+    }
     std::atomic<int> pose_choice{0};
     std::atomic<int> pose_frame{0};          // in 5% steps, 0 to 20
     std::atomic<bool> pose_dirty{false};
@@ -437,7 +733,7 @@ namespace {
         "Teal and orange", "Dream" };
     constexpr const char* border_names[] = { "None", "Instant photo", "Film strip", "Honeycomb", "Jiggy", "Wooden" };
     constexpr const char* crop_names[] = { "None", "16:9", "2.39:1", "4:3", "1:1", "4:5", "9:16" };
-    constexpr const char* row_names[] = { "Zoom", "Camera", "Collision", "Time", "HUD", "Banjo", "Pose", "Pose frame", "Others", "Timer", "Shutter", "Filter", "Exposure",
+    constexpr const char* row_names[] = { "Zoom", "Camera", "Collision", "Time", "HUD", "Banjo", "Character", "Pose", "Pose frame", "Others", "Timer", "Shutter", "Filter", "Exposure",
         "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Focus point", "Tilt", "Crop", "Border", "Grid", "Album" };
     static_assert(std::size(row_names) == row_count);
 
@@ -466,8 +762,21 @@ namespace {
             case Row::Others:
                 others_hidden = !others_hidden;
                 break;
+            case Row::Character: {
+                // The next unlocked character that way round.
+                const uint32_t unlocked = unlocked_characters.load();
+                int c = character.load();
+                for (int i = 0; i < character_count; i++) {
+                    c = (c + character_count + step) % character_count;
+                    if (unlocked & (1u << c)) {
+                        break;
+                    }
+                }
+                character_request = c;
+                break;
+            }
             case Row::Pose:
-                pose_choice = (pose_choice + pose_count + step) % pose_count;
+                pose_choice = (pose_choice + pose_total() + step) % pose_total();
                 pose_dirty = true;
                 break;
             case Row::PoseFrame:
@@ -542,7 +851,9 @@ namespace {
         case Row::Others:
             return others_hidden ? "Hidden" : "Shown";
         case Row::Pose:
-            return poses[pose_choice.load()].name;
+            return pose_at(pose_choice.load()).name;
+        case Row::Character:
+            return current_character().name;
         case Row::PoseFrame:
             std::snprintf(text, sizeof(text), "%d%%", pose_frame.load() * 5);
             return text;
@@ -679,12 +990,943 @@ namespace {
         timer_shown = -1;
     }
 
+    // ---- Pose cards and the pose grid ----
+    //
+    // A card is pose_card_frames pictures of Banjo through one loop of a pose, taken by photo mode itself: the
+    // camera is put in front of him (card_camera), the others are hidden, the photo filters are off, and for each
+    // frame the animation is held at that point and the square in the middle of the next frame's game picture is asked
+    // of RT64 (the same copy F12 takes, so the menus over it are never in it). Before the first card the same square
+    // is taken with Banjo hidden (the plate); what matches it is background and made transparent. The frames are cut
+    // to fit Banjo, shrunk to card_size and handed to the menus as images; the frames are also written side by side to
+    // <app-data>/pose_cards/<animation id>.png, so the next time the grid opens they load instead. The game's
+    // pictures stay on this PC: nothing of them is in the repository.
+    constexpr int card_size = 128;
+    // The square cut out of the picture, as a part of its height, and the card camera: this far from Banjo's
+    // middle (this high above his feet), looking down a little, turned off his face so he is seen three-quarters,
+    // with this vertical field of view.
+    constexpr float card_crop = 0.92f;
+    constexpr float card_distance = 290.0f;
+    constexpr float card_height = 62.0f;
+    constexpr float card_pitch = -6.0f;
+    constexpr float card_turn = 28.0f;
+    constexpr float card_fov = 40.0f;
+    // Game updates waited after putting on a pose (it settles) and after moving its animation (the picture shows it).
+    constexpr int settle_updates = 4;
+    constexpr int frame_updates = 1;
+    // How long one loop of a pose takes on the cards and on Banjo while the grid is open.
+    constexpr float pose_loop_seconds = 1.0f;
+
+    struct CardStore {
+        std::mutex mutex;
+        struct Card {
+            uint32_t gen = 0;          // 0: no card
+            int frames_in = 0;         // frames of the card being taken that have come back
+            std::vector<std::vector<uint8_t>> frames;
+        };
+        std::unordered_map<uint32_t, Card> cards;   // by card key: the model << 16 | the animation id
+    } store;
+    std::atomic<uint32_t> card_gen{0};
+    // The model whose cards were last read from disk (0 none), so a character's are read the first time its grid opens.
+    std::atomic<uint32_t> cards_loaded_model{0};
+    // The model of the round of cards being taken: its cards are filed under it.
+    std::atomic<uint32_t> round_model{0};
+
+    uint32_t card_key(uint32_t model, uint32_t anim) {
+        return (model << 16) | (anim & 0xFFFF);
+    }
+    // Set when RT64 has handed back the frame last asked for.
+    std::atomic<bool> develop_shot_back{false};
+
+    std::string card_prefix(uint32_t anim, uint32_t gen) {
+        char text[48];
+        std::snprintf(text, sizeof(text), "?/posecard/%X/%u/", anim, gen);
+        return text;
+    }
+
+    std::filesystem::path card_folder() {
+        // pose_cards held keyed cards (the background taken away by a plate); these are filmed with alpha.
+        return recomp::get_config_path() / "pose_cards_v2";
+    }
+
+    // A folder for each character's model, a file for each animation.
+    std::filesystem::path card_path(uint32_t key) {
+        char folder[16], name[24];
+        std::snprintf(folder, sizeof(folder), "%X", key >> 16);
+        std::snprintf(name, sizeof(name), "%X.png", key & 0xFFFF);
+        return card_folder() / folder / name;
+    }
+
+    // Hands a whole card to the menus (dropping the one it replaces) and, when asked, writes it to disk. Any thread.
+    void publish_card(uint32_t anim, std::vector<std::vector<uint8_t>>&& frames, bool save) {
+        if ((int)frames.size() != tooie::photo_mode::pose_card_frames) {
+            return;
+        }
+        const uint32_t gen = card_gen.fetch_add(1) + 1;
+        for (int f = 0; f < (int)frames.size(); f++) {
+            std::vector<char> bytes(frames[f].begin(), frames[f].end());
+            recompui::queue_image_from_bytes_rgba32(card_prefix(anim, gen) + std::to_string(f), bytes, card_size, card_size);
+        }
+        uint32_t old = 0;
+        {
+            std::lock_guard lock{ store.mutex };
+            CardStore::Card& card = store.cards[anim];
+            old = card.gen;
+            card.gen = gen;
+        }
+        if (old != 0) {
+            for (int f = 0; f < (int)frames.size(); f++) {
+                recompui::release_image(card_prefix(anim, old) + std::to_string(f));
+            }
+        }
+        if (save) {
+            // One strip, the frames left to right.
+            const int n = (int)frames.size();
+            std::vector<uint8_t> strip((size_t)card_size * n * card_size * 4);
+            for (int f = 0; f < n; f++) {
+                for (int y = 0; y < card_size; y++) {
+                    std::memcpy(&strip[((size_t)y * card_size * n + (size_t)f * card_size) * 4],
+                        &frames[f][(size_t)y * card_size * 4], (size_t)card_size * 4);
+                }
+            }
+            std::error_code ec;
+            std::filesystem::create_directories(card_path(anim).parent_path(), ec);
+            // Through a stream: stbi_write_png takes a narrow name, which Windows reads in the ANSI code page.
+            int length = 0;
+            unsigned char* png = stbi_write_png_to_mem(strip.data(), card_size * n * 4, card_size * n, card_size, 4, &length);
+            if (png != nullptr) {
+                std::ofstream out(card_path(anim), std::ios::binary);
+                out.write(reinterpret_cast<const char*>(png), length);
+                STBIW_FREE(png);
+            }
+        }
+    }
+
+    // Reads the cards kept from before of a character (by its model, the animations given). Returns the animations
+    // that have none.
+    std::vector<uint32_t> load_cards(uint32_t model, const std::vector<uint32_t>& anims) {
+        std::vector<uint32_t> missing;
+        for (const uint32_t anim : anims) {
+            const uint32_t key = card_key(model, anim);
+            {
+                std::lock_guard lock{ store.mutex };
+                auto it = store.cards.find(key);
+                if (it != store.cards.end() && it->second.gen != 0) {
+                    continue;
+                }
+            }
+            std::vector<unsigned char> file;
+            {
+                std::ifstream in(card_path(key), std::ios::binary);
+                if (in) {
+                    file.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+                }
+            }
+            int w = 0, h = 0, channels = 0;
+            stbi_uc* pixels = file.empty() ? nullptr : stbi_load_from_memory(file.data(), (int)file.size(), &w, &h, &channels, 4);
+            const int n = tooie::photo_mode::pose_card_frames;
+            if (pixels == nullptr || w != card_size * n || h != card_size) {
+                if (pixels != nullptr) {
+                    stbi_image_free(pixels);
+                }
+                missing.push_back(anim);
+                continue;
+            }
+            std::vector<std::vector<uint8_t>> frames(n, std::vector<uint8_t>((size_t)card_size * card_size * 4));
+            for (int f = 0; f < n; f++) {
+                for (int y = 0; y < card_size; y++) {
+                    std::memcpy(&frames[f][(size_t)y * card_size * 4], &pixels[((size_t)y * w + (size_t)f * card_size) * 4], (size_t)card_size * 4);
+                }
+            }
+            stbi_image_free(pixels);
+            publish_card(key, std::move(frames), false);
+        }
+        return missing;
+    }
+
+    // Only the square in the middle is copied back from the GPU (the image has the window's shape), which is
+    // far quicker than the whole picture; the callbacks still cut the middle square from whatever comes.
+    void request_card_square(RT64::ScreenshotCallback callback) {
+        int window_w = 0, window_h = 0;
+        recompui::get_window_size(window_w, window_h);
+        const float half = window_w > 0 && window_h > 0 ? std::min(0.5f, 0.5f * card_crop * (float)window_h / (float)window_w) : 0.5f;
+        RT64::RequestScreenshotRegion(0.5f - half, 0.5f - card_crop * 0.5f, 0.5f + half, 0.5f + card_crop * 0.5f, std::move(callback));
+    }
+
+    // The background plate: the card camera's square with Banjo hidden, taken once at the start of each round of
+    // cards (Banjo and the camera stay put through it). A frame's pixels that match it are background and made
+    // transparent, so the cards are Banjo alone. Under store.mutex.
+    struct Plate {
+        uint32_t width = 0, height = 0;
+        std::vector<uint8_t> rgba;
+    } plate;
+    // How far a pixel's colour may be from the plate's (the largest of its three channels, 0-255) and still be
+    // background, and how far it must be to be all Banjo; between the two it is partly see-through (soft edges).
+    constexpr int key_near = 10;
+    constexpr int key_far = 34;
+
+    void take_plate() {
+        request_card_square([](uint32_t width, uint32_t height, std::vector<uint8_t>&& rgba) {
+            {
+                std::lock_guard lock{ store.mutex };
+                plate.width = width;
+                plate.height = height;
+                plate.rgba = std::move(rgba);
+            }
+            develop_shot_back = true;
+        });
+    }
+
+    // Makes the background of a frame transparent, by the plate. Without a plate of the same size it stays opaque.
+    void key_frame(uint32_t width, uint32_t height, std::vector<uint8_t>& rgba) {
+        std::lock_guard lock{ store.mutex };
+        const bool have = plate.width == width && plate.height == height && plate.rgba.size() == rgba.size();
+        for (size_t i = 0; i + 3 < rgba.size(); i += 4) {
+            if (!have) {
+                rgba[i + 3] = 255;
+                continue;
+            }
+            int d = 0;
+            for (int c = 0; c < 3; c++) {
+                d = std::max(d, std::abs((int)rgba[i + c] - (int)plate.rgba[i + c]));
+            }
+            rgba[i + 3] = (uint8_t)std::clamp((d - key_near) * 255 / (key_far - key_near), 0, 255);
+        }
+    }
+
+    // Frames are kept this large until the whole card is in, then cut to fit Banjo and shrunk to card_size.
+    constexpr int work_size = 256;
+    // Space left round Banjo on a fitted card, as a part of its side.
+    constexpr float fit_margin = 0.06f;
+
+    // Cuts the same square out of every frame of a card: the smallest one (with a margin) that holds Banjo in all of
+    // them, centred on him, so each pose fills its card however big or small it is. Then shrinks them to card_size.
+    std::vector<std::vector<uint8_t>> fit_card(const std::vector<std::vector<uint8_t>>& frames) {
+        int x0 = work_size, y0 = work_size, x1 = -1, y1 = -1;
+        for (const auto& f : frames) {
+            for (int y = 0; y < work_size; y++) {
+                for (int x = 0; x < work_size; x++) {
+                    if (f[((size_t)y * work_size + x) * 4 + 3] > 96) {
+                        x0 = std::min(x0, x); x1 = std::max(x1, x);
+                        y0 = std::min(y0, y); y1 = std::max(y1, y);
+                    }
+                }
+            }
+        }
+        int side = work_size, left = 0, top = 0;
+        if (x1 >= x0 && y1 >= y0) {
+            side = std::max(x1 - x0 + 1, y1 - y0 + 1);
+            side = std::clamp((int)((float)side * (1.0f + 2.0f * fit_margin)), work_size / 4, work_size);
+            left = std::clamp((x0 + x1 + 1) / 2 - side / 2, 0, work_size - side);
+            top = std::clamp((y0 + y1 + 1) / 2 - side / 2, 0, work_size - side);
+        }
+        std::vector<std::vector<uint8_t>> out;
+        for (const auto& f : frames) {
+            std::vector<uint8_t> small((size_t)card_size * card_size * 4);
+            stbir_resize_uint8_linear(&f[((size_t)top * work_size + left) * 4], side, side, work_size * 4,
+                small.data(), card_size, card_size, card_size * 4, STBIR_RGBA);
+            out.push_back(std::move(small));
+        }
+        return out;
+    }
+
+    // One frame of a card back from RT64 (its present thread): keyed against the plate, the middle cut square and
+    // shrunk, on a thread of its own. The last frame in publishes the card.
+    void take_card_frame(uint32_t anim, int frame) {
+        request_card_square([anim, frame](uint32_t width, uint32_t height, std::vector<uint8_t>&& rgba) {
+            std::thread([anim, frame, width, height, rgba = std::move(rgba)]() mutable {
+                if (width == 0 || height == 0 || rgba.size() < (size_t)width * height * 4) {
+                    return;
+                }
+                key_frame(width, height, rgba);
+                const uint32_t side = std::max(1u, std::min(width, height));
+                const uint32_t x0 = (width - side) / 2, y0 = (height - side) / 2;
+                std::vector<uint8_t> small((size_t)work_size * work_size * 4);
+                // Straight alpha, as the menus draw it; the resize weighs colours by it, so no background bleeds in.
+                stbir_resize_uint8_linear(&rgba[((size_t)y0 * width + x0) * 4], (int)side, (int)side, (int)width * 4,
+                    small.data(), work_size, work_size, work_size * 4, STBIR_RGBA);
+                std::vector<std::vector<uint8_t>> done;
+                {
+                    std::lock_guard lock{ store.mutex };
+                    CardStore::Card& card = store.cards[anim];
+                    const int n = tooie::photo_mode::pose_card_frames;
+                    if ((int)card.frames.size() != n) {
+                        card.frames.assign(n, {});
+                        card.frames_in = 0;
+                    }
+                    if (card.frames[frame].empty()) {
+                        card.frames_in++;
+                    }
+                    card.frames[frame] = std::move(small);
+                    if (card.frames_in == n) {
+                        done = std::move(card.frames);
+                        card.frames.clear();
+                        card.frames_in = 0;
+                    }
+                }
+                if (!done.empty()) {
+                    publish_card(card_key(round_model, anim), fit_card(done), true);
+                }
+            }).detach();
+            develop_shot_back = true;
+        });
+    }
+
+    // The grid, and taking the cards (game thread unless atomic).
+    std::atomic<bool> grid_open{false};
+    std::atomic<int> grid_cursor{0};
+    int grid_prev_pose = 0;                  // put back when the grid is left with B
+    Clock::time_point grid_anim_start{};
+    std::atomic<bool> grid_open_request{false}, grid_close_request{false};
+    std::atomic<int> grid_pick_request{-1};  // a pose to wear and close the grid with
+    std::atomic<bool> grid_cancel{false};    // B: close and put the pose back
+    std::atomic<bool> develop_again{false};  // Start in the grid: all cards again
+
+    std::mutex develop_mutex;
+    std::vector<uint32_t> develop_requested;   // under develop_mutex
+    uint32_t develop_requested_model = 0;     // the character's model they are for (under develop_mutex)
+    bool develop_requested_stand_in = false;  // filmed as another form than the player's (under develop_mutex)
+    float develop_requested_size = 1.0f;
+    std::atomic<bool> develop_pending{false};
+    std::atomic<bool> developing{false};
+    std::atomic<int> developed{0}, develop_total{0};
+    struct Develop {
+        std::vector<uint32_t> anims;
+        size_t at = 0;
+        int frame = 0;
+        int phase = 0;
+        int wait = 0;
+        Clock::time_point asked{};
+        bool others_were_hidden = false;
+        bool players_were_hidden = false;
+        // Filmed with pose puppets (pose_puppets.cpp): off screen, nothing on screen moves.
+        bool puppets = false;
+        std::vector<uint32_t> queue;                                // shots waiting, (anim << 8) | frame
+        std::unordered_map<uint32_t, Clock::time_point> asked_at;   // shots out, when asked for
+        Clock::time_point started{};
+    } dev;
+    // The pose puppets' side, shared with the threads their pictures come back on.
+    struct FilmShared {
+        std::mutex mutex;
+        uint32_t gen = 0;                       // the round of cards; pictures of an older one are dropped
+        std::unordered_set<uint32_t> got;       // shots back this round
+        int cards_done = 0;                     // cards of this round published
+    } film_shared;
+    std::atomic<bool> film_stop_pending{false};
+    // Cards taken the old way: Banjo posed in front of the card camera, the picture keyed against a plate.
+    bool old_develop() {
+        return developing && !dev.puppets;
+    }
+
+    // Sound cues for the grid, played by mix_shutter: a tick for each move, a pop for a pick, a chime when the
+    // cards are ready.
+    std::atomic<uint32_t> cue_ticks{0}, cue_picks{0}, cue_chimes{0};
+
+    void start_develop(std::vector<uint32_t> anims, uint32_t model, bool stand_in, float size) {
+        if (anims.empty()) {
+            return;
+        }
+        std::lock_guard lock{ develop_mutex };
+        develop_requested = std::move(anims);
+        develop_requested_model = model;
+        develop_requested_stand_in = stand_in;
+        develop_requested_size = size;
+        develop_pending = true;
+    }
+
+    float banjo_yaw(uint8_t* rdram, recomp_context* ctx) {
+        const uint32_t player = (uint32_t)MEM_W(0, (gpr)(int32_t)player_table);
+        if (player < 0x80000000u || player >= 0x81000000u) {
+            return 0.0f;
+        }
+        recomp_context call = *ctx;
+        call.r29 = ctx->r29 - 0x100;
+        call.r4 = (int32_t)player;
+        yaw_get(rdram, &call);
+        return call.f0.fl;
+    }
+
+    // The card camera's place and turn: in front of Banjo, three-quarters on. Banjo's yaw and the camera's share
+    // a sense (yaw 0 looks along -z; Banjo at yaw 0 faces +z), so a camera with his yaw looks him in the face.
+    bool card_camera(uint8_t* rdram, recomp_context* ctx, float pos[3], float& yaw, float& pitch) {
+        const uint32_t player = (uint32_t)MEM_W(0, (gpr)(int32_t)player_table);
+        const uint32_t transform = player != 0 ? (uint32_t)MEM_W(player_transform, (gpr)(int32_t)player) : 0;
+        if (transform == 0) {
+            return false;
+        }
+        float pivot[3];
+        for (int i = 0; i < 3; i++) {
+            pivot[i] = read_float(rdram, transform + 4 * i);
+        }
+        pivot[1] += card_height;
+        yaw = std::fmod(banjo_yaw(rdram, ctx) + card_turn + 720.0f, 360.0f);
+        pitch = card_pitch;
+        const float sy = std::sin(yaw * deg), cy = std::cos(yaw * deg);
+        const float sp = std::sin(pitch * deg), cp = std::cos(pitch * deg);
+        const float forward[3] = { -sy * cp, sp, -cy * cp };
+        for (int i = 0; i < 3; i++) {
+            pos[i] = pivot[i] - forward[i] * card_distance;
+        }
+        return true;
+    }
+
+    void hold_anim_at(uint8_t* rdram, recomp_context* ctx, float t) {
+        const uint32_t ctrl = player_anim_ctrl(rdram, ctx);
+        if (ctrl != 0) {
+            write_float(rdram, ctrl + anctrl_timer, std::clamp(t, 0.0f, 0.999f));
+        }
+    }
+
+    void finish_develop(bool cancelled) {
+        developing = false;
+        if (dev.puppets) {
+            // The puppets give their room back on the game thread (tick).
+            film_stop_pending = true;
+            std::lock_guard lock{ film_shared.mutex };
+            film_shared.gen++;
+        }
+        else {
+            others_hidden = dev.others_were_hidden;
+            players_hidden = dev.players_were_hidden;
+            // The pose worn before: on again from the start.
+            pose_dirty = true;
+            grid_anim_start = Clock::now();
+        }
+        if (!cancelled) {
+            cue_chimes.fetch_add(1);
+        }
+        const float secs = std::chrono::duration<float>(Clock::now() - dev.started).count();
+        fprintf(stderr, "[photo] pose cards %s: %d of %d in %.1f s (%s)\n", cancelled ? "stopped" : "done", developed.load(),
+            develop_total.load(), secs, dev.puppets ? "puppets" : "Banjo and a plate");
+    }
+
+    // A picture of a shot back from the puppets (any thread): into its card, which is published once all its frames
+    // are in.
+    void puppet_shot_back(uint32_t gen, uint32_t id, uint32_t side, std::vector<uint8_t>&& rgba) {
+        const uint32_t anim = id >> 8;
+        const int frame = (int)(id & 0xFF);
+        const int n = tooie::photo_mode::pose_card_frames;
+        if (frame >= n || side == 0) {
+            return;
+        }
+        {
+            std::lock_guard lock{ film_shared.mutex };
+            if (gen != film_shared.gen || !film_shared.got.insert(id).second) {
+                return;
+            }
+        }
+        std::vector<uint8_t> small((size_t)work_size * work_size * 4);
+        stbir_resize_uint8_linear(rgba.data(), (int)side, (int)side, (int)side * 4,
+            small.data(), work_size, work_size, work_size * 4, STBIR_RGBA);
+        std::vector<std::vector<uint8_t>> done;
+        {
+            std::lock_guard lock{ store.mutex };
+            CardStore::Card& card = store.cards[anim];
+            if ((int)card.frames.size() != n) {
+                card.frames.assign(n, {});
+                card.frames_in = 0;
+            }
+            if (card.frames[frame].empty()) {
+                card.frames_in++;
+            }
+            card.frames[frame] = std::move(small);
+            if (card.frames_in == n) {
+                done = std::move(card.frames);
+                card.frames.clear();
+                card.frames_in = 0;
+            }
+        }
+        if (!done.empty()) {
+            publish_card(card_key(round_model, anim), fit_card(done), true);
+            std::lock_guard lock{ film_shared.mutex };
+            if (gen == film_shared.gen) {
+                developed = ++film_shared.cards_done;
+            }
+        }
+    }
+
+    void bring_page_forward();
+
+    // One game update of filming with the puppets: shots not back in time are asked again, and while fewer than
+    // two frames are out, the next frame's shots are handed over (a pose's frames are queued when it is begun, the
+    // open page's poses first).
+    void step_film() {
+        const int n = tooie::photo_mode::pose_card_frames;
+        int done = 0;
+        {
+            std::lock_guard lock{ film_shared.mutex };
+            done = film_shared.cards_done;
+            const Clock::time_point now = Clock::now();
+            for (auto it = dev.asked_at.begin(); it != dev.asked_at.end();) {
+                if (film_shared.got.count(it->first) != 0) {
+                    it = dev.asked_at.erase(it);
+                }
+                else if (now - it->second > 1500ms) {
+                    dev.queue.insert(dev.queue.begin(), it->first);
+                    it = dev.asked_at.erase(it);
+                }
+                else {
+                    ++it;
+                }
+            }
+        }
+        if (done >= (int)dev.anims.size()) {
+            finish_develop(false);
+            return;
+        }
+        if (!tooie::pose_puppets::filming() || tooie::pose_puppets::film_in_flight() >= 2) {
+            return;
+        }
+        std::vector<tooie::pose_puppets::Shot> shots;
+        const int cells = tooie::pose_puppets::film_cells();
+        while ((int)shots.size() < cells) {
+            if (dev.queue.empty()) {
+                if (dev.at >= dev.anims.size()) {
+                    break;
+                }
+                bring_page_forward();
+                const uint32_t anim = dev.anims[dev.at++];
+                for (int f = n - 1; f >= 0; f--) {
+                    dev.queue.insert(dev.queue.begin(), (anim << 8) | (uint32_t)f);
+                }
+                continue;
+            }
+            const uint32_t id = dev.queue.front();
+            dev.queue.erase(dev.queue.begin());
+            shots.push_back({ id >> 8, (float)(id & 0xFF) / (float)n, id });
+            dev.asked_at[id] = Clock::now();
+        }
+        if (!shots.empty()) {
+            tooie::pose_puppets::film_next(std::move(shots));
+        }
+    }
+
+    // The cards on the page the grid shows are taken first: the next one waiting on that page is moved up to be
+    // taken now, so the page fills in before the rest, whichever page is turned to meanwhile.
+    void bring_page_forward() {
+        if (!grid_open) {
+            return;
+        }
+        const int page = grid_cursor.load() / tooie::photo_mode::pose_grid_page;
+        for (size_t i = dev.at; i < dev.anims.size(); i++) {
+            for (int p = 0; p < pose_total(); p++) {
+                if (card_anim(p) == dev.anims[i] && p / tooie::photo_mode::pose_grid_page == page) {
+                    std::swap(dev.anims[dev.at], dev.anims[i]);
+                    return;
+                }
+            }
+        }
+    }
+
+    // One game update of taking cards.
+    void step_develop(uint8_t* rdram, recomp_context* ctx) {
+        if (!developing) {
+            return;
+        }
+        if (dev.puppets) {
+            step_film();
+            return;
+        }
+        const int n = tooie::photo_mode::pose_card_frames;
+        const float t = (float)dev.frame / (float)n;
+        if (dev.phase >= 1 && dev.phase <= 3) {
+            hold_anim_at(rdram, ctx, t);
+        }
+        if (dev.wait > 0) {
+            dev.wait--;
+            return;
+        }
+        switch (dev.phase) {
+        case 10:
+            // The plate: Banjo hidden, then his picture asked for.
+            players_hidden = true;
+            dev.wait = settle_updates;
+            dev.phase = 11;
+            break;
+        case 11:
+            develop_shot_back = false;
+            dev.asked = Clock::now();
+            take_plate();
+            dev.phase = 12;
+            break;
+        case 12:
+            if (!develop_shot_back && Clock::now() - dev.asked < 1s) {
+                break;
+            }
+            players_hidden = false;
+            dev.phase = 0;
+            break;
+        case 0:
+            if (dev.at >= dev.anims.size()) {
+                finish_develop(false);
+                return;
+            }
+            bring_page_forward();
+            apply_pose(rdram, ctx, dev.anims[dev.at]);
+            dev.frame = 0;
+            hold_anim_at(rdram, ctx, 0.0f);
+            dev.wait = settle_updates;
+            dev.phase = 2;
+            break;
+        case 1:
+            dev.wait = frame_updates;
+            dev.phase = 2;
+            break;
+        case 2:
+            develop_shot_back = false;
+            dev.asked = Clock::now();
+            take_card_frame(dev.anims[dev.at], dev.frame);
+            dev.phase = 3;
+            break;
+        case 3:
+            if (!develop_shot_back && Clock::now() - dev.asked < 1s) {
+                break;
+            }
+            if (++dev.frame >= n) {
+                dev.at++;
+                developed = (int)dev.at;
+                dev.phase = 0;
+            }
+            else {
+                dev.phase = 1;
+            }
+            break;
+        }
+    }
+
+    void begin_develop(uint8_t* rdram, recomp_context* ctx, std::vector<uint32_t>&& anims, uint32_t model, bool stand_in, float size) {
+        dev = Develop{};
+        round_model = model;
+        dev.anims = std::move(anims);
+        dev.started = Clock::now();
+        developed = 0;
+        develop_total = (int)dev.anims.size();
+        // Off screen with the pose puppets when there is room for them: nothing on screen changes. TOOIE_POSE_OLD=1
+        // takes them the old way, to compare.
+        static const bool old_way = std::getenv("TOOIE_POSE_OLD") != nullptr;
+        if (film_stop_pending.exchange(false)) {
+            tooie::pose_puppets::film_stop(rdram, ctx);
+        }
+        uint32_t gen = 0;
+        {
+            std::lock_guard lock{ film_shared.mutex };
+            gen = ++film_shared.gen;
+            film_shared.got.clear();
+            film_shared.cards_done = 0;
+        }
+        if (!old_way && tooie::pose_puppets::film_start(rdram, ctx, [gen](uint32_t id, uint32_t side, std::vector<uint8_t>&& rgba) {
+                puppet_shot_back(gen, id, side, std::move(rgba));
+            }, stand_in ? (uint16_t)model : 0, size)) {
+            dev.puppets = true;
+            developing = true;
+            fprintf(stderr, "[photo] filming %d pose cards of model 0x%X with puppets, %d at a time\n", develop_total.load(), model,
+                tooie::pose_puppets::film_cells());
+            return;
+        }
+        // The old way poses the player himself, so it cannot film another form.
+        if (stand_in) {
+            develop_total = 0;
+            fprintf(stderr, "[photo] no room for the pose puppets: model 0x%X's cards wait\n", model);
+            return;
+        }
+        dev.others_were_hidden = others_hidden;
+        dev.players_were_hidden = players_hidden;
+        others_hidden = true;
+        players_hidden = false;
+        developed = 0;
+        develop_total = (int)dev.anims.size();
+        {
+            std::lock_guard lock{ store.mutex };
+            plate = Plate{};
+        }
+        // First the background plate, once the card camera is in place.
+        dev.phase = 10;
+        dev.wait = settle_updates;
+        developing = true;
+        // The cards are the plain game picture: no photo look, crop, border or blur on them.
+        apply_filters(false);
+        fprintf(stderr, "[photo] taking %d pose cards\n", develop_total.load());
+    }
+
+    // The mouse in photo mode (input path): its buttons and wheel, counted since the last read.
+    std::atomic<bool> mouse_reset{false};
+    bool mouse_clicks_seen = false;
+    uint32_t last_left_clicks = 0, last_right_clicks = 0;
+    bool wheel_seen = false;
+    int32_t last_wheel = 0;
+    std::atomic<int> zoom_notches{0};   // for place_camera
+
+    // Whether a mouse button is bound to one of the game's buttons in the keyboard profile: then a click is
+    // that button already, and photo mode leaves it alone.
+    bool mouse_button_bound(int button) {
+        try {
+            const int profile = recompinput::profiles::get_sp_keyboard_profile_index();
+            for (int i = (int)recompinput::GameInput::N64_BUTTON_START;
+                 i < (int)recompinput::GameInput::N64_BUTTON_START + (int)recompinput::GameInput::N64_BUTTON_COUNT; i++) {
+                for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
+                    const recompinput::InputField& f = recompinput::profiles::get_input_binding(profile, (recompinput::GameInput)i, b);
+                    if (f.input_type == recompinput::InputType::Mouse && f.input_id == button) {
+                        return true;
+                    }
+                }
+            }
+        } catch (...) {
+        }
+        return false;
+    }
+
+    // The first key the keyboard profile binds to a game button, by name ("Space"), for notices in plain text.
+    std::string key_name(recompinput::GameInput input) {
+        try {
+            const int profile = recompinput::profiles::get_sp_keyboard_profile_index();
+            for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
+                const recompinput::InputField& f = recompinput::profiles::get_input_binding(profile, input, b);
+                if (f.input_type == recompinput::InputType::Keyboard && !f.has_modifier()) {
+                    const char* name = SDL_GetScancodeName((SDL_Scancode)f.input_id);
+                    if (name != nullptr && name[0] != '\0') {
+                        return name;
+                    }
+                }
+            }
+        } catch (...) {
+        }
+        return recompinput::get_game_input_name(input);
+    }
+
+    // The grid's own repeat for a held D-pad direction.
+    uint16_t grid_held = 0;
+    Clock::time_point grid_held_since{}, grid_held_last{};
+
+    void move_cursor(int by) {
+        const int count = pose_total();
+        const int now = grid_cursor.load();
+        const int next = std::clamp(now + by, 0, count - 1);
+        if (next != now) {
+            grid_cursor = next;
+            cue_ticks.fetch_add(1);
+        }
+    }
+
+    // Input path, while the grid is open (or cards are being taken): the D-pad moves over the cards (held, it
+    // repeats), L and R turn the page, A wears the pose and closes, B closes and puts the pose back, Start
+    // takes every card again. While cards are being taken the cursor and the pages still move (the page shown is
+    // taken first), B stops it, and A and Start wait till it is done.
+    void grid_input(uint16_t buttons, uint16_t pressed, int wheel_notches, Clock::time_point now) {
+        if (developing) {
+            if (pressed & button_b) {
+                grid_cancel = true;
+            }
+            pressed &= (uint16_t)~(button_a | button_b | button_start);
+        }
+        const uint16_t dirs = buttons & (d_up | d_down | d_left | d_right);
+        auto step = [](uint16_t d) {
+            const int cols = tooie::photo_mode::pose_grid_columns;
+            return (d & d_up ? -cols : 0) + (d & d_down ? cols : 0) + (d & d_left ? -1 : 0) + (d & d_right ? 1 : 0);
+        };
+        if (pressed & dirs) {
+            grid_held = dirs;
+            grid_held_since = now;
+            grid_held_last = now;
+            move_cursor(step(pressed & dirs));
+        }
+        else if (dirs != 0 && dirs == grid_held && now - grid_held_since >= repeat_delay && now - grid_held_last >= repeat_every * 2) {
+            grid_held_last = now;
+            move_cursor(step(dirs));
+        }
+        else if (dirs == 0) {
+            grid_held = 0;
+        }
+        const int page = tooie::photo_mode::pose_grid_page;
+        if (pressed & (button_l | button_z)) {
+            move_cursor(grid_cursor.load() >= page ? -page : -grid_cursor.load());
+        }
+        if (pressed & button_r) {
+            move_cursor(page);
+        }
+        // The wheel scrolls a row of cards a notch.
+        if (wheel_notches != 0) {
+            move_cursor(-wheel_notches * tooie::photo_mode::pose_grid_columns);
+        }
+        if (pressed & button_a) {
+            grid_pick_request = grid_cursor.load();
+        }
+        else if (pressed & button_b) {
+            grid_cancel = true;
+        }
+        else if (pressed & button_start) {
+            develop_again = true;
+        }
+    }
+
+    // The picked character's card animations (each once).
+    std::vector<uint32_t> all_pose_anims() {
+        std::vector<uint32_t> anims;
+        for (int i = 0; i < pose_total(); i++) {
+            const uint32_t anim = card_anim(i);
+            if (anim != 0 && std::find(anims.begin(), anims.end(), anim) == anims.end()) {
+                anims.push_back(anim);
+            }
+        }
+        return anims;
+    }
+
+    // Takes the picked character's cards (those given, or all), filed under its model.
+    void develop_character(std::vector<uint32_t> anims) {
+        const Character& c = current_character();
+        start_develop(std::move(anims), c.model, stand_in_wanted(), c.card_size);
+    }
+
+    // Game thread, each update while photo mode is on: carries out the grid's requests. The pose under the
+    // cursor is worn at once, so Banjo shows it in the world as well as on its card.
+    int grid_worn = -1;
+    void tick_grid(uint8_t* rdram, recomp_context* ctx) {
+        const int count = pose_total();
+        if (grid_open_request.exchange(false) && !grid_open && !developing) {
+            grid_prev_pose = pose_choice;
+            grid_cursor = pose_choice.load();
+            grid_worn = pose_choice;
+            grid_anim_start = Clock::now();
+            grid_open = true;
+            cue_picks.fetch_add(1);
+            // The first time: the cards kept from before, then any missing are taken.
+            const uint32_t model = current_character().model;
+            if (cards_loaded_model.exchange(model) != model) {
+                const bool stand_in = stand_in_wanted();
+                const float size = current_character().card_size;
+                std::thread([model, stand_in, size, anims = all_pose_anims()] {
+                    start_develop(load_cards(model, anims), model, stand_in, size);
+                }).detach();
+            }
+        }
+        if (grid_close_request.exchange(false)) {
+            grid_open = false;
+        }
+        if (grid_cancel.exchange(false)) {
+            if (developing) {
+                finish_develop(true);
+            }
+            else if (grid_open) {
+                pose_choice = grid_prev_pose;
+                pose_dirty = true;
+                grid_open = false;
+            }
+        }
+        if (const int pick = grid_pick_request.exchange(-1); pick >= 0 && pick < count) {
+            pose_choice = pick;
+            pose_dirty = true;
+            grid_open = false;
+            cue_picks.fetch_add(1);
+            if (!panel_shown) {
+                tooie::toast::show(std::string("Pose: ") + pose_at(pick).name);
+            }
+        }
+        if (develop_again.exchange(false)) {
+            develop_character(all_pose_anims());
+        }
+        if (develop_pending && !developing) {
+            std::vector<uint32_t> anims;
+            uint32_t model = 0;
+            bool stand_in = false;
+            float size = 1.0f;
+            {
+                std::lock_guard lock{ develop_mutex };
+                anims = std::move(develop_requested);
+                develop_requested.clear();
+                model = develop_requested_model;
+                stand_in = develop_requested_stand_in;
+                size = develop_requested_size;
+                develop_pending = false;
+            }
+            if (!anims.empty()) {
+                begin_develop(rdram, ctx, std::move(anims), model, stand_in, size);
+            }
+        }
+        if (grid_open && !old_develop()) {
+            const int c = std::clamp(grid_cursor.load(), 0, count - 1);
+            if (c != grid_worn) {
+                grid_worn = c;
+                pose_choice = c;
+                pose_dirty = true;
+                grid_anim_start = Clock::now();
+            }
+        }
+    }
+
+    // The stand-in's place in its pose, moved on in slow time.
+    float stand_in_t = 0.0f;
+    Clock::time_point stand_in_last{};
+
+    uint8_t read_player_form(uint8_t* rdram) {
+        const uint32_t player = (uint32_t)MEM_W(0, (gpr)(int32_t)player_table);
+        if (player < 0x80000000u || player >= 0x81000000u) {
+            return 0;
+        }
+        const uint32_t block = (uint32_t)MEM_W(0xA0, (gpr)(int32_t)player);
+        if (block < 0x80000000u || block >= 0x81000000u) {
+            return 0;
+        }
+        return (uint8_t)MEM_BU(0x29, (gpr)(int32_t)block);
+    }
+
+    // Game thread, while photo mode is on: the player's form; on entering, which characters the save has unlocked and
+    // the player's own picked; a character asked for.
+    void tick_characters(uint8_t* rdram, recomp_context* ctx) {
+        if (!characters_checked) {
+            player_dragon = tooie::progress_cheats::get_flag(rdram, ctx, dragon_kazooie_flag);
+        }
+        const uint8_t form = read_player_form(rdram);
+        if (form != 0) {
+            player_form_now = form + (form == 0x0B && player_dragon ? dragon_form : 0);
+        }
+        if (!characters_checked) {
+            characters_checked = true;
+            uint32_t unlocked = 0;
+            int own = 0;
+            for (int i = 0; i < character_count; i++) {
+                const Character& c = characters[i];
+                const bool is_own = c.form == (uint16_t)player_form_now.load();
+                static const bool all = std::getenv("TOOIE_PHOTO_ALL_CHARACTERS") != nullptr;
+                if (is_own || all || c.flag < 0 || tooie::progress_cheats::get_flag(rdram, ctx, c.flag)) {
+                    unlocked |= 1u << i;
+                }
+                if (is_own) {
+                    own = i;
+                }
+            }
+            unlocked_characters = unlocked;
+            character = own;
+        }
+        if (const int c = character_request.exchange(-1); c >= 0 && c < character_count && c != character.load()) {
+            if (developing) {
+                finish_develop(true);
+            }
+            if (saved_anim.saved) {
+                apply_pose(rdram, ctx, 0);
+            }
+            character = c;
+            pose_choice = 0;
+            pose_dirty = true;
+            grid_cursor = 0;
+            grid_worn = 0;
+            stand_in_t = 0.0f;
+            if (!panel_shown) {
+                tooie::toast::show(std::string("Character: ") + characters[c].name);
+            }
+            fprintf(stderr, "[photo] character %s (form 0x%X, model 0x%X)%s\n", characters[c].name, characters[c].form, characters[c].model,
+                stand_in_wanted() ? ", a stand-in" : "");
+        }
+    }
+
     void enter(uint8_t* rdram) {
+        characters_checked = false;
+        character_request = -1;
         if (pose_restore_pending) {
             pose_restore_pending = false;
             saved_anim.saved = false;
         }
         exit_mask = 0;
+        mouse_reset = true;
+        zoom_notches = 0;
+        grid_open = false;
         is_active = true;
         speed = 0;
         fov_scale = 1.0f;
@@ -705,7 +1947,14 @@ namespace {
             last_buttons = 0xFFFF;   // buttons already held don't count as presses
         }
         if (!panel_shown) {
-            tooie::toast::show("Photo mode: A photo, B back, L shows the list");
+            // In the words of what was last used: the controller's N64 buttons, or the keyboard's keys.
+            if (recompui::get_cont_active()) {
+                tooie::toast::show("Photo mode: A photo, B back, L shows the list");
+            }
+            else {
+                tooie::toast::show("Photo mode: " + key_name(recompinput::GameInput::A) + " or click: photo, " +
+                    key_name(recompinput::GameInput::B) + ": back, " + key_name(recompinput::GameInput::L) + ": shows the list");
+            }
         }
         fprintf(stderr, "[photo] on\n");
     }
@@ -713,6 +1962,10 @@ namespace {
     void leave() {
         // Before is_active goes false, so no pad read in between passes a held button.
         exit_mask = 0xFFFF;
+        if (developing) {
+            finish_develop(true);
+        }
+        grid_open = false;
         is_active = false;
         apply_filters(false);
         RT64::SetPhotoFocus(0.5f, 0.5f);
@@ -734,9 +1987,10 @@ void tooie::photo_mode::register_input() {
     recompinput::set_game_input_name(photo_input, "Photo Mode");
     recompinput::set_game_input_description(photo_input,
         "Freezes the game and hides the HUD so you can fly the camera around and take screenshots. "
-        "Left stick moves, right stick looks, Z and R go down and up, A takes a screenshot. "
-        "A list on screen holds zoom, camera, collision, time, HUD, Banjo, the filters, depth of field, tilt, crop and grid: "
-        "D-pad up and down pick a row, left and right change it, L hides the list. "
+        "Left stick moves, right stick or the mouse looks, Z and R go down and up, A or a click takes a screenshot, the mouse wheel zooms. "
+        "A list on screen holds zoom, camera, collision, time, HUD, Banjo, his pose, the filters, depth of field, tilt, crop and grid: "
+        "D-pad up and down pick a row, left and right change it, L hides the list, A on Pose opens the pose cards. "
+        "The list's help shows the keys or the buttons of whichever you used last. "
         "Start runs time at 1/167, 1/8 or 1/4 speed, B goes back to the game.");
     recompinput::set_default_mapping_for_keyboard(photo_input, { recompinput::InputField::keyboard(SDL_SCANCODE_F10) });
     recompinput::set_default_mapping_for_controller(photo_input, { recompinput::InputField::controller_digital(SDL_CONTROLLER_BUTTON_GUIDE) });
@@ -862,6 +2116,9 @@ float tooie::photo_mode::adjust_fov(float fov) {
     if (!is_active) {
         return fov;
     }
+    if (old_develop()) {
+        return card_fov;
+    }
     last_fov = fov * fov_scale.load();
     return last_fov;
 }
@@ -885,12 +2142,47 @@ void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
         pressed = *buttons & ~last_buttons;
         last_buttons = *buttons;
     }
+    // Mouse buttons (when no game button is bound to them): left as A, right as B in the grid. Clicks and wheel
+    // turns from before photo mode came on don't count.
+    if (mouse_reset.exchange(false)) {
+        mouse_clicks_seen = false;
+        wheel_seen = false;
+    }
+    const uint32_t left_clicks = recompinput::get_game_mouse_clicks(SDL_BUTTON_LEFT);
+    const uint32_t right_clicks = recompinput::get_game_mouse_clicks(SDL_BUTTON_RIGHT);
+    if (mouse_clicks_seen && !mouse_button_bound(SDL_BUTTON_LEFT) && left_clicks != last_left_clicks) {
+        pressed |= button_a;
+    }
+    if (mouse_clicks_seen && !mouse_button_bound(SDL_BUTTON_RIGHT) && right_clicks != last_right_clicks && grid_open) {
+        pressed |= button_b;
+    }
+    last_left_clicks = left_clicks;
+    last_right_clicks = right_clicks;
+    mouse_clicks_seen = true;
+    // The wheel: zoom, or in the grid a row of cards a notch.
+    const int32_t wheel = recompinput::get_game_mouse_wheel();
+    const int wheel_notches = wheel_seen ? (int)(wheel - last_wheel) : 0;
+    last_wheel = wheel;
+    wheel_seen = true;
+
+    const Clock::time_point now = Clock::now();
+    if (grid_open || developing) {
+        grid_input(*buttons, pressed, wheel_notches, now);
+        *buttons = 0;
+        *x = 0.0f;
+        *y = 0.0f;
+        return;
+    }
+    zoom_notches += wheel_notches;
     if (pressed & button_b) {
         leave_requested = true;
     }
     if (pressed & button_a) {
         if ((Row)picked.load() == Row::Album) {
             album_requested = true;
+        }
+        else if ((Row)picked.load() == Row::Pose) {
+            grid_open_request = true;
         }
         else if (timer_choice == 0) {
             shoot();
@@ -911,7 +2203,6 @@ void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
     }
     // Left / right change the picked row (zoom is held, in place_camera).
     const int dir = (*buttons & d_right ? 1 : 0) - (*buttons & d_left ? 1 : 0);
-    const Clock::time_point now = Clock::now();
     if (dir == 0 || (Row)picked.load() == Row::Zoom) {
         step_held_since = {};
     }
@@ -965,7 +2256,9 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
             enter(rdram);
         }
     }
-    if (is_active && (leave_requested.exchange(false) || !playing || tooie::debug::current_map(rdram) != entered_map)) {
+    const bool asked_to_leave = leave_requested.exchange(false);
+    if (is_active && (asked_to_leave || !playing || tooie::debug::current_map(rdram) != entered_map)) {
+        fprintf(stderr, "[photo] leaving: %s\n", asked_to_leave ? "asked (B or the key)" : !playing ? "the game stopped playing" : "the map changed");
         if (saved_anim.saved && tooie::debug::current_map(rdram) == entered_map) {
             if (playing) {
                 apply_pose(rdram, ctx, 0);
@@ -995,7 +2288,14 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     }
     leave_requested = false;
+    if (film_stop_pending.exchange(false)) {
+        tooie::pose_puppets::film_stop(rdram, ctx);
+    }
     if (!is_active) {
+        // Leaving takes the stand-in away: the player shows again as he was.
+        if (tooie::pose_puppets::stand_in_on()) {
+            tooie::pose_puppets::stand_in(rdram, ctx, 0, 0, 0.0f);
+        }
         return;
     }
 
@@ -1025,12 +2325,53 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
             }
         }
     }
-    if (pose_dirty.exchange(false)) {
-        apply_pose(rdram, ctx, poses[pose_choice.load()].anim);
+    tick_characters(rdram, ctx);
+    tick_grid(rdram, ctx);
+    if (developing) {
+        step_develop(rdram, ctx);
     }
-    if (pose_choice != 0 || pose_sweep.active) {
-        if (speed == 0) {
-            hold_pose_frame(rdram, ctx);
+    if (!old_develop() && stand_in_wanted()) {
+        // Another form: the stand-in wears the pose, held at the pose frame while time is frozen, looping in slow time
+        // and under the grid's cursor; the player, hidden, is left in his own animation.
+        if (saved_anim.saved) {
+            apply_pose(rdram, ctx, 0);
+        }
+        const float scale = speed_scales[speed.load()];
+        const Clock::time_point now = Clock::now();
+        const float real_dt = std::clamp(std::chrono::duration<float>(now - stand_in_last).count(), 0.0f, 0.1f);
+        stand_in_last = now;
+        if (pose_dirty.exchange(false)) {
+            stand_in_t = std::min((float)pose_frame.load() / 20.0f, 0.999f);
+        }
+        float t = stand_in_t;
+        if (grid_open) {
+            t = std::fmod(std::chrono::duration<float>(now - grid_anim_start).count() / pose_loop_seconds, 1.0f);
+        }
+        else if (scale > 0.0f) {
+            stand_in_t = std::fmod(stand_in_t + real_dt * scale / pose_loop_seconds, 1.0f);
+            t = stand_in_t;
+        }
+        else {
+            t = std::min((float)pose_frame.load() / 20.0f, 0.999f);
+        }
+        tooie::pose_puppets::stand_in(rdram, ctx, players_hidden ? 0 : current_character().model, stand_in_anim(pose_choice.load()), t);
+    }
+    else if (!old_develop()) {
+        if (tooie::pose_puppets::stand_in_on()) {
+            tooie::pose_puppets::stand_in(rdram, ctx, 0, 0, 0.0f);
+        }
+        if (pose_dirty.exchange(false)) {
+            apply_pose(rdram, ctx, pose_at(pose_choice.load()).anim);
+        }
+        if (grid_open && pose_choice != 0) {
+            // In the grid Banjo plays the pose under the cursor, as its card does.
+            const float s = std::chrono::duration<float>(Clock::now() - grid_anim_start).count();
+            hold_anim_at(rdram, ctx, std::fmod(s / pose_loop_seconds, 1.0f));
+        }
+        else if (pose_choice != 0 || pose_sweep.active) {
+            if (speed == 0) {
+                hold_pose_frame(rdram, ctx);
+            }
         }
     }
 
@@ -1070,10 +2411,13 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     }
 
-    // RT64 keys framebuffers by physical address.
-    apply_filters(true, (uint32_t)MEM_W(0, depth_buffer_ptr) & 0x1FFFFFFFu);
+    // RT64 keys framebuffers by physical address. Not while cards are taken the old way: they are the plain picture.
+    if (!old_develop()) {
+        apply_filters(true, (uint32_t)MEM_W(0, depth_buffer_ptr) & 0x1FFFFFFFu);
+    }
 
-    const float scale = speed_scales[speed.load()];
+    // Time stands still while cards are taken, so each frame of a pose is only where its animation is held.
+    const float scale = old_develop() ? 0.0f : speed_scales[speed.load()];
     const float dt = read_float(rdram, (uint32_t)delta_time_addr);
     game_delta = dt;
     write_float(rdram, (uint32_t)delta_time_addr, scale > 0.0f ? dt * scale : frozen_delta);
@@ -1155,26 +2499,54 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
     const float dt = std::clamp(std::chrono::duration<float>(now - cam.last).count(), 0.0f, 0.1f);
     cam.last = now;
 
+    // Mouse (and gyro) motion since the last frame, in degrees: yaw positive to the left, as the camera's.
+    float mouse_yaw = 0.0f, mouse_pitch = 0.0f, gyro_yaw = 0.0f, gyro_pitch = 0.0f;
+    tooie::motion_aim::take_orbit(&mouse_yaw, &mouse_pitch, &gyro_yaw, &gyro_pitch);
+
+    if (old_develop()) {
+        // Taking pose cards: the card camera, in front of Banjo. The photo camera's own place is kept for after.
+        float pos[3], yaw = 0.0f, pitch = 0.0f;
+        if (card_camera(rdram, ctx, pos, yaw, pitch)) {
+            for (int i = 0; i < 3; i++) {
+                write_float(rdram, camera + cam_pos + 4 * i, pos[i]);
+            }
+            write_float(rdram, camera + cam_rot + 0, pitch < 0.0f ? pitch + 360.0f : pitch);
+            write_float(rdram, camera + cam_rot + 4, yaw);
+            write_float(rdram, camera + cam_rot + 8, 0.0f);
+        }
+        return true;
+    }
+
     Pad p;
     {
         std::lock_guard lock{ pad_mutex };
         p = pad;
     }
+    // While the grid is open the controls are the grid's: the camera stays where it is.
+    if (grid_open) {
+        p = Pad{};
+        mouse_yaw = mouse_pitch = 0.0f;
+    }
     // Look: the right stick, or the C-buttons when the stick is still (keyboard).
     float look_x = 0.0f, look_y = 0.0f;
-    recompinput::get_right_analog(0, &look_x, &look_y);
-    look_y = -look_y;
-    tooie::debug::get_scripted_right_stick(&look_x, &look_y);
+    if (!grid_open) {
+        recompinput::get_right_analog(0, &look_x, &look_y);
+        look_y = -look_y;
+        tooie::debug::get_scripted_right_stick(&look_x, &look_y);
+    }
     look_x = deadzone(look_x);
     look_y = deadzone(look_y);
     if (look_x == 0.0f && look_y == 0.0f) {
         look_x = (p.buttons & c_right ? 1.0f : 0.0f) - (p.buttons & c_left ? 1.0f : 0.0f);
         look_y = (p.buttons & c_up ? 1.0f : 0.0f) - (p.buttons & c_down ? 1.0f : 0.0f);
     }
-    // Zoom, held.
+    // Zoom, held; and the mouse wheel, a step a notch (up zooms in).
     const float zoom = (Row)picked.load() != Row::Zoom ? 0.0f : (p.buttons & d_left ? 1.0f : 0.0f) - (p.buttons & d_right ? 1.0f : 0.0f);
     if (zoom != 0.0f) {
         fov_scale = std::clamp(fov_scale.load() * std::exp(zoom * fov_rate * dt), min_fov_scale, max_fov_scale);
+    }
+    if (const int notches = zoom_notches.exchange(0); notches != 0) {
+        fov_scale = std::clamp(fov_scale.load() * std::exp(-0.12f * (float)notches), min_fov_scale, max_fov_scale);
     }
     if (orbit_toggle.exchange(false)) {
         cam.orbit = !cam.orbit;
@@ -1229,8 +2601,10 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
         look_x += move_x;
         look_y += move_y;
     }
-    cam.yaw = std::fmod(cam.yaw - look_x * look_speed * dt + 360.0f, 360.0f);
-    cam.pitch = std::clamp(cam.pitch + look_y * look_speed * dt, -max_pitch, max_pitch);
+    // The mouse turns the camera as the right stick does (the gyro is left out: a controller held still in the
+    // hands would drift the view).
+    cam.yaw = std::fmod(cam.yaw - look_x * look_speed * dt + mouse_yaw + 720.0f, 360.0f);
+    cam.pitch = std::clamp(cam.pitch + look_y * look_speed * dt + mouse_pitch, -max_pitch, max_pitch);
 
     const float sy = std::sin(cam.yaw * deg), cy = std::cos(cam.yaw * deg);
     const float sp = std::sin(cam.pitch * deg), cp = std::cos(cam.pitch * deg);
@@ -1290,7 +2664,8 @@ extern "C" int tooie_others_hidden(void) {
 }
 
 extern "C" int tooie_players_hidden(void) {
-    return is_active && players_hidden ? 1 : 0;
+    // Another character is photographed: the player gives way to its stand-in.
+    return is_active && (players_hidden || stand_in_wanted()) ? 1 : 0;
 }
 
 float tooie::photo_mode::flash_level() {
@@ -1305,6 +2680,7 @@ float tooie::photo_mode::flash_level() {
 // A camera shutter, made up: two short clicks (the shutter opening and closing, 70 ms apart), each a
 // burst of noise and a high ring dying away within a few milliseconds.
 void tooie::photo_mode::mix_shutter(float* stereo, size_t frames, uint32_t rate, float volume) {
+    mix_cues(stereo, frames, rate, volume);
     static uint32_t seen = 0;
     static float time = -1.0f;
     static uint32_t noise = 22222;
@@ -1337,6 +2713,179 @@ void tooie::photo_mode::mix_shutter(float* stereo, size_t frames, uint32_t rate,
     }
     if (time >= length) {
         time = -1.0f;
+    }
+}
+
+namespace {
+    // The grid's sounds, made up like the shutter: notes that ring and die away. A cue is a list of notes
+    // (start, pitch, length of the ring) played over a short time.
+    struct Note {
+        float start, hz, ring;
+    };
+    struct Cue {
+        const std::atomic<uint32_t>* counter;
+        std::vector<Note> notes;
+        float level;
+        uint32_t seen = 0;
+        float time = -1.0f;
+    };
+
+    float cue_length(const Cue& cue) {
+        float end = 0.0f;
+        for (const Note& n : cue.notes) {
+            end = std::max(end, n.start + n.ring * 6.0f);
+        }
+        return end;
+    }
+}
+
+void tooie::photo_mode::mix_cues(float* stereo, size_t frames, uint32_t rate, float volume) {
+    // A woody tick for a move, a rising two-note pop for a pick, and a bright four-note chime when the cards are
+    // ready.
+    static Cue cues[] = {
+        { &cue_ticks, { { 0.0f, 1480.0f, 0.010f } }, 0.10f },
+        { &cue_picks, { { 0.0f, 784.0f, 0.030f }, { 0.06f, 1175.0f, 0.045f } }, 0.10f },
+        { &cue_chimes, { { 0.0f, 1047.0f, 0.06f }, { 0.08f, 1319.0f, 0.06f }, { 0.16f, 1568.0f, 0.06f }, { 0.24f, 2093.0f, 0.10f } }, 0.08f },
+    };
+    if (rate == 0) {
+        return;
+    }
+    const float dt = 1.0f / (float)rate;
+    for (Cue& cue : cues) {
+        const uint32_t now = cue.counter->load(std::memory_order_relaxed);
+        if (now != cue.seen) {
+            cue.seen = now;
+            cue.time = 0.0f;
+        }
+        if (cue.time < 0.0f) {
+            continue;
+        }
+        const float length = cue_length(cue);
+        for (size_t i = 0; i < frames && cue.time < length; i++, cue.time += dt) {
+            float v = 0.0f;
+            for (const Note& n : cue.notes) {
+                const float t = cue.time - n.start;
+                if (t < 0.0f) {
+                    continue;
+                }
+                // A sine with a little of its octave, so it sounds like a struck bar.
+                const float phase = t * 2.0f * 3.14159265f * n.hz;
+                v += (std::sin(phase) + 0.3f * std::sin(2.0f * phase)) * std::exp(-t / n.ring) * std::min(1.0f, t * 2000.0f);
+            }
+            stereo[i * 2 + 0] += v * cue.level * volume;
+            stereo[i * 2 + 1] += v * cue.level * volume;
+        }
+        if (cue.time >= length) {
+            cue.time = -1.0f;
+        }
+    }
+}
+
+bool tooie::photo_mode::pose_grid(PoseGridView& view) {
+    if (!is_active || (!grid_open && !developing)) {
+        return false;
+    }
+    view.open = grid_open;
+    view.cursor = grid_cursor;
+    view.count = pose_total();
+    view.character = current_character().name;
+    view.developing = developing;
+    view.curtain = old_develop();
+    view.developed = developed;
+    view.develop_total = develop_total;
+    return true;
+}
+
+int tooie::photo_mode::pose_count() {
+    return pose_total();
+}
+
+std::string tooie::photo_mode::pose_name(int index) {
+    return index >= 0 && index < pose_total() ? pose_at(index).name : "";
+}
+
+std::string tooie::photo_mode::pose_card(int index) {
+    if (index < 0 || index >= pose_total()) {
+        return "";
+    }
+    const uint32_t anim = card_anim(index);
+    if (anim == 0) {
+        return "";
+    }
+    const uint32_t key = card_key(current_character().model, anim);
+    std::lock_guard lock{ store.mutex };
+    auto it = store.cards.find(key);
+    return it == store.cards.end() || it->second.gen == 0 ? "" : card_prefix(key, it->second.gen);
+}
+
+bool tooie::photo_mode::request_character(int index) {
+    if (!is_active || index < 0 || index >= ::character_count) {
+        return false;
+    }
+    character_request = index;
+    return true;
+}
+
+int tooie::photo_mode::character_count() {
+    return ::character_count;
+}
+
+std::string tooie::photo_mode::character_list() {
+    std::string out;
+    char line[128];
+    const uint32_t unlocked = unlocked_characters.load();
+    for (int i = 0; i < ::character_count; i++) {
+        const Character& c = characters[i];
+        std::snprintf(line, sizeof(line), "%s%2d  %-16s form 0x%X, model 0x%X, %d poses%s%s", i == 0 ? "" : "\n", i, c.name, c.form, c.model,
+            c.pose_count, i == character.load() ? "  (picked)" : "", is_active && !(unlocked & (1u << i)) ? "  (locked in this save)" : "");
+        out += line;
+    }
+    return out;
+}
+
+std::string tooie::photo_mode::character_name(int index) {
+    return index >= 0 && index < ::character_count ? characters[index].name : "";
+}
+
+bool tooie::photo_mode::request_pose_grid(bool open) {
+    if (!is_active) {
+        return false;
+    }
+    (open ? grid_open_request : grid_close_request) = true;
+    return true;
+}
+
+bool tooie::photo_mode::request_pose(int index) {
+    if (!is_active || index < 0 || index >= pose_total()) {
+        return false;
+    }
+    grid_pick_request = index;
+    return true;
+}
+
+bool tooie::photo_mode::request_develop(const std::vector<uint32_t>& anims) {
+    if (!is_active) {
+        return false;
+    }
+    develop_character(anims.empty() ? all_pose_anims() : anims);
+    return true;
+}
+
+std::string tooie::photo_mode::pose_list() {
+    std::string out;
+    char line[96];
+    for (int i = 0; i < pose_total(); i++) {
+        std::snprintf(line, sizeof(line), "%s%2d  %3X  %s", i == 0 ? "" : "\n", i, pose_at(i).anim, pose_at(i).name);
+        out += line;
+    }
+    return out;
+}
+
+tooie::photo_mode::AButton tooie::photo_mode::a_button() {
+    switch ((Row)picked.load()) {
+    case Row::Pose: return AButton::PoseGrid;
+    case Row::Album: return AButton::Album;
+    default: return AButton::Photo;
     }
 }
 

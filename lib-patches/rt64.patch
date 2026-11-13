@@ -771,7 +771,7 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..b80bdcf 100644
+index 3227ab1..e9030ea 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,12 +4,30 @@
@@ -970,7 +970,7 @@ index 3227ab1..b80bdcf 100644
                  
                  VIRenderer::RenderParams renderParams;
                  if (colorTarget != nullptr) {
-@@ -339,17 +421,179 @@ namespace RT64 {
+@@ -339,17 +421,189 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -1033,11 +1033,13 @@ index 3227ab1..b80bdcf 100644
                  
 +                // Copy the game image for a pending screenshot, before any UI is drawn.
 +                ScreenshotReadback screenshot;
++                float shotRegion[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
 +                if ((renderParams.texture != nullptr) && screenshotFormatSupported(renderParams.textureFormat)) {
 +                    const std::scoped_lock lock(screenshotMutex);
 +                    if (screenshotCallback) {
 +                        screenshot.callback = std::move(screenshotCallback);
 +                        screenshotCallback = nullptr;
++                        std::copy(std::begin(screenshotRegion), std::end(screenshotRegion), std::begin(shotRegion));
 +                    }
 +                }
 +
@@ -1048,9 +1050,16 @@ index 3227ab1..b80bdcf 100644
 +                        shotTexture = mirrorShotRenderer->apply(ext.device, commandList, ext.shaderLibrary, renderParams.texture,
 +                            renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight, MirrorUsedWidth(renderParams));
 +                    }
++                    // Banjo-Tooie: only the part asked for (RequestScreenshotRegion), the whole image otherwise.
++                    const uint32_t fullWidth = renderParams.textureWidth;
++                    const uint32_t fullHeight = renderParams.textureHeight;
++                    const uint32_t left = std::min(uint32_t(shotRegion[0] * fullWidth), fullWidth - 1);
++                    const uint32_t top = std::min(uint32_t(shotRegion[1] * fullHeight), fullHeight - 1);
++                    const uint32_t right = std::clamp(uint32_t(shotRegion[2] * fullWidth + 0.5f), left + 1, fullWidth);
++                    const uint32_t bottom = std::clamp(uint32_t(shotRegion[3] * fullHeight + 0.5f), top + 1, fullHeight);
 +                    screenshot.format = renderParams.textureFormat;
-+                    screenshot.width = renderParams.textureWidth;
-+                    screenshot.height = renderParams.textureHeight;
++                    screenshot.width = right - left;
++                    screenshot.height = bottom - top;
 +
 +                    // Rows are padded to 256 bytes, as D3D12 requires.
 +                    const uint32_t texelSize = RenderFormatSize(screenshot.format);
@@ -1058,9 +1067,10 @@ index 3227ab1..b80bdcf 100644
 +                    screenshot.rowWidth = rowBytes / texelSize;
 +                    screenshot.buffer = ext.device->createBuffer(RenderBufferDesc::ReadbackBuffer(uint64_t(rowBytes) * screenshot.height));
 +                    commandList->barriers(RenderBarrierStage::COPY, RenderTextureBarrier(shotTexture, RenderTextureLayout::COPY_SOURCE));
++                    const RenderBox shotBox{ int32_t(left), int32_t(top), int32_t(right), int32_t(bottom) };
 +                    commandList->copyTextureRegion(
 +                        RenderTextureCopyLocation::PlacedFootprint(screenshot.buffer.get(), screenshot.format, screenshot.width, screenshot.height, 1, screenshot.rowWidth),
-+                        RenderTextureCopyLocation::Subresource(shotTexture));
++                        RenderTextureCopyLocation::Subresource(shotTexture), 0, 0, 0, &shotBox);
 +                }
 +
 +                // Banjo-Tooie: FSR 1, when it's on and the game renders below the window's resolution, upscales
@@ -1150,7 +1160,7 @@ index 3227ab1..b80bdcf 100644
                      drawHook(commandList, swapChainFramebuffer);
                  }
  
-@@ -359,13 +603,24 @@ namespace RT64 {
+@@ -359,13 +613,24 @@ namespace RT64 {
                          inspector->draw(commandList);
                      }
                      
@@ -1175,7 +1185,7 @@ index 3227ab1..b80bdcf 100644
                  }
              }
  
-@@ -384,14 +639,16 @@ namespace RT64 {
+@@ -384,14 +649,16 @@ namespace RT64 {
              }
  
              // As soon as we're done with the first render target, we notify the workload queue it can proceed.
@@ -1193,7 +1203,7 @@ index 3227ab1..b80bdcf 100644
                  }
  
                  if (presentWaitEnabled) {
-@@ -400,8 +657,49 @@ namespace RT64 {
+@@ -400,8 +667,49 @@ namespace RT64 {
  
                  RenderCommandSemaphore *waitSemaphore = drawSemaphores[swapChainIndex].get();
                  presentTimestamp = Timer::current();
@@ -1244,7 +1254,7 @@ index 3227ab1..b80bdcf 100644
              }
          }
      }
-@@ -428,6 +726,7 @@ namespace RT64 {
+@@ -428,6 +736,7 @@ namespace RT64 {
      void PresentQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % presents.size();
@@ -1252,7 +1262,7 @@ index 3227ab1..b80bdcf 100644
      }
  
      void PresentQueue::threadLoop() {
-@@ -449,23 +748,68 @@ namespace RT64 {
+@@ -449,23 +758,68 @@ namespace RT64 {
          uint32_t displayTimingRate = UINT32_MAX;
          const bool displayTiming = ext.device->getCapabilities().displayTiming;
          bool swapChainValid = !ext.swapChain->needsResize();
@@ -1326,7 +1336,7 @@ index 3227ab1..b80bdcf 100644
                  if (needsResize) {
                      ext.presentGraphicsWorker->commandList->begin();
                      ext.presentGraphicsWorker->commandList->end();
-@@ -489,7 +833,7 @@ namespace RT64 {
+@@ -489,7 +843,7 @@ namespace RT64 {
                      ext.sharedResources->setSwapChainRate(std::min(ext.appWindow->getRefreshRate(), displayTimingRate));
                  }
  
@@ -1335,7 +1345,7 @@ index 3227ab1..b80bdcf 100644
                      uint32_t newDisplayTimingRate = ext.swapChain->getRefreshRate();
                      if (newDisplayTimingRate == 0) {
                          newDisplayTimingRate = UINT32_MAX;
-@@ -501,23 +845,44 @@ namespace RT64 {
+@@ -501,23 +855,44 @@ namespace RT64 {
                      }
                  }
  
@@ -1381,7 +1391,7 @@ index 3227ab1..b80bdcf 100644
                  if (!present.paused) {
                      if (!present.fbOperations.empty()) {
                          const std::scoped_lock lock(screenFbChangePoolMutex);
-@@ -528,6 +893,7 @@ namespace RT64 {
+@@ -528,6 +903,7 @@ namespace RT64 {
                      threadAdvanceBarrier();
                  }
  
@@ -2155,7 +2165,7 @@ index 8ea27d5..50ebf26 100644
          std::vector<uint16_t> worldIndices;
          std::vector<uint16_t> fogIndices;
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..a564490 100644
+index 5a331aa..0a11b1e 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -4,9 +4,14 @@
@@ -2406,7 +2416,19 @@ index 5a331aa..a564490 100644
                      framebufferRenderer->recordFramebuffer(ext.workloadGraphicsWorker, framebufferIndex++);
  
                      // Transition the render targets in case the present queue will show them so it doesn't have to perform transitions.
-@@ -837,17 +935,23 @@ namespace RT64 {
+@@ -805,6 +903,11 @@ namespace RT64 {
+                         ext.workloadGraphicsWorker->commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(chosenTarget->texture.get(), RenderTextureLayout::SHADER_READ));
+                     }
+ 
++                    // Banjo-Tooie: a picture asked for with SetTargetCapture (rt64_present_queue_ext.cpp) is copied back.
++                    if (colorFb != nullptr) {
++                        presentext::targetCaptureRecord(ext.workloadGraphicsWorker, colorTarget, colorFb->addressStart, targetWidth, targetHeight, ext.shaderLibrary);
++                    }
++
+                     // Do the resolve if using MSAA while target override is active and we're on the correct framebuffer pair index.
+                     if (usingMSAA && (overrideTarget != nullptr) && ((uint32_t)overrideTargetFbPairIndex == f)) {
+                         overrideTarget->resize(ext.workloadGraphicsWorker, colorTarget->width, colorTarget->height);
+@@ -837,17 +940,24 @@ namespace RT64 {
                      fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
@@ -2419,6 +2441,7 @@ index 5a331aa..a564490 100644
              ext.workloadGraphicsWorker->execute();
              ext.workloadGraphicsWorker->wait();
 +            cpuPart(RendererCpuPart::GpuWait);
++            presentext::targetCaptureFinish();
              workerMutex.unlock();
  
              // Update the GPU profiler with the results from the timestamps of the frame.
@@ -2430,7 +2453,7 @@ index 5a331aa..a564490 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -858,6 +962,8 @@ namespace RT64 {
+@@ -858,6 +968,8 @@ namespace RT64 {
          }
  
          framebufferRenderer->advanceFrame(workloadConfig.raytracingEnabled);
@@ -2439,7 +2462,7 @@ index 5a331aa..a564490 100644
          rendererCPUProfiler.end();
          rendererCPUProfiler.log();
          rendererCPUProfiler.reset();
-@@ -867,6 +973,7 @@ namespace RT64 {
+@@ -867,6 +979,7 @@ namespace RT64 {
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();
@@ -2447,6 +2470,14 @@ index 5a331aa..a564490 100644
      }
  
      void WorkloadQueue::threadAdvanceWorkloadId(uint64_t newWorkloadId) {
+@@ -1064,6 +1177,7 @@ namespace RT64 {
+                 uint32_t targetIndex = 0;
+                 uint32_t framesRendered = 0;
+                 int64_t renderTimeTotalMicro = 0;
++                presentext::targetCaptureBeginFrame();
+                 for (uint32_t frame = 0; (frame < displayFrames) && !skipWorkloadNow; frame++) {
+                     // Evaluate if this frame should be skipped. Measure the current time and compare it to what frame is estimated should be have been rendered by now.
+                     if ((frame > 0) && (originalTimeMicro > 0)) {
 diff --git a/src/hle/rt64_workload_queue.h b/src/hle/rt64_workload_queue.h
 index bde2f03..ea4d76b 100644
 --- a/src/hle/rt64_workload_queue.h
