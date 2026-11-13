@@ -5,6 +5,9 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-13
 
+- Photo mode: a Mirror row flips whoever you photograph left to right, Banjo himself or another character, in any pose. Console: `photo mirror [on|off]`.
+- Photo mode's pose grid: scrub a card through its loop with C-left and C-right (or by moving the mouse sideways); the card holds that frame with a bar showing where it is, the character in the world holds it too, and A keeps it as the Pose frame.
+- Photo mode looks more like the game's own menus: the list's heading has a Jiggy and a honeycomb over a gold rule, the list slides in from the left, the picked row nudges across with its Jiggy popping and its value pops when it changes, and the grid grows open with its pages sliding across as they turn. A viewfinder sits over the picture while photo mode is on: corner brackets, a small cross in the middle, and a blinking red light with a film counter of the photos taken. Like the list, none of it is ever in a photo.
 - Graphics settings set after Lighting no longer go back to their defaults when the game starts with Lighting on Ray Tracing. Loading the file set the Ray Tracing switch to match Lighting before the switch was read, which saved the file half loaded.
 
 ## 2026-11-12

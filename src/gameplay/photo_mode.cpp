@@ -196,13 +196,17 @@ namespace {
 
     // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
     // thread (-1 or +1 on the picked row).
-    enum class Row { Zoom, Camera, Collision, Time, Hud, Banjo, Character, Pose, PoseFrame, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
+    enum class Row { Zoom, Camera, Collision, Time, Hud, Banjo, Character, Pose, PoseFrame, Mirror, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
         Vignette, Grain, Focus, FocusPoint, Tilt, Crop, Border, Grid, Album, Count };
     constexpr int row_count = (int)Row::Count;
     std::atomic<int> picked{0};
     std::atomic<bool> panel_shown{true};
     std::atomic<int> pending_step{0};
     std::atomic<bool> orbit_on{false};
+    // Mirror: the character photographed flipped left to right. It is drawn by the stand-in
+    // (tooie::pose_puppets::set_mirror), the player's own form too (in his own look and animation), so the game's own
+    // Banjo is never touched.
+    std::atomic<bool> mirror_on{false};
     // Depth of field's focus point: the middle, Banjo, or one of the rule-of-thirds points.
     enum class Focus { Middle, Banjo, TopLeft, TopRight, BottomLeft, BottomRight, Count };
     constexpr const char* focus_names[] = { "Middle", "Banjo", "Top left", "Top right", "Bottom left", "Bottom right" };
@@ -542,6 +546,7 @@ namespace {
     int timer_shown = -1;
     // Shutter: photos taken (the sound mixer plays a click for each new one) and when the last one was.
     std::atomic<uint32_t> shots{0};
+    std::atomic<uint32_t> shots_at_enter{0};
     std::atomic<int64_t> last_shot_ns{0};
     constexpr float flash_seconds = 0.35f;
 
@@ -734,7 +739,7 @@ namespace {
         "Teal and orange", "Dream" };
     constexpr const char* border_names[] = { "None", "Instant photo", "Film strip", "Honeycomb", "Jiggy", "Wooden" };
     constexpr const char* crop_names[] = { "None", "16:9", "2.39:1", "4:3", "1:1", "4:5", "9:16" };
-    constexpr const char* row_names[] = { "Zoom", "Camera", "Collision", "Time", "HUD", "Banjo", "Character", "Pose", "Pose frame", "Others", "Timer", "Shutter", "Filter", "Exposure",
+    constexpr const char* row_names[] = { "Zoom", "Camera", "Collision", "Time", "HUD", "Banjo", "Character", "Pose", "Pose frame", "Mirror", "Others", "Timer", "Shutter", "Filter", "Exposure",
         "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Focus point", "Tilt", "Crop", "Border", "Grid", "Album" };
     static_assert(std::size(row_names) == row_count);
 
@@ -783,6 +788,9 @@ namespace {
             case Row::PoseFrame:
                 pose_frame = std::clamp(pose_frame + step, 0, 20);
                 pose_dirty = true;
+                break;
+            case Row::Mirror:
+                mirror_on = !mirror_on;
                 break;
             case Row::Filter: {
                 const uint32_t n = (uint32_t)std::size(look_names);
@@ -858,6 +866,8 @@ namespace {
         case Row::PoseFrame:
             std::snprintf(text, sizeof(text), "%d%%", pose_frame.load() * 5);
             return text;
+        case Row::Mirror:
+            return mirror_on ? "On" : "Off";
         case Row::Filter: {
             const uint32_t v = qol_value<uint32_t>(tooie::photo_mode::look_option, 0);
             return v < std::size(look_names) ? look_names[v] : "None";
@@ -1275,6 +1285,11 @@ namespace {
     // The grid, and taking the cards (game thread unless atomic).
     std::atomic<bool> grid_open{false};
     std::atomic<int> grid_cursor{0};
+    // Scrubbing: the cursor's card held at a pose frame (0 to 20, the Pose frame row's steps), moved with C-left and
+    // C-right or the mouse sideways; -1 while it plays. A then keeps that frame. Moving to another card lets it play.
+    std::atomic<int> grid_scrub{-1};
+    float scrub_mouse = 0.0f;   // mouse turn not yet made into frames, degrees (game thread)
+    constexpr float scrub_degrees = 1.5f;   // mouse turn a frame
     int grid_prev_pose = 0;                  // put back when the grid is left with B
     Clock::time_point grid_anim_start{};
     std::atomic<bool> grid_open_request{false}, grid_close_request{false};
@@ -1703,9 +1718,23 @@ namespace {
         const int next = std::clamp(now + by, 0, count - 1);
         if (next != now) {
             grid_cursor = next;
+            grid_scrub = -1;
             cue_ticks.fetch_add(1);
         }
     }
+
+    // A step of the scrub (+1 or -1 a frame), from where the card's loop has got to the first time; round the loop.
+    void scrub_step(int by) {
+        int f = grid_scrub.load();
+        if (f < 0) {
+            const float s = std::chrono::duration<float>(Clock::now() - grid_anim_start).count();
+            f = (int)std::lround(std::fmod(s / pose_loop_seconds, 1.0f) * 20.0f) % 21;
+        }
+        grid_scrub = ((f + by) % 21 + 21) % 21;
+        cue_ticks.fetch_add(1);
+    }
+    uint16_t scrub_held = 0;
+    Clock::time_point scrub_held_since{}, scrub_held_last{};
 
     // Input path, while the grid is open (or cards are being taken): the D-pad moves over the cards (held, it
     // repeats), L and R turn the page, A wears the pose and closes, B closes and puts the pose back, Start
@@ -1735,6 +1764,21 @@ namespace {
         }
         else if (dirs == 0) {
             grid_held = 0;
+        }
+        // C-left and C-right scrub the cursor's card (held, they repeat at the D-pad's pace).
+        const uint16_t scrub = buttons & (c_left | c_right);
+        if (pressed & scrub) {
+            scrub_held = scrub;
+            scrub_held_since = now;
+            scrub_held_last = now;
+            scrub_step(pressed & c_right ? 1 : -1);
+        }
+        else if (scrub != 0 && scrub == scrub_held && now - scrub_held_since >= repeat_delay && now - scrub_held_last >= repeat_every) {
+            scrub_held_last = now;
+            scrub_step(scrub & c_right ? 1 : -1);
+        }
+        else if (scrub == 0) {
+            scrub_held = 0;
         }
         const int page = tooie::photo_mode::pose_grid_page;
         if (pressed & (button_l | button_z)) {
@@ -1782,6 +1826,7 @@ namespace {
     void tick_grid(uint8_t* rdram, recomp_context* ctx) {
         const int count = pose_total();
         if (grid_open_request.exchange(false) && !grid_open && !developing) {
+            grid_scrub = -1;
             grid_prev_pose = pose_choice;
             grid_cursor = pose_choice.load();
             grid_worn = pose_choice;
@@ -1812,6 +1857,10 @@ namespace {
             }
         }
         if (const int pick = grid_pick_request.exchange(-1); pick >= 0 && pick < count) {
+            // A scrubbed card keeps its frame: the Pose frame row takes it.
+            if (const int f = grid_scrub.exchange(-1); f >= 0) {
+                pose_frame = f;
+            }
             pose_choice = pick;
             pose_dirty = true;
             grid_open = false;
@@ -1918,6 +1967,7 @@ namespace {
     }
 
     void enter(uint8_t* rdram) {
+        shots_at_enter = shots.load();
         characters_checked = false;
         character_request = -1;
         if (pose_restore_pending) {
@@ -2103,6 +2153,10 @@ bool tooie::photo_mode::panel_state(std::vector<std::string>& rows, int& picked_
 
 bool tooie::photo_mode::take_album_request() {
     return album_requested.exchange(false) && is_active;
+}
+
+int tooie::photo_mode::shots_taken() {
+    return (int)(shots.load() - shots_at_enter.load());
 }
 
 bool tooie::photo_mode::active() {
@@ -2328,6 +2382,7 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
     }
     tick_characters(rdram, ctx);
     tick_grid(rdram, ctx);
+    tooie::pose_puppets::set_mirror(mirror_on.load());
     if (developing) {
         step_develop(rdram, ctx);
     }
@@ -2345,7 +2400,10 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
             stand_in_t = std::min((float)pose_frame.load() / 20.0f, 0.999f);
         }
         float t = stand_in_t;
-        if (grid_open) {
+        if (grid_open && grid_scrub >= 0) {
+            t = std::min((float)grid_scrub.load() / 20.0f, 0.999f);
+        }
+        else if (grid_open) {
             t = std::fmod(std::chrono::duration<float>(now - grid_anim_start).count() / pose_loop_seconds, 1.0f);
         }
         else if (scale > 0.0f) {
@@ -2358,7 +2416,11 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
         tooie::pose_puppets::stand_in(rdram, ctx, players_hidden ? 0 : current_character().model, stand_in_anim(pose_choice.load()), t);
     }
     else if (!old_develop()) {
-        if (tooie::pose_puppets::stand_in_on()) {
+        // The player's own form: posed himself; mirrored, a stand-in in his own look and animation takes his place.
+        if (mirror_on && !players_hidden) {
+            tooie::pose_puppets::stand_in(rdram, ctx, tooie::pose_puppets::own_look, 0, 0.0f);
+        }
+        else if (tooie::pose_puppets::stand_in_on()) {
             tooie::pose_puppets::stand_in(rdram, ctx, 0, 0, 0.0f);
         }
         if (pose_dirty.exchange(false)) {
@@ -2367,7 +2429,8 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
         if (grid_open && pose_choice != 0) {
             // In the grid Banjo plays the pose under the cursor, as its card does.
             const float s = std::chrono::duration<float>(Clock::now() - grid_anim_start).count();
-            hold_anim_at(rdram, ctx, std::fmod(s / pose_loop_seconds, 1.0f));
+            const int f = grid_scrub.load();
+            hold_anim_at(rdram, ctx, f >= 0 ? std::min((float)f / 20.0f, 0.999f) : std::fmod(s / pose_loop_seconds, 1.0f));
         }
         else if (pose_choice != 0 || pose_sweep.active) {
             if (speed == 0) {
@@ -2526,7 +2589,17 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
     // While the grid is open the controls are the grid's: the camera stays where it is.
     if (grid_open) {
         p = Pad{};
+        // The mouse sideways scrubs the cursor's card (right is later in the loop).
+        scrub_mouse -= mouse_yaw;
+        while (std::fabs(scrub_mouse) >= scrub_degrees) {
+            const int by = scrub_mouse > 0.0f ? 1 : -1;
+            scrub_mouse -= by * scrub_degrees;
+            scrub_step(by);
+        }
         mouse_yaw = mouse_pitch = 0.0f;
+    }
+    else {
+        scrub_mouse = 0.0f;
     }
     // Look: the right stick, or the C-buttons when the stick is still (keyboard).
     float look_x = 0.0f, look_y = 0.0f;
@@ -2666,7 +2739,7 @@ extern "C" int tooie_others_hidden(void) {
 
 extern "C" int tooie_players_hidden(void) {
     // Another character is photographed: the player gives way to its stand-in.
-    return is_active && (players_hidden || stand_in_wanted()) ? 1 : 0;
+    return is_active && (players_hidden || stand_in_wanted() || (mirror_on && !old_develop())) ? 1 : 0;
 }
 
 float tooie::photo_mode::flash_level() {
@@ -2794,6 +2867,7 @@ bool tooie::photo_mode::pose_grid(PoseGridView& view) {
     view.curtain = old_develop();
     view.developed = developed;
     view.develop_total = develop_total;
+    view.scrub = grid_scrub;
     return true;
 }
 
@@ -2825,6 +2899,14 @@ bool tooie::photo_mode::request_character(int index) {
     }
     character_request = index;
     return true;
+}
+
+void tooie::photo_mode::set_mirror(bool on) {
+    mirror_on = on;
+}
+
+bool tooie::photo_mode::mirror() {
+    return mirror_on.load();
 }
 
 int tooie::photo_mode::character_count() {

@@ -39,6 +39,7 @@
 #include "tooie_pose_puppets.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -315,9 +316,29 @@ namespace {
         func_8008ADBC(rdram, &call);
     }
 
-    // Draws one copy, posed by ctrl held at t, standing at pos turned yaw degrees.
-    void draw_copy(uint8_t* rdram, recomp_context* ctx, const PlayerLook& look, uint32_t ctrl, float t, const float pos[3], float yaw) {
+    // gEXSetCullFlip (rt64_extended_gbi.h): RT64 winds the tris that follow the other way round for culling.
+    constexpr uint32_t ex_cull_flip = 0x36;
+
+    // Draws one copy, posed by ctrl held at t, standing at pos turned yaw degrees. Mirrored, it is drawn at minus its
+    // scale and half a turn about its own x axis, which together flip it left to right only; its faces then turn
+    // round on screen, so RT64 is told to cull the other side for it (gEXSetCullFlip) and back after.
+    void draw_copy(uint8_t* rdram, recomp_context* ctx, const PlayerLook& look, uint32_t ctrl, float t, const float pos[3], float yaw,
+                   bool mirror = false) {
         recomp_context call = call_ctx(ctx);
+        uint32_t gfx = 0;
+        if (mirror) {
+            func_800A7180(rdram, &call);
+            gfx = (uint32_t)call.r2;
+            if (!valid_ptr(gfx) || !valid_ptr(read_word(rdram, gfx))) {
+                gfx = 0;
+                mirror = false;
+            }
+            call = call_ctx(ctx);
+        }
+        if (mirror) {
+            push_gfx(rdram, gfx, rt64_hook_word0, rt64_enable_word1);
+            push_gfx(rdram, gfx, ex | ex_cull_flip, 1);
+        }
         const gpr base = call.r29;
         const uint32_t position = (uint32_t)base + 0x40;  // vec3
         const uint32_t rotation = (uint32_t)base + 0x50;  // vec3, degrees
@@ -346,16 +367,20 @@ namespace {
             write_float(rdram, position, pos[0]);
             write_float(rdram, position + 4, pos[1]);
             write_float(rdram, position + 8, pos[2]);
-            write_float(rdram, rotation, 0.0f);
+            write_float(rdram, rotation, mirror ? 180.0f : 0.0f);
             write_float(rdram, rotation + 4, yaw);
             write_float(rdram, rotation + 8, 0.0f);
+            const float scale = part == 0 ? look.scale : look.backpack_scale;
             call.r29 = base;
             call.r4 = (int32_t)position;
             call.r5 = (int32_t)rotation;
-            call.r6 = (int32_t)float_bits(part == 0 ? look.scale : look.backpack_scale);
+            call.r6 = (int32_t)float_bits(mirror ? -scale : scale);
             call.r7 = 0;
             MEM_W(0x10, call.r29) = (int32_t)model;
             func_800DE448(rdram, &call);
+        }
+        if (mirror) {
+            push_gfx(rdram, gfx, ex | ex_cull_flip, 0);
         }
     }
 
@@ -392,6 +417,7 @@ namespace {
         uint16_t map = 0;
         float t = 0.0f;
     } stand;
+    std::atomic<bool> stand_mirror{false};
 
     // Shared with the capture callback's thread.
     struct Pending {
@@ -612,12 +638,28 @@ namespace {
         }
         PlayerLook look;
         float at[3];
-        if (!tooie::gfx_budget::room_for_extras(rdram) || !look_for(rdram, ctx, stand.model, look) || !tooie::player_cheats::position(rdram, at)) {
+        const bool own = stand.model == tooie::pose_puppets::own_look;
+        if (!tooie::gfx_budget::room_for_extras(rdram) || !look_for(rdram, ctx, own ? 0 : stand.model, look) ||
+            !tooie::player_cheats::position(rdram, at)) {
             return;
+        }
+        uint32_t ctrl = stand.ctrl;
+        float t = stand.t;
+        if (own) {
+            // The player's own animation controller, at the place it has got to (its bones are worked out again for
+            // that same place, which changes nothing).
+            recomp_context call = call_ctx(ctx);
+            call.r4 = (int32_t)look.player;
+            baanim_getAnimCtrlPtr(rdram, &call);
+            ctrl = (uint32_t)call.r2;
+            if (!valid_ptr(ctrl)) {
+                return;
+            }
+            t = read_float(rdram, ctrl + anctrl_timer);
         }
         const uint32_t yaw_ptr = read_word(rdram, look.player + 0xF8);
         const float yaw = valid_ptr(yaw_ptr) ? read_float(rdram, yaw_ptr) : 0.0f;
-        draw_copy(rdram, ctx, look, stand.ctrl, stand.t, at, yaw);
+        draw_copy(rdram, ctx, look, ctrl, t, at, yaw, stand_mirror.load());
     }
 
     void draw_puppets(uint8_t* rdram, recomp_context* ctx) {
@@ -817,7 +859,9 @@ void tooie::pose_puppets::stand_in(uint8_t* rdram, recomp_context* ctx, uint16_t
     }
     if (model == 0) {
         if (stand.model != 0) {
-            free_ctrl(rdram, ctx, stand.ctrl);
+            if (stand.ctrl != 0) {
+                free_ctrl(rdram, ctx, stand.ctrl);
+            }
             stand = StandIn{};
             // The model is held for filming too: let go of it only when no round of cards is filming with it.
             if (!film.on || film.model != held.id) {
@@ -825,6 +869,24 @@ void tooie::pose_puppets::stand_in(uint8_t* rdram, recomp_context* ctx, uint16_t
             }
         }
         return;
+    }
+    if (model == own_look) {
+        // The player's own look and animation: no controller of its own, and no other model held.
+        if (stand.model != 0 && stand.model != own_look) {
+            if (stand.ctrl != 0) {
+                free_ctrl(rdram, ctx, stand.ctrl);
+            }
+            if (!film.on || film.model != held.id) {
+                release_held(rdram, ctx);
+            }
+            stand = StandIn{};
+        }
+        stand.model = own_look;
+        stand.map = map;
+        return;
+    }
+    if (stand.model == own_look) {
+        stand = StandIn{};
     }
     if (stand.model == 0) {
         const uint32_t ctrl = new_ctrl(rdram, ctx);
@@ -845,4 +907,8 @@ void tooie::pose_puppets::stand_in(uint8_t* rdram, recomp_context* ctx, uint16_t
 
 bool tooie::pose_puppets::stand_in_on() {
     return stand.model != 0;
+}
+
+void tooie::pose_puppets::set_mirror(bool on) {
+    stand_mirror = on;
 }

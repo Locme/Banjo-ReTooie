@@ -2115,7 +2115,7 @@ Catch: needs the game running, so `sweep start` waits in the queue until then.
 
 ### `photo`
 
-Usage: `photo | photo character list|<n>|<name> | photo pose list|<n>|<name> | photo cards [open|close] | photo develop [hex ids]`
+Usage: `photo | photo character list|<n>|<name> | photo pose list|<n>|<name> | photo mirror [on|off] | photo cards [open|close] | photo develop [hex ids]`
 
 `photo` turns photo mode on or off, as its key does. The change happens on the next frame, and the message gives the
 state it is switching to.
@@ -2130,6 +2130,13 @@ meanwhile; leaving photo mode takes it away. `TOOIE_PHOTO_ALL_CHARACTERS=1` offe
 `photo pose list` lists the picked character's poses: their place in the list, animation id (hex) and name.
 `photo pose <n>` or `photo pose <name>` puts the character in that pose, as picking its card does (`photo pose 0` gives
 the player back his own animation, or a stand-in its standing one). `photo cards` opens the pose grid, as A on the Pose row does, and `photo cards close` shuts it.
+In the grid, C-left and C-right (or the mouse sideways) scrub the card under the cursor through its loop; A then keeps
+that frame as the Pose frame.
+
+`photo mirror on` flips the character photographed left to right, as the Mirror row does (`photo mirror off` puts it
+back; with nothing after it, it says which). It is drawn as a stand-in, the player's own form too, in his own look
+and animation, with a mirrored model matrix; RT64 is told to cull the other side of its triangles meanwhile
+(`gEXSetCullFlip`, lib-patches/rt64.patch), so it is not drawn inside out. The pose cards are not mirrored.
 
 `photo develop` takes every pose card again, as Start in the grid does. Given animation ids in hex (single ones or
 ranges), it takes cards of those instead, whether or not they are in the list: each is written to

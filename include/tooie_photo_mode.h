@@ -65,6 +65,8 @@ namespace tooie::photo_mode {
 
     // How white the shutter flash is now, 1 just after a photo down to 0 (read by src/ui/photo_panel.cpp).
     float flash_level();
+    // Photos taken since photo mode last came on (the viewfinder's film counter).
+    int shots_taken();
     // True once after A on the Album row: the photo panel then opens the menu on its Album tab.
     bool take_album_request();
 
@@ -90,6 +92,7 @@ namespace tooie::photo_mode {
         int develop_total = 0;
         std::string character;   // whose poses they are
         bool curtain = false; // the picture is covered while the cards are taken (the old way, which moves Banjo)
+        int scrub = -1;       // the cursor's card held at this pose frame (0 to 20) while scrubbed, -1 while it plays
     };
     // False while the grid is shut (and photo mode off).
     bool pose_grid(PoseGridView& view);
@@ -115,6 +118,9 @@ namespace tooie::photo_mode {
     std::string character_list();
     // One line per pose: its place, animation id and name.
     std::string pose_list();
+    // The Mirror row: the character photographed flipped left to right. Any thread; applies on the next frame.
+    void set_mirror(bool on);
+    bool mirror();
 
     // Once per frame on the game thread (tooie_warp_tick): enters and leaves, and slows game time.
     void tick(uint8_t* rdram, recomp_context* ctx);

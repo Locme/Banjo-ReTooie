@@ -39,8 +39,14 @@ namespace tooie::pose_puppets {
     // ---- The stand-in (photo mode's Character row) ----
     // Another form's model drawn where the player stands, turned as he is, posed by animation `anim` held at t (0 to 1).
     // Photo mode hides the player meanwhile. Called each game update while wanted; model 0 takes it away. Game thread.
+    // model own_look: the player's own look (Kazooie in the backpack, his eyes) in his own animation as it plays, for
+    // photo mode's Mirror on the player's own form (anim and t are not used then).
+    constexpr uint16_t own_look = 0xFFFF;
     void stand_in(uint8_t* rdram, recomp_context* ctx, uint16_t model, uint32_t anim, float t);
     bool stand_in_on();
+    // Photo mode's Mirror: the stand-in is drawn flipped left to right (its own left and right swapped, turned as
+    // before). Any thread.
+    void set_mirror(bool on);
 
     // ---- Looking (the console's puppet command) ----
     // Adds a copy beside Banjo playing animation `anim` held at `t` (0 to 1), dx, dz world units from him. Game

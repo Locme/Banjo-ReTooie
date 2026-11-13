@@ -7,6 +7,12 @@
 // the controller's buttons, or the keyboard's keys and the mouse, each drawn with the glyph of what it is bound to in
 // the active input profile (promptfont), so a rebound key shows as itself. They change the moment the other is used.
 //
+// The look is Banjo-Tooie's menus': gold on brown with Jiggies and honeycombs, and things that move as the game's do:
+// the list slides in, the picked row nudges across with its Jiggy popping, its value pops when it changes, the grid's
+// pages slide across. A viewfinder sits over the picture
+// (corner brackets, a blinking red light and a film counter) while photo mode is on, on its own layer, so like the
+// rest it is never in a photo.
+//
 // The pose grid (A on the Pose row, tooie::photo_mode::pose_grid) takes the list's place: a 4 x 5 page of pose cards,
 // each a short film of Banjo in that pose played over and over, the picked one in gold with a Jiggy. While photo mode
 // takes the cards, a dark red darkroom curtain covers the picture (it is the menus' layer, so never in the cards) and
@@ -42,6 +48,11 @@ namespace {
     namespace photo = tooie::photo_mode;
 
     constexpr auto poll_interval = 50ms;
+    constexpr auto anim_interval = 16ms;
+    // How long the moves last.
+    constexpr float slide_in_s = 0.22f;
+    constexpr float nudge_s = 0.14f;
+    constexpr float page_turn_s = 0.20f;
     constexpr auto grid_interval = 16ms;
     constexpr auto flash_interval = 16ms;
     constexpr auto ui_wait = 500ms;
@@ -61,6 +72,18 @@ namespace {
     const recompui::Color darkroom{ 46, 6, 4, 238 };
     // Behind Banjo on a card.
     const recompui::Color card_back{ 104, 62, 26, 255 };
+
+    // 0 to 1 over `seconds` since `start` (1 once done), eased out (fast, then settling).
+    float ease_out(Clock::time_point start, float seconds) {
+        const float t = std::clamp(std::chrono::duration<float>(Clock::now() - start).count() / seconds, 0.0f, 1.0f);
+        return 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t);
+    }
+    // A little past the end and back (an overshoot), for pops.
+    float ease_back(Clock::time_point start, float seconds) {
+        const float t = std::clamp(std::chrono::duration<float>(Clock::now() - start).count() / seconds, 0.0f, 1.0f);
+        const float u = t - 1.0f;
+        return 1.0f + 2.7f * u * u * u + 1.7f * u * u;
+    }
 
     // ---- The controls, in the words of the controller or of the keyboard and mouse ----
 
@@ -120,13 +143,15 @@ namespace {
                 return {
                     { I(GameInput::DPAD_UP), I(GameInput::DPAD_DOWN), I(GameInput::DPAD_LEFT), I(GameInput::DPAD_RIGHT), T(" pick a card"), dot,
                       I(GameInput::L), T(" / "), I(GameInput::R), T(" page") },
+                    { I(GameInput::C_LEFT), I(GameInput::C_RIGHT), T(" scrub the card's frame") },
                     { I(GameInput::A), T(" wear it"), dot, I(GameInput::B), T(" back"), dot, I(GameInput::START), T(" develop again") },
                 };
             }
             return {
                 { I(GameInput::DPAD_UP), I(GameInput::DPAD_DOWN), I(GameInput::DPAD_LEFT), I(GameInput::DPAD_RIGHT), T(" / "),
                   G(PF_MOUSE_SCROLL_UP), G(PF_MOUSE_SCROLL_DOWN), T(" pick a card") },
-                { I(GameInput::L), T(" / "), I(GameInput::R), T(" page") },
+                { I(GameInput::L), T(" / "), I(GameInput::R), T(" page"), dot, I(GameInput::C_LEFT), I(GameInput::C_RIGHT), T(" / "),
+                  G(PF_MOUSE_LEFT_RIGHT), T(" scrub") },
                 { I(GameInput::A), T(" / "), G(PF_MOUSE_LEFT), T(" wear it"), dot, I(GameInput::B), T(" / "), G(PF_MOUSE_RIGHT), T(" back"), dot,
                   I(GameInput::START), T(" develop again") },
             };
@@ -246,12 +271,16 @@ namespace {
 
     struct Panel {
         recompui::ContextId context = recompui::ContextId::null();
+        recompui::Element* box = nullptr;
         std::vector<RowView> rows;
         Help help;
         bool shown = false;
         std::vector<std::string> last_rows;
         int last_picked = -1;
         size_t first = 0; // the first row shown, when there are more rows than fit
+        // The moves: the list sliding in, the picked row nudging across, its value popping.
+        Clock::time_point shown_at{}, picked_at{}, value_at{};
+        bool animating = false;
     };
 
     recompui::Label* make_title(recompui::ContextId& ctx, recompui::Element* parent, const char* text) {
@@ -309,7 +338,27 @@ namespace {
             recompui::Element* root = make_root(ctx);
             recompui::Element* box = make_frame(ctx, root);
             box->set_width(470);
-            make_title(ctx, box, "Photo Mode")->set_margin_bottom(8);
+            p.box = box;
+            // The title between a Jiggy and a honeycomb, over a gold rule, as the game's menu headings.
+            recompui::Element* head = ctx.create_element<recompui::Element>(box);
+            head->set_display(recompui::Display::Flex);
+            head->set_flex_direction(recompui::FlexDirection::Row);
+            head->set_align_items(recompui::AlignItems::Center);
+            head->set_pointer_events(recompui::PointerEvents::None);
+            recompui::Svg* head_jiggy = ctx.create_element<recompui::Svg>(head, "icons/Jiggy.svg");
+            head_jiggy->set_width(34);
+            head_jiggy->set_height(34);
+            head_jiggy->set_margin_right(4);
+            make_title(ctx, head, "Photo Mode")->set_flex_grow(1);
+            recompui::Svg* head_comb = ctx.create_element<recompui::Svg>(head, "icons/Honeycomb.svg");
+            head_comb->set_width(30);
+            head_comb->set_height(30);
+            recompui::Element* rule = ctx.create_element<recompui::Element>(box);
+            rule->set_height(3);
+            rule->set_margin_top(4);
+            rule->set_margin_bottom(8);
+            rule->set_border_radius(2);
+            rule->set_background_color(style::gold_soft);
 
             for (size_t i = 0; i < max_rows; i++) {
                 RowView r;
@@ -365,6 +414,31 @@ namespace {
         }
     }
 
+    // The moves, each frame while one is going: the list sliding in from the left, the picked row nudging across with
+    // its Jiggy popping, and its value popping when it changes.
+    void animate(Panel& p) {
+        const float in = ease_out(p.shown_at, slide_in_s);
+        p.box->set_translate_2D(-520.0f * (1.0f - in), 0.0f);
+        p.box->set_opacity(0.4f + 0.6f * in);
+        const float nudge = ease_out(p.picked_at, nudge_s);
+        const float pop = ease_back(p.picked_at, nudge_s * 2.0f);
+        const float value_pop = ease_back(p.value_at, nudge_s * 1.5f);
+        const size_t v = p.last_picked >= (int)p.first ? (size_t)p.last_picked - p.first : p.rows.size();
+        for (size_t i = 0; i < p.rows.size(); i++) {
+            RowView& r = p.rows[i];
+            const bool is_picked = i == v;
+            r.box->set_translate_2D(is_picked ? -14.0f * (1.0f - nudge) : 0.0f, 0.0f);
+            const float s = is_picked ? 0.6f + 0.4f * pop : 1.0f;
+            r.jiggy->set_scale_2D(s, s);
+            const float vs = is_picked ? 0.85f + 0.15f * value_pop : 1.0f;
+            r.value->set_scale_2D(vs, vs);
+        }
+        const auto now = Clock::now();
+        p.animating = now - p.shown_at < std::chrono::duration<float>(slide_in_s) ||
+            now - p.picked_at < std::chrono::duration<float>(nudge_s * 2.0f) ||
+            now - p.value_at < std::chrono::duration<float>(nudge_s * 1.5f);
+    }
+
     void update(Panel& p, const std::vector<std::string>& rows, int picked) {
         auto lifetime = recompui::lock_context_lifetime();
         if (!recompui::contexts_alive()) {
@@ -373,9 +447,19 @@ namespace {
         p.context.open();
         render_help(p.context, p.help, HelpMode::Panel, photo::a_button());
         if (rows == p.last_rows && picked == p.last_picked) {
+            if (p.animating) {
+                animate(p);
+            }
             p.context.close();
             return;
         }
+        if (picked != p.last_picked) {
+            p.picked_at = Clock::now();
+        }
+        else if (picked >= 0 && picked < (int)rows.size() && picked < (int)p.last_rows.size() && rows[picked] != p.last_rows[picked]) {
+            p.value_at = Clock::now();
+        }
+        p.animating = true;
         // More rows than fit: the list scrolls, moving only when the picked row would leave it.
         const size_t shown = p.rows.size();
         if (rows.size() <= shown) {
@@ -405,8 +489,7 @@ namespace {
             const std::string value = split == std::string::npos ? "" : text.substr(split + 2);
             const bool is_picked = (int)i == picked;
             r.name->set_text(name);
-            // Arrows on the picked row: D-pad left and right change it.
-            r.value->set_text(is_picked && !value.empty() ? "‹ " + value + " ›" : value);
+            r.value->set_text(value);
             r.name->set_color(is_picked ? style::brown_text : style::cream);
             r.value->set_color(is_picked ? style::brown_text : style::gold);
             r.box->set_background_color(is_picked ? style::gold : clear);
@@ -417,9 +500,10 @@ namespace {
             r.jiggy->set_display(is_picked ? recompui::Display::Block : recompui::Display::None);
             r.box->set_display(recompui::Display::Flex);
         }
-        p.context.close();
         p.last_rows = rows;
         p.last_picked = picked;
+        animate(p);
+        p.context.close();
     }
 
     // ---- The pose grid ----
@@ -436,6 +520,9 @@ namespace {
         int frame_shown = -1;
         int state = -1;                         // 0 empty, 1 placeholder, 2 picture
         int picked = -1;
+        recompui::Element* scrub_track = nullptr;  // under the picture while the card is scrubbed: where in its loop
+        recompui::Element* scrub_mark = nullptr;
+        int scrub_shown = -2;
     };
 
     // Lines said while the cards come out of the darkroom, one after another.
@@ -452,8 +539,14 @@ namespace {
         recompui::ContextId context = recompui::ContextId::null();
         recompui::Element* root = nullptr;
         recompui::Label* page = nullptr;
+        recompui::Element* frame = nullptr;
+        recompui::Element* cards_box = nullptr;
         std::vector<recompui::Svg*> pips;
         std::vector<CardView> cards;
+        // The moves: the grid opening, a page sliding across (from the side it was turned to), the cursor's card popping.
+        Clock::time_point opened_at{}, page_at{}, cursor_at{};
+        int page_dir = 0;
+        int last_cursor = -1;
         recompui::Element* develop = nullptr;
         recompui::Label* develop_label = nullptr;
         recompui::Label* develop_quip = nullptr;
@@ -480,6 +573,7 @@ namespace {
             ctx.open();
             g.root = make_root(ctx);
             recompui::Element* box = make_frame(ctx, g.root);
+            g.frame = box;
 
             // The title, and the page with a honeycomb for each page (the one shown lit).
             recompui::Element* head = ctx.create_element<recompui::Element>(box);
@@ -510,6 +604,8 @@ namespace {
             cards->set_flex_wrap(recompui::FlexWrap::Wrap);
             cards->set_gap(8);
             cards->set_width(photo::pose_grid_columns * (card_image + 14.0f) + (photo::pose_grid_columns - 1) * 8.0f);
+            g.cards_box = cards;
+            box->set_overflow(recompui::Overflow::Hidden);
             for (int i = 0; i < photo::pose_grid_page; i++) {
                 CardView c;
                 c.box = ctx.create_element<recompui::Element>(cards);
@@ -560,6 +656,26 @@ namespace {
                 c.jiggy->set_top(-10);
                 c.jiggy->set_width(30);
                 c.jiggy->set_height(30);
+
+                // Where the scrubbed card is in its loop: a gold mark along a brown track, over the picture's foot.
+                c.scrub_track = ctx.create_element<recompui::Element>(c.frame);
+                c.scrub_track->set_position(recompui::Position::Absolute);
+                c.scrub_track->set_left(8);
+                c.scrub_track->set_right(8);
+                c.scrub_track->set_bottom(6);
+                c.scrub_track->set_height(8);
+                c.scrub_track->set_border_radius(4);
+                c.scrub_track->set_background_color(recompui::Color{ 40, 22, 8, 200 });
+                c.scrub_track->set_display(recompui::Display::None);
+                c.scrub_mark = ctx.create_element<recompui::Element>(c.scrub_track);
+                c.scrub_mark->set_position(recompui::Position::Absolute);
+                c.scrub_mark->set_top(-3);
+                c.scrub_mark->set_width(10);
+                c.scrub_mark->set_height(14);
+                c.scrub_mark->set_border_radius(3);
+                c.scrub_mark->set_background_color(style::gold);
+                c.scrub_mark->set_border_width(2);
+                c.scrub_mark->set_border_color(style::orange);
 
                 c.name = ctx.create_element<recompui::Label>(c.box, "", recompui::LabelStyle::Small);
                 c.name->set_font_family(style::font);
@@ -620,6 +736,11 @@ namespace {
         render_help(g.context, g.help, view.developing ? HelpMode::Developing : HelpMode::Grid, photo::AButton::Photo);
 
         if (page != g.last_page || view.count != g.last_count || view.character != g.last_character) {
+            // A page turned slides in from the side it was turned to.
+            if (g.last_page >= 0 && view.character == g.last_character && page != g.last_page) {
+                g.page_dir = page > g.last_page ? 1 : -1;
+                g.page_at = Clock::now();
+            }
             g.last_page = page;
             g.last_count = view.count;
             g.last_character = view.character;
@@ -669,11 +790,24 @@ namespace {
                 }
             }
             if (state == 2) {
-                // Each card starts its loop at its own point, so the page doesn't move in step.
-                const int frame = (int)((ms / card_frame_ms + index * 3) % photo::pose_card_frames);
+                // Each card starts its loop at its own point, so the page doesn't move in step. The cursor's card,
+                // scrubbed, holds the frame scrubbed to.
+                const bool scrubbed = index == view.cursor && view.scrub >= 0;
+                const int frame = scrubbed ? std::min(view.scrub * photo::pose_card_frames / 20, photo::pose_card_frames - 1)
+                                           : (int)((ms / card_frame_ms + index * 3) % photo::pose_card_frames);
                 if (frame != c.frame_shown) {
                     c.frame_shown = frame;
                     c.image->set_src(c.prefix + std::to_string(frame));
+                }
+            }
+            // The scrub bar on the cursor's card while it is scrubbed.
+            const int scrub = index == view.cursor ? view.scrub : -1;
+            if (scrub != c.scrub_shown) {
+                c.scrub_shown = scrub;
+                c.scrub_track->set_display(scrub >= 0 ? recompui::Display::Block : recompui::Display::None);
+                if (scrub >= 0) {
+                    c.scrub_mark->set_left((float)scrub / 20.0f * 100.0f, recompui::Unit::Percent);
+                    c.scrub_mark->set_margin_left(-5);
                 }
             }
             const int picked = index == view.cursor ? 1 : 0;
@@ -684,6 +818,23 @@ namespace {
                 c.name->set_color(picked ? style::brown_text : style::cream);
                 c.jiggy->set_display(picked ? recompui::Display::Block : recompui::Display::None);
             }
+        }
+
+        // The moves: the grid opening (a quick grow), a turned page sliding across, the cursor's card popping.
+        if (view.cursor != g.last_cursor) {
+            g.last_cursor = view.cursor;
+            g.cursor_at = Clock::now();
+        }
+        const float open = ease_back(g.opened_at, 0.24f);
+        g.frame->set_scale_2D(0.9f + 0.1f * open, 0.9f + 0.1f * open);
+        g.frame->set_opacity(std::min(1.0f, 0.3f + 0.7f * ease_out(g.opened_at, 0.15f)));
+        const float turn = ease_out(g.page_at, page_turn_s);
+        g.cards_box->set_translate_2D(90.0f * g.page_dir * (1.0f - turn), 0.0f);
+        g.cards_box->set_opacity(0.35f + 0.65f * turn);
+        const float pop = ease_back(g.cursor_at, 0.2f);
+        for (CardView& c : g.cards) {
+            const float s = c.index == view.cursor ? 0.94f + 0.06f * pop : 1.0f;
+            c.box->set_scale_2D(s, s);
         }
 
         // The darkroom: the curtain over the picture, and how many cards are out.
@@ -710,6 +861,158 @@ namespace {
             }
         }
         g.context.close();
+    }
+
+    // ---- The viewfinder ----
+
+    // Over the picture while photo mode is on (with the list shown or not), never in a photo: corner brackets, a small
+    // mark in the middle, and at the bottom right a blinking red light and the film counter (photos taken this time),
+    // clear of the notices at the top right.
+    struct Viewfinder {
+        recompui::ContextId context = recompui::ContextId::null();
+        recompui::Element* root = nullptr;
+        recompui::Element* light = nullptr;
+        recompui::Label* counter = nullptr;
+        std::vector<recompui::Element*> top_left;   // the corner under the list, hidden while the list is shown
+        bool corner_hidden = false;
+        bool shown = false;
+        int counter_shown = -1;
+        bool light_on = true;
+        Clock::time_point shown_at{};
+    };
+
+    const recompui::Color finder_line{ 246, 232, 196, 210 };
+    const recompui::Color finder_shadow{ 30, 16, 6, 150 };
+
+    // One corner: two bars meeting, with a dark edge so they show on bright scenes too.
+    void make_corner(recompui::ContextId& ctx, recompui::Element* root, bool right, bool bottom, std::vector<recompui::Element*>* bars = nullptr) {
+        constexpr float inset = 3.0f;      // percent of the window
+        constexpr float length = 56.0f;
+        constexpr float thick = 5.0f;
+        for (int bar = 0; bar < 2; bar++) {
+            recompui::Element* e = ctx.create_element<recompui::Element>(root);
+            e->set_position(recompui::Position::Absolute);
+            e->set_width(bar == 0 ? length : thick);
+            e->set_height(bar == 0 ? thick : length);
+            e->set_background_color(finder_line);
+            e->set_border_width(1);
+            e->set_border_color(finder_shadow);
+            e->set_border_radius(2);
+            if (right) {
+                e->set_right(inset, recompui::Unit::Percent);
+            }
+            else {
+                e->set_left(inset, recompui::Unit::Percent);
+            }
+            if (bottom) {
+                e->set_bottom(inset, recompui::Unit::Percent);
+            }
+            else {
+                e->set_top(inset, recompui::Unit::Percent);
+            }
+            e->set_pointer_events(recompui::PointerEvents::None);
+            if (bars != nullptr) {
+                bars->push_back(e);
+            }
+        }
+    }
+
+    bool build_viewfinder(Viewfinder& v) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return false;
+        }
+        try {
+            recompui::ContextId ctx = recompui::create_context();
+            ctx.open();
+            v.root = make_root(ctx);
+            make_corner(ctx, v.root, false, false, &v.top_left);
+            make_corner(ctx, v.root, true, false);
+            make_corner(ctx, v.root, false, true);
+            make_corner(ctx, v.root, true, true);
+            // The middle: a small cross.
+            for (int bar = 0; bar < 2; bar++) {
+                recompui::Element* e = ctx.create_element<recompui::Element>(v.root);
+                e->set_position(recompui::Position::Absolute);
+                e->set_left(50.0f, recompui::Unit::Percent);
+                e->set_top(50.0f, recompui::Unit::Percent);
+                e->set_width(bar == 0 ? 26.0f : 3.0f);
+                e->set_height(bar == 0 ? 3.0f : 26.0f);
+                e->set_margin_left(bar == 0 ? -13.0f : -1.5f);
+                e->set_margin_top(bar == 0 ? -1.5f : -13.0f);
+                e->set_background_color(recompui::Color{ 246, 232, 196, 120 });
+                e->set_pointer_events(recompui::PointerEvents::None);
+            }
+            // Top right: the red light and the film counter.
+            recompui::Element* tag = ctx.create_element<recompui::Element>(v.root);
+            tag->set_position(recompui::Position::Absolute);
+            tag->set_bottom(6.0f, recompui::Unit::Percent);
+            tag->set_right(6.0f, recompui::Unit::Percent);
+            tag->set_display(recompui::Display::Flex);
+            tag->set_flex_direction(recompui::FlexDirection::Row);
+            tag->set_align_items(recompui::AlignItems::Center);
+            tag->set_padding_left(12);
+            tag->set_padding_right(14);
+            tag->set_padding_top(4);
+            tag->set_padding_bottom(4);
+            tag->set_border_radius(14);
+            tag->set_border_width(2);
+            tag->set_border_color(style::gold_soft);
+            tag->set_background_color(recompui::Color{ 40, 22, 8, 170 });
+            tag->set_pointer_events(recompui::PointerEvents::None);
+            v.light = ctx.create_element<recompui::Element>(tag);
+            v.light->set_width(16);
+            v.light->set_height(16);
+            v.light->set_border_radius(8);
+            v.light->set_background_color(recompui::Color{ 226, 38, 24, 255 });
+            v.light->set_border_width(2);
+            v.light->set_border_color(recompui::Color{ 120, 10, 6, 255 });
+            v.light->set_margin_right(10);
+            v.counter = ctx.create_element<recompui::Label>(tag, "", recompui::LabelStyle::Normal);
+            v.counter->set_font_family(style::font);
+            v.counter->set_font_weight(400);
+            v.counter->set_font_size(24);
+            v.counter->set_letter_spacing(2);
+            v.counter->set_color(style::gold);
+            v.counter->set_pointer_events(recompui::PointerEvents::None);
+            ctx.close();
+            ctx.set_captures_input(false);
+            ctx.set_captures_mouse(false);
+            v.context = ctx;
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
+
+    void update_viewfinder(Viewfinder& v, bool list_shown) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
+        v.context.open();
+        if (list_shown != v.corner_hidden) {
+            v.corner_hidden = list_shown;
+            for (recompui::Element* e : v.top_left) {
+                e->set_display(list_shown ? recompui::Display::None : recompui::Display::Block);
+            }
+        }
+        // Fades in as photo mode comes on.
+        v.root->set_opacity(ease_out(v.shown_at, 0.3f));
+        const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
+        const bool light = (ms / 600) % 2 == 0;
+        if (light != v.light_on) {
+            v.light_on = light;
+            v.light->set_opacity(light ? 1.0f : 0.2f);
+        }
+        const int count = photo::shots_taken();
+        if (count != v.counter_shown) {
+            v.counter_shown = count;
+            char text[32];
+            std::snprintf(text, sizeof(text), "No. %03d", count);
+            v.counter->set_text(text);
+        }
+        v.context.close();
     }
 
     // ---- The shutter flash ----
@@ -826,12 +1129,26 @@ namespace {
         Panel panel;
         Grid grid;
         Flash flash;
+        Viewfinder finder;
         std::vector<std::string> rows;
         for (;;) {
             const float level = tooie::photo_mode::flash_level();
             photo::PoseGridView view;
             const bool want_grid = photo::pose_grid(view) && !menu_open();
-            std::this_thread::sleep_for(level > 0.0f || flash.shown ? flash_interval : want_grid ? grid_interval : poll_interval);
+            const bool want_finder = photo::active() && !want_grid && !menu_open();
+            const bool quick = level > 0.0f || flash.shown || panel.animating || want_finder;
+            std::this_thread::sleep_for(quick ? anim_interval : want_grid ? grid_interval : poll_interval);
+            // The viewfinder, over the picture while photo mode is on (not under the grid or the menu).
+            if (want_finder && (finder.context != recompui::ContextId::null() || build_viewfinder(finder))) {
+                if (!finder.shown) {
+                    finder.shown_at = Clock::now();
+                }
+                update_viewfinder(finder, panel.shown);
+                show(finder.context, finder.shown);
+            }
+            else if (finder.shown) {
+                hide(finder.context, finder.shown);
+            }
             if (level > 0.0f || flash.shown) {
                 if (flash.context != recompui::ContextId::null() || build_flash(flash)) {
                     set_flash(flash, tooie::photo_mode::flash_level());
@@ -844,6 +1161,10 @@ namespace {
             // The grid takes the list's place while it is open.
             if (want_grid && (grid.context != recompui::ContextId::null() || build_grid(grid))) {
                 photo::pose_grid(view);
+                if (!grid.shown) {
+                    grid.opened_at = Clock::now();
+                    grid.page_dir = 0;
+                }
                 update_grid(grid, view);
                 show(grid.context, grid.shown);
             }
@@ -863,6 +1184,10 @@ namespace {
             if (panel.context == recompui::ContextId::null() && !build(panel)) {
                 std::this_thread::sleep_for(ui_wait);
                 continue;
+            }
+            if (!panel.shown) {
+                panel.shown_at = Clock::now();
+                panel.animating = true;
             }
             update(panel, rows, picked);
             show(panel.context, panel.shown);

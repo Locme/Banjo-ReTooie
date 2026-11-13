@@ -211,10 +211,10 @@ index 79dfc38..2b521e4 100644
 +    include(${RT64_EXTENSION_CMAKE})
 +endif()
 diff --git a/include/rt64_extended_gbi.h b/include/rt64_extended_gbi.h
-index d387090..fb734be 100644
+index d387090..bbb465b 100644
 --- a/include/rt64_extended_gbi.h
 +++ b/include/rt64_extended_gbi.h
-@@ -80,7 +80,11 @@
+@@ -80,7 +80,14 @@
  #define G_EX_SETVERTEXSEGMENT_V1        0x000031
  #define G_EX_SETTEXCOORDWRAPPOINT_V1    0x000032
  #define G_EX_SETRECTASPECT_V1           0x000033
@@ -223,11 +223,14 @@ index d387090..fb734be 100644
 +#define G_EX_SETSCENEEFFECTSEXCLUDE_V1  0x000034
 +// Banjo-Tooie: draws after this get fur shells over them (1) or not (0).
 +#define G_EX_SETFURSHELLS_V1            0x000035
-+#define G_EX_MAX                        0x000036
++// Banjo-Tooie: the triangles that follow are wound the other way round for culling (a model drawn with a
++// mirrored matrix, photo mode's Mirror), so their back faces stay culled instead of their front ones.
++#define G_EX_SETCULLFLIP_V1             0x000036
++#define G_EX_MAX                        0x000037
  
  #define G_EX_ORIGIN_NONE            0x800
  #define G_EX_ORIGIN_LEFT            0x0
-@@ -579,4 +583,16 @@ typedef union {
+@@ -579,4 +586,22 @@ typedef union {
          PARAM(aspect, 2, 0) \
      )
  
@@ -241,6 +244,12 @@ index d387090..fb734be 100644
 +    G_EX_COMMAND1(cmd, \
 +        PARAM(RT64_EXTENDED_OPCODE, 8, 24) | PARAM(G_EX_SETFURSHELLS_V1, 24, 0), \
 +        PARAM(fur, 1, 0) \
++    )
++
++#define gEXSetCullFlip(cmd, flip) \
++    G_EX_COMMAND1(cmd, \
++        PARAM(RT64_EXTENDED_OPCODE, 8, 24) | PARAM(G_EX_SETCULLFLIP_V1, 24, 0), \
++        PARAM(flip, 1, 0) \
 +    )
 +
  #endif // RT64_EXTENDED_GBI
@@ -457,10 +466,10 @@ index 8c6af2b..6fab1c5 100644
                      }
                  }
 diff --git a/src/gbi/rt64_gbi_extended.cpp b/src/gbi/rt64_gbi_extended.cpp
-index 20c0d4d..7bd4ab6 100644
+index 20c0d4d..17c6ed3 100644
 --- a/src/gbi/rt64_gbi_extended.cpp
 +++ b/src/gbi/rt64_gbi_extended.cpp
-@@ -331,6 +331,15 @@ namespace RT64 {
+@@ -331,6 +331,19 @@ namespace RT64 {
              state->rdp->setRectAspect(aspect);
          }
  
@@ -473,15 +482,20 @@ index 20c0d4d..7bd4ab6 100644
 +            state->rdp->setFurShells((*dl)->p1(0, 3));
 +        }
 +
++        void setCullFlipV1(State *state, DisplayList **dl) {
++            state->rsp->cullFlip = (*dl)->p1(0, 1) != 0;
++        }
++
          void noOpHook(State *state, DisplayList **dl) {
              uint32_t magicNumber = (*dl)->p0(0, 24);
              if (magicNumber == RT64_HOOK_MAGIC_NUMBER) {
-@@ -439,6 +448,8 @@ namespace RT64 {
+@@ -439,6 +452,9 @@ namespace RT64 {
              Map[G_EX_SETVERTEXSEGMENT_V1] = &setVertexSegmentV1;
              Map[G_EX_SETTEXCOORDWRAPPOINT_V1] = &setTexcoordWrapPointV1;
              Map[G_EX_SETRECTASPECT_V1] = &setRectAspectV1;
 +            Map[G_EX_SETSCENEEFFECTSEXCLUDE_V1] = &setSceneEffectsExcludeV1;
 +            Map[G_EX_SETFURSHELLS_V1] = &setFurShellsV1;
++            Map[G_EX_SETCULLFLIP_V1] = &setCullFlipV1;
              MapInitialized = true;
          }
      }
@@ -1803,7 +1817,7 @@ index 3708220..8039083 100644
          void uploadEmpty(State *state, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint64_t replacementHash);
          uint64_t uploadTMEM(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t byteOffset, uint16_t byteCount, uint16_t width, uint16_t height, uint32_t tlut);
 diff --git a/src/hle/rt64_rsp.cpp b/src/hle/rt64_rsp.cpp
-index ee2030b..12dd68d 100644
+index ee2030b..695130e 100644
 --- a/src/hle/rt64_rsp.cpp
 +++ b/src/hle/rt64_rsp.cpp
 @@ -14,6 +14,7 @@
@@ -1814,7 +1828,15 @@ index ee2030b..12dd68d 100644
  
  //#define LOG_SPECIAL_MATRIX_OPERATIONS
  
-@@ -706,6 +707,16 @@ namespace RT64 {
+@@ -38,6 +39,7 @@ namespace RT64 {
+     }
+ 
+     void RSP::reset() {
++        cullFlip = false;
+         modelMatrixStackSize = 1;
+         projectionMatrixStackSize = 1;
+         viewportStackSize = 1;
+@@ -706,6 +708,16 @@ namespace RT64 {
          readExtendedVertexSegment<3, vertexSize>(rdramAddress, dstIndex, dstMax, globalIndex, G_EX_VERTEX_POSITION, posFloats);
          readExtendedVertexSegment<3, vertexSize>(rdramAddress, dstIndex, dstMax, globalIndex, G_EX_VERTEX_VELOCITY, velFloats);
  
@@ -1831,7 +1853,7 @@ index ee2030b..12dd68d 100644
          uint32_t floatIndex = globalIndex * 3;
          for (uint32_t i = dstIndex; i < dstMax; i++) {
              const hlslpp::float4 tfPos = hlslpp::mul(hlslpp::float4(posFloats[floatIndex + 0], posFloats[floatIndex + 1], posFloats[floatIndex + 2], 1.0f), mvp);
-@@ -782,6 +793,11 @@ namespace RT64 {
+@@ -782,6 +794,11 @@ namespace RT64 {
              lookAtIndices.emplace_back(lookAtIndices[globalIndex]);
              posTransformed.emplace_back(posTransformed[globalIndex]);
              posScreen.emplace_back(posScreen[globalIndex]);
@@ -1843,7 +1865,21 @@ index ee2030b..12dd68d 100644
              indices[dstIndex] = newIndex;
              used[dstIndex] = false;
              globalIndex = indices[dstIndex];
-@@ -1150,6 +1166,16 @@ namespace RT64 {
+@@ -1090,8 +1107,11 @@ namespace RT64 {
+         const bool usesFog = geometryMode & G_FOG;
+         const bool computeSmoothNormals = !usesLighting;
+ 
+-        // Swap the indices around if and only if front face culling is enabled.
+-        if ((geometryMode & cullBothMask) == cullFrontMask) {
++        // Swap the indices around if and only if front face culling is enabled; the other way round under
++        // gEXSetCullFlip (Banjo-Tooie: a model drawn mirrored, whose faces turn round on screen).
++        const uint32_t cullMode = geometryMode & cullBothMask;
++        const bool cullOneSide = (cullMode != 0) && (cullMode != cullBothMask);
++        if ((cullMode == cullFrontMask) != (cullFlip && cullOneSide)) {
+             uint8_t swap = c;
+             c = a;
+             a = swap;
+@@ -1150,6 +1170,16 @@ namespace RT64 {
                  drawRect.lry = std::max(drawRect.lry, int32_t(hlslpp::ceil(v.y).x * 4.0f));
              }
  
@@ -1860,6 +1896,19 @@ index ee2030b..12dd68d 100644
              drawRect = scissorRect.intersection(drawRect);
              if (!drawRect.isNull()) {
                  fbPair.drawColorRect.merge(drawRect);
+diff --git a/src/hle/rt64_rsp.h b/src/hle/rt64_rsp.h
+index 61bb3b1..e02cd0b 100644
+--- a/src/hle/rt64_rsp.h
++++ b/src/hle/rt64_rsp.h
+@@ -181,6 +181,8 @@ namespace RT64 {
+         bool NoN;
+         uint32_t cullBothMask;
+         uint32_t cullFrontMask;
++        // Banjo-Tooie: gEXSetCullFlip, the tris wound the other way round for culling (a mirrored model).
++        bool cullFlip = false;
+         uint32_t projMask;
+         uint32_t loadMask;
+         uint32_t pushMask;
 diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
 index 2970e71..5eec515 100644
 --- a/src/hle/rt64_state.cpp
@@ -2690,7 +2739,7 @@ index 69a82ac..f9a72b5 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..23bb897 100644
+index 9fae0d4..2a0f45b 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,23 @@
@@ -4459,8 +4508,8 @@ index 9fae0d4..23bb897 100644
 +                    {
 +                        targetDrawCall.characterInstances.push_back(instanceIndex);
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -5171,11 +5220,11 @@ index 9fae0d4..23bb897 100644
 +                    else {
 +                        p.rasterShaderCache->submit(groundDesc);
 +                    }
-+                }
+                 }
 +                instanceGroundPipelineVector.resize(instanceIndex, nullptr);
 +                instanceGroundPipelineVector.push_back(groundPipeline);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
-+
+ 
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
