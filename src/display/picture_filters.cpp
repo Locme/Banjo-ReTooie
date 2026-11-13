@@ -5946,7 +5946,12 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
             [in_presets, id](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
-                sync_lighting(*id, value);
+                // Not while graphics.json is loading: the file's Lighting and Ray Tracing already agree, and the one
+                // loaded first would otherwise be "corrected" against the other's default, which saves the file half
+                // loaded and writes every setting not yet read back at its default.
+                if (context != recomp::config::OptionChangeContext::Load) {
+                    sync_lighting(*id, value);
+                }
                 if (context == recomp::config::OptionChangeContext::Temporary) {
                     if (applying_preset) {
                         // The preset saves once it has set everything.

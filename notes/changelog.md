@@ -3,6 +3,10 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-13
+
+- Graphics settings set after Lighting no longer go back to their defaults when the game starts with Lighting on Ray Tracing. Loading the file set the Ray Tracing switch to match Lighting before the switch was read, which saved the file half loaded.
+
 ## 2026-11-12
 
 - Esc menu: the sidebar's tabs are a little larger (bigger lettering, taller tabs and portraits), and the sidebar is wider to fit them.
