@@ -70,6 +70,9 @@ from anywhere.
 * [FreeType](https://freetype.org/): menu fonts (built from source for Android).
 * [SMAA](https://github.com/iryoku/smaa) by Jorge Jimenez, Jose I. Echevarria,
   Belen Masia, Fernando Navarro and Diego Gutierrez: the SMAA Anti-Aliasing option.
+* Timothy Lottes' CRT shader (public domain): the method of the Retro: CRT option
+  (Gaussian scanlines and pixels in linear light, the shadow mask's pattern); the
+  code is written fresh.
 * [FidelityFX Super Resolution 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR)
   by Advanced Micro Devices: the FSR 1 Upscaling option.
 * The Mario Party 3 recomp (GPLv3, same author): the sampling profiler behind the console's

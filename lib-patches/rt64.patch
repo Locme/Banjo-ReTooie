@@ -8416,10 +8416,10 @@ index 9131697..e0b127b 100644
          bool hasReplacement(uint64_t hash);
          void clearReplacementDirectories();
 diff --git a/src/render/rt64_vi_renderer.cpp b/src/render/rt64_vi_renderer.cpp
-index b4ff4e9..f5e37b2 100644
+index b4ff4e9..954e563 100644
 --- a/src/render/rt64_vi_renderer.cpp
 +++ b/src/render/rt64_vi_renderer.cpp
-@@ -4,10 +4,36 @@
+@@ -4,10 +4,37 @@
  
  #include "rt64_vi_renderer.h"
  
@@ -8437,13 +8437,14 @@ index b4ff4e9..f5e37b2 100644
 +        PictureFilters pictureFilters;
 +    }
 +
-+    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, uint32_t dither16, bool threePointFiltering) {
++    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, uint32_t crt, float crtCurvature, uint32_t dither16, bool threePointFiltering) {
 +        const std::scoped_lock lock(pictureFiltersMutex);
 +        pictureFilters.brightness = brightness;
 +        pictureFilters.brightnessPattern = brightnessPattern;
 +        pictureFilters.colourblindMode = colourblindMode;
 +        pictureFilters.colourblindStrength = colourblindStrength;
 +        pictureFilters.crt = crt;
++        pictureFilters.crtCurvature = crtCurvature;
 +        pictureFilters.dither16 = dither16;
 +        pictureFilters.threePointFiltering = threePointFiltering;
 +    }
@@ -8456,7 +8457,7 @@ index b4ff4e9..f5e37b2 100644
      // VIRenderer
  
      VIRenderer::VIRenderer() { }
-@@ -73,11 +99,32 @@ namespace RT64 {
+@@ -73,11 +100,32 @@ namespace RT64 {
          p.commandList->setViewports(viewport);
          p.commandList->setScissors(scissor);
  
@@ -8480,9 +8481,9 @@ index b4ff4e9..f5e37b2 100644
 +        pushConstants.brightnessPattern = filters.brightnessPattern ? 1 : 0;
 +        pushConstants.colourblindMode = filters.colourblindMode;
 +        pushConstants.colourblindStrength = std::clamp(filters.colourblindStrength, 0.0f, 1.0f);
-+        pushConstants.crt = filters.crt ? 1 : 0;
++        pushConstants.crt = std::min(filters.crt, 4U);
 +        pushConstants.dither16 = std::min(filters.dither16, 2U);
-+        pushConstants.padding0 = 0;
++        pushConstants.crtCurvature = std::clamp(filters.crtCurvature, 0.0f, 1.0f);
 +        pushConstants.sdResolution = hlslpp::float2(p.vi->fbSize());
 +        pushConstants.windowResolution = { float(p.swapChain->getWidth()), float(p.swapChain->getHeight()) };
 +
@@ -8490,10 +8491,10 @@ index b4ff4e9..f5e37b2 100644
          p.commandList->setGraphicsPipelineLayout(shader->pipelineLayout.get());
          p.commandList->setGraphicsDescriptorSet(descriptorSet->get(), 0);
 diff --git a/src/render/rt64_vi_renderer.h b/src/render/rt64_vi_renderer.h
-index 8a3782a..5f1b8d5 100644
+index 8a3782a..03308f3 100644
 --- a/src/render/rt64_vi_renderer.h
 +++ b/src/render/rt64_vi_renderer.h
-@@ -11,6 +11,28 @@
+@@ -11,6 +11,30 @@
  #include "rt64_shader_library.h"
  
  namespace RT64 {
@@ -8506,8 +8507,10 @@ index 8a3782a..5f1b8d5 100644
 +        // 0 off, 1 deuteranopia, 2 protanopia, 3 tritanopia (daltonization), with a strength of 0 to 1.
 +        uint32_t colourblindMode = 0;
 +        float colourblindStrength = 1.0f;
-+        // 240 scanlines with an aperture grille.
-+        bool crt = false;
++        // The CRT filter: 0 off, 1 aperture grille, 2 slot mask, 3 shadow mask, 4 scanlines with no mask; and the
++        // tube's curve, 0 (flat) to 1.
++        uint32_t crt = 0;
++        float crtCurvature = 0.0f;
 +        // 5 bits per channel with the N64's dither pattern: 0 off, 1 with the VI's dither filter (as the
 +        // console shows it), 2 the raw dither.
 +        uint32_t dither16 = 0;
@@ -8516,7 +8519,7 @@ index 8a3782a..5f1b8d5 100644
 +    };
 +
 +    // Plain arguments, so the game can declare it without RT64's headers.
-+    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, uint32_t dither16, bool threePointFiltering);
++    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, uint32_t crt, float crtCurvature, uint32_t dither16, bool threePointFiltering);
 +    bool PictureFiltersThreePoint();
 +
      struct VIRenderer {
@@ -9284,10 +9287,10 @@ index 1ceb2ce..3485226 100644
 +
 +#endif // RT64_TEXTURESAMPLER_HLSLI
 diff --git a/src/shaders/VideoInterfacePS.hlsl b/src/shaders/VideoInterfacePS.hlsl
-index 3f33475..f471fd1 100644
+index 3f33475..c711323 100644
 --- a/src/shaders/VideoInterfacePS.hlsl
 +++ b/src/shaders/VideoInterfacePS.hlsl
-@@ -32,10 +32,141 @@ float4 PixelAntialiasing(float2 uv) {
+@@ -32,10 +32,266 @@ float4 PixelAntialiasing(float2 uv) {
      return SampleInput(uvTexspace / gConstants.textureResolution);
  }
  
@@ -9363,13 +9366,135 @@ index 3f33475..f471fd1 100644
 +    return saturate((center * 8.0f + floor(center / 4.0f) + restore) / 255.0f);
 +}
 +
-+// 240 scanlines and an aperture grille (vertical red, green and blue stripes, 3 window pixels wide).
-+float3 Crt(float3 rgb, float2 uv, float4 pos) {
-+    const float scan = frac(uv.y * 240.0f);
-+    const float scanline = lerp(0.55f, 1.0f, sin(scan * 3.14159265f));
-+    const uint stripe = uint(pos.x) % 3;
-+    const float3 mask = (stripe == 0) ? float3(1.0f, 0.7f, 0.7f) : ((stripe == 1) ? float3(0.7f, 1.0f, 0.7f) : float3(0.7f, 0.7f, 1.0f));
-+    return saturate(rgb * scanline * mask * 1.35f);
++// The CRT filter. It draws the picture again as a TV would from the N64's signal, after Timothy Lottes'
++// public domain CRT shader: each of the game's lines is an electron beam with a Gaussian profile, worked
++// out in linear light. Along the line the beam is read straight from the rendered picture, blurred over
++// about one game pixel, as the TV's signal was smooth along a line; only the lines are the game's own.
++// On top of Lottes' shader, a beam is wider where it is brighter (each colour channel apart, as on a real
++// tube) and each beam is scaled so it gives off the same light whatever its width, so the scanlines do not
++// darken the picture. Then the phosphor mask, and the tube's curve.
++// gConstants.crt: 1 aperture grille, 2 slot mask, 3 shadow mask, 4 no mask (scanlines only).
++
++static const float CrtScanDark = -12.0f;        // The beam's profile, exp2(hardness * distance^2) in lines, for a black...
++static const float CrtScanBright = -4.5f;       // ...and a full-bright channel.
++static const float CrtMaskDark = 0.45f;         // How much of its light a phosphor lets through when it is not its colour's.
++static const float CrtInputGamma = 2.4f;        // A TV's gamma: the signal is turned into light with this...
++static const float CrtOutputGamma = 1.0f / 2.2f; // ...and back for the monitor with this, as in Lottes' shader.
++
++float3 CrtInputAt(float2 uv) {
++    return SampleInput((uv / gConstants.textureResolution) * gConstants.videoResolution).rgb;
++}
++
++// One line at one point along it, as light: the rendered picture averaged over about a game pixel each way
++// round the point, with the 16-bit colour and colourblind filters applied to it as they would be to the plain
++// picture. Two bilinear reads a quarter of a game pixel from the point, on a diagonal, average 8 rendered
++// pixels spread over about a game pixel, so the beam does not shimmer as the picture moves.
++float3 CrtLine(float2 at, float2 cellSize) {
++    const float2 q = cellSize * 0.25f;
++    float3 rgb = (CrtInputAt(at - q) + CrtInputAt(at + q)) * 0.5f;
++
++    // 16-bit colour: the RDP's 5 bits with its dither. The VI's dither filter would read 8 more pixels round
++    // each of these, so it is left out here: the beam's blur along the line smooths the dither instead, as
++    // the picture's own blur did on a TV.
++    if (gConstants.dither16 != 0) {
++        const float3 quantized = Quantize16(rgb, int2(at * gConstants.sdResolution));
++        rgb = (quantized * 8.0f + floor(quantized / 4.0f)) / 255.0f;
++    }
++
++    if (gConstants.colourblindMode != 0) {
++        rgb = Daltonize(rgb, gConstants.colourblindMode, gConstants.colourblindStrength);
++    }
++
++    return pow(max(rgb, 0.0f), CrtInputGamma);
++}
++
++// The phosphors in front of the window pixel, as how much of each colour gets through. The pattern is drawn
++// in window pixels, doubled from about 2160 lines up so it stays visible on a 4K screen.
++float3 CrtMask(float2 pos, uint type, out float average) {
++    const float scale = max(floor(gConstants.windowResolution.y / 1200.0f + 0.5f), 1.0f);
++    const float2 p = floor(pos / scale);
++    const float d = CrtMaskDark;
++    uint stripe;
++    bool gap = false;
++    if (type == 1) {
++        // Aperture grille (Trinitron): unbroken red, green and blue stripes.
++        stripe = uint(p.x) % 3;
++        average = (1.0f + 2.0f * d) / 3.0f;
++    }
++    else if (type == 2) {
++        // Slot mask: the same stripes, cut into slots 3 rows tall by a dark row, staggered by 2 rows on every other triad.
++        stripe = uint(p.x) % 3;
++        gap = ((uint(p.y) + ((uint(p.x) / 3) & 1) * 2) % 4) == 0;
++        average = (0.75f * (1.0f + 2.0f * d) + 0.25f * 3.0f * d) / 3.0f;
++    }
++    else {
++        // Shadow mask: triads of dots, each row half a triad along from the one above (Lottes' pattern).
++        stripe = uint(p.x + p.y * 3.0f) % 6 / 2;
++        average = (1.0f + 2.0f * d) / 3.0f;
++    }
++
++    if (gap) {
++        return float3(d, d, d);
++    }
++
++    return (stripe == 0) ? float3(1.0f, d, d) : ((stripe == 1) ? float3(d, 1.0f, d) : float3(d, d, 1.0f));
++}
++
++float3 Crt(float2 uv, float4 pos) {
++    // The tube's curve: the picture bulges towards the middle, more so along its longer side.
++    const float curvature = gConstants.crtCurvature;
++    if (curvature > 0.0f) {
++        float2 c = uv * 2.0f - 1.0f;
++        c *= 1.0f + c.yx * c.yx * curvature * float2(1.0f / 16.0f, 1.0f / 12.0f);
++        uv = c * 0.5f + 0.5f;
++    }
++
++    // The edge of the tube, one window pixel soft, with corners rounded more as the curve grows.
++    const float2 pixelsPerUV = 1.0f / max(fwidth(uv), 1e-6f);
++    const float2 inside = min(uv, 1.0f - uv) * pixelsPerUV;
++    const float radius = curvature * 0.05f * pixelsPerUV.y;
++    // A rounded box's signed distance, in window pixels, negative inside.
++    const float2 q = radius - inside;
++    const float outside = length(max(q, 0.0f)) + min(max(q.x, q.y), 0.0f) - radius;
++    const float edge = saturate(0.5f - outside);
++    if (edge <= 0.0f) {
++        return float3(0.0f, 0.0f, 0.0f);
++    }
++
++    // The game's lines: an interlaced 480-line picture shows 240 a field, so it is drawn as 240 here too.
++    const float lines = (gConstants.sdResolution.y > 300.0f) ? gConstants.sdResolution.y * 0.5f : gConstants.sdResolution.y;
++    const float2 cells = float2(gConstants.sdResolution.x, lines);
++    const float2 cellSize = 1.0f / cells;
++    const float2 p = uv * cells;
++    // Only the two lines either side of the window pixel are read (4 texture reads). The next ones out would
++    // carry under a twentieth of the light.
++    const float baseY = floor(p.y - 0.5f) + 0.5f;
++
++    float3 light = float3(0.0f, 0.0f, 0.0f);
++    [unroll]
++    for (int ly = 0; ly <= 1; ly++) {
++        const float lineY = baseY + float(ly);
++        if ((lineY < 0.0f) || (lineY > lines)) {
++            continue;
++        }
++
++        const float3 lineColor = CrtLine(float2(uv.x, lineY * cellSize.y), cellSize);
++
++        // Brighter beams spread wider. Each is divided by its own area (the integral of exp2(h * y^2),
++        // sqrt(pi / (-h * ln 2))), so a flat colour keeps its brightness with any beam width.
++        const float3 hardness = lerp(CrtScanDark, CrtScanBright, saturate(lineColor));
++        const float dy = lineY - p.y;
++        const float3 beam = exp2(hardness * dy * dy) * sqrt(-hardness / 4.53236014f);
++        light += lineColor * beam;
++    }
++
++    if (gConstants.crt != 4) {
++        float average;
++        const float3 mask = CrtMask(pos.xy, gConstants.crt, average);
++        light *= mask / average;
++    }
++
++    return pow(saturate(light), CrtOutputGamma) * edge;
 +}
 +
 +// Ten boxes from 2% to 20% grey on black, across the top of the window. With the brightness right,
@@ -9394,16 +9519,19 @@ index 3f33475..f471fd1 100644
 +}
 +
 +float4 ApplyPictureFilters(float4 color, float2 uv, float4 pos) {
-+    if (gConstants.dither16 != 0) {
-+        color.rgb = Dither16(color.rgb, uv, gConstants.dither16);
-+    }
-+
-+    if (gConstants.colourblindMode != 0) {
-+        color.rgb = Daltonize(color.rgb, gConstants.colourblindMode, gConstants.colourblindStrength);
-+    }
-+
 +    if (gConstants.crt != 0) {
-+        color.rgb = Crt(color.rgb, uv, pos);
++        // The CRT filter reads the picture itself and applies the 16-bit colour and colourblind filters to
++        // each game pixel it reads.
++        color.rgb = Crt(uv, pos);
++    }
++    else {
++        if (gConstants.dither16 != 0) {
++            color.rgb = Dither16(color.rgb, uv, gConstants.dither16);
++        }
++
++        if (gConstants.colourblindMode != 0) {
++            color.rgb = Daltonize(color.rgb, gConstants.colourblindMode, gConstants.colourblindStrength);
++        }
 +    }
 +
 +    float3 patternColor;
@@ -9743,7 +9871,7 @@ index b7a6750..608dfae 100644
  #endif
 \ No newline at end of file
 diff --git a/src/shared/rt64_video_interface.h b/src/shared/rt64_video_interface.h
-index b51cf09..a2b8354 100644
+index b51cf09..f5b13a7 100644
 --- a/src/shared/rt64_video_interface.h
 +++ b/src/shared/rt64_video_interface.h
 @@ -13,6 +13,16 @@ namespace interop {
@@ -9757,7 +9885,7 @@ index b51cf09..a2b8354 100644
 +        float colourblindStrength;
 +        uint crt;
 +        uint dither16;
-+        uint padding0;
++        float crtCurvature;
 +        float2 sdResolution;
 +        float2 windowResolution;
      };

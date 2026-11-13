@@ -17,6 +17,8 @@
 namespace tooie::picture_filters {
     enum class Colourblind : uint32_t { Off, Deuteranopia, Protanopia, Tritanopia };
     enum class Colour16 : uint32_t { Off, Console, Raw };
+    // Retro: CRT's phosphor mask; RT64 takes it plus one (0 is the filter off).
+    enum class CrtMask : uint32_t { ApertureGrille, SlotMask, ShadowMask, None };
     enum class TextureUpscale : uint32_t { Off, Double, Quadruple };
     enum class FogColour : uint32_t { Haze, Mist, Dusk, Gloom };
     enum class Preset : uint32_t { Custom, Original, Enhanced, Retro, Toon };
@@ -38,6 +40,8 @@ namespace tooie::picture_filters {
     inline const std::string three_point_option = "retro_three_point";
     inline const std::string dither16_option = "retro_16bit_colour";
     inline const std::string crt_option = "retro_crt";
+    inline const std::string crt_mask_option = "retro_crt_mask";
+    inline const std::string crt_curvature_option = "retro_crt_curvature";
     inline const std::string sharpen_option = "picture_sharpening";
     inline const std::string contrast_option = "picture_contrast";
     inline const std::string saturation_option = "picture_saturation";

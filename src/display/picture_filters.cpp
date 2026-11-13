@@ -13,8 +13,9 @@
 //   off gives plain bilinear. N64 16-bit colour cuts each channel to 5 bits with the
 //   RDP's magic square dither, at the game's own resolution; Console then runs the
 //   VI's dither filter as the N64 does on its way to the TV, Raw dither leaves the
-//   dither pattern as it is in the framebuffer. CRT draws 240
-//   scanlines and an aperture grille.
+//   dither pattern as it is in the framebuffer. CRT draws the picture again as a TV would:
+//   the game's 240 lines as Gaussian electron beams, wider where brighter, then a phosphor
+//   mask (aperture grille, slot mask or shadow mask) and the tube's curve.
 // The Graphics tab normally waits for Apply; these save and apply as they change.
 
 #include <algorithm>
@@ -50,7 +51,7 @@
 
 namespace RT64 {
     // lib/rt64/src/render/rt64_vi_renderer.h (from lib-patches/rt64.patch).
-    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, uint32_t dither16, bool threePointFiltering);
+    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, uint32_t crt, float crtCurvature, uint32_t dither16, bool threePointFiltering);
     // rt64-ext/src/render/rt64_photo_grade.h.
     void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
     void SetSharpening(float strength);
@@ -4575,7 +4576,8 @@ void tooie::picture_filters::apply() {
         value<bool>(brightness_pattern_option, false),
         debug_value(Solo::Colourblind, value<uint32_t>(colourblind_option, (uint32_t)Colourblind::Off), (uint32_t)Colourblind::Off, (uint32_t)Colourblind::Deuteranopia),
         debug_value(Solo::Colourblind, (float)(value<double>(colourblind_strength_option, 100.0) / 100.0), 0.0f, 1.0f),
-        debug_value(Solo::Crt, value<bool>(crt_option, false), false, true),
+        debug_value(Solo::Crt, value<bool>(crt_option, false) ? value<uint32_t>(crt_mask_option, (uint32_t)CrtMask::ApertureGrille) + 1 : 0U, 0U, 1U),
+        (float)(value<double>(crt_curvature_option, 0.0) / 100.0),
         debug_value(Solo::Colour16, value<uint32_t>(dither16_option, (uint32_t)Colour16::Off), (uint32_t)Colour16::Off, (uint32_t)Colour16::Console),
         value<bool>(three_point_option, true));
 
@@ -5894,8 +5896,26 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         crt_option,
         "Retro: CRT",
-        "Draws 240 scanlines and the stripes of a CRT TV's aperture grille over the picture.",
+        "Draws the picture again as a CRT TV would show it: the game's 240 lines as glowing beams that spread wider where the picture is brighter, with the phosphors of the tube's screen in front.",
         false);
+    graphics.add_enum_option(
+        crt_mask_option,
+        "CRT Mask",
+        "The pattern of red, green and blue phosphors on the tube. <recomp-color primary>Aperture grille</recomp-color> is unbroken stripes (Trinitron TVs and PC monitors), <recomp-color primary>Slot mask</recomp-color> is stripes cut into short slots (most TVs), <recomp-color primary>Shadow mask</recomp-color> is triangles of dots. <recomp-color primary>None</recomp-color> keeps only the scanlines.",
+        {
+            {CrtMask::ApertureGrille, "Aperture grille", "Aperture grille"},
+            {CrtMask::SlotMask, "Slot mask", "Slot mask"},
+            {CrtMask::ShadowMask, "Shadow mask", "Shadow mask"},
+            {CrtMask::None, "None", "None"},
+        },
+        CrtMask::ApertureGrille);
+    graphics.add_option_hidden_dependency(crt_mask_option, crt_option, false);
+    graphics.add_number_option(
+        crt_curvature_option,
+        "CRT Curvature",
+        "How much the tube's glass bulges, with rounded corners. 0 is a flat screen.",
+        0, 100, 10, 0, false, 0);
+    graphics.add_option_hidden_dependency(crt_curvature_option, crt_option, false);
     graphics.add_enum_option(
         colourblind_option,
         "Colourblind Filter",
@@ -5937,7 +5957,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         0, 100, 5, 0, false, 0, true);
 
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
-                                   &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
+                                   &three_point_option, &dither16_option, &crt_option, &crt_mask_option, &crt_curvature_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
                                    &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &toon_style_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &lighting_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &texture_cartoon_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &relighting_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &parallax_smoothness_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option,

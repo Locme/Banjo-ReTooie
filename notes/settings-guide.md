@@ -297,7 +297,18 @@ Graphics changes apply at once. Graphics API needs a restart: changing it asks "
   N64 does on its way to the TV, so it looks close to Off with a little colour
   banding. **Raw dither** shows the dither pattern itself, as emulators do with
   the N64's dither filter turned off. Default: Off.
-- **Retro: CRT**: 240 scanlines and the stripes of a CRT TV. Default: off.
+- **Retro: CRT**: draws the picture again as a CRT TV would show it. The game's
+  240 lines are glowing beams, spread wider where the picture is brighter (so
+  dark parts show black gaps between the lines and bright parts fill them in),
+  with the picture as bright overall as without it. With N64 16-bit colour on,
+  the beam's blur smooths the dither in place of the N64's dither filter, so
+  Console and Raw dither look the same under it. Default: off.
+  - **CRT Mask**: the phosphors on the tube. **Aperture grille** is unbroken red,
+    green and blue stripes (Trinitron TVs), **Slot mask** stripes cut into short
+    slots (most TVs), **Shadow mask** triangles of dots, **None** scanlines only.
+    Default: Aperture grille.
+  - **CRT Curvature**: how much the glass bulges, with rounded corners. 0 is flat.
+    Default: 0.
 
 F12 screenshots are taken before these filters, so they don't show them.
 
