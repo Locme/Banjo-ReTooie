@@ -3779,6 +3779,7 @@ RECOMP_FUNC void _chfactorydrums_entrypoint_0(uint8_t* rdram, recomp_context* ct
 RECOMP_FUNC void func_800C6B78(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_voxel_sweep_enter(rdram, ctx);
     // 0x800C6B78: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x800C6B7C: sw          $s2, 0x30($sp)
@@ -3867,6 +3868,7 @@ L_800C6BEC:
     // 0x800C6C08: sw          $s7, 0x14($sp)
     MEM_W(0X14, ctx->r29) = ctx->r23;
     after_0:
+    tooie_voxel_sweep_provider(rdram, ctx);
     // 0x800C6C0C: beq         $v0, $zero, L_800C6C34
     if (ctx->r2 == 0) {
         // 0x800C6C10: or          $s1, $v0, $zero
@@ -3942,6 +3944,7 @@ L_800C6C4C:
 L_800C6C5C:
     // 0x800C6C5C: lw          $ra, 0x4C($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X4C);
+    tooie_voxel_sweep_exit(rdram, ctx);
     // 0x800C6C60: or          $v0, $fp, $zero
     ctx->r2 = ctx->r30 | 0;
     // 0x800C6C64: lw          $fp, 0x48($sp)

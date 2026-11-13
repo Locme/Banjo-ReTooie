@@ -29,6 +29,7 @@
 #include "tooie_debug.h"
 #include "tooie_enemy_spawner.h"
 #include "tooie_point_lights.h"
+#include "tooie_voxel_layer.h"
 #include "tooie_player_cheats.h"
 #include "tooie_progress_cheats.h"
 #include "tooie_rdram.h"
@@ -1192,6 +1193,14 @@ void cmd_pos(Ctx& c) {
 void cmd_lights(Ctx& c) {
     const std::vector<std::string> args(c.w.begin() + 1, c.w.end());
     const std::string text = tooie::point_lights::console(c.rdram, args);
+    if (text.rfind("ERR ", 0) == 0) { error(text.substr(4)); return; }
+    print(text);
+}
+
+// voxel ...: the Voxel Layer (src/gameplay/voxel_layer.cpp).
+void cmd_voxel(Ctx& c) {
+    const std::vector<std::string> args(c.w.begin() + 1, c.w.end());
+    const std::string text = tooie::voxel_layer::console(c.rdram, c.ctx, args);
     if (text.rfind("ERR ", 0) == 0) { error(text.substr(4)); return; }
     print(text);
 }
@@ -4481,6 +4490,7 @@ const std::vector<Command>& commands() {
         { "spawn", {}, true, "spawn [enemy|number] [count]", "spawn an enemy in front of Banjo (the Enemy Spawner cheat); no argument lists them", cmd_spawn },
         { "flag", {}, true, "flag <hex id> [on|off]", "read or set one of the game's progress flags (the getter and setter the cheats use)", cmd_flag },
         { "pos", {}, true, "pos", "Banjo's position and facing", cmd_pos },
+        { "voxel", { "voxels" }, true, "voxel [on|off|info|hit [power] [radius] [wall]|dig [power] [radius]|surface [ahead]|metal [type [off]]|restore|sound <id> [material]|debris [size]|voidscan|void [on|off]|mtx rel|abs|flip]", "The Voxel Layer: switch it, show what is dug, strike ahead of Banjo or down at his feet, show the ground's surface type, mark metal, put the map back, try a break sound, find or show gaps into the void", cmd_voxel },
         { "lights", {}, true, "lights [add [r g b [radius [height]]] | undo | clear | list]", "Point Lights's lamps for this map: add one above Banjo (warm, radius 500, 80 up), remove the last, all, or list them (saved to Dev Files/point_lights.txt)", cmd_lights },
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },

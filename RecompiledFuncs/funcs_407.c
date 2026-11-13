@@ -4782,6 +4782,7 @@ RECOMP_FUNC void mlwave_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800C6A7C(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_voxel_floor_enter(rdram, ctx);
     // 0x800C6A7C: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x800C6A80: sw          $s2, 0x1C($sp)
@@ -4932,6 +4933,7 @@ L_800C6B38:
 L_800C6B48:
     // 0x800C6B48: lw          $ra, 0x34($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X34);
+    tooie_voxel_floor(rdram, ctx);
     // 0x800C6B4C: or          $v0, $s7, $zero
     ctx->r2 = ctx->r23 | 0;
     // 0x800C6B50: lw          $s7, 0x30($sp)

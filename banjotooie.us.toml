@@ -1536,13 +1536,65 @@ func = "func_800A73F4"
 before_vram = 0x800A7404
 text = "tooie_scene_begin(rdram, ctx);"
 
+# The Voxel Layer (src/gameplay/voxel_layer.cpp) digs into the level, so the level's collision must stop where it is
+# dug. Three tests ask the collision providers (a table at 0x8012AA40) in turn:
+# - func_800C6A7C(from, to, normal, kind), the line test floors and ceilings come from. Its entry keeps the line's
+#   end; at its exit ($s7 the triangle, $s3 from, $s4 to, $s5 the normal, $s6 the kind) a hit in a dug cell is dropped
+#   and the test run again past it, and the dug hole's own floor answers.
+# - func_800C6C94(centre, radius, push_out, kind), the sphere push that keeps Banjo out of walls (func_800FAE44).
+#   After each provider ($v0 its triangle, $s3 the centre, $s4 push_out, $f20 the radius) a contact in a dug cell is
+#   dropped.
+# - func_800C6B78(a, b, radius, normal, kind, flags), the swept sphere (func_800D4584's second pass). After each
+#   provider ($v0, $s3 a, $s4 b, $s5 the normal, $f20 the radius), the same.
+[[patches.hook]]
+func = "func_800C6A7C"
+before_vram = 0x800C6A7C
+text = "tooie_voxel_floor_enter(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800C6A7C"
+before_vram = 0x800C6B4C
+text = "tooie_voxel_floor(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800C6C94"
+before_vram = 0x800C6C94
+text = "tooie_voxel_push_enter(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800C6C94"
+before_vram = 0x800C6D14
+text = "tooie_voxel_push_provider(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800C6C94"
+before_vram = 0x800C6D68
+text = "tooie_voxel_push_exit(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800C6B78"
+before_vram = 0x800C6B78
+text = "tooie_voxel_sweep_enter(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800C6B78"
+before_vram = 0x800C6C0C
+text = "tooie_voxel_sweep_provider(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800C6B78"
+before_vram = 0x800C6C60
+text = "tooie_voxel_sweep_exit(rdram, ctx);"
+
+# The Voxel Layer (src/gameplay/voxel_layer.cpp) keeps Banjo out of its blocks and draws them here, after the
+# game's physics and before the see-through scenery.
 # Pose puppets (src/gameplay/pose_puppets.cpp) draw their extra copies of Banjo first, in the 3D scene.
 # Photo mode's Hide Banjo (src/gameplay/photo_mode.cpp): func_800F5008 draws the players, listing the
 # faded ones (count byte at 0x801354D8) for func_800F50D0 to draw after the see-through scenery.
 [[patches.hook]]
 func = "func_800F5008"
 before_vram = 0x800F5008
-text = "tooie_players_draw(rdram, ctx); if (tooie_players_hidden()) { MEM_B(0x48, (gpr)(int32_t)0x80135490) = 0; return; }"
+text = "tooie_voxel_draw(rdram, ctx); tooie_players_draw(rdram, ctx); if (tooie_players_hidden()) { MEM_B(0x48, (gpr)(int32_t)0x80135490) = 0; return; }"
 
 [[patches.hook]]
 func = "func_800F50D0"

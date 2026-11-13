@@ -629,6 +629,205 @@ namespace RT64 {
 
     static std::atomic<bool> sceneIcyLevel{ false };
 
+    static std::mutex voxelCutsMutex;
+    static std::vector<uint32_t> voxelCutsTable(12, 0u);   // header of 12 words (VoxelCuts.hlsli), no slots
+    static std::atomic<uint64_t> voxelCutsVersion{ 1 };
+    static std::atomic<bool> voxelCutsActive{ false };
+
+    void SetSceneVoxelCuts(const uint32_t *table, uint32_t words) {
+        const std::scoped_lock lock(voxelCutsMutex);
+        if ((table == nullptr) || (words < 12)) {
+            voxelCutsTable.assign(12, 0u);
+        }
+        else {
+            voxelCutsTable.assign(table, table + words);
+        }
+        voxelCutsActive = (voxelCutsTable[0] != 0) && (voxelCutsTable[1] != 0);
+        voxelCutsVersion++;
+    }
+
+    bool SceneVoxelCuts(SceneVoxelCutsCopy &copy) {
+        if (copy.version == voxelCutsVersion.load(std::memory_order_relaxed)) {
+            return false;
+        }
+        const std::scoped_lock lock(voxelCutsMutex);
+        copy.table = voxelCutsTable;
+        copy.version = voxelCutsVersion.load();
+        return true;
+    }
+
+    bool SceneVoxelCutsActive() {
+        return voxelCutsActive.load(std::memory_order_relaxed);
+    }
+
+    static std::mutex textureAverageMutex;
+    static std::unordered_map<uint64_t, std::array<float, 3>> textureAverages;
+    static std::unordered_map<uint64_t, std::vector<uint16_t>> textureImages;
+
+    void NoteSceneTextureTMEM(uint64_t hash, const uint8_t *tmem, uint32_t tmemBytes, int width, int height, uint32_t tlut, uint8_t fmt, uint8_t siz,
+        uint16_t line, uint16_t tmemAddress, uint8_t palette)
+    {
+        if ((tmem == nullptr) || (tmemBytes < 0x1000) || (width <= 0) || (height <= 0)) {
+            return;
+        }
+        {
+            const std::scoped_lock lock(textureAverageMutex);
+            if (textureAverages.count(hash) != 0) {
+                return;
+            }
+        }
+        // The texels as RDP TMEM holds them (TextureDecoder.hlsli): rows `line` 64-bit words apart from tmemAddress,
+        // odd rows with their 32-bit words swapped in pairs, big-endian; palettes from 0x800, an entry every 8 bytes.
+        // (The swap moves texels about within a row, which an average does not mind, but it is kept to read whole ones.)
+        auto byteAt = [&](uint32_t address) { return uint32_t(tmem[address & 0xFFFu]); };
+        auto paletteRGB = [&](uint32_t address, float out[4]) {
+            const uint32_t v = (byteAt(address) << 8) | byteAt(address + 1);
+            if ((tlut & 0xC000u) == 0xC000u) {
+                out[0] = out[1] = out[2] = float(v >> 8) / 255.0f;
+                out[3] = float(v & 0xFF) / 255.0f;
+            }
+            else {
+                out[0] = float((v >> 11) & 31) / 31.0f;
+                out[1] = float((v >> 6) & 31) / 31.0f;
+                out[2] = float((v >> 1) & 31) / 31.0f;
+                out[3] = float(v & 1);
+            }
+        };
+        const bool paletted = (fmt == 2) && ((tlut & 0x8000u) != 0);
+        const int bits = 4 << siz;
+        const uint32_t stride = uint32_t(line) * 8;
+        const uint32_t start = uint32_t(tmemAddress) * 8;
+        double sum[3] = { 0.0, 0.0, 0.0 };
+        double weight = 0.0;
+        const int w = std::min(width, 128), h = std::min(height, 128);
+        std::vector<std::array<float, 4>> texels(size_t(w) * h);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                const uint32_t inRow = uint32_t(x) * uint32_t(bits) / 8;
+                const uint32_t word = (inRow / 4) ^ ((y & 1) ? 1u : 0u);
+                const uint32_t address = start + uint32_t(y) * stride + word * 4 + (inRow & 3);
+                float c[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+                if (bits == 4) {
+                    const uint32_t v = (x & 1) ? (byteAt(address) & 15) : (byteAt(address) >> 4);
+                    if (paletted) paletteRGB(0x800 + (uint32_t(palette) << 7) + (v << 3), c);
+                    else if (fmt == 3) { c[0] = c[1] = c[2] = float(v >> 1) / 7.0f; c[3] = float(v & 1); }
+                    else { c[0] = c[1] = c[2] = float(v) / 15.0f; }
+                }
+                else if (bits == 8) {
+                    const uint32_t v = byteAt(address);
+                    if (paletted) paletteRGB(0x800 + (v << 3), c);
+                    else if (fmt == 3) { c[0] = c[1] = c[2] = float(v >> 4) / 15.0f; c[3] = float(v & 15) / 15.0f; }
+                    else { c[0] = c[1] = c[2] = float(v) / 255.0f; }
+                }
+                else if (bits == 16) {
+                    const uint32_t v = (byteAt(address) << 8) | byteAt(address + 1);
+                    if (fmt == 0) {
+                        c[0] = float((v >> 11) & 31) / 31.0f;
+                        c[1] = float((v >> 6) & 31) / 31.0f;
+                        c[2] = float((v >> 1) & 31) / 31.0f;
+                        c[3] = float(v & 1);
+                    }
+                    else { c[0] = c[1] = c[2] = float(v >> 8) / 255.0f; c[3] = (fmt == 3) ? float(v & 0xFF) / 255.0f : 1.0f; }
+                }
+                else {
+                    // 32-bit: red and green in the low half, blue and alpha in the high half.
+                    c[0] = float(byteAt(address)) / 255.0f;
+                    c[1] = float(byteAt(address + 1)) / 255.0f;
+                    c[2] = float(byteAt(address + 0x800)) / 255.0f;
+                    c[3] = float(byteAt(address + 0x801)) / 255.0f;
+                }
+                texels[size_t(y) * w + x] = { c[0], c[1], c[2], c[3] };
+                if (c[3] < 0.5f) {
+                    continue;
+                }
+                for (int k = 0; k < 3; k++) sum[k] += c[k];
+                weight += 1.0;
+            }
+        }
+        if (weight <= 0.0) {
+            return;
+        }
+        // The 32 x 32 image (nearest texel), clear texels as the average so the inside has no holes.
+        const float avg[3] = { float(sum[0] / weight), float(sum[1] / weight), float(sum[2] / weight) };
+        std::vector<uint16_t> image(1024);
+        for (int y = 0; y < 32; y++) {
+            for (int x = 0; x < 32; x++) {
+                const auto &t = texels[size_t(y * h / 32) * w + size_t(x * w / 32)];
+                const float *src = (t[3] < 0.5f) ? avg : t.data();
+                auto five = [](float v) { return uint16_t(std::clamp(int(v * 31.0f + 0.5f), 0, 31)); };
+                image[y * 32 + x] = uint16_t((five(src[0]) << 11) | (five(src[1]) << 6) | (five(src[2]) << 1) | 1);
+            }
+        }
+        const std::scoped_lock lock(textureAverageMutex);
+        textureAverages[hash] = { avg[0], avg[1], avg[2] };
+        textureImages[hash] = std::move(image);
+    }
+
+    bool SceneTextureRGBA16(uint64_t hash, uint16_t texels[1024]) {
+        const std::scoped_lock lock(textureAverageMutex);
+        auto it = textureImages.find(hash);
+        if (it == textureImages.end()) {
+            return false;
+        }
+        std::copy(it->second.begin(), it->second.end(), texels);
+        return true;
+    }
+
+    bool SceneTextureAverage(uint64_t hash, float rgb[3]) {
+        const std::scoped_lock lock(textureAverageMutex);
+        auto it = textureAverages.find(hash);
+        if (it == textureAverages.end()) {
+            return false;
+        }
+        for (int k = 0; k < 3; k++) rgb[k] = it->second[k];
+        return true;
+    }
+
+    static std::mutex surfaceColourMutex;
+    static float surfaceColourPoint[3] = { 0.0f, 0.0f, 0.0f };
+    static float surfaceColourFacing[3] = { 0.0f, 1.0f, 0.0f };
+    static uint32_t surfaceColourAsked = 0;      // the ticket asked (0: none)
+    static uint32_t surfaceColourAnswered = 0;   // the ticket answered
+    static float surfaceColourRGB[3] = { 0.0f, 0.0f, 0.0f };
+    static uint64_t surfaceColourTexture = 0;
+    static float surfaceColourRepeat = 0.0f;
+
+    void RequestSceneSurfaceColour(const float point[3], const float facing[3], uint32_t ticket) {
+        const std::scoped_lock lock(surfaceColourMutex);
+        for (int k = 0; k < 3; k++) surfaceColourPoint[k] = point[k];
+        for (int k = 0; k < 3; k++) surfaceColourFacing[k] = facing[k];
+        surfaceColourAsked = ticket;
+    }
+
+    bool SceneSurfaceColourPending(float point[3], float facing[3]) {
+        const std::scoped_lock lock(surfaceColourMutex);
+        if ((surfaceColourAsked == 0) || (surfaceColourAsked == surfaceColourAnswered)) {
+            return false;
+        }
+        for (int k = 0; k < 3; k++) point[k] = surfaceColourPoint[k];
+        for (int k = 0; k < 3; k++) facing[k] = surfaceColourFacing[k];
+        return true;
+    }
+
+    void SetSceneSurfaceColour(const float rgb[3], uint64_t textureHash, float repeat) {
+        const std::scoped_lock lock(surfaceColourMutex);
+        for (int k = 0; k < 3; k++) surfaceColourRGB[k] = rgb[k];
+        surfaceColourTexture = textureHash;
+        surfaceColourRepeat = repeat;
+        surfaceColourAnswered = surfaceColourAsked;
+    }
+
+    bool SceneSurfaceColour(uint32_t ticket, float rgb[3], uint64_t *textureHash, float *repeat) {
+        const std::scoped_lock lock(surfaceColourMutex);
+        if ((ticket == 0) || (surfaceColourAnswered != ticket)) {
+            return false;
+        }
+        for (int k = 0; k < 3; k++) rgb[k] = surfaceColourRGB[k];
+        if (textureHash != nullptr) *textureHash = surfaceColourTexture;
+        if (repeat != nullptr) *repeat = surfaceColourRepeat;
+        return true;
+    }
+
     void SetSceneIcyLevel(bool enabled) {
         sceneIcyLevel = enabled;
     }
@@ -2631,7 +2830,10 @@ namespace RT64 {
         frameParams.groundParams = { 0.0f, 0.0f, 0.0f, 0.0f };
         const bool water = settings.modernWater && (settings.waterDetail > 0.0f);
         const bool ground = settings.groundDisplacement > 0.0f;
-        if (!water && !ground) {
+        // (The Voxel Layer's cut cells need the clip-to-world matrix too: RasterVS hands flagged level draws their world
+        // positions with it.)
+        const bool voxelCuts = SceneVoxelCutsActive();
+        if (!water && !ground && !voxelCuts) {
             return 0;
         }
         UsePlayerFrame(settings, workloadId);
@@ -2650,6 +2852,9 @@ namespace RT64 {
             frameParams.waterClipToWorld[r] = { float(inverse[r][0]), float(inverse[r][1]), float(inverse[r][2]), float(inverse[r][3]) };
             frameParams.waterWorldToClip[r] = { float(toClip[r][0]), float(toClip[r][1]), float(toClip[r][2]), float(toClip[r][3]) };
         }
+        if (!water && !ground) {
+            return 4;
+        }
 
         const float detail = settings.waterDetail;
         frameParams.waterCamera = { float(camera[0]), float(camera[1]), float(camera[2]), water ? detail : 0.0f };
@@ -2661,7 +2866,7 @@ namespace RT64 {
             frameParams.groundParams = { 28.0f * settings.groundDisplacement, 16.0f, 12.0f, settings.groundReach };
         }
         if (!water) {
-            return 2;
+            return 2 | 4;
         }
 
         // Water detail: up to 4 to 16 pieces an edge, pieces no shorter than 24 down to 8 units, cut finely within 500 to
@@ -3340,7 +3545,7 @@ namespace RT64 {
             const std::scoped_lock lock(effectsMutex);
             settings = effectsSettings;
         }
-        if ((settings.view < SceneEffectsSoloFirst) || (settings.view == SceneEffectsViewRayScene)) {
+        if ((settings.view < SceneEffectsSoloFirst) || (settings.view == SceneEffectsViewRayScene) || (settings.view == SceneEffectsViewVoid)) {
             return settings;
         }
         if ((settings.view >= SceneEffectsViewGtao) && (settings.view <= SceneEffectsViewSsr)) {
@@ -4570,9 +4775,13 @@ namespace RT64 {
         // count, 32 a lamp), then for denoising the camera the history was drawn from (its view's three rows into the world
         // and its projection) and a word: denoising on (x), the history to be used (y). Then Relighting's amount for the pass
         // without ray tracing (the traced one has it in the lights' header), which lights the scene again by the sun shadow map.
+        // Then the Voxel Layer's cut cells (SetSceneVoxelCuts' table, as SceneEffectsPS.hlsl DustVoxelOffset reads it), up to
+        // DustVoxelBytes; a bigger table goes as none (the traced passes see the level uncut, as before the layer).
         constexpr uint32_t DustDenoiseOffset = 32 + 32 * ScenePointLightMax;
         constexpr uint32_t DustRelightOffset = DustDenoiseOffset + 16 * 5;
-        constexpr uint32_t DustBufferSize = DustRelightOffset + 16;
+        constexpr uint32_t DustVoxelOffset = DustRelightOffset + 16;
+        constexpr uint32_t DustVoxelBytes = 512 * 1024;
+        constexpr uint32_t DustBufferSize = DustVoxelOffset + DustVoxelBytes;
         // This pass's upload slot: its own dust buffer and scene set (one command list can record the pass more than once).
         std::unique_ptr<RenderBuffer> &dustBuffer = res.dustBuffer[res.uploadSlot];
         if (dustBuffer == nullptr) {
@@ -4581,7 +4790,8 @@ namespace RT64 {
         }
         {
             float *dust = reinterpret_cast<float *>(dustBuffer->map());
-            memset(dust, 0, DustBufferSize);
+            // (All but the cut cells' table, which is written whole below: its header says how much of it is used.)
+            memset(dust, 0, DustVoxelOffset + 48);
             {
                 const std::scoped_lock extraLock(volExtraMutex);
                 dust[1] = volExtra[0];
@@ -4589,6 +4799,13 @@ namespace RT64 {
             }
             dust[3] = UpscalerNoiseOffset();
             dust[DustRelightOffset / 4] = float(relightPercent.load()) / 100.0f;
+            {
+                static SceneVoxelCutsCopy voxelCuts;
+                SceneVoxelCuts(voxelCuts);
+                if (!voxelCuts.table.empty() && (voxelCuts.table.size() * sizeof(uint32_t) <= DustVoxelBytes)) {
+                    memcpy(reinterpret_cast<uint8_t *>(dust) + DustVoxelOffset, voxelCuts.table.data(), voxelCuts.table.size() * sizeof(uint32_t));
+                }
+            }
             // Test aid: TOOIE_RELIGHT_SHADE_VIEW=1 shows the game's shading Traced Relighting finds (RelightShadeView).
             static const bool shadeView = (getenv("TOOIE_RELIGHT_SHADE_VIEW") != nullptr);
             dust[DustRelightOffset / 4 + 1] = shadeView ? 1.0f : 0.0f;

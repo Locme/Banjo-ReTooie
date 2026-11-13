@@ -27,6 +27,7 @@
 #include "tooie_save_state.h"
 #include "tooie_honeycomb_cap.h"
 #include "tooie_honeycomb_glitter.h"
+#include "tooie_voxel_layer.h"
 #include "tooie_snout_jiggle.h"
 #include "tooie_original_honeycomb.h"
 #include "tooie_window_beams.h"
@@ -866,6 +867,7 @@ void tooie::init_config() {
         "Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy.",
         false);
     tooie::torch_enemy::add_option(general);
+    tooie::voxel_layer::add_options(general);
     tooie::bottles_revenge::add_option(general);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(
@@ -1164,7 +1166,12 @@ void tooie::init_config() {
             &tooie::snout_jiggle::squash_across_option,
             &tooie::snout_jiggle::squash_walk_option,
             &tooie::snout_jiggle::nose_option,
-            &tooie::torch_enemy::option }) {
+            &tooie::torch_enemy::option,
+            &tooie::voxel_layer::option,
+            &tooie::voxel_layer::strength_option,
+            &tooie::voxel_layer::depth_soft_option,
+            &tooie::voxel_layer::depth_stone_option,
+            &tooie::voxel_layer::depth_rock_option }) {
         recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
     }
 

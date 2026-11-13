@@ -106,6 +106,8 @@ namespace {
     std::once_flag started;
     std::atomic<uint32_t> view{0};
     std::atomic<bool> compare{false};
+    std::atomic<bool> void_on{false};
+    constexpr uint32_t scene_void_view = 23;   // SceneEffectsPS: the picture, with nothing-drawn pixels magenta
     bool created = false;
 
     // Looked up each time: the tab list moves its configs as more tabs are added. The options live in the DEV tab.
@@ -115,7 +117,7 @@ namespace {
 
     void send() {
         const uint32_t v = view.load();
-        RT64::SetSceneEffectsView(views[v].scene_view, compare);
+        RT64::SetSceneEffectsView(void_on ? scene_void_view : views[v].scene_view, compare);
         RT64::SetPhotoGradeCompare(compare);
         // The filters outside the scene effects pass read isolating() and solo() as they apply.
         tooie::picture_filters::apply();
@@ -193,6 +195,15 @@ namespace {
             compare_was_down = compare_down;
         }
     }
+}
+
+void tooie::effect_views::void_view(bool on) {
+    void_on = on;
+    send();
+}
+
+bool tooie::effect_views::void_view_on() {
+    return void_on;
 }
 
 bool tooie::effect_views::isolating() {

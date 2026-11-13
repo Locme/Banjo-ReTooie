@@ -39,6 +39,10 @@ namespace tooie::effect_views {
     bool isolating();
     // Which of those filters is shown alone (None for a scene effect, all off, or no debug view).
     Solo solo();
+    // The Voxel Layer's void view (console: voxel void on): the picture with everything nothing was drawn on (the sky,
+    // and any gap a hole lets the camera see through) magenta. It overrides the debug view while on; not saved.
+    void void_view(bool on);
+    bool void_view_on();
 }
 
 #endif

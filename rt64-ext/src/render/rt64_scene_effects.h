@@ -36,6 +36,8 @@ namespace RT64 {
     // What the traced effects' rays see: green where they meet the drawn surface, blue where it isn't in the traced
     // scene (light goes through it), red where something traced stands in front of it.
     constexpr uint32_t SceneEffectsViewRayScene = 22;
+    // The Voxel Layer's void view (voxel void on): the picture, with every pixel nothing was drawn on magenta.
+    constexpr uint32_t SceneEffectsViewVoid = 23;
 
     constexpr uint32_t SceneMaxLights = 32;
 
@@ -239,6 +241,39 @@ namespace RT64 {
     // of decal is dirt, grass or paths blended onto the ground).
     void SetSceneIcyLevel(bool enabled);
     bool SceneIcyLevel();
+    // Banjo-Tooie: the Voxel Layer's cut cells (src/gameplay/voxel_layer.cpp), where the level's own geometry is left
+    // out of the picture, the sun shadow maps and the traced scene. A hash table of 4 words a slot (cell x, y, z, 1
+    // when used; cells of 18 units), after a header of 4 words (slot count, a power of 2 or 0; cells; 0; 0). Copied.
+    void SetSceneVoxelCuts(const uint32_t *table, uint32_t words);
+    // The table and its version (it goes up with every change); an empty table has a slot count of 0.
+    struct SceneVoxelCutsCopy {
+        std::vector<uint32_t> table;
+        uint64_t version = 0;
+    };
+    // Copies the table into `copy` when it changed since `copy.version`. True when it did.
+    bool SceneVoxelCuts(SceneVoxelCutsCopy &copy);
+    // Whether any cell is cut now.
+    bool SceneVoxelCutsActive();
+    // Banjo-Tooie: the Voxel Layer's colours (src/gameplay/voxel_layer.cpp: the inside of what Banjo breaks takes the
+    // colour of the surface he broke). Each texture's average colour (its opaque texels), worked out once from its TMEM
+    // bytes as it is queued for upload; then a colour asked for at a place in the world is found in the next frame's
+    // level draws: the texture's average times the vertex colours of the triangle under that place.
+    void NoteSceneTextureTMEM(uint64_t hash, const uint8_t *tmem, uint32_t tmemBytes, int width, int height, uint32_t tlut, uint8_t fmt, uint8_t siz,
+        uint16_t line, uint16_t tmemAddress, uint8_t palette);
+    bool SceneTextureAverage(uint64_t hash, float rgb[3]);
+    // The texture itself, 32 x 32 (resampled from its texels), as N64 RGBA16 (5551) values, for the Voxel Layer to
+    // draw the inside of what Banjo breaks with the surface's own texture.
+    bool SceneTextureRGBA16(uint64_t hash, uint16_t texels[1024]);
+    // A colour asked for at point (world units), by ticket; the answer (0 to 1 each) when found. One asked at a time:
+    // a new ask replaces one not answered.
+    // The surface's facing (a unit normal, either way round) picks the triangle: only one turned the same way answers,
+    // so a wall's foot doesn't take the floor's texture.
+    void RequestSceneSurfaceColour(const float point[3], const float facing[3], uint32_t ticket);
+    bool SceneSurfaceColourPending(float point[3], float facing[3]);
+    // repeat: the world units one width of the texture covers on that triangle (0 when unknown).
+    void SetSceneSurfaceColour(const float rgb[3], uint64_t textureHash, float repeat);
+    // The answer: its colour and the hash of the texture there (0 for none).
+    bool SceneSurfaceColour(uint32_t ticket, float rgb[3], uint64_t *textureHash, float *repeat);
     // Modern water's caustics while under water: how far under (0 to 1), the surface's height, a whole level under water.
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     // Banjo-Tooie: light shafts from the sun through gaps against the sky (0 off, 1 strongest).
@@ -494,7 +529,8 @@ namespace RT64 {
     // the renderer's trail grid up to date (two uints a cell, Snow.hlsli). False when there is no deep snow this frame.
     // Banjo-Tooie: Modern and Stylised water's tessellated surface (WaterTess.hlsl): the camera's terms, the player's place
     // and motion, and how finely to cut, into frameParams' water fields. False when it isn't tessellated this frame.
-    // Returns bit 1 when the water is tessellated this frame, bit 2 when ground is displaced (0: neither).
+    // Returns bit 1 when the water is tessellated this frame, bit 2 when ground is displaced (0: neither), bit 4 when the
+    // clip-to-world matrix was filled (the Voxel Layer's cut level draws use it).
     uint32_t ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
         const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId,
         interop::FrameParams &frameParams);

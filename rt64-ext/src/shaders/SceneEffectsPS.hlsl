@@ -1273,6 +1273,100 @@ uint RayGeometryOf(uint instance, uint geometry) {
     return instance + geometry;
 }
 
+// Banjo-Tooie: the Voxel Layer's cut cells (src/gameplay/voxel_layer.cpp, VoxelCuts.hlsli): where Banjo has dug into the
+// level, its triangles are passed by, so light and reflections go into the hole as the picture shows it. The cells are
+// a hash table of four words a slot (x, y, z, 1 when used; cells of 18 units) after a header of twelve (the slot count,
+// 0 for none; cells; 0; 0; the lowest cell; 0; the highest cell; 0), in the dust buffer after Relighting's word
+// (rt64_scene_effects.cpp).
+static const uint DustVoxelOffset = DustDenoiseOffset + 16u * 5u + 16u;
+
+bool VoxelCutsOn() {
+    return gDust.Load(DustVoxelOffset) != 0u;
+}
+
+bool VoxelCellCutDust(int3 cell) {
+    const uint slots = gDust.Load(DustVoxelOffset);
+    if (slots == 0u) {
+        return false;
+    }
+    const uint mask = slots - 1u;
+    uint h = ((uint(cell.x) * 73856093u) ^ (uint(cell.y) * 19349663u) ^ (uint(cell.z) * 83492791u)) & mask;
+    [loop]
+    for (uint k = 0u; k < 32u; k++) {
+        const uint4 slot = gDust.Load4(DustVoxelOffset + 48u + h * 16u);
+        if (slot.w == 0u) {
+            return false;
+        }
+        if ((int(slot.x) == cell.x) && (int(slot.y) == cell.y) && (int(slot.z) == cell.z)) {
+            return true;
+        }
+        h = (h + 1u) & mask;
+    }
+    return false;
+}
+
+// A hit t along the ray over a cut cell: the cell a cell's size on along the ray (a ray meets a surface from its front,
+// so that is behind it, in the outermost solid cell; the cells in front of the level's surfaces are never cut).
+bool VoxelHitCut(RayDesc ray, float t) {
+    if (!VoxelCutsOn()) {
+        return false;
+    }
+    const float3 p = ray.Origin + ray.Direction * (t + 18.0f / max(length(ray.Direction), 1e-6f));
+    const int3 cell = int3(floor(p / 18.0f));
+    // Outside the cut cells' bounds: not cut, without a look in the table.
+    const int3 lo = asint(gDust.Load3(DustVoxelOffset + 16u));
+    const int3 hi = asint(gDust.Load3(DustVoxelOffset + 32u));
+    if (any(cell < lo) || any(cell > hi)) {
+        return false;
+    }
+    return VoxelCellCutDust(cell);
+}
+
+// After a nearest-hit trace: a level hit (instance 0) over a cut cell moves the ray's start just past it, to be traced
+// again (true); anything else stands (false).
+bool VoxelPassThrough(bool hit, uint instance, float t, inout RayDesc ray) {
+    if (!hit || (instance != 0u) || !VoxelHitCut(ray, t)) {
+        return false;
+    }
+    ray.TMin = t + 1.0f / max(length(ray.Direction), 1e-6f);
+    return true;
+}
+
+// Whether anything solid in mask is on the ray, nearest first, passing by level hits over cut cells. For the searches
+// that take the first triangle they meet: that one may be a level triangle over a cut cell with another in front of it.
+bool VoxelBlockedNearest(RayDesc ray, uint mask, bool forceOpaque) {
+    [loop]
+    for (uint pass = 0u; pass < 6u; pass++) {
+        bool hit;
+        uint instance;
+        float t;
+        if (forceOpaque) {
+            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+            query.TraceRayInline(gSceneBVH, 0, mask, ray);
+            query.Proceed();
+            hit = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+            instance = query.CommittedInstanceID();
+            t = query.CommittedRayT();
+        }
+        else {
+            RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+            query.TraceRayInline(gSceneBVH, 0, mask, ray);
+            while (query.Proceed()) {
+            }
+            hit = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+            instance = query.CommittedInstanceID();
+            t = query.CommittedRayT();
+        }
+        if (!hit) {
+            return false;
+        }
+        if (!VoxelPassThrough(hit, instance, t, ray)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // A traced geometry's flags: 1 a cut-out or see-through draw, 2 it has a texture, 4 a model.
 uint RayGeometryFlags(uint geometry) {
     return gRayGeometries.Load(geometry * 16u + 8u);
@@ -1356,14 +1450,20 @@ bool SurfaceAlbedo(float3 center, out float3 albedo) {
     ray.TMax = 12.0f + distance * 0.004f;
     // Through a cut-out's or see-through draw's clear texels to what is drawn behind them, as the picture shows it.
     RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
-    while (query.Proceed()) {
-        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
-            continue;
+    [loop]
+    for (uint voxelPass = 0u; voxelPass < 6u; voxelPass++) {
+        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
+        while (query.Proceed()) {
+            if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
+                continue;
+            }
+            const uint candidate = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
+            if (RayCutoutSolid(candidate, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
+                query.CommitNonOpaqueTriangleHit();
+            }
         }
-        const uint candidate = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
-        if (RayCutoutSolid(candidate, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
-            query.CommitNonOpaqueTriangleHit();
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+            break;
         }
     }
     if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
@@ -1471,6 +1571,34 @@ bool RayCutoutSolid(uint geometry, uint primitive, float2 barycentrics) {
 // through and met none leave SunThroughCutout nothing to find.
 static bool gSawLevelCutout = false;
 
+// (The Voxel Layer's cut cells: a nearest-first search like it, passing by level hits over them.)
+bool TraceAnyNearest(RayDesc ray, uint mask) {
+    [loop]
+    for (uint pass = 0u; pass < 6u; pass++) {
+        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        query.TraceRayInline(gSceneBVH, RAY_FLAG_NONE, mask, ray);
+        while (query.Proceed()) {
+            if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
+                continue;
+            }
+            const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
+            if ((query.CandidateInstanceID() == 0u) && ((RayGeometryFlags(geometry) & 5u) == 1u)) {
+                gSawLevelCutout = true;
+            }
+            if (RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
+                query.CommitNonOpaqueTriangleHit();
+            }
+        }
+        if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+            return false;
+        }
+        if (!VoxelPassThrough(true, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool TraceAny(RayDesc ray, uint mask) {
     RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
     query.TraceRayInline(gSceneBVH, RAY_FLAG_NONE, mask, ray);
@@ -1486,7 +1614,13 @@ bool TraceAny(RayDesc ray, uint mask) {
             query.CommitNonOpaqueTriangleHit();
         }
     }
-    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+    if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+        return false;
+    }
+    if ((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT())) {
+        return TraceAnyNearest(ray, mask);
+    }
+    return true;
 }
 
 // Whether a ray meets a model that is (banjo) or isn't Banjo. Only the models' instance, where each triangle is looked at.
@@ -1671,8 +1805,14 @@ bool SurfaceGeometryTraced(float3 center, out uint geometry) {
     ray.TMin = 0.0f;
     ray.TMax = 12.0f + distance * 0.004f;
     RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
-    query.Proceed();
+    [loop]
+    for (uint voxelPass = 0u; voxelPass < 6u; voxelPass++) {
+        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
+        query.Proceed();
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+            break;
+        }
+    }
     if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
         return false;
     }
@@ -1755,14 +1895,20 @@ float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
     // Cut-outs are seen where their texture is solid (a grate's bars, Banjo's textured parts: characters are drawn as
     // cut-outs), passed by in their holes.
     RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
-    while (query.Proceed()) {
-        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
-            continue;
+    [loop]
+    for (uint voxelPass = 0u; voxelPass < 6u; voxelPass++) {
+        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
+        while (query.Proceed()) {
+            if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
+                continue;
+            }
+            const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
+            if (RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
+                query.CommitNonOpaqueTriangleHit();
+            }
         }
-        const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
-        if (RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
-            query.CommitNonOpaqueTriangleHit();
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+            break;
         }
     }
     const float2 size = gConstants.projection.zw;
@@ -2162,8 +2308,14 @@ float TraceDistance(float3 origin, float3 direction, float reach) {
     ray.TMin = 0.0f;
     ray.TMax = reach;
     RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-    query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
-    while (query.Proceed()) {
+    [loop]
+    for (uint voxelPass = 0u; voxelPass < 6u; voxelPass++) {
+        query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
+        while (query.Proceed()) {
+        }
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+            break;
+        }
     }
     return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? query.CommittedRayT() : -1.0f;
 }
@@ -2190,8 +2342,14 @@ float TraceDistanceGeometry(float3 origin, float3 direction, float reach, out ui
     ray.TMin = 0.0f;
     ray.TMax = reach;
     RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-    query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
-    while (query.Proceed()) {
+    [loop]
+    for (uint voxelPass = 0u; voxelPass < 6u; voxelPass++) {
+        query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
+        while (query.Proceed()) {
+        }
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+            break;
+        }
     }
     if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
         return -1.0f;
@@ -2212,7 +2370,13 @@ bool TraceBlocked(float3 origin, float3 direction, float reach) {
     RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
     query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
     query.Proceed();
-    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+    if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+        return false;
+    }
+    if ((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT())) {
+        return VoxelBlockedNearest(ray, RayWorldMask, false);
+    }
+    return true;
 }
 
 // Traced ambient occlusion: the share of the cosine-spread rays that reach the open (a ray that hits something
@@ -2332,8 +2496,14 @@ float TraceDistanceSolid(float3 origin, float3 direction, float reach) {
     ray.TMin = 0.0f;
     ray.TMax = reach;
     RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-    query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
-    query.Proceed();
+    [loop]
+    for (uint voxelPass = 0u; voxelPass < 6u; voxelPass++) {
+        query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
+        query.Proceed();
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+            break;
+        }
+    }
     return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? query.CommittedRayT() : -1.0f;
 }
 
@@ -2418,7 +2588,9 @@ float3 PathDirectLight(float3 at, float3 normal) {
         RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
         query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
         query.Proceed();
-        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+        // (A level hit over the Voxel Layer's cut cells is checked again nearest first.)
+        if ((query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) &&
+            !((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT()) && !VoxelBlockedNearest(ray, RayWorldMask, false))) {
             continue;
         }
         const float falloff = saturate(1.0f - fromSurface / lamp.w);
@@ -2567,7 +2739,9 @@ float3 TracedSubsurface(float3 center, float3 normal) {
         RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
         query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
         query.Proceed();
-        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+        // (A level hit over the Voxel Layer's cut cells is checked again nearest first.)
+        if ((query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) &&
+            !((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT()) && !VoxelBlockedNearest(ray, RayWorldMask, false))) {
             continue;
         }
         const float falloff = saturate(1.0f - fromSurface / lamp.w);
@@ -4931,8 +5105,14 @@ bool SunThroughCutout(float3 worldStart, float3 worldSun, bool unblocked) {
         ray.TMin = 0.0f;
         ray.TMax = 20000.0f;
         RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-        query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
-        query.Proceed();
+        [loop]
+        for (uint voxelPass = 0u; voxelPass < 6u; voxelPass++) {
+            query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
+            query.Proceed();
+            if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+                break;
+            }
+        }
         if ((query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) || ((RayGeometryFlags(RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex())) & 5u) != 1u)) {
             return false;
         }
@@ -4948,7 +5128,8 @@ bool SunThroughCutout(float3 worldStart, float3 worldSun, bool unblocked) {
         RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
         query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
         query.Proceed();
-        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+        if ((query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) &&
+            !((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT()) && !VoxelBlockedNearest(ray, RayWorldMask, true))) {
             hits++;
         }
         else if (k == 0) {
@@ -5679,6 +5860,11 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // Debug view of the traced scene: a ray from the eye to each pixel's surface, green where it meets that surface,
     // blue where it passes through (not in the traced scene: light goes through it), red where something traced
     // stands in front of it; over the scene, dimmed. Grey without ray tracing.
+    // Banjo-Tooie: the Voxel Layer's void view (voxel void on): the picture as it is, with every pixel nothing was drawn
+    // on (the sky, and any gap a hole in the level lets the camera see through) bright magenta.
+    if (gConstants.view.x > 22.5f) {
+        return float4((depth >= 0.99999f) ? float3(1.0f, 0.0f, 1.0f) : gColor.Load(int3(pixel, 0)).rgb, 0.0f);
+    }
     if (gConstants.view.x > 21.5f) {
         const float3 scene = gColor.Load(int3(pixel, 0)).rgb;
         const float grey = dot(scene, float3(0.299f, 0.587f, 0.114f)) * 0.5f + 0.1f;

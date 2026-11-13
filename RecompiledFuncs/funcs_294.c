@@ -1639,6 +1639,7 @@ RECOMP_FUNC void func_8080046C_chchuffycont(uint8_t* rdram, recomp_context* ctx)
 RECOMP_FUNC void func_800C6C94(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_voxel_push_enter(rdram, ctx);
     // 0x800C6C94: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x800C6C98: sw          $s2, 0x28($sp)
@@ -1719,6 +1720,7 @@ L_800C6CF8:
     // 0x800C6D10: or          $a3, $s5, $zero
     ctx->r7 = ctx->r21 | 0;
     after_0:
+    tooie_voxel_push_provider(rdram, ctx);
     // 0x800C6D14: beq         $v0, $zero, L_800C6D3C
     if (ctx->r2 == 0) {
         // 0x800C6D18: or          $s1, $v0, $zero
@@ -1795,6 +1797,7 @@ L_800C6D58:
 L_800C6D64:
     // 0x800C6D64: lw          $ra, 0x3C($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X3C);
+    tooie_voxel_push_exit(rdram, ctx);
     // 0x800C6D68: or          $v0, $s6, $zero
     ctx->r2 = ctx->r22 | 0;
     // 0x800C6D6C: lw          $s6, 0x38($sp)

@@ -386,6 +386,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/level_box.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/cutscene_skip.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/honeycomb_glitter.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/voxel_layer.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/honeycomb_cap.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/snout_jiggle.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/original_honeycomb.cpp

@@ -65,7 +65,7 @@ last <the last output line>
   value up to 255 is one byte, up to 65535 is two, and larger is four. A negative value is four bytes.
 * Some commands need the game running. These are `status`, `savestate`, `spawn`, `diff`, `perf`,
   `press`, `peek`, `poke`, `expect`, `find`, `freeze`, `flag`, `pos`, `goto`, `walkto`, `face`, `look`, `transform`, `pause`,
-  `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo`, `invincible`, `jiggies`, `challenge`, `lights`, `recall`, `play` and `input`. Until the game
+  `resume`, `step`, `timescale`, `break`, `if`, `findptr`, `gfx`, `hang`, `sweep`, `photo`, `invincible`, `jiggies`, `challenge`, `lights`, `voxel`, `recall`, `play` and `input`. Until the game
   is running they wait at the front
   of the queue, so `start; status` works on one line. If the game never starts, they never run. The frame,
   control, map and until forms of `wait` report an error instead of waiting. `load`, `goload` and `warp` work in the launcher too, and start the
@@ -1600,6 +1600,64 @@ set point_lights on; set point_lights_strength 100
 lights list
 lights undo
 ```
+
+### `voxel`
+
+Usage: `voxel [on|off|info|hit [power] [radius] [wall]|dig [power] [radius]|surface [ahead]|metal [type [off]]|restore|sound <id> [material]|debris [size]|voidscan|void [on|off]|mtx rel|abs|flip]`
+
+The Voxel Layer (Gameplay tab): Banjo digs into the level's ground and walls. The ground behind the level's surface is
+made of cells of 18 units, 1 to 2 m deep (2 to 4 m in sand and dirt), filled only where something strikes. Sand and dirt break
+at one blow; anything else takes two at least: the first cracks it (the level's surface there gives way to cells with
+a cracked texture), the next breaks it out. Nothing breaks within 300 of water or 100 of metal. Leaving the map puts
+everything back.
+
+- `voxel on` and `voxel off` switch it, as the setting does.
+- `voxel info` (or no word) shows this map's chunks and line-tested columns, its solid, bedrock and dug cells, the cut
+  cells (dug ones and the shown ones round them, where the level's own surface is left out), the debris in the air,
+  the room left in its memory, and how many of the game's floor tests a cell answered and how many level contacts in
+  cut cells were dropped.
+- `voxel hit` strikes from Banjo's chest to 60 ahead of him (`voxel hit <power> <radius> wall`: on the first wall
+  straight ahead, within 1000), `voxel dig` from his chest down to his feet, at power 3 and radius 40 unless given. Power 1 is a claw swipe, 2 the Rat-a-tat Rap, 3 the Beak Barge, Beak Buster and Bill
+  Drill, and 4 a grenade egg. The reply says whether the blow met the level, how many cells broke, cracked or were
+  too hard, and how long the blow took.
+- `voxel surface` (or `voxel surface ahead`, for the wall in front of him) prints the flags of the ground under Banjo
+  and its surface type (`flags & 0x1F00`, which the game
+  turns into footstep sounds), for matching surface types to materials.
+- `voxel metal <type>` marks a surface type as metal: never dug, and nothing within 100 of it either. `voxel metal
+  <type> off` takes it back, and `voxel metal` lists them. The game names no surface types, so metal's are found by
+  standing on metal with `voxel surface`.
+- `voxel restore` puts this map's ground and walls back.
+- `voxel sound <id>` plays one of the game's sounds (hex) at Banjo. With a material after it, that material's cells
+  make that sound when they break, until the game restarts. It is for picking break sounds by ear.
+- `voxel debris [size]` drops one still stone cube (size 30 unless given) 120 ahead of Banjo for 8 s, to check that
+  debris is drawn.
+- `voxel voidscan` looks for places where a hole lets the camera see the empty inside of the world. It takes points on
+  the level's surface over and round the cut cells, keeps those the shader cuts away (the same rule as
+  `VoxelCuts.hlsli`) and the camera can see, and follows each line of sight on through the cells. A point is covered
+  when the line meets a cell's face or the backstop behind a dug cell, and a void when it starts inside a whole cell,
+  runs into cells not filled yet, or goes six cells without meeting anything. It prints the counts by kind and puts a
+  magenta marker at up to 160 voids for 10 s, so a screenshot shows where they are.
+- `voxel void [on|off]` (no word: switch it) paints every pixel nothing was drawn on bright magenta: the sky, and any
+  gap a hole lets the camera see through, so a void stands out against the level. It is a view of the picture effects
+  pass (it needs that pass, as the effect debug views do) and is not saved.
+- `voxel mtx rel` draws the cells with places relative to the camera instead of world places, and `voxel mtx abs`
+  goes back; `voxel flip` turns the triangles' winding over. Both are for checking the drawing on a new setup.
+
+Needs the game running and a save file loaded, and the layer on, except for `on`, `off` and `info`.
+
+```
+voxel on
+voxel dig 3
+voxel dig 3
+voxel hit 2 40
+voxel surface
+voxel voidscan
+voxel sound 3F2 rock
+voxel restore
+```
+
+Catch: environment variables `TOOIE_VOXELS=1` (on, whatever the setting) and `TOOIE_VOXEL_LOG=1` (what each blow did,
+and the drawing every 2 s). Cutscene maps are never dug.
 
 ### `sun`
 

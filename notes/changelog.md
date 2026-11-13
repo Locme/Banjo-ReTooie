@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-13
 
+- Gameplay > Voxel Layer (WIP, off by default): Banjo digs into the levels' ground and walls with his attacks and the special eggs. The level looks and plays as it always did until he strikes it; behind its surface is 1 to 2 m of ground (2 to 4 m in sand and dirt). Sand and dirt break at one blow, anything else cracks first; nothing near water or metal breaks. The holes are smooth, carved shapes in the texture of the surface he broke, with stone seams; digging down into soft ground throws up a lip round the hole, and pieces cut loose fall as stones. He can stand in the holes and walk into them. Leaving the level, or falling out of bounds through a hole, puts everything back. Voxel Strength sets how much each blow breaks, and Voxel Depth how deep the ground goes for sand and dirt, stone, and rock. Console: `voxel` (`voxel void on` shows any gap into the void in magenta, `voxel voidscan` looks for them).
 - Photo mode: Hide Banjo hides his shadow too.
 - Photo mode: a Face row holds Banjo's eyes open, half shut or shut (Game leaves them as the game has them), on Banjo himself and mirrored. Kazooie's eyes stay as they are. Console: `photo face [game|open|half|shut]`.
 - Photo mode: a Mirror row flips whoever you photograph left to right, Banjo himself or another character, in any pose. Console: `photo mirror [on|off]`.
