@@ -121,6 +121,17 @@ namespace tooie::photo_mode {
     // The Mirror row: the character photographed flipped left to right. Any thread; applies on the next frame.
     void set_mirror(bool on);
     bool mirror();
+    // The model texture slots (func_800DF744: eyes, mouths and other face pictures, set before a model is drawn):
+    // the picture the slot gets, `value` as the game asked or another while photo mode's Face row says so. Game
+    // thread. The console can hold any slot at a picture (`photo face slot <n> <value>`, -1 lets it go).
+    int32_t face_slot(int slot, int32_t value);
+    void hold_face_slot(int slot, int32_t value);
+    // The Face row: "game", "open", "halfshut" (or "half") or "shut"; false for anything else. Any thread.
+    bool set_face(const std::string& name);
+    std::string face();
+    // The selector nodes (face slots) in the player's model as it is now: each one's slot, how many pictures it picks
+    // between, and the bone it is on. Game thread (the console).
+    std::string face_list(uint8_t* rdram, recomp_context* ctx);
 
     // Once per frame on the game thread (tooie_warp_tick): enters and leaves, and slows game time.
     void tick(uint8_t* rdram, recomp_context* ctx);

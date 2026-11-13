@@ -319,9 +319,49 @@ namespace {
     // gEXSetCullFlip (rt64_extended_gbi.h): RT64 winds the tris that follow the other way round for culling.
     constexpr uint32_t ex_cull_flip = 0x36;
 
-    // Draws one copy, posed by ctrl held at t, standing at pos turned yaw degrees. Mirrored, it is drawn at minus its
-    // scale and half a turn about its own x axis, which together flip it left to right only; its faces then turn
-    // round on screen, so RT64 is told to cull the other side for it (gEXSetCullFlip) and back after.
+    // The projection for a mirrored copy: the scene's (the projection has the camera's turn and position in it, and the
+    // model view is the model's place in the world) after a reflection about the upright plane through `pos` that the
+    // copy faces along (its normal the copy's right, (cos yaw, 0, -sin yaw)), so the copy is flipped left to right
+    // where it stands. Written as an N64 matrix (s15.16, row vectors) into the frame's matrix room (the gfx block's
+    // +4, as the model draw takes its own) and multiplied onto the projection (G_MTX, projection, multiply, no push)
+    // between RT64's push and pop of the projection. The game's own size test multiplies by the scale, so a negative
+    // scale (the obvious way) has the copy left out as too far away.
+    bool push_mirror(uint8_t* rdram, uint32_t gfx, const float pos[3], float yaw) {
+        const uint32_t mtx = read_word(rdram, gfx + 4);
+        if (!valid_ptr(mtx)) {
+            return false;
+        }
+        const float* c = pos;
+        const float rad = yaw * 3.14159265f / 180.0f;
+        const float n[3] = { std::cos(rad), 0.0f, -std::sin(rad) };
+        const float d = 2.0f * (c[0] * n[0] + c[1] * n[1] + c[2] * n[2]);
+        float m[4][4] = {};
+        for (int r = 0; r < 3; r++) {
+            for (int k = 0; k < 3; k++) {
+                m[r][k] = (r == k ? 1.0f : 0.0f) - 2.0f * n[r] * n[k];
+            }
+            m[3][r] = d * n[r];
+        }
+        m[3][3] = 1.0f;
+        for (int r = 0; r < 4; r++) {
+            for (int k = 0; k < 4; k += 2) {
+                const int32_t a = (int32_t)std::lround(m[r][k] * 65536.0f);
+                const int32_t b = (int32_t)std::lround(m[r][k + 1] * 65536.0f);
+                write_word(rdram, mtx + r * 8 + k * 2, ((uint32_t)a & 0xFFFF0000u) | ((uint32_t)b >> 16));
+                write_word(rdram, mtx + 32 + r * 8 + k * 2, ((uint32_t)a << 16) | ((uint32_t)b & 0xFFFFu));
+            }
+        }
+        write_word(rdram, gfx + 4, mtx + 64);
+        push_gfx(rdram, gfx, rt64_hook_word0, rt64_enable_word1);
+        push_gfx(rdram, gfx, ex | ex_push_projection, 0);
+        push_gfx(rdram, gfx, ex | ex_cull_flip, 1);
+        push_gfx(rdram, gfx, 0xDA380005, mtx);
+        return true;
+    }
+
+    // Draws one copy, posed by ctrl held at t, standing at pos turned yaw degrees. Mirrored, it is drawn through a
+    // mirrored projection (push_mirror); its faces then turn round on screen, so RT64 is told to cull the other side
+    // for it (gEXSetCullFlip), and both are put back after.
     void draw_copy(uint8_t* rdram, recomp_context* ctx, const PlayerLook& look, uint32_t ctrl, float t, const float pos[3], float yaw,
                    bool mirror = false) {
         recomp_context call = call_ctx(ctx);
@@ -335,9 +375,8 @@ namespace {
             }
             call = call_ctx(ctx);
         }
-        if (mirror) {
-            push_gfx(rdram, gfx, rt64_hook_word0, rt64_enable_word1);
-            push_gfx(rdram, gfx, ex | ex_cull_flip, 1);
+        if (mirror && !push_mirror(rdram, gfx, pos, yaw)) {
+            mirror = false;
         }
         const gpr base = call.r29;
         const uint32_t position = (uint32_t)base + 0x40;  // vec3
@@ -367,20 +406,21 @@ namespace {
             write_float(rdram, position, pos[0]);
             write_float(rdram, position + 4, pos[1]);
             write_float(rdram, position + 8, pos[2]);
-            write_float(rdram, rotation, mirror ? 180.0f : 0.0f);
+            write_float(rdram, rotation, 0.0f);
             write_float(rdram, rotation + 4, yaw);
             write_float(rdram, rotation + 8, 0.0f);
             const float scale = part == 0 ? look.scale : look.backpack_scale;
             call.r29 = base;
             call.r4 = (int32_t)position;
             call.r5 = (int32_t)rotation;
-            call.r6 = (int32_t)float_bits(mirror ? -scale : scale);
+            call.r6 = (int32_t)float_bits(scale);
             call.r7 = 0;
             MEM_W(0x10, call.r29) = (int32_t)model;
             func_800DE448(rdram, &call);
         }
         if (mirror) {
             push_gfx(rdram, gfx, ex | ex_cull_flip, 0);
+            push_gfx(rdram, gfx, ex | ex_pop_projection, 0);
         }
     }
 
@@ -656,6 +696,16 @@ namespace {
                 return;
             }
             t = read_float(rdram, ctrl + anctrl_timer);
+            // His face slots (eyes and the rest), as his own draw sets them before drawing (func_800A0714 with his
+            // model id): his draw is skipped while the stand-in takes his place.
+            call = call_ctx(ctx);
+            call.r4 = (int32_t)look.player;
+            func_80092B80(rdram, &call);
+            const uint32_t model_id = (uint32_t)call.r2 & 0xFFFF;
+            call = call_ctx(ctx);
+            call.r4 = (int32_t)look.player;
+            call.r5 = (int32_t)model_id;
+            func_800A0714(rdram, &call);
         }
         const uint32_t yaw_ptr = read_word(rdram, look.player + 0xF8);
         const float yaw = valid_ptr(yaw_ptr) ? read_float(rdram, yaw_ptr) : 0.0f;

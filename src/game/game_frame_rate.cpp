@@ -61,6 +61,7 @@
 #include "funcs.h"
 #include "recompui/config.h"
 
+#include "tooie_photo_mode.h"
 #include "tooie_debug.h"
 #include "tooie_game.h"
 #include "tooie_game_frame_rate.h"
@@ -1545,7 +1546,8 @@ extern "C" int tooie_translate_wait_skip(uint8_t* rdram, recomp_context* ctx) {
 // Recompiled code does not set $ra, so the caller is taken from the host stack and named from
 // BanjoReTooie.pdb. Windows only.
 extern "C" void tooie_face_slot_log(uint8_t* rdram, recomp_context* ctx) {
-    (void)rdram;
+    // Photo mode's Face row may put another picture in the slot (src/gameplay/photo_mode.cpp).
+    ctx->r5 = (gpr)(int32_t)tooie::photo_mode::face_slot((int)(ctx->r4 & 0xFF), (int32_t)ctx->r5);
     static const bool log = std::getenv("TOOIE_FACE_LOG") != nullptr;
     if (!log) {
         return;

@@ -3440,7 +3440,7 @@ void cmd_sweep(Ctx& c) {
     print(tooie::texture_sweep::sweeping() ? "sweeping" : "not sweeping (sweep start | fast | more | stop)");
 }
 
-// photo | photo pose list|<n>|<name> | photo mirror [on|off] | photo cards [open|close] | photo develop [hex ids]
+// photo | photo pose list|<n>|<name> | photo mirror [on|off] | photo face [game|open|half|shut] | photo cards [open|close] | photo develop [hex ids]
 void cmd_photo(Ctx& c) {
     const std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
     if (what.empty()) {
@@ -3476,6 +3476,23 @@ void cmd_photo(Ctx& c) {
         print("character " + std::to_string(index) + ": " + tooie::photo_mode::character_name(index) + " (on the next frame)");
         return;
     }
+    if (what == "face" && c.w.size() >= 3 && lower(c.w[2]) == "list") {
+        if (c.ctx == nullptr) { error("no game update is running"); return; }
+        print(tooie::photo_mode::face_list(c.rdram, c.ctx));
+        return;
+    }
+    if (what == "face" && c.w.size() <= 3 && (c.w.size() < 3 || lower(c.w[2]) != "list")) {
+        if (c.w.size() == 3 && !tooie::photo_mode::set_face(lower(c.w[2]))) { error("photo face [game|open|half|shut] | photo face list | photo face slot <n> <picture>"); return; }
+        print("face: " + tooie::photo_mode::face());
+        return;
+    }
+    if (what == "face" && c.w.size() >= 5 && lower(c.w[2]) == "slot") {
+        int slot = -1, value = -1;
+        if (!parse_int(c.w[3], &slot) || !parse_int(c.w[4], &value)) { error("photo face slot <n> <picture, -1 for the game's>"); return; }
+        tooie::photo_mode::hold_face_slot(slot, value);
+        print(format("face slot %d %s", slot, value < 0 ? "as the game sets it" : ("held at " + std::to_string(value)).c_str()));
+        return;
+    }
     if (what == "mirror") {
         const std::string arg = c.w.size() >= 3 ? lower(c.w[2]) : "";
         if (arg == "on" || arg == "off") tooie::photo_mode::set_mirror(arg == "on");
@@ -3503,7 +3520,7 @@ void cmd_photo(Ctx& c) {
         print(anims.empty() ? std::string("taking every pose card again") : format("taking %d pose cards", (int)anims.size()));
         return;
     }
-    error("photo | photo character list|<n>|<name> | photo pose list|<n>|<name> | photo mirror [on|off] | photo cards [open|close] | photo develop [hex ids]");
+    error("photo | photo character list|<n>|<name> | photo pose list|<n>|<name> | photo mirror [on|off] | photo face [game|open|half|shut] | photo cards [open|close] | photo develop [hex ids]");
 }
 
 void cmd_ach(Ctx& c) {
@@ -4502,7 +4519,7 @@ const std::vector<Command>& commands() {
         { "save", {}, false, "save backup | save list", "copy the save file into save_backups", cmd_save },
         { "profile", {}, false, "profile save|load <name> | profile list", "keep every setting's value under a name and set them again", cmd_profile },
         { "sweep", {}, true, "sweep [start|fast|more|stop]", "the texture sweep (Texture dump > Sweep all maps); fast and more are the quick passes", cmd_sweep },
-        { "photo", {}, true, "photo | photo character list|<n>|<name> | photo pose list|<n>|<name> | photo mirror [on|off] | photo cards [open|close] | photo develop [hex ids]", "photo mode on or off, as its key; who is photographed; their pose; the pose grid; take pose cards (all, or any animation ids)", cmd_photo },
+        { "photo", {}, true, "photo | photo character list|<n>|<name> | photo pose list|<n>|<name> | photo mirror [on|off] | photo face [game|open|half|shut] | photo cards [open|close] | photo develop [hex ids]", "photo mode on or off, as its key; who is photographed; their pose; the pose grid; take pose cards (all, or any animation ids)", cmd_photo },
         { "ach", { "achievements" }, false, "ach [filter]", "the achievements and which are unlocked", cmd_ach },
         { "item", { "give", "items" }, true, "item [list] | item <name|n> [value|+n|-n]", "read or set an item counter (eggs, feathers, Glowbos...) through the game's own functions", cmd_item },
         { "sfx", {}, true, "sfx <hex id> [volume]", "play a sound effect on Banjo (the game's func_8009DE38)", cmd_sfx },

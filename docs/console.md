@@ -2115,7 +2115,7 @@ Catch: needs the game running, so `sweep start` waits in the queue until then.
 
 ### `photo`
 
-Usage: `photo | photo character list|<n>|<name> | photo pose list|<n>|<name> | photo mirror [on|off] | photo cards [open|close] | photo develop [hex ids]`
+Usage: `photo | photo character list|<n>|<name> | photo pose list|<n>|<name> | photo mirror [on|off] | photo face [game|open|half|shut] | photo face list | photo face slot <n> <picture> | photo cards [open|close] | photo develop [hex ids]`
 
 `photo` turns photo mode on or off, as its key does. The change happens on the next frame, and the message gives the
 state it is switching to.
@@ -2135,8 +2135,16 @@ that frame as the Pose frame.
 
 `photo mirror on` flips the character photographed left to right, as the Mirror row does (`photo mirror off` puts it
 back; with nothing after it, it says which). It is drawn as a stand-in, the player's own form too, in his own look
-and animation, with a mirrored model matrix; RT64 is told to cull the other side of its triangles meanwhile
-(`gEXSetCullFlip`, lib-patches/rt64.patch), so it is not drawn inside out. The pose cards are not mirrored.
+and animation, through a projection mirrored about the upright plane it faces along; RT64 is told to cull the other
+side of its triangles meanwhile (`gEXSetCullFlip`, lib-patches/rt64.patch), so it is not drawn inside out. The pose
+cards are not mirrored.
+
+`photo face open`, `half`, `shut` or `game` sets the Face row: Banjo's eyes held open, half shut or shut, or as the
+game has them (with nothing after it, it says which). Kazooie's eyes are not covered. `photo face list` lists the
+selector nodes (face slots) in the player's model: each one's slot, how many pictures it picks between, and its bone.
+`photo face slot <n> <picture>` holds any slot at a picture while photo mode is on (`-1` gives it back to the game),
+for finding what a slot does; Banjo's eyes are slots 52 and 53 (0 shut, 1 to 4 open with the pupils in different
+places, 5 to 7 closing).
 
 `photo develop` takes every pose card again, as Start in the grid does. Given animation ids in hex (single ones or
 ranges), it takes cards of those instead, whether or not they are in the list: each is written to

@@ -64,6 +64,7 @@
 // the game loop first runs. TOOIE_PHOTO_LOG=1 logs the photo camera.
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -196,7 +197,7 @@ namespace {
 
     // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
     // thread (-1 or +1 on the picked row).
-    enum class Row { Zoom, Camera, Collision, Time, Hud, Banjo, Character, Pose, PoseFrame, Mirror, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
+    enum class Row { Zoom, Camera, Collision, Time, Hud, Banjo, Character, Pose, PoseFrame, Mirror, Face, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
         Vignette, Grain, Focus, FocusPoint, Tilt, Crop, Border, Grid, Album, Count };
     constexpr int row_count = (int)Row::Count;
     std::atomic<int> picked{0};
@@ -207,6 +208,15 @@ namespace {
     // (tooie::pose_puppets::set_mirror), the player's own form too (in his own look and animation), so the game's own
     // Banjo is never touched.
     std::atomic<bool> mirror_on{false};
+    // Face: Banjo's eyes as the game has them, or held open, half shut or shut. They are the two selectors on his head
+    // (face slots 52 and 53, eight pictures each: 0 shut, 1 to 4 open with the pupils in different places, 5 to 7
+    // closing), which the player's draw sets from his +0x138 block (func_800A0714); face_slot puts the picture
+    // asked for in their place. Kazooie's eyes are not among the slots, so they stay as the game has them.
+    enum class Face { Game, Open, HalfShut, Shut, Count };
+    constexpr const char* face_names[] = { "Game", "Open", "Half shut", "Shut" };
+    constexpr int32_t face_pictures[] = { -1, 1, 5, 0 };
+    constexpr int banjo_eye_slots[] = { 52, 53 };
+    std::atomic<int> face_choice{0};
     // Depth of field's focus point: the middle, Banjo, or one of the rule-of-thirds points.
     enum class Focus { Middle, Banjo, TopLeft, TopRight, BottomLeft, BottomRight, Count };
     constexpr const char* focus_names[] = { "Middle", "Banjo", "Top left", "Top right", "Bottom left", "Bottom right" };
@@ -739,7 +749,7 @@ namespace {
         "Teal and orange", "Dream" };
     constexpr const char* border_names[] = { "None", "Instant photo", "Film strip", "Honeycomb", "Jiggy", "Wooden" };
     constexpr const char* crop_names[] = { "None", "16:9", "2.39:1", "4:3", "1:1", "4:5", "9:16" };
-    constexpr const char* row_names[] = { "Zoom", "Camera", "Collision", "Time", "HUD", "Banjo", "Character", "Pose", "Pose frame", "Mirror", "Others", "Timer", "Shutter", "Filter", "Exposure",
+    constexpr const char* row_names[] = { "Zoom", "Camera", "Collision", "Time", "HUD", "Banjo", "Character", "Pose", "Pose frame", "Mirror", "Face", "Others", "Timer", "Shutter", "Filter", "Exposure",
         "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Focus point", "Tilt", "Crop", "Border", "Grid", "Album" };
     static_assert(std::size(row_names) == row_count);
 
@@ -792,6 +802,11 @@ namespace {
             case Row::Mirror:
                 mirror_on = !mirror_on;
                 break;
+            case Row::Face: {
+                const int n = (int)Face::Count;
+                face_choice = (face_choice + n + step) % n;
+                break;
+            }
             case Row::Filter: {
                 const uint32_t n = (uint32_t)std::size(look_names);
                 qol.update_option_value(tooie::photo_mode::look_option, (qol_value<uint32_t>(tooie::photo_mode::look_option, 0) + n + step) % n);
@@ -868,6 +883,8 @@ namespace {
             return text;
         case Row::Mirror:
             return mirror_on ? "On" : "Off";
+        case Row::Face:
+            return face_names[face_choice.load()];
         case Row::Filter: {
             const uint32_t v = qol_value<uint32_t>(tooie::photo_mode::look_option, 0);
             return v < std::size(look_names) ? look_names[v] : "None";
@@ -2899,6 +2916,98 @@ bool tooie::photo_mode::request_character(int index) {
     }
     character_request = index;
     return true;
+}
+
+namespace {
+    // Slots held at a picture from the console (-1: as the game sets them).
+    // Stored plus one, so the zero they start at means not held.
+    std::array<std::atomic<int32_t>, 64> held_face_slots{};
+}
+
+int32_t tooie::photo_mode::face_slot(int slot, int32_t value) {
+    if (!is_active || slot < 0 || slot >= (int)held_face_slots.size()) {
+        return value;
+    }
+    const int32_t held = held_face_slots[slot].load() - 1;
+    if (held >= 0) {
+        return held;
+    }
+    const int32_t picture = face_pictures[std::clamp(face_choice.load(), 0, (int)Face::Count - 1)];
+    if (picture >= 0 && (slot == banjo_eye_slots[0] || slot == banjo_eye_slots[1])) {
+        return picture;
+    }
+    return value;
+}
+
+namespace {
+    // A model's geometry, walked as the game's draw does (src/gameplay/snout_jiggle.cpp has the node kinds): 2 is a
+    // bone (its children at +byte 8, the bone at +byte 9), 0x0C a selector (the number of pictures at +8, the slot at
+    // +10, each picture's offset at +12 on).
+    void list_selectors(uint8_t* rdram, uint32_t node, int bone, int depth, std::string& out) {
+        for (int guard = 0; guard < 4096 && depth < 32; guard++) {
+            const uint32_t cmd = (uint32_t)MEM_W(0, (gpr)(int32_t)node);
+            const uint32_t size = (uint32_t)MEM_W(4, (gpr)(int32_t)node);
+            if (cmd == 2) {
+                list_selectors(rdram, node + (uint8_t)MEM_BU(8, (gpr)(int32_t)node), (uint8_t)MEM_BU(9, (gpr)(int32_t)node), depth + 1, out);
+            }
+            else if (cmd == 0x0C) {
+                const int options = (uint16_t)MEM_H(8, (gpr)(int32_t)node);
+                const int slot = (int16_t)MEM_H(10, (gpr)(int32_t)node);
+                char line[96];
+                std::snprintf(line, sizeof(line), "%sslot %d: %d pictures, bone %d", out.empty() ? "" : "\n", slot, options, bone);
+                out += line;
+                for (int i = 0; i < options && i < 64; i++) {
+                    list_selectors(rdram, node + (uint32_t)MEM_W(12 + 4 * i, (gpr)(int32_t)node), bone, depth + 1, out);
+                }
+            }
+            if (size == 0 || size > 0x100000) {
+                return;
+            }
+            node += size;
+        }
+    }
+}
+
+std::string tooie::photo_mode::face_list(uint8_t* rdram, recomp_context* ctx) {
+    const uint32_t player = (uint32_t)MEM_W(0, (gpr)(int32_t)player_table);
+    if (player < 0x80000000u || player >= 0x81000000u) {
+        return "no player";
+    }
+    recomp_context call = *ctx;
+    call.r29 = ctx->r29 - 0x100;
+    call.r4 = (int32_t)player;
+    call.r5 = 0;
+    func_80092B04(rdram, &call);
+    const uint32_t model = (uint32_t)call.r2;
+    if (model < 0x80000000u || model >= 0x81000000u) {
+        return "no model";
+    }
+    std::string out;
+    list_selectors(rdram, model + (uint32_t)MEM_W(4, (gpr)(int32_t)model), -1, 0, out);
+    return out.empty() ? "no selectors" : out;
+}
+
+void tooie::photo_mode::hold_face_slot(int slot, int32_t value) {
+    if (slot >= 0 && slot < (int)held_face_slots.size()) {
+        held_face_slots[slot] = value < 0 ? 0 : value + 1;
+    }
+}
+
+bool tooie::photo_mode::set_face(const std::string& name) {
+    for (int i = 0; i < (int)Face::Count; i++) {
+        std::string n = face_names[i];
+        n.erase(std::remove(n.begin(), n.end(), ' '), n.end());
+        std::transform(n.begin(), n.end(), n.begin(), [](unsigned char ch) { return (char)std::tolower(ch); });
+        if (n == name || (name == "half" && i == (int)Face::HalfShut)) {
+            face_choice = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string tooie::photo_mode::face() {
+    return face_names[face_choice.load()];
 }
 
 void tooie::photo_mode::set_mirror(bool on) {
