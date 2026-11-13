@@ -434,7 +434,8 @@ namespace {
     // stand-in, drawn where the player stands by tooie::pose_puppets::stand_in while photo mode hides him, so nothing
     // changes in the game and there is nothing to undo on leaving (the game's own way to change form reloads the area
     // and sends Banjo back to its entrance). Each has its own animations only. A character shows once the save has
-    // unlocked it (the flags transform_menu.cpp reads, gameflags.h's for Mumbo's pad and Golden Goliath, and 0x3EC for Dragon Kazooie), and the
+    // unlocked it (the flags transform_menu.cpp reads; gameflags.h's for Mumbo's pad and Golden Goliath; for Dragon
+    // Kazooie 0x34E, her first change at Humba's pool, which stays set when she changes back), and the
     // player's own form always does.
     struct Character {
         const char* name;
@@ -464,7 +465,7 @@ namespace {
         { "Snowball", 0x02, 0x60B, 0x5E, 0x34C, TOOIE_POSES(snowball_poses), 1.3f },
         { "Bee", 0x06, 0x613, 0x1DE, 0x34D, TOOIE_POSES(bee_poses), 0.9f },
         { "Golden Goliath", 0x0E, 0x673, 0x1EE, 0x050, TOOIE_POSES(goliath_poses), 5.0f },
-        { "Dragon Kazooie", 0x0B | 0x100, 0x62E, 0xA4, 0x3EC, TOOIE_POSES(kazooie_poses), 1.0f },
+        { "Dragon Kazooie", 0x0B | 0x100, 0x62E, 0xA4, 0x34E, TOOIE_POSES(kazooie_poses), 1.0f },
     };
 #undef TOOIE_POSES
     constexpr int character_count = (int)std::size(characters);
