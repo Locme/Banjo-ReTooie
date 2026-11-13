@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-13
 
+- Photo mode: Hide Banjo hides his shadow too.
 - Photo mode: a Face row holds Banjo's eyes open, half shut or shut (Game leaves them as the game has them), on Banjo himself and mirrored. Kazooie's eyes stay as they are. Console: `photo face [game|open|half|shut]`.
 - Photo mode: a Mirror row flips whoever you photograph left to right, Banjo himself or another character, in any pose. Console: `photo mirror [on|off]`.
 - Photo mode's pose grid: scrub a card through its loop with C-left and C-right (or by moving the mouse sideways); the card holds that frame with a bar showing where it is, the character in the world holds it too, and A keeps it as the Pose frame.

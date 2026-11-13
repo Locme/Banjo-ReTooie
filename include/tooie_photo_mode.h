@@ -42,6 +42,8 @@ namespace tooie::photo_mode {
     void start();
 
     bool active();
+    // Whether photo mode's Hide Banjo row has the player hidden (his shadow goes too, src/gameplay/circle_shadow.cpp).
+    bool banjo_hidden();
     // Same as the photo mode key: turns photo mode on or off on the next frame (developer console).
     void request_toggle();
 

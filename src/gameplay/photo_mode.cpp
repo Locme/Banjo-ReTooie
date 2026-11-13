@@ -2176,6 +2176,10 @@ int tooie::photo_mode::shots_taken() {
     return (int)(shots.load() - shots_at_enter.load());
 }
 
+bool tooie::photo_mode::banjo_hidden() {
+    return is_active && players_hidden;
+}
+
 bool tooie::photo_mode::active() {
     return is_active;
 }
