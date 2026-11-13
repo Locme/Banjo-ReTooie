@@ -6,7 +6,8 @@
 // player every time and the flattened model is skipped. Nothing is built here: it is the game's own
 // shadow, so it behaves as it does for those characters.
 //
-// Photo mode's Hide Banjo takes his shadow away with him: while it is on, neither is drawn here.
+// Photo mode's Hide Banjo takes his shadow away with him: while it is on, neither is drawn (the blob's own way in
+// has a hook of its own, banjotooie.us.toml).
 
 #include <variant>
 
@@ -25,9 +26,14 @@ bool tooie::circle_shadow::enabled() {
     }
 }
 
+// Hooked in func_800A6DAC where it would draw the round blob (player+0x64 bit 20 set): 1 skips it.
+extern "C" int tooie_player_shadow_hidden(void) {
+    return tooie::photo_mode::banjo_hidden() ? 1 : 0;
+}
+
 // Hooked in func_800A6DAC where it would draw the flattened model: $s0 is the player.
 extern "C" int tooie_circle_shadow_draw(uint8_t* rdram, recomp_context* ctx) {
-    if (tooie::photo_mode::banjo_hidden()) {
+    if (tooie_player_shadow_hidden()) {
         return 1;
     }
     if (!tooie::circle_shadow::enabled()) {

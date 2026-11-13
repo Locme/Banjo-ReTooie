@@ -1703,6 +1703,13 @@ func = "func_800A6DAC"
 before_vram = 0x800A6ED8
 text = "if (tooie_circle_shadow_draw(rdram, ctx)) goto L_800A6EE4;"
 
+# Photo mode's Hide Banjo (src/gameplay/circle_shadow.cpp): the game's round blob for the player, drawn when
+# player+0x64 bit 20 is set, is skipped while he is hidden, as the flattened model is in the hook above.
+[[patches.hook]]
+func = "func_800A6DAC"
+before_vram = 0x800A6EC8
+text = "if (tooie_player_shadow_hidden()) goto L_800A6EE4;"
+
 # HD Shadows: the player's shadow draws (two func_800DE448 calls) are over by 0x800A66C4; 0x800A69E0
 # is the way out for the early return. Ends tooie::hd_shadows::drawing_shadow() for Banjo.
 [[patches.hook]]

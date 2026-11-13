@@ -4620,6 +4620,7 @@ L_800A6E94:
     }
     // 0x800A6EC4: nop
 
+    if (tooie_player_shadow_hidden()) goto L_800A6EE4;
     // 0x800A6EC8: jal         0x800A5DB0
     // 0x800A6ECC: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
