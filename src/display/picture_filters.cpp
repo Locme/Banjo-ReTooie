@@ -5441,7 +5441,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         ray_tracing_relighting_option,
         "Traced Relighting",
-        "Experimental. Lights the level again with the traced light instead of only darkening the game's picture: the game's own painted shading is taken out of each surface (its texture is read where the camera's ray meets it) and the sun, the sky and the bounce light light it again, so sunlit ground is brighter, the side turned from the sun and what is in shadow darker, and traced shadows no longer land on top of painted ones. 0 keeps the game's shading (the default); 100 is all traced. Needs Ray tracing on.",
+        "Experimental. Lights the level again with the traced light instead of only darkening the game's picture: the game's own painted shading is taken out of each surface (its texture is read where the camera's ray meets it) and the sun, the sky and the bounce light light it again, so sunlit ground is brighter, the side turned from the sun and what is in shadow darker, and traced shadows no longer land on top of painted ones. The level stays about as bright as the game's on the whole. In rooms and caves the traced lamps light it instead, with their shadows, where their light reaches. 0 keeps the game's shading (the default); 100 is all traced. Needs Ray tracing on.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         path_tracing_option,

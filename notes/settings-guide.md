@@ -462,7 +462,12 @@ is the game's painted shading, which is divided out. The traced sun (by how
 squarely the surface faces it, and only where its rays get through) and the sky
 then light it again. Sunlit ground comes out brighter, and the side turned away
 and what is in shadow come out darker. Traced shadows no longer land on top of
-painted ones. Rooms and caves, the sky and water keep the game's shading.
+painted ones. Flat ground in full sun comes out a little brighter than the game
+paints it and the rest in proportion, so the level as a whole stays about as
+bright as the game's. In rooms and caves the traced lamps relight instead:
+where their light reaches, the picture keeps half of the game's painted light
+and the lamps, with their shadows, light the rest; where none reaches, the
+game's picture stays. The sky and water keep the game's shading.
 
 **Ray traced denoising** (Graphics > Ray Tracing, off by default, experimental)
 keeps the traced light from frame to frame: the sun's and lamps' shadows, the

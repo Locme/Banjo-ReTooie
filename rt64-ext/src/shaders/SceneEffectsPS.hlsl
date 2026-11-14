@@ -579,6 +579,26 @@ uint3 IndirectPacked() {
     return uint3(packed & 127u, (packed >> 7) & 127u, (packed >> 14) & 127u);
 }
 
+// How much light a full shadow takes away at full strength. Traced shadows are exact, so they may go deeper than the
+// screen-space and shadow-map ones, which guess and would show their mistakes as dark blotches: at 0.55 a traced shadow
+// was a light grey film over the game's own shading and hardly showed (L, 2026-11-14: "ray tracing still seems
+// underwhelming").
+#ifdef RAY_TRACED
+static const float ShadowDepth = 0.8f;
+#else
+static const float ShadowDepth = 0.55f;
+#endif
+// How much further a lamp's traced light reaches than the game's own range for it (LightShadows).
+static const float LampReach = 2.5f;
+// How much of the game's painted light a room or a cave keeps under full Traced Relighting; the traced lamps light the rest.
+static const float IndoorKeep = 0.5f;
+// How much brighter the traced lamps shine in a room or a cave under full Traced Relighting.
+static const float IndoorLampGain = 3.0f;
+// The traced lamp light (its brightness) at which a room's painted light is fully swapped for it.
+static const float IndoorLampFull = 0.3f;
+// How strongly bright indoor lamp light rolls off: lamp / (1 + lamp * this), so it never adds more than 1 / this.
+static const float IndoorLampSoft = 0.3f;
+
 float AoStrength() {
     return float(IndirectPacked().x) / 100.0f;
 }
@@ -1028,6 +1048,19 @@ bool LoadCharacter(int2 pixel);
 
 // Relighting: a surface's own colour (own) lit by the sun where it gets through (sunBlocked, from SunShadow), by how
 // squarely the surface faces it, and by the sky from above (the ground's bounce from below). See Relit.
+// The sun's and the sky's share of Relit's light. Traced, the sun is stronger and the sky weaker than the fit
+// Relighting without ray tracing keeps: about 4 to 1 between sunlit and shaded instead of 3 to 1, so the traced
+// shadows and the side turned from the sun read as shade and not as a slightly darker picture.
+#ifdef RAY_TRACED
+static const float SunLevel = 1.2f;
+static const float SkyLevel = 0.75f;
+// Flat ground in full sun under Traced Relighting, times its texture's colour (see RelitLight's exposure).
+static const float RelitSunlit = 1.0f;
+#else
+static const float SunLevel = 0.9f;
+static const float SkyLevel = 1.0f;
+#endif
+
 float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float sunBlocked, float3 fill = float3(0.0f, 0.0f, 0.0f)) {
     const float3 luma = float3(0.299f, 0.587f, 0.114f);
     // Smoothed over a few pixels of the same surface (more at higher resolutions), so the low-poly level's faces don't
@@ -1042,17 +1075,27 @@ float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float su
     // near the horizon (Preetham, Shirley and Smits 1999). Every built-in sun is higher, so they light as fitted.
     const float low = saturate((0.57f - dot(sunDirection, up)) / 0.5f);
     const float3 sky = lerp(RelitGround(pixel), lerp(float3(0.42f, 0.47f, 0.56f), float3(0.46f, 0.44f, 0.46f), low * 0.6f), skyward);
-    const float3 sun = lerp(float3(1.0f, 0.95f, 0.86f), float3(1.0f, 0.70f, 0.42f), low) * (0.9f * lerp(1.0f, 0.65f, low));
+    const float3 sun = lerp(float3(1.0f, 0.95f, 0.86f), float3(1.0f, 0.70f, 0.42f), low) * (SunLevel * lerp(1.0f, 0.65f, low));
     // The day and night cycle's light: its brightest channel dims the sun and the sky (its colour is already in the picture).
     float3 tint;
     const float daylight = DayTint(tint) ? max(tint.r, max(tint.g, tint.b)) : 1.0f;
-    float3 lit = own * (sky + fill + sun * (facing * (1.0f - sunBlocked))) * daylight;
+    float3 lit = own * (sky * SkyLevel + fill + sun * (facing * (1.0f - sunBlocked))) * daylight;
     // Shiny surfaces (the shiny list) catch the sun as a highlight where it gets through: Blinn-Phong's, round the
     // direction halfway between the sun and the eye.
     if (LoadShiny(pixel)) {
         const float3 halfway = normalize(sunDirection + normalize(-center));
         lit += sun * (pow(saturate(dot(smooth, halfway)), 60.0f) * 0.5f * saturate(dot(smooth, sunDirection)) * (1.0f - sunBlocked) * daylight);
     }
+#ifdef RAY_TRACED
+    // Exposure: flat ground in full sun comes out at RelitSunlit times its texture's colour, a little brighter than
+    // the game's usual shading (0.85), and everything else in proportion to it, so what is turned from the sun or in
+    // shadow comes out darker than the game painted it. Without it the traced sun and sky added up to about 1.5 times
+    // the texture, and the relit levels came out a third to a half brighter than the game, grass a glaring green
+    // (shot sheet of 2026-11-14). The sky's brightness straight up is about 0.46.
+    const float upFacing = saturate((dot(up, sunDirection) + 0.25f) / 1.25f);
+    const float sunlitGround = 0.46f * SkyLevel + SunLevel * lerp(1.0f, 0.65f, low) * upFacing;
+    lit *= RelitSunlit / max(sunlitGround, 0.5f);
+#endif
     // A soft shoulder on the brightness above three quarters, so sunlit snow and sand roll off towards white instead of
     // clipping flat. On the brightness and not each channel, so a bright colour keeps its hue (per channel, sunlit grass
     // went neon).
@@ -1432,6 +1475,11 @@ float4 RayTexel(uint geometry, uint primitive, float2 barycentrics) {
     }
     return RayTileTexel(tile, gpuTile, int2(floor(RayTileCoord(tile, gpuTile, uv))));
 }
+
+// The lamps' light on a surface is taken from this share of its texture's colour where that is brighter than the
+// picture (see the composite), up to LampLift times the picture.
+static const float LampAlbedoShare = 0.8f;
+static const float LampLift = 4.0f;
 
 // Traced relighting: the texture's colour where the camera's ray meets the surface (view space), blended between its
 // four nearest texels as the game's own filtering blends them, so the colour divided out of the picture (Relit) doesn't
@@ -2105,10 +2153,16 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
         const float distance = length(toLight);
         const float radius = LightSourceRadius(light.w);
         const float fromSurface = max(distance - radius, 0.0f);
-        if ((distance < 30.0f) || (fromSurface > light.w)) {
+        // A lamp's traced light reaches LampReach times the game's range for it (a Light Source pick and a fire keep
+        // theirs). The game's range is how far its own painted lamplight goes, often 300 units, so on its own the
+        // traced lamp only redid that glow with shadows and a lantern on a cave wall lit nothing below it (L,
+        // 2026-11-14: "ray tracing still seems underwhelming").
+        const float reachScale = ((radius > 0.0f) || fire) ? 1.0f : LampReach;
+        if ((distance < 30.0f) || (fromSurface > light.w * reachScale)) {
             continue;
         }
         const float falloff = saturate(1.0f - fromSurface / light.w);
+        const float farFalloff = saturate(1.0f - fromSurface / (light.w * reachScale));
         // A Light Source pick leaves the room's own light as it is (dimming it round the object and adding its own
         // back drew a bright patch, a "ball", round it; L 2026-10-22) and adds a gentler light that fades out
         // smoothly, so what is round the object is just lit a little more, evenly.
@@ -2117,6 +2171,8 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
         if (!source && !fire) {
             influence = max(influence, reachHere);
         }
+        // The traced light's share here: the game's range for a Light Source or a fire, the longer reach for a lamp.
+        const float lampHere = (source || fire) ? reachHere : (farFalloff * farFalloff);
         const float3 direction = toLight / distance;
         const float facing = dot(worldNormal, direction);
         // A surface facing away from a fire is in its shadow without a ray: the side of the pillar it burns on.
@@ -2127,7 +2183,7 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
         // At most six lights traced a pixel (a room full of lamps traced every one). A light that would add less than a
         // step of the picture's colour here isn't traced (nor counted, so a nearer one gets its turn).
         // A fire is traced while its shadow would show, however little the surface faces it.
-        const float worth = fire ? (FireShadow * falloff) : (1.3f * reachHere * facing);
+        const float worth = fire ? (FireShadow * falloff) : (1.3f * lampHere * facing);
         if ((facing <= 0.0f) || (traced >= mostTraced) || (gLampHalf == 2) || (worth * distanceFade < 0.002f)) {
             continue;
         }
@@ -2173,11 +2229,13 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
             lamp += FireColour * (FireLight * reachHere * saturate(facing) * visible);
         }
         else {
-            lamp += float3(1.0f, 0.8f, 0.55f) * (1.3f * reachHere * saturate(facing) * visible);
+            lamp += float3(1.0f, 0.8f, 0.55f) * (1.3f * lampHere * saturate(facing) * visible);
         }
     }
     lamp *= distanceFade;
     gFireKeep = lerp(1.0f, fireKeep, distanceFade);
+    // Lamps keep 0.55: the darkening here stands for the game's own painted lamplight, which the traced lamp light
+    // (lamp) then adds back where it gets through, so a deeper one would leave lamp-lit spots dimmer.
     return lerp(1.0f, 1.0f - 0.55f * influence, distanceFade) * gFireKeep;
 }
 
@@ -2287,7 +2345,7 @@ float ModelShadow(float3 center, float3 normal) {
             }
         }
     }
-    return 1.0f - 0.55f * distanceFade * shade / float(max(traced, 1));
+    return 1.0f - ShadowDepth * distanceFade * shade / float(max(traced, 1));
 }
 
 // The indirect pass's traced rays: a cosine-spread direction round the normal (ray index of 32 in a 4x4 block's
@@ -5466,7 +5524,7 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
 #endif
     // The side turned from the sun darkens over a wider turn the softer the shadows.
     const float turnedAway = saturate(-facing * lerp(4.0f, 1.25f, softness)) * lerp(0.6f, 0.45f, softness);
-    return 1.0f - gConstants.shadows.x * 0.55f * near * max(shadow, turnedAway);
+    return 1.0f - gConstants.shadows.x * ShadowDepth * near * max(shadow, turnedAway);
 }
 
 // Rim light and Toon shading share ambientOcclusion.w, packed as rim light (0 to 1) + 2 * (the level's toon shading
@@ -6080,6 +6138,8 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // Traced relighting: how much of the game's shading the traced light takes over here (not the sky, nor water, whose
     // colour is the water's and not its surface's), and how much of the sun is blocked (SunShadow).
     float relight = 0.0f;
+    // Traced Relighting's share in a room or a cave (see Enclosed below), where it relights from the lamps.
+    float indoor = 0.0f;
     float sunBlocked = 0.0f;
     float waterAt;
 #ifdef RAY_TRACED
@@ -6109,8 +6169,12 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         center = ViewPosition(pixel, depth);
         normal = ViewNormal(pixel, center);
 #ifdef RAY_TRACED
-        // Not in a room or a cave: there the game's own light is the lamps' and the sun doesn't reach.
+        // In a room or a cave the sun doesn't reach and the game's own light is the lamps'. There Traced Relighting
+        // relights from the traced lamps instead of the sun and sky (indoor): the picture keeps IndoorKeep of the
+        // game's painted light and the lamps, traced with their shadows, light the rest (L, 2026-11-14: relighting
+        // used to stop at every roof, so caves and rooms got only the darkening).
         if ((relight > 0.0f) && Enclosed(ViewToWorldPoint(center + normal * 4.0f))) {
+            indoor = relight;
             relight = 0.0f;
         }
 #endif
@@ -6153,9 +6217,9 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             gSunHalf = HalfTraced() ? 2 : 0;
 #endif
             float sunKeep = SunShadow(pixel, center, normal, lamp);
-            // SunShadow returns 1 - strength * 0.55 * blocked. Relit lights the surface by what gets through, so the
+            // SunShadow returns 1 - strength * ShadowDepth * blocked. Relit lights the surface by what gets through, so the
             // picture keeps the shadow only as much as it is not relit.
-            sunBlocked = saturate((1.0f - sunKeep) / max(gConstants.shadows.x * 0.55f, 1e-3f));
+            sunBlocked = saturate((1.0f - sunKeep) / max(gConstants.shadows.x * ShadowDepth, 1e-3f));
 #ifndef RAY_TRACED
             // Relighting without ray tracing leaves a cave or a room to the game's own lighting, as the traced version
             // does (Enclosed): only asked where the sun is mostly blocked, as a roofed spot always is.
@@ -6174,16 +6238,19 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         if (lightShadows) {
             float3 lamps;
             gLampHalf = HalfTraced() ? 2 : 0;
-            keep *= LightShadows(pixel, center, normal, lamps);
+            float lampKeep = LightShadows(pixel, center, normal, lamps);
             gLampHalf = 0;
             if (HalfTraced()) {
                 const float4 halfLamp = TracedHalfLamp(pixel, center, normal);
                 lamp += halfLamp.rgb;
-                keep *= halfLamp.a;
+                lampKeep *= halfLamp.a;
             }
             else {
                 lamp += lamps;
             }
+            // The lamps' darkening stands for the game's painted lamplight; relit indoors, that light is already taken
+            // out of the picture (IndoorKeep), so the darkening goes with it.
+            keep *= lerp(lampKeep, 1.0f, indoor);
             if (!onBanjo) {
                 keep *= ModelShadow(center, normal);
             }
@@ -6291,6 +6358,33 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         if (relight > 0.0f) {
             scene = lerp(scene, Relit(pixel, center, normal, scene, sunBlocked), relight);
         }
+#ifdef RAY_TRACED
+        if (indoor > 0.0f) {
+            // Only as far as a traced lamp reaches: where none does (a room whose lamps are far off), the game's own
+            // light is all there is, and taking it out left Jolly's and Grunty Industries darker and flatter than the
+            // game (shot sheet of 2026-11-14).
+            const float reached = indoor * saturate(dot(lamp, float3(0.299f, 0.587f, 0.114f)) / IndoorLampFull);
+            scene *= lerp(1.0f, IndoorKeep, reached);
+            // The game's lamps are dim and short-ranged for the traced light alone to stand in for the painted light
+            // taken out, so indoors they shine IndoorLampGain times as bright.
+            lamp *= lerp(1.0f, IndoorLampGain, reached);
+            // A soft roll-off on strong lamp light, so the wall right by a lantern takes a warm glow instead of
+            // flaring orange (shot sheet of 2026-11-14), while the pools further out keep most of their light.
+            lamp = lerp(lamp, lamp / (1.0f + lamp * IndoorLampSoft), reached);
+        }
+        // A lamp lights the surface's own colour, not the game's picture of it. The picture is multiplied by
+        // (keep + lamp) below, so on a cave floor the game painted nearly black a lantern added nearly nothing. Where a
+        // lamp reaches, its share is taken from the texture's colour where the camera's ray meets the surface (as Relit
+        // reads it) whenever that is brighter than the picture, at most LampLift times the picture so a stray bright
+        // texel can't flare.
+        if ((dot(lamp, float3(0.299f, 0.587f, 0.114f)) > 0.01f) && (depth < 0.99999f)) {
+            float3 albedo;
+            if (SurfaceAlbedo(center, albedo)) {
+                const float3 base = max(scene, albedo * LampAlbedoShare);
+                lamp *= min(base / max(scene, 1e-3f), LampLift);
+            }
+        }
+#endif
         if (gConstants.water.z > 0.0f) {
             // The surface's own colour lit by it, and a little of it straight on, so dark corners take on the
             // colour of what is around them.

@@ -3,6 +3,13 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-14
+
+- Ray tracing shows more: traced sun shadows and the shadows of models now take away up to 80% of the light instead of 55%, so they read as shade instead of a light grey film. Shadow-map and screen-space shadows are unchanged.
+- Ray tracing: Traced Relighting no longer makes the levels brighter and the grass a glaring green. The traced sun is stronger against the sky and the picture is exposed so flat ground in full sun is a little brighter than the game paints it: about the game's brightness on the whole, with more light and shade.
+- Ray tracing: lamps light up caves and rooms. Their traced light reaches two and a half times as far as the game's own lamplight and lights the surface's own colour, so a lantern on a cave wall lights the floor and the steps round it.
+- Ray tracing: Traced Relighting works in rooms and caves too, relit by the lamps with their shadows where their light reaches; elsewhere they keep the game's picture. Strong lamplight rolls off softly into a warm glow.
+
 ## 2026-11-13
 
 - Gameplay > Voxel Layer (WIP, off by default): Banjo digs into the levels' ground and walls with his attacks and the special eggs. The level looks and plays as it always did until he strikes it; behind its surface is 1 to 2 m of ground (2 to 4 m in sand and dirt). Sand and dirt break at one blow, anything else cracks first; nothing near water or metal breaks. The holes are smooth, carved shapes in the texture of the surface he broke, with stone seams; digging down into soft ground throws up a lip round the hole, and pieces cut loose fall as stones. He can stand in the holes and walk into them. Leaving the level, or falling out of bounds through a hole, puts everything back. Voxel Strength sets how much each blow breaks, and Voxel Depth how deep the ground goes for sand and dirt, stone, and rock. Console: `voxel` (`voxel void on` shows any gap into the void in magenta, `voxel voidscan` looks for them).
