@@ -1019,7 +1019,7 @@ index 4dce8e0..15bd9e3 100644
  endif()
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..42850c8 100644
+index 38b84f5..3f3ab6e 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
 @@ -1,6 +1,7 @@
@@ -1039,7 +1039,7 @@ index 38b84f5..42850c8 100644
              void toggle_fullscreen();
          }
  
-@@ -133,10 +136,79 @@ namespace recompui {
+@@ -133,10 +136,93 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
@@ -1068,6 +1068,20 @@ index 38b84f5..42850c8 100644
 +            std::function<void()> on_press;
 +        };
 +        const OptionButton *get_option_button(const std::string &option_id);
++        // The menu's own text in another language: tab names (key tab.<tab id>), section headings
++        // (heading.<heading>) and the search box (menu.search). The translator gives the text for a key, or the
++        // English it is given. refresh_texts() renames the tabs and builds the open page again, so a change shows
++        // at once.
++        void set_text_translator(std::function<std::string(const std::string &key, const std::string &english)> translator);
++        std::string translate_text(const std::string &key, const std::string &english);
++        void refresh_texts();
++        // Every key of the menu's own text with its English (tabs, headings, the search box).
++        std::vector<std::pair<std::string, std::string>> menu_texts();
++        // A picture (an SVG path relative to the assets folder, or empty for none) before each choice of a choice
++        // option, in the order of its choices, such as a flag before each language. Shown when the choices are tabs,
++        // not when there are so many they become a drop-down list.
++        void set_option_icons(const std::string &option_id, std::vector<std::string> icons);
++        const std::vector<std::string> *get_option_icons(const std::string &option_id);
 +        // Adds a tab that shows some of another tab's options (the ones given to it with set_option_page).
 +        // The options still belong to that tab's config, so they save and apply as before.
 +        void create_page_tab(const std::string &name, const std::string &page_id, const std::string &config_id);
@@ -1119,6 +1133,15 @@ index 38b84f5..42850c8 100644
          // Get the config modal instance. nullptr until created with init_modal() internally.
          // Will throw an error if it hasn't been created yet.
          recompui::TabbedModal *get_config_modal();
+@@ -146,6 +232,8 @@ namespace recompui {
+         // Get any added config by ID.
+         recomp::config::Config &get_config(const std::string &id);
+         recomp::config::Config &get_general_config();
++        // Every config tab's config, in the order they were added (for a translation of the menu's text).
++        void for_each_config(const std::function<void(recomp::config::Config &)> &fn);
+         recomp::config::Config &get_graphics_config();
+         recomp::config::Config &get_sound_config();
+ 
 diff --git a/recompui/include/recompui/recompui.h b/recompui/include/recompui/recompui.h
 index 30c463b..dd5122e 100644
 --- a/recompui/include/recompui/recompui.h
@@ -1754,19 +1777,48 @@ index 277a421..97780fc 100644
      ui_state->unload();
      ui_state.reset();
 diff --git a/recompui/src/composites/ui_prompt.cpp b/recompui/src/composites/ui_prompt.cpp
-index 56a0b70..bec287f 100644
+index 56a0b70..1bdf8e2 100644
 --- a/recompui/src/composites/ui_prompt.cpp
 +++ b/recompui/src/composites/ui_prompt.cpp
-@@ -6,6 +6,8 @@
+@@ -6,6 +6,11 @@
  #include "elements/ui_document.h"
  #include "elements/ui_label.h"
  #include "elements/ui_button.h"
 +#include "elements/ui_svg.h"
 +#include "elements/ui_sidebar_style.h"
++#include "recompinput/recompinput.h"
++#include "recompinput/profiles.h"
++#include "recompinput/players.h"
  
  struct {
      recompui::ContextId ui_context;
-@@ -46,6 +48,148 @@ void run_cancel_callback() {
+@@ -19,11 +24,17 @@ struct {
+     std::mutex mutex;
+ } prompt_state;
+ 
++namespace {
++    // Set while the Banjo panel is up; its update loop (the button hints) stops once it is cleared.
++    bool banjo_panel_up = false;
++}
++
+ void run_confirm_callback() {
+     std::function<void()> confirm_action;
+     {
+         std::lock_guard lock{ prompt_state.mutex };
+         confirm_action = std::move(prompt_state.confirm_action);
++        banjo_panel_up = false;
+     }
+     if (confirm_action) {
+         confirm_action();
+@@ -36,6 +47,7 @@ void run_cancel_callback() {
+     {
+         std::lock_guard lock{ prompt_state.mutex };
+         cancel_action = std::move(prompt_state.cancel_action);
++        banjo_panel_up = false;
+     }
+     if (cancel_action) {
+         cancel_action();
+@@ -46,6 +58,285 @@ void run_cancel_callback() {
      // or just remove it as the usage of the prompt can change now
  }
  
@@ -1775,8 +1827,119 @@ index 56a0b70..bec287f 100644
 +
 +    // One prompt panel: header, text and the two buttons. The prompt context holds a plain panel and one in the look
 +    // of Banjo-Tooie's own menus, and each open shows one of them; prompt_state points at the one shown.
++    // The Banjo panel itself. B (the menu's Back) presses Keep Playing, and the row of button hints under the
++    // buttons follows the controller or keyboard last used, as the settings menu's hints do.
++    class BanjoPanelElement : public recompui::Element {
++    public:
++        recompui::ContextId context = recompui::ContextId::null();
++        recompui::Element* hints = nullptr;
++
++        BanjoPanelElement(recompui::ResourceId rid, recompui::Element* parent)
++            : Element(rid, parent, recompui::Events(recompui::EventType::MenuAction, recompui::EventType::Update), "div", false) {}
++
++        void refresh_hints() {
++            using namespace recompui;
++            auto [device, profile] = last_input();
++            shown_device = device;
++            shown_profile = profile;
++            hints->clear_children();
++            if (device == recompinput::InputDevice::COUNT) {
++                return;
++            }
++            struct Hint {
++                recompinput::GameInput input;
++                const char* text;
++            };
++            const Hint list[] = {
++                { recompinput::GameInput::ACCEPT_MENU, "Choose" },
++                { recompinput::GameInput::BACK_MENU, "Keep Playing" },
++            };
++            for (const Hint& hint : list) {
++                std::vector<recompinput::InputField> fields;
++                for (size_t i = 0; i < recompinput::num_bindings_per_input; i++) {
++                    auto field = recompinput::profiles::get_input_binding(profile, hint.input, i);
++                    // The menu's own stand-in keys (F15 to F17) are not real keys to press.
++                    if (field.is_empty() ||
++                        (field.input_type == recompinput::InputType::Keyboard &&
++                         menu_action_mapping::is_sdl_input_fake_mapped(field.input_id))) {
++                        continue;
++                    }
++                    fields.push_back(field);
++                }
++                if (fields.empty()) {
++                    continue;
++                }
++                Element* item = context.create_element<Element>(hints, 0, "span", false);
++                item->set_display(Display::Flex);
++                item->set_flex_direction(FlexDirection::Row);
++                item->set_align_items(AlignItems::Center);
++                item->set_gap(6.0f);
++                for (const auto& field : fields) {
++                    Label* glyph = context.create_element<Label>(item, field.to_string(), theme::Typography::LabelSM);
++                    glyph->set_font_family("promptfont");
++                    glyph->set_font_style(FontStyle::Normal);
++                    glyph->set_font_weight(400);
++                    glyph->set_font_size(28);
++                    glyph->set_color(banjo::gold);
++                }
++                Label* text = context.create_element<Label>(item, hint.text, theme::Typography::LabelSM);
++                text->set_font_family(banjo::font);
++                text->set_font_weight(400);
++                text->set_font_size(20);
++                text->set_letter_spacing(1);
++                text->set_color(banjo::cream_dim);
++                text->set_padding_top(3);
++            }
++        }
++
++    protected:
++        void process_event(const recompui::Event& e) override {
++            using namespace recompui;
++            switch (e.type) {
++            case EventType::MenuAction:
++                if (std::get<EventMenuAction>(e.variant).action == MenuAction::Back) {
++                    run_cancel_callback();
++                }
++                break;
++            case EventType::Update:
++                if (banjo_panel_up) {
++                    auto [device, profile] = last_input();
++                    if (device != shown_device || profile != shown_profile) {
++                        refresh_hints();
++                    }
++                    queue_update();
++                }
++                break;
++            default:
++                break;
++            }
++        }
++        std::string_view get_type_name() override { return "BanjoPrompt"; }
++
++    private:
++        recompinput::InputDevice shown_device = recompinput::InputDevice::COUNT;
++        int shown_profile = -1;
++
++        // The device and profile whose bindings the hints show, chosen as the settings menu chooses them.
++        static std::pair<recompinput::InputDevice, int> last_input() {
++            if (recompinput::players::is_single_player_mode()) {
++                if (recompui::get_cont_active()) {
++                    return { recompinput::InputDevice::Controller, recompinput::profiles::get_sp_controller_profile_index() };
++                }
++                return { recompinput::InputDevice::Keyboard, recompinput::profiles::get_sp_keyboard_profile_index() };
++            }
++            recompinput::InputDevice device = recompinput::players::get_player_input_device(0);
++            if (device == recompinput::InputDevice::COUNT) {
++                return { recompinput::InputDevice::COUNT, -1 };
++            }
++            return { device, recompinput::profiles::get_input_profile_for_player(0, device) };
++        }
++    };
++
 +    struct PromptPanel {
 +        recompui::Element* content = nullptr;
++        BanjoPanelElement* banjo = nullptr;
++        recompui::Element* jiggy = nullptr;
 +        recompui::Label* header = nullptr;
 +        recompui::Label* label = nullptr;
 +        recompui::Element* controls = nullptr;
@@ -1811,7 +1974,13 @@ index 56a0b70..bec287f 100644
 +        using namespace recompui;
 +        PromptPanel p;
 +
-+        p.content = context.create_element<Element>(parent);
++        if (banjo_look) {
++            p.banjo = context.create_element<BanjoPanelElement>(parent);
++            p.banjo->context = context;
++            p.content = p.banjo;
++        } else {
++            p.content = context.create_element<Element>(parent);
++        }
 +        p.content->set_display(Display::Flex);
 +        p.content->set_position(Position::Relative);
 +        p.content->set_flex(1.0f, 1.0f);
@@ -1850,6 +2019,7 @@ index 56a0b70..bec287f 100644
 +            jiggy->set_min_height(60, Unit::Dp);
 +            jiggy->set_flex_shrink(0);
 +            jiggy->set_margin_right(16, Unit::Dp);
++            p.jiggy = jiggy;
 +            p.header = context.create_element<Label>(header_row, "", LabelStyle::Large);
 +            p.header->set_font_family(banjo::font);
 +            p.header->set_font_weight(400);
@@ -1894,6 +2064,15 @@ index 56a0b70..bec287f 100644
 +        if (banjo_look) {
 +            style_banjo_button(p.confirm);
 +            style_banjo_button(p.cancel);
++
++            p.banjo->hints = context.create_element<Element>(p.content);
++            p.banjo->hints->set_display(Display::Flex);
++            p.banjo->hints->set_flex_direction(FlexDirection::Row);
++            p.banjo->hints->set_justify_content(JustifyContent::Center);
++            p.banjo->hints->set_align_items(AlignItems::Center);
++            p.banjo->hints->set_gap(36.0f);
++            p.banjo->hints->set_padding_bottom(16, Unit::Dp);
++            p.banjo->hints->set_margin_top(-8, Unit::Dp);
 +        }
 +        return p;
 +    }
@@ -1909,13 +2088,23 @@ index 56a0b70..bec287f 100644
 +        prompt_state.prompt_controls = shown.controls;
 +        prompt_state.confirm_button = shown.confirm;
 +        prompt_state.cancel_button = shown.cancel;
++        banjo_panel_up = banjo_look;
++        if (banjo_look) {
++            banjo_panel.banjo->refresh_hints();
++            banjo_panel.banjo->queue_update();
++            // The panel pops in, a little past full size and back, and the Jiggy spins in. Quit and Keep Playing
++            // work at once all the same.
++            banjo_panel.content->animate("opacity", "0", "1", 0.18f);
++            banjo_panel.content->animate("transform", "scale(0.8)", "scale(1)", 0.35f, true);
++            banjo_panel.jiggy->animate("transform", "rotate(-200deg) scale(0.3)", "rotate(0deg) scale(1)", 0.55f, true);
++        }
 +    }
 +}
 +
  void recompui::init_prompt_context() {
      ContextId context = create_context();
  
-@@ -78,46 +222,9 @@ void recompui::init_prompt_context() {
+@@ -78,46 +369,9 @@ void recompui::init_prompt_context() {
      prompt_content_wrapper->set_align_items(AlignItems::Center);
      prompt_content_wrapper->set_justify_content(JustifyContent::Center);
  
@@ -1965,7 +2154,7 @@ index 56a0b70..bec287f 100644
  
      context.close();
  }
-@@ -151,7 +258,8 @@ void recompui::open_choice_prompt(
+@@ -151,7 +405,8 @@ void recompui::open_choice_prompt(
      std::function<void()> cancel_action,
      ButtonStyle confirm_variant,
      ButtonStyle cancel_variant,
@@ -1975,7 +2164,7 @@ index 56a0b70..bec287f 100644
  ) {
      std::lock_guard lock{ prompt_state.mutex };
  
-@@ -160,6 +268,7 @@ void recompui::open_choice_prompt(
+@@ -160,6 +415,7 @@ void recompui::open_choice_prompt(
      ContextId prev_context = try_close_current_context();
  
      prompt_state.ui_context.open();
@@ -1983,7 +2172,7 @@ index 56a0b70..bec287f 100644
  
      prompt_state.prompt_header->set_text(header_text);
      prompt_state.prompt_label->set_text(content_text);
-@@ -170,8 +279,10 @@ void recompui::open_choice_prompt(
+@@ -170,8 +426,10 @@ void recompui::open_choice_prompt(
      prompt_state.cancel_button->set_text(cancel_label_text);
      prompt_state.confirm_action = confirm_action;
      prompt_state.cancel_action = cancel_action;
@@ -1996,7 +2185,7 @@ index 56a0b70..bec287f 100644
  
      prompt_state.ui_context.close();
  
-@@ -196,6 +307,7 @@ void recompui::open_info_prompt(
+@@ -196,6 +454,7 @@ void recompui::open_info_prompt(
      ContextId prev_context = try_close_current_context();
  
      prompt_state.ui_context.open();
@@ -2004,7 +2193,7 @@ index 56a0b70..bec287f 100644
  
      prompt_state.prompt_header->set_text(header_text);
      prompt_state.prompt_label->set_text(content_text);
-@@ -228,6 +340,7 @@ void recompui::open_notification(
+@@ -228,6 +487,7 @@ void recompui::open_notification(
      ContextId prev_context = try_close_current_context();
  
      prompt_state.ui_context.open();
@@ -2012,8 +2201,16 @@ index 56a0b70..bec287f 100644
  
      prompt_state.prompt_header->set_text(header_text);
      prompt_state.prompt_label->set_text(content_text);
+@@ -250,6 +510,7 @@ void recompui::close_prompt() {
+     std::lock_guard lock{ prompt_state.mutex };
+ 
+     if (recompui::is_context_shown(prompt_state.ui_context)) {
++        banjo_panel_up = false;
+         if (prompt_state.cancel_action) {
+             prompt_state.cancel_action();
+         }
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..445d022 100644
+index 6c84c05..70a7b92 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
 @@ -1,7 +1,15 @@
@@ -2143,7 +2340,7 @@ index 6c84c05..445d022 100644
      void config::create_tab(
          const std::string &name,
          const std::string &id,
-@@ -121,7 +226,103 @@ namespace recompui {
+@@ -121,7 +226,130 @@ namespace recompui {
          loaded_configs = true;
      }
  
@@ -2188,6 +2385,33 @@ index 6c84c05..445d022 100644
 +    const config::OptionButton *config::get_option_button(const std::string &option_id) {
 +        auto it = option_buttons.find(option_id);
 +        return it == option_buttons.end() ? nullptr : &it->second;
++    }
++
++    void config::for_each_config(const std::function<void(recomp::config::Config &)> &fn) {
++        for (auto &entry : configs) {
++            fn(entry.second);
++        }
++    }
++
++    static std::function<std::string(const std::string &, const std::string &)> text_translator;
++
++    void config::set_text_translator(std::function<std::string(const std::string &key, const std::string &english)> translator) {
++        text_translator = std::move(translator);
++    }
++
++    std::string config::translate_text(const std::string &key, const std::string &english) {
++        return text_translator ? text_translator(key, english) : english;
++    }
++
++    static std::unordered_map<std::string, std::vector<std::string>> option_icons;
++
++    void config::set_option_icons(const std::string &option_id, std::vector<std::string> icons) {
++        option_icons[option_id] = std::move(icons);
++    }
++
++    const std::vector<std::string> *config::get_option_icons(const std::string &option_id) {
++        auto it = option_icons.find(option_id);
++        return it == option_icons.end() ? nullptr : &it->second;
 +    }
 +
 +    static std::unordered_map<std::string, std::string> option_pages;
@@ -2247,7 +2471,39 @@ index 6c84c05..445d022 100644
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
                  if (tab.id == id) {
-@@ -152,9 +353,12 @@ namespace recompui {
+@@ -135,6 +363,31 @@ namespace recompui {
+         }
+     }
+ 
++    void config::refresh_texts() {
++        if (config_modal != nullptr) {
++            config_modal->refresh_texts();
++        }
++    }
++
++    std::vector<std::pair<std::string, std::string>> config::menu_texts() {
++        std::vector<std::pair<std::string, std::string>> list;
++        for (auto &tab : pending_tabs) {
++            list.emplace_back("tab." + tab.id, tab.name);
++        }
++        std::vector<std::string> headings;
++        for (auto &[option_id, heading] : option_groups) {
++            if (std::find(headings.begin(), headings.end(), heading) == headings.end()) {
++                headings.push_back(heading);
++            }
++        }
++        std::sort(headings.begin(), headings.end());
++        for (auto &heading : headings) {
++            list.emplace_back("heading." + heading, heading);
++        }
++        list.emplace_back("menu.search", "Search settings");
++        return list;
++    }
++
+     void config::init_modal() {
+         if (!loaded_configs) {
+             throw std::runtime_error("Configurations have not been loaded. Call recompui::config::finalize() first.");
+@@ -152,9 +405,12 @@ namespace recompui {
                  config_modal->set_tab_visible(tab.id, false);
              }
          }
@@ -2260,7 +2516,7 @@ index 6c84c05..445d022 100644
          quit_button->add_pressed_callback([]() {
              if (ultramodern::is_game_started()) {
                  recompui::open_quit_game_prompt();
-@@ -163,6 +367,7 @@ namespace recompui {
+@@ -163,6 +419,7 @@ namespace recompui {
              }
          });
          auto close_button = config_modal->modal_root_context.create_element<IconButton>(header_right, "icons/X.svg", ButtonStyle::Basic);
@@ -2268,7 +2524,7 @@ index 6c84c05..445d022 100644
          close_button->add_pressed_callback([]() {
              config::close();
          });
-@@ -177,6 +382,14 @@ namespace recompui {
+@@ -177,6 +434,14 @@ namespace recompui {
          return config_modal->modal_root_context;
      }
  
@@ -2283,7 +2539,7 @@ index 6c84c05..445d022 100644
      void config::set_tab(const std::string &id) {
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
-@@ -185,6 +398,83 @@ namespace recompui {
+@@ -185,6 +450,83 @@ namespace recompui {
          config_modal->set_selected_tab(id);
      }
  
@@ -2368,7 +2624,7 @@ index 6c84c05..445d022 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("Config modal has not been initialized.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..27e620b 100644
+index 86428c9..f205518 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
 @@ -1,4 +1,7 @@
@@ -2418,7 +2674,20 @@ index 86428c9..27e620b 100644
      auto name_text = option.name;
      if (!name_text.empty()) {
          name_label = context.create_element<Label>(this, name_text, theme::Typography::LabelMD);
-@@ -59,7 +87,11 @@ bool ConfigOptionElement::get_disabled() {
+@@ -47,6 +75,12 @@ ConfigOptionElement::ConfigOptionElement(
+     update_hidden();
+ }
+ 
++void ConfigOptionElement::update_name() {
++    if (name_label != nullptr) {
++        name_label->set_text(config->get_option(option_index).name);
++    }
++}
++
+ recomp::config::ConfigValueVariant ConfigOptionElement::get_value() {
+     if (config->requires_confirmation) {
+         return config->get_temp_option_value(option_id);
+@@ -59,7 +93,11 @@ bool ConfigOptionElement::get_disabled() {
  }
  
  bool ConfigOptionElement::get_hidden() {
@@ -2431,7 +2700,7 @@ index 86428c9..27e620b 100644
  }
  
  void ConfigOptionElement::process_event(const Event &e) {
-@@ -76,6 +108,9 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -76,6 +114,9 @@ void ConfigOptionElement::process_event(const Event &e) {
          if (active) {
              on_hover(option_id);
              scroll_into_view();
@@ -2441,7 +2710,7 @@ index 86428c9..27e620b 100644
          }
          break;
      }
-@@ -87,14 +122,72 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -87,14 +128,72 @@ void ConfigOptionElement::process_event(const Event &e) {
      }
  }
  
@@ -2515,7 +2784,7 @@ index 86428c9..27e620b 100644
  }
  
  // ConfigOptionEnum
-@@ -110,6 +203,7 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -110,6 +209,7 @@ ConfigOptionEnum::ConfigOptionEnum(
  {
      ContextId context = recompui::get_current_context();
      Element *wrapper = context.create_element<Element>(this, 0, "div", false);
@@ -2523,7 +2792,7 @@ index 86428c9..27e620b 100644
      wrapper->set_display(Display::Flex);
      wrapper->set_flex_direction(FlexDirection::Row);
      wrapper->set_align_items(AlignItems::Center);
-@@ -120,25 +214,48 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -120,25 +220,55 @@ ConfigOptionEnum::ConfigOptionEnum(
      // Negates the extra padding that radio tabs automatically add.
      name_label->set_margin_bottom(4.0f);
  
@@ -2575,8 +2844,15 @@ index 86428c9..27e620b 100644
 +        details_label = context.create_element<Label>(wrapper, "", theme::Typography::LabelXS);
 +        details_label->set_color(theme::color::Primary);
 +
++        const std::vector<std::string> *icons = config::get_option_icons(option_id);
++        if (icons != nullptr) {
++            // Choices with pictures (the Language setting's flags) are wide: the row wraps onto a second line
++            // instead of running past the panel's edge.
++            radio->set_flex_wrap(true);
++        }
 +        for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
-+            radio->add_option(enum_opt.options[i].name);
++            const bool has_icon = icons != nullptr && i < icons->size() && !(*icons)[i].empty();
++            radio->add_option(enum_opt.options[i].name, has_icon ? std::string_view((*icons)[i]) : std::string_view());
          }
 -    });
 -
@@ -2589,7 +2865,7 @@ index 86428c9..27e620b 100644
      }
  
      update_value();
-@@ -153,12 +270,18 @@ void ConfigOptionEnum::update_value() {
+@@ -153,12 +283,18 @@ void ConfigOptionEnum::update_value() {
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(this->option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          if (enum_opt.options[i].value == option_value) {
@@ -2610,7 +2886,20 @@ index 86428c9..27e620b 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -177,6 +300,14 @@ void ConfigOptionEnum::update_enum_details() {
+@@ -174,9 +310,27 @@ void ConfigOptionEnum::update_enum_details() {
+     }
+ };
+ 
++void ConfigOptionEnum::update_enum_names() {
++    if (radio == nullptr) {
++        return;  // a drop-down keeps the names it was made with
++    }
++    auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
++    for (uint32_t i = 0; i < enum_opt.options.size() && i < radio->num_options(); i++) {
++        radio->get_option_element(i)->set_name(enum_opt.options[i].name);
++    }
++}
++
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
@@ -2625,7 +2914,7 @@ index 86428c9..27e620b 100644
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
          auto opt_element = radio->get_option_element(i);
-@@ -198,9 +329,60 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -198,9 +352,60 @@ ConfigOptionNumber::ConfigOptionNumber(
      ContextId context = recompui::get_current_context();
      auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
  
@@ -2687,7 +2976,7 @@ index 86428c9..27e620b 100644
  
      slider->set_min_value(num_opt.min);
      slider->set_max_value(num_opt.max);
-@@ -214,14 +396,23 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -214,14 +419,23 @@ ConfigOptionNumber::ConfigOptionNumber(
              this->on_hover(this->option_id);
          }
      });
@@ -2711,7 +3000,7 @@ index 86428c9..27e620b 100644
  };
  
  void ConfigOptionNumber::update_disabled() {
-@@ -229,6 +420,18 @@ void ConfigOptionNumber::update_disabled() {
+@@ -229,6 +443,18 @@ void ConfigOptionNumber::update_disabled() {
      set_enabled(!disabled);
  };
  
@@ -2730,7 +3019,7 @@ index 86428c9..27e620b 100644
  // ConfigOptionString
  ConfigOptionString::ConfigOptionString(
      ResourceId rid,
-@@ -245,6 +448,7 @@ ConfigOptionString::ConfigOptionString(
+@@ -245,6 +471,7 @@ ConfigOptionString::ConfigOptionString(
  
      ContextId context = recompui::get_current_context();
      text_input = context.create_element<TextInput>(this);
@@ -2738,7 +3027,7 @@ index 86428c9..27e620b 100644
      text_input->set_width(100.0f, Unit::Percent);
      text_input->set_max_width(100.0f, Unit::Percent);
      update_value();
-@@ -284,16 +488,41 @@ ConfigOptionBool::ConfigOptionBool(
+@@ -284,16 +511,41 @@ ConfigOptionBool::ConfigOptionBool(
  
      ContextId context = recompui::get_current_context();
      toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
@@ -2781,7 +3070,7 @@ index 86428c9..27e620b 100644
  
  void ConfigOptionBool::update_disabled() {
 diff --git a/recompui/src/config/ui_config_option.h b/recompui/src/config/ui_config_option.h
-index 0561657..01b1c2e 100644
+index 0561657..01971b0 100644
 --- a/recompui/src/config/ui_config_option.h
 +++ b/recompui/src/config/ui_config_option.h
 @@ -4,9 +4,12 @@
@@ -2818,10 +3107,12 @@ index 0561657..01b1c2e 100644
  
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "ConfigOptionElement"; }
-@@ -42,12 +55,25 @@ namespace recompui {
+@@ -42,12 +55,27 @@ namespace recompui {
          virtual void update_value() = 0;
          virtual void update_disabled() = 0;
          void update_hidden();
++        // The option's name changed (a translation of the menu): shows the new one.
++        void update_name();
 +        // Search rows show an option even when Simple mode or a closed parent hides it, as its full control.
 +        bool ignore_simple = false;
 +        // The group heading shown above this option (hidden together with it).
@@ -2844,7 +3135,14 @@ index 0561657..01b1c2e 100644
      Label *details_label = nullptr;
  
      std::string_view get_type_name() override { return "ConfigOptionEnum"; }
-@@ -72,7 +98,13 @@ public:
+@@ -67,12 +95,20 @@ public:
+ 
+     void update_enum_details();
+     void update_enum_disabled();
++    // The choices' names changed (a translation of the menu): a row of choices shows the new ones.
++    void update_enum_names();
+ };
+ 
  class ConfigOptionNumber : public ConfigOptionElement {
  protected:
      Slider *slider = nullptr;
@@ -2858,7 +3156,7 @@ index 0561657..01b1c2e 100644
      std::string_view get_type_name() override { return "ConfigOptionNumber"; }
  public:
      ConfigOptionNumber(
-@@ -87,6 +119,7 @@ public:
+@@ -87,6 +123,7 @@ public:
  
      void update_value() override;
      void update_disabled() override;
@@ -2866,7 +3164,7 @@ index 0561657..01b1c2e 100644
  };
  
  class ConfigOptionString : public ConfigOptionElement {
-@@ -112,7 +145,10 @@ public:
+@@ -112,7 +149,10 @@ public:
  class ConfigOptionBool : public ConfigOptionElement {
  protected:
      Toggle *toggle = nullptr;
@@ -2877,7 +3175,7 @@ index 0561657..01b1c2e 100644
      std::string_view get_type_name() override { return "ConfigOptionBool"; }
  public:
      ConfigOptionBool(
-@@ -127,6 +163,7 @@ public:
+@@ -127,6 +167,7 @@ public:
  
      void update_value() override;
      void update_disabled() override;
@@ -2947,7 +3245,7 @@ index f379a6f..7bbf136 100644
      recompui::GameInputRowsWrapper *last = nullptr;
      for (auto *wrapper : rows_wrappers) {
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..8464ec4 100644
+index 6ba64e2..e1013a4 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,10 @@
@@ -3153,7 +3451,22 @@ index 6ba64e2..8464ec4 100644
              continue;
          }
          for (auto &update_type :option_update.updates) {
-@@ -109,6 +260,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -86,6 +237,14 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
+                     element->update_value();
+                     break;
+                 }
++                case ConfigOptionUpdateType::Name: {
++                    element->update_name();
++                    break;
++                }
++                case ConfigOptionUpdateType::EnumNames: {
++                    static_cast<ConfigOptionEnum*>(element)->update_enum_names();
++                    break;
++                }
+                 case ConfigOptionUpdateType::Description: {
+                     if (description_container && description_option_id == option_id) {
+                         set_description_text(config->get_option(option_index).description);
+@@ -109,6 +268,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
          break;
      }
      case EventType::Update: {
@@ -3163,7 +3476,7 @@ index 6ba64e2..8464ec4 100644
          if (apply_button != nullptr) {
              bool apply_enabled = this->apply_button->is_enabled();
              bool is_dirty = config->is_dirty();
-@@ -117,6 +271,10 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -117,6 +279,10 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
              }
          }
          perform_option_render_updates();
@@ -3174,7 +3487,7 @@ index 6ba64e2..8464ec4 100644
          break;
      }
      case EventType::MenuAction: {
-@@ -149,6 +307,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -149,6 +315,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -3185,14 +3498,16 @@ index 6ba64e2..8464ec4 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -172,8 +334,21 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -172,8 +342,23 @@ void ConfigPageOptionsMenu::render_config_options() {
          body_left_scroll->set_padding(16.0f);
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
 +        options_scroll = body_left_scroll;
 +
 +        // The tab's name as a heading, shown with the sidebar layout.
-+        page_title = context.create_element<Label>(body_left_scroll, page_id.empty() ? config->name : page_name, theme::Typography::Header2);
++        page_title = context.create_element<Label>(body_left_scroll, page_id.empty()
++            ? recompui::config::translate_text("tab." + config->id, config->name)
++            : recompui::config::translate_text("tab." + page_id, page_name), theme::Typography::Header2);
 +        page_title->set_display(Display::None);
 +        page_title->set_font_family(sidebar_style::font);
 +        page_title->set_font_weight(400);
@@ -3207,7 +3522,7 @@ index 6ba64e2..8464ec4 100644
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
          };
-@@ -181,8 +356,46 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +366,46 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
@@ -3219,7 +3534,7 @@ index 6ba64e2..8464ec4 100644
 +                order.push_back(i);
 +            }
 +        }
-+        for (size_t i = 0; i < schema.options.size(); i++) {
+         for (size_t i = 0; i < schema.options.size(); i++) {
 +            const std::string *before = recompui::config::get_option_display_before(schema.options[i].id);
 +            if (before == nullptr || !schema.options_by_id.contains(*before)) {
 +                continue;
@@ -3232,7 +3547,7 @@ index 6ba64e2..8464ec4 100644
 +            order.insert(std::find(order.begin(), order.end(), schema.options_by_id.at(*before)), i);
 +        }
 +        // Options set with set_option_display_last go to the bottom, in schema order.
-         for (size_t i = 0; i < schema.options.size(); i++) {
++        for (size_t i = 0; i < schema.options.size(); i++) {
 +            auto from = std::find(order.begin(), order.end(), i);
 +            if (from == order.end() || !recompui::config::get_option_display_last(schema.options[i].id)) {
 +                continue;
@@ -3245,7 +3560,7 @@ index 6ba64e2..8464ec4 100644
              auto &config_option = schema.options[i];
 +            Element *group_heading = nullptr;
 +            if (const std::string *group = recompui::config::get_option_group(config_option.id)) {
-+                auto heading = context.create_element<Label>(body_left_scroll, *group, LabelStyle::Large);
++                auto heading = context.create_element<Label>(body_left_scroll, recompui::config::translate_text("heading." + *group, *group), LabelStyle::Large);
 +                heading->set_margin_top(position == 0 ? 0.0f : 16.0f);
 +                heading->set_margin_bottom(4.0f);
 +                heading->set_color(theme::color::Primary);
@@ -3254,7 +3569,7 @@ index 6ba64e2..8464ec4 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +446,10 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +456,10 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -3265,7 +3580,7 @@ index 6ba64e2..8464ec4 100644
              element->update_disabled();
              element->update_hidden();
              config_option_elements.push_back(element);
-@@ -240,7 +457,42 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -240,7 +467,42 @@ void ConfigPageOptionsMenu::render_config_options() {
      }
  }
  
@@ -4136,7 +4451,7 @@ index 34eec3f..7c9e118 100644
 +
  } // namespace recompui
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..9aa85fb 100644
+index b057f46..5affce1 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
 @@ -3,6 +3,12 @@
@@ -4684,12 +4999,14 @@ index b057f46..9aa85fb 100644
  void Modal::set_on_close_callback(std::function<void()> callback) {
      on_close_callback = callback;
  }
-@@ -311,6 +772,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
+@@ -311,6 +772,90 @@ Modal *Modal::create_modal(ModalType modal_type) {
      return modal;
  }
  
 +// The sidebar's search box: opens the Search tab, whose own text box does the searching.
 +class SidebarSearch : public Element {
++public:
++    Element *label = nullptr;
 +protected:
 +    std::function<void()> on_select;
 +    std::function<void()> on_enter;
@@ -4756,7 +5073,7 @@ index b057f46..9aa85fb 100644
 +        row->set_display(Display::Flex);
 +        row->set_align_items(AlignItems::Center);
 +        row->set_height(100.0f, Unit::Percent);
-+        Element *label = context.create_element<Label>(row, "Search settings", theme::Typography::LabelSM);
++        label = context.create_element<Label>(row, config::translate_text("menu.search", "Search settings"), theme::Typography::LabelSM);
 +        label->set_white_space(WhiteSpace::Nowrap);
 +        label->set_font_family(sidebar_style::font);
 +        label->set_font_weight(400);
@@ -4773,7 +5090,7 @@ index b057f46..9aa85fb 100644
  TabbedModal::TabbedModal(
      ResourceId rid,
      Document *parent,
-@@ -319,6 +862,12 @@ TabbedModal::TabbedModal(
+@@ -319,6 +864,12 @@ TabbedModal::TabbedModal(
  ) : Modal(rid, parent, modal_root_context, modal_type)
  {
      set_menu_action_callback(MenuAction::Back, [this]() {
@@ -4786,7 +5103,7 @@ index b057f46..9aa85fb 100644
          if (this->tabs != nullptr) {
              this->tabs->focus_on_active_tab();
          }
-@@ -331,15 +880,156 @@ TabbedModal::TabbedModal(
+@@ -331,15 +882,159 @@ TabbedModal::TabbedModal(
      }, "Next Tab");
  }
  
@@ -4908,6 +5225,9 @@ index b057f46..9aa85fb 100644
 +                    get_current_context().set_autofocus_element(autofocus);
 +                }
 +            }
++            if (texts_changed.exchange(false)) {
++                apply_texts();
++            }
 +            if (tabs != nullptr) {
 +                uint32_t version = 0;
 +                const auto portraits = recompui::config::get_tab_portraits(&version);
@@ -4943,7 +5263,7 @@ index b057f46..9aa85fb 100644
              }
              queue_update();
              break;
-@@ -362,7 +1052,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
+@@ -362,7 +1057,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
          return;
      }
      int next_index = tabs->get_next_tab_in_direction(tabs->get_active_tab(), direction);
@@ -4964,7 +5284,36 @@ index b057f46..9aa85fb 100644
      // Only focus if the tab changed to the intended tab, otherwise the tab change was cancelled.
      if (current_tab_index == next_index) {
          tabs->focus_on_active_tab();
-@@ -404,12 +1107,21 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+@@ -383,6 +1091,28 @@ void TabbedModal::on_tab_change(int tab_index) {
+     }
+ }
+ 
++void TabbedModal::refresh_texts() {
++    // Only a flag: this can come from any thread, and the open menu updates every frame (a closed one on opening).
++    texts_changed = true;
++}
++
++void TabbedModal::apply_texts() {
++    if (tabs != nullptr) {
++        for (int i = 0; i < (int)tab_contexts.size(); i++) {
++            tabs->set_tab_text(i, config::translate_text("tab." + tab_contexts[i].id, tab_contexts[i].name));
++        }
++    }
++    if (sidebar_search != nullptr) {
++        SidebarSearch *search = static_cast<SidebarSearch *>(sidebar_search);
++        if (search->label != nullptr) {
++            search->label->set_text(config::translate_text("menu.search", "Search settings"));
++        }
++    }
++    // The page is built again on the next update, with its headings and title in the new language.
++    previous_tab_index = -1;
++    queue_update();
++}
++
+ void TabbedModal::set_selected_tab(int tab_index) {
+     if (tabs != nullptr) {
+         tabs->set_active_tab(tab_index, true);
+@@ -404,12 +1134,21 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
      ContextId context = get_current_context();
      if (tabs == nullptr) {
          header->set_padding_left(0.0f); // tabs hug to left side
@@ -4980,7 +5329,7 @@ index b057f46..9aa85fb 100644
          });
      }
 -    tabs->add_tab(tab_context.name);
-+    int tab_index = tabs->add_tab(tab_context.name);
++    int tab_index = tabs->add_tab(config::translate_text("tab." + tab_context.id, tab_context.name));
 +    if (Tab *tab = tabs->get_tab(tab_index)) {
 +        tab->set_layout_name("tab." + tab_context.id);
 +    }
@@ -4988,10 +5337,17 @@ index b057f46..9aa85fb 100644
  
  void TabbedModal::add_tab(TabContext &&tab_context) {
 diff --git a/recompui/src/elements/ui_modal.h b/recompui/src/elements/ui_modal.h
-index d065a14..a6ec898 100644
+index d065a14..74c254b 100644
 --- a/recompui/src/elements/ui_modal.h
 +++ b/recompui/src/elements/ui_modal.h
-@@ -8,6 +8,8 @@
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include <atomic>
+ #include "recompui/recompui.h"
+ #include "elements/ui_element.h"
+ #include "elements/ui_document.h"
+@@ -8,6 +9,8 @@
  
  #include "recompinput/recompinput.h"
  
@@ -5000,7 +5356,7 @@ index d065a14..a6ec898 100644
  namespace recompui {
  
      class Modal;
-@@ -74,6 +76,66 @@ namespace recompui {
+@@ -74,6 +77,66 @@ namespace recompui {
          recompinput::InputDevice last_input_device = recompinput::InputDevice::COUNT;
          int last_input_profile = -1;
  
@@ -5067,7 +5423,7 @@ index d065a14..a6ec898 100644
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "Modal"; }
  
-@@ -85,8 +147,18 @@ namespace recompui {
+@@ -85,8 +148,18 @@ namespace recompui {
          virtual void open();
          virtual bool close();
          bool is_open_now() const { return is_open; }
@@ -5086,9 +5442,12 @@ index d065a14..a6ec898 100644
          Element *get_body() { return body; }
  
          void set_on_close_callback(std::function<void()> callback);
-@@ -102,11 +174,33 @@ namespace recompui {
+@@ -101,12 +174,36 @@ namespace recompui {
+         std::vector<TabContext> tab_contexts;
          TabSet *tabs = nullptr;
          int previous_tab_index = -1;
++        std::atomic<bool> texts_changed{ false };
++        void apply_texts();
          int current_tab_index = -1;
 +        bool sidebar_layout = false;
 +        Element *sidebar_search = nullptr;
@@ -5120,6 +5479,116 @@ index d065a14..a6ec898 100644
      public:
          virtual void open() override;
          virtual bool close() override;
+@@ -122,6 +219,9 @@ namespace recompui {
+         );
+         void set_selected_tab(int tab_index);
+         void set_selected_tab(const std::string &id);
++        // The menu's own text changed language: renames the tabs and the search box and builds the page again,
++        // on the menu's next update (safe to call from any thread).
++        void refresh_texts();
+         Element *get_active_tab() { return tabs != nullptr ? static_cast<Tab*>(tabs->get_active_tab_element()) : nullptr; }
+         void set_tab_visible(const std::string &id, bool is_visible);
+     };
+diff --git a/recompui/src/elements/ui_radio.cpp b/recompui/src/elements/ui_radio.cpp
+index 7e5c18d..af6a747 100644
+--- a/recompui/src/elements/ui_radio.cpp
++++ b/recompui/src/elements/ui_radio.cpp
+@@ -1,16 +1,34 @@
+ #include "overloaded.h"
+ #include "ui_radio.h"
++#include "ui_svg.h"
+ #include "ui_utils.h"
+ 
+ namespace recompui {
+ 
+     // RadioOption
+ 
+-    RadioOption::RadioOption(ResourceId rid, Element *parent, std::string_view name, uint32_t index) : Element(rid, parent, Events(EventType::MouseButton, EventType::Click, EventType::Focus, EventType::Hover, EventType::Enable, EventType::Update), "label", true) {
++    RadioOption::RadioOption(ResourceId rid, Element *parent, std::string_view name, uint32_t index, std::string_view icon) : Element(rid, parent, Events(EventType::MouseButton, EventType::Click, EventType::Focus, EventType::Hover, EventType::Enable, EventType::Update), "label", icon.empty()) {
+         this->index = index;
+ 
+         enable_focus();
+-        set_text(name);
++        if (icon.empty()) {
++            set_text(name);
++        } else {
++            // An element with settable text can't have children (they would not be torn down with it), so with a
++            // picture the label holds the picture and a span with the name instead of text of its own.
++            set_display(Display::Flex);
++            set_flex_direction(FlexDirection::Row);
++            set_align_items(AlignItems::Center);
++            set_gap(8.0f);
++            ContextId context = get_current_context();
++            Svg *picture = context.create_element<Svg>(this, icon);
++            picture->set_width(30.0f);
++            picture->set_height(20.0f);
++            picture->set_flex_shrink(0.0f);
++            Element *text = context.create_element<Element>(this, 0, "span", true);
++            text->set_text(name);
++            name_text = text;
++        }
+         set_cursor(Cursor::Pointer);
+         set_typography(theme::Typography::LabelSM);
+         set_border_color(theme::color::Text, 0);
+@@ -35,6 +53,14 @@ namespace recompui {
+         add_style(&disabled_style, { disabled_state });
+     }
+ 
++    void RadioOption::set_name(std::string_view name) {
++        if (name_text != nullptr) {
++            name_text->set_text(name);
++        } else {
++            set_text(name);
++        }
++    }
++
+     void RadioOption::set_pressed_callback(std::function<void(uint32_t)> callback) {
+         pressed_callback = callback;
+     }
+@@ -173,8 +199,8 @@ namespace recompui {
+ 
+     }
+ 
+-    void Radio::add_option(std::string_view name) {
+-        RadioOption *option = get_current_context().create_element<RadioOption>(this, name, uint32_t(options.size()));
++    void Radio::add_option(std::string_view name, std::string_view icon) {
++        RadioOption *option = get_current_context().create_element<RadioOption>(this, name, uint32_t(options.size()), icon);
+         option->set_pressed_callback([this](uint32_t index){ options[index]->focus(); option_selected(index); });
+         option->set_focus_callback([this](bool active) {
+             if (focus_callback != nullptr) {
+diff --git a/recompui/src/elements/ui_radio.h b/recompui/src/elements/ui_radio.h
+index 4a4033b..0c31db8 100644
+--- a/recompui/src/elements/ui_radio.h
++++ b/recompui/src/elements/ui_radio.h
+@@ -13,14 +13,18 @@ namespace recompui {
+         std::function<void(uint32_t)> pressed_callback = nullptr;
+         std::function<void(bool)> focus_callback = nullptr;
+         uint32_t index = 0;
++        Element *name_text = nullptr;  // the name beside a picture; without one the label's own text is the name
+     protected:
+         virtual void process_event(const Event &e) override;
+         std::string_view get_type_name() override { return "LabelRadioOption"; }
+     public:
+-        RadioOption(ResourceId rid, Element *parent, std::string_view name, uint32_t index);
++        // With an icon (an SVG path), the picture comes before the name.
++        RadioOption(ResourceId rid, Element *parent, std::string_view name, uint32_t index, std::string_view icon = {});
+         void set_pressed_callback(std::function<void(uint32_t)> callback);
+         void set_focus_callback(std::function<void(bool)> callback);
+         void set_selected_state(bool enable);
++        // Shows another name (a translation of the menu).
++        void set_name(std::string_view name);
+     };
+ 
+     class Radio : public Container {
+@@ -42,7 +46,7 @@ namespace recompui {
+     public:
+         Radio(ResourceId rid, Element *parent);
+         virtual ~Radio();
+-        void add_option(std::string_view name);
++        void add_option(std::string_view name, std::string_view icon = {});
+         void set_index(uint32_t index);
+         uint32_t get_index() const;
+         void add_index_changed_callback(std::function<void(uint32_t)> callback);
 diff --git a/recompui/src/elements/ui_select.cpp b/recompui/src/elements/ui_select.cpp
 index e289e9e..4676f73 100644
 --- a/recompui/src/elements/ui_select.cpp
@@ -5386,10 +5855,21 @@ index 4d8c41e..11fdc79 100644
  
  } // namespace recompui
 diff --git a/recompui/src/elements/ui_style.cpp b/recompui/src/elements/ui_style.cpp
-index 99c8e61..728cc56 100644
+index 99c8e61..b1ac9a9 100644
 --- a/recompui/src/elements/ui_style.cpp
 +++ b/recompui/src/elements/ui_style.cpp
-@@ -829,6 +829,18 @@ namespace recompui {
+@@ -637,6 +637,10 @@ namespace recompui {
+         set_flex_basis(basis, basis_unit);
+     }
+ 
++    void Style::set_flex_wrap(bool wrap) {
++        set_property(Rml::PropertyId::FlexWrap, wrap ? Rml::Style::FlexWrap::Wrap : Rml::Style::FlexWrap::Nowrap);
++    }
++
+     void Style::set_flex_direction(FlexDirection flex_direction) {
+         switch (flex_direction) {
+         case FlexDirection::Row:
+@@ -829,6 +833,18 @@ namespace recompui {
          set_property(Rml::PropertyId::Transform, Rml::Property(Rml::Variant(std::move(transform)), Rml::Unit::TRANSFORM));
      }
  
@@ -5409,7 +5889,7 @@ index 99c8e61..728cc56 100644
          remove_property(Rml::PropertyId::Transform);
      }
 diff --git a/recompui/src/elements/ui_style.h b/recompui/src/elements/ui_style.h
-index 3fe8e04..1de21a8 100644
+index 3fe8e04..8fccccc 100644
 --- a/recompui/src/elements/ui_style.h
 +++ b/recompui/src/elements/ui_style.h
 @@ -32,6 +32,8 @@ namespace recompui {
@@ -5429,8 +5909,17 @@ index 3fe8e04..1de21a8 100644
          void set_display(Display display);
          Display get_display();
          // Sets display property to hidden, and remembers the previous display value when calling display_show().
+@@ -107,6 +110,8 @@ namespace recompui {
+         void set_flex(float grow, float shrink);
+         void set_flex(float grow, float shrink, float basis, Unit basis_unit = Unit::Percent);
+         void set_flex_direction(FlexDirection flex_direction);
++        // Lets a row's children go onto more lines when they don't fit.
++        void set_flex_wrap(bool wrap);
+         void set_flex_wrap(FlexWrap flex_wrap);
+         void set_align_items(AlignItems align_items);
+         void set_overflow(Overflow overflow);
 diff --git a/recompui/src/elements/ui_tab_set.cpp b/recompui/src/elements/ui_tab_set.cpp
-index 2c5dc52..f415e57 100644
+index 2c5dc52..2de860a 100644
 --- a/recompui/src/elements/ui_tab_set.cpp
 +++ b/recompui/src/elements/ui_tab_set.cpp
 @@ -1,5 +1,11 @@
@@ -5675,13 +6164,25 @@ index 2c5dc52..f415e57 100644
      set_as_primary_focus(enable);
      set_style_enabled(checked_state, enable);
      indicator->set_background_color(enable ? theme::color::BorderSolid : theme::color::Transparent);
-@@ -125,12 +326,21 @@ void TabSet::set_change_tab_callback(on_change_tab_callback callback) {
+@@ -125,12 +326,33 @@ void TabSet::set_change_tab_callback(on_change_tab_callback callback) {
      change_tab_callback = std::move(callback);
  }
  
++void Tab::set_label_text(std::string_view text) {
++    if (label != nullptr) {
++        label->set_text(text);
++    }
++}
++
 +void TabSet::set_tab_portrait(int tab_index, const std::vector<std::string> &frames) {
 +    if (tab_index >= 0 && tab_index < static_cast<int>(tabs.size())) {
 +        tabs[tab_index]->set_portrait(frames);
++    }
++}
++
++void TabSet::set_tab_text(int tab_index, std::string_view text) {
++    if (tab_index >= 0 && tab_index < static_cast<int>(tabs.size())) {
++        tabs[tab_index]->set_label_text(text);
 +    }
 +}
 +
@@ -5697,7 +6198,7 @@ index 2c5dc52..f415e57 100644
      if (active_tab < 0) {
          active_tab = 0;
          tab->set_selected(true);
-@@ -194,6 +404,39 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
+@@ -194,6 +416,39 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
      return new_index;
  }
  
@@ -5738,7 +6239,7 @@ index 2c5dc52..f415e57 100644
      if (tab_index < 0 || tab_index >= static_cast<int>(tabs.size())) {
          return;
 diff --git a/recompui/src/elements/ui_tab_set.h b/recompui/src/elements/ui_tab_set.h
-index b8d3783..256a059 100644
+index b8d3783..03f298a 100644
 --- a/recompui/src/elements/ui_tab_set.h
 +++ b/recompui/src/elements/ui_tab_set.h
 @@ -1,6 +1,10 @@
@@ -5776,12 +6277,13 @@ index b8d3783..256a059 100644
  
          bool visible = true;
  
-@@ -32,6 +53,16 @@ namespace recompui {
+@@ -32,6 +53,17 @@ namespace recompui {
          void set_selected(bool selected);
          void set_visible(bool is_visible);
          bool get_visible() { return visible; }
 +        // Sidebar layout: a row of a vertical list, its selected mark down the left edge.
 +        void set_vertical(bool vertical);
++        void set_label_text(std::string_view text);
 +        // Sidebar layout: a portrait (registered images' names: the still picture, then the blink's frames, the eyes
 +        // closing) shown before the name, instead of the Jiggy on the picked tab. Empty takes it away.
 +        void set_portrait(const std::vector<std::string> &frames);
@@ -5793,7 +6295,7 @@ index b8d3783..256a059 100644
      };
  
      class TabSet : public Element {
-@@ -47,10 +78,21 @@ namespace recompui {
+@@ -47,10 +79,23 @@ namespace recompui {
          int add_tab(std::string_view text);
          void set_active_tab(int tab_index, bool report_change = true);
          void focus_on_active_tab();
@@ -5801,6 +6303,8 @@ index b8d3783..256a059 100644
          Element *get_active_tab_element() const { return active_tab >= 0 && active_tab < static_cast<int>(tabs.size()) ? tabs[active_tab] : nullptr; };
          int get_active_tab() const { return active_tab; }
          void set_tab_visible(int tab_index, bool is_visible);
++        // Shows another name on a tab (a translation of the menu).
++        void set_tab_text(int tab_index, std::string_view text);
 +        void set_tab_portrait(int tab_index, const std::vector<std::string> &frames);
          int get_next_tab_in_direction(int index, int direction);
 +        // Lays the tabs out top to bottom (the settings sidebar) instead of in a row.

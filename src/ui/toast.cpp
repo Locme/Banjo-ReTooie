@@ -11,6 +11,7 @@
 #include "elements/ui_label.h"
 
 #include "tooie_toast.h"
+#include "tooie_language.h"
 
 namespace {
     using namespace std::chrono_literals;
@@ -176,7 +177,8 @@ void tooie::toast::show(const std::string& message) {
     });
     {
         std::lock_guard lock{ queue_mutex };
-        pending.push_back(message);
+        // In the chosen language (General > Language): the translation file's toast.<English> lines.
+        pending.push_back(tooie::language::notice_text(message));
     }
     queue_cv.notify_all();
 }

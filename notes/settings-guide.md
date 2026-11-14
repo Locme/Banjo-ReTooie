@@ -7,6 +7,9 @@ on a controller.
 
 ## General
 
+- **Language**: the language of the game's own text (dialogue, menus, signs), with a flag before each choice. English
+  is the game's text; each other choice is a fan-made translation file (`docs/translations.md`). Lines a translation
+  leaves out stay English. Changing it reloads the area so the new text shows at once. Default: English.
 - **Back up saves**: copies your save file into the `save_backups` folder
   whenever it changes. Default: on.
 - **Discord Status (Non-functional ATM)**: shows the level you are playing in your Discord status

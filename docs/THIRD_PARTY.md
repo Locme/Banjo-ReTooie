@@ -40,6 +40,12 @@ using Polygonal Light Volumes" (High Performance Graphics 2010): a mesh round th
 drawn from the light, and its faces add and take away the light gathered along each pixel's ray. No code is copied
 from anywhere.
 
+Supplied fonts (`fonts/dialogue.ttf`, `fonts/title.ttf`, `src/game/language_font.cpp`) are read with Sean Barrett's
+stb_truetype 1.26 (public domain or MIT, the player's choice; licence text at the end of
+`lib/rt64/src/contrib/stb/stb_truetype.h`, which RT64 already carries). No font is shipped: the player supplies them.
+The translations in `assets/translations/` are written for this port (drafted by AI) and are the port's own text; the
+flags there are drawn from the flags' official proportions (flags are not copyrighted).
+
 ## Credits
 
 * Locme: direction, design and play-testing, the game's icon (`icons/`) and the

@@ -2110,6 +2110,22 @@ func = "func_800D5B34"
 before_vram = 0x800D5BF4
 text = "if (tooie_asset_replace(rdram, ctx)) goto L_800D5D0C;"
 
+# Accented letters (src/game/language_font.cpp): character -> glyph index. The fonts get added glyphs for the
+# translations' accented letters; a character that has one gets its index here, before the game turns a-z into
+# capitals for the title font. Every other character is looked up as the game does.
+[[patches.hook]]
+func = "func_800D35D0"
+before_vram = 0x800D35D0
+text = "if (tooie_glyph_index(rdram, ctx)) return;"
+
+# Supplied title font (src/game/language_font.cpp): func_80800000_fxkern gives the title lettering's nudge for a
+# pair of letters (a table tuned to Rare's overlapping stone letters). With a font of the player's own the nudge
+# gives back the 4 pixels the lettering takes off, plus a small gap.
+[[patches.hook]]
+func = "func_80800000_fxkern"
+before_vram = 0x80800000
+text = "if (tooie_title_kerning(rdram, ctx)) return;"
+
 # Window light beams (src/gameplay/window_beams.cpp): func_80800000_gcmapDll finds a map's entry in the
 # map table (14 bytes a map: map, solid model, see-through model, ...); where it returns the entry
 # ($v1, the map in $a0), rooms with no see-through model get one for the beams.

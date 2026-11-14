@@ -8,6 +8,7 @@
 #include "tooie_brightness_panel.h"
 #include "tooie_photo_album.h"
 #include "tooie_game.h"
+#include "tooie_language.h"
 #include "tooie_hand_cursor.h"
 #include "tooie_menu_tree.h"
 #include "tooie_hd_shadows.h"
@@ -595,6 +596,7 @@ void tooie::init_config() {
     general_options.has_mouse_sensitivity = true;
 #endif
     auto& general = recompui::config::create_general_tab(general_options);
+    tooie::language::add_option(general);
     tooie::control_scheme::add_option(general);
     general.add_bool_option(
         tooie::save_backups_option,

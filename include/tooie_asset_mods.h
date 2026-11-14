@@ -26,6 +26,9 @@ namespace tooie::asset_mods {
     void enable_mod(const std::string& mod_id, const std::filesystem::path& root, size_t order);
     void disable_mod(const std::string& mod_id);
     void reorder(const std::function<size_t(const std::string&)>& order_of);
+    // Reloads the area on the next frame where a warp is allowed (as for a switched asset mod), so assets already
+    // loaded load again: General > Language uses it.
+    void request_area_reload();
 
     // Asset `id` as the game loads it now: an asset mod's file when one replaces it, else decompressed from the
     // ROM. Empty when it can't be read.

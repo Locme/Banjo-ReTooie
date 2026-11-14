@@ -28,6 +28,7 @@
 #include "funcs.h"
 #include "recompui/config.h"
 
+#include "tooie_language.h"
 #include "tooie_achievements.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
@@ -65,10 +66,11 @@ namespace {
         uint8_t id;
         uint16_t icon;
         const char* name;
+        const char* text_key;  // its name in a translation (General > Language), src/game/language.cpp
     };
     constexpr Entry entries[] = {
-        { tooie::achievements::pause_sub_page, 0xAE, "ACHIEVEMENTS" },
-        { tooie::game_settings::pause_sub_page, 0x0C, "SETTINGS" },
+        { tooie::achievements::pause_sub_page, 0xAE, "ACHIEVEMENTS", "pause.achievements" },
+        { tooie::game_settings::pause_sub_page, 0x0C, "SETTINGS", "pause.settings" },
     };
     constexpr uint32_t entry_count = sizeof(entries) / sizeof(entries[0]);
 
@@ -125,9 +127,11 @@ namespace {
     void write_strings(uint8_t* rdram) {
         for (const Entry& e : entries) {
             const gpr addr = string_for(e);
+            // In the chosen language (General > Language), as the game draws text; a slot holds 31 bytes and the 0.
+            const std::string name = tooie::language::port_game_text(e.text_key, e.name);
             size_t i = 0;
-            for (; e.name[i] != '\0'; i++) {
-                MEM_B(i, addr) = e.name[i];
+            for (; i < name.size() && i + 1 < string_stride; i++) {
+                MEM_B(i, addr) = (int8_t)name[i];
             }
             MEM_B(i, addr) = 0;
         }

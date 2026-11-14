@@ -1,5 +1,5 @@
 diff --git a/librecomp/include/librecomp/config.hpp b/librecomp/include/librecomp/config.hpp
-index a1086cf..917be5c 100644
+index a1086cf..2e3451f 100644
 --- a/librecomp/include/librecomp/config.hpp
 +++ b/librecomp/include/librecomp/config.hpp
 @@ -8,6 +8,7 @@
@@ -10,7 +10,29 @@ index a1086cf..917be5c 100644
  
  #include <json/json.hpp>
  
-@@ -315,7 +316,28 @@ namespace recomp {
+@@ -138,7 +139,9 @@ namespace recomp {
+             EnumDetails,
+             EnumDisabled,
+             Value,
+-            Description
++            Description,
++            Name,       // the option's name changed (a translation)
++            EnumNames   // the names of an enum option's choices changed (a translation)
+         };
+ 
+         struct ConfigOptionUpdateContext {
+@@ -272,6 +275,10 @@ namespace recomp {
+             void update_option_enum_details(const std::string& option_id, const std::string& enum_details);
+             void update_option_value(const std::string& option_id, ConfigValueVariant value);
+             void update_option_description(const std::string& option_id, const std::string& new_description);
++            // Renames an option, or the choices of an enum option (in their order), and tells the menu: for a
++            // translation of the menu's text that applies at once.
++            void update_option_name(const std::string& option_id, const std::string& new_name);
++            void update_enum_option_names(const std::string& option_id, const std::vector<std::string>& new_names);
+             void update_enum_option_disabled(const std::string& option_id, uint32_t enum_index, bool disabled);
+ 
+             // Makes the dependent option disabled when the source option is set to any of the specified values.
+@@ -315,7 +322,28 @@ namespace recomp {
  
              std::vector<ConfigOptionUpdateContext> get_config_option_updates() { return config_option_updates; }
              bool is_config_option_disabled(size_t option_index) const { return disabled_options.contains(option_index); }
@@ -40,7 +62,7 @@ index a1086cf..917be5c 100644
              void clear_config_option_updates() {
                  config_option_updates.clear();
              }
-@@ -327,10 +349,20 @@ namespace recomp {
+@@ -327,10 +355,20 @@ namespace recomp {
                  json_serialize_option_map[option_id] = callback;
              }
  
@@ -62,7 +84,7 @@ index a1086cf..917be5c 100644
              bool loaded_config = false;
              bool is_mod_config = false;
  
-@@ -338,6 +370,15 @@ namespace recomp {
+@@ -338,6 +376,15 @@ namespace recomp {
              std::string mod_version; // only used if mod
  
              ConfigSchema schema;
@@ -78,7 +100,7 @@ index a1086cf..917be5c 100644
              ConfigStorage storage;
              ConfigStorage temp_storage;
  
-@@ -347,6 +388,14 @@ namespace recomp {
+@@ -347,6 +394,14 @@ namespace recomp {
              std::vector<ConfigOptionUpdateContext> config_option_updates = {};
              std::unordered_set<size_t> disabled_options = {};
              std::unordered_set<size_t> hidden_options = {};
@@ -158,7 +180,7 @@ index 35703bd..7095517 100644
          uint32_t get_section_ram_addr(uint16_t code_section_index);
          std::span<const RelocEntry> get_section_relocs(uint16_t code_section_index);
 diff --git a/librecomp/src/config.cpp b/librecomp/src/config.cpp
-index 6bc03fd..0952944 100644
+index 6bc03fd..6ac6bac 100644
 --- a/librecomp/src/config.cpp
 +++ b/librecomp/src/config.cpp
 @@ -84,7 +84,8 @@ void Config::set_mod_version(const std::string &mod_version) {
@@ -373,7 +395,33 @@ index 6bc03fd..0952944 100644
      if (was_hidden == hidden) {
          return;
      }
-@@ -692,8 +742,89 @@ std::string Config::get_enum_option_details(size_t option_index) const {
+@@ -660,6 +710,25 @@ void Config::update_option_description(const std::string& option_id, const std::
+     report_config_option_update(option_index, ConfigOptionUpdateType::Description);
+ }
+ 
++void Config::update_option_name(const std::string& option_id, const std::string& new_name) {
++    size_t option_index = schema.options_by_id[option_id];
++    schema.options[option_index].name = new_name;
++    report_config_option_update(option_index, ConfigOptionUpdateType::Name);
++}
++
++void Config::update_enum_option_names(const std::string& option_id, const std::vector<std::string>& new_names) {
++    size_t option_index = schema.options_by_id[option_id];
++    ConfigOption &option = schema.options[option_index];
++    if (option.type != ConfigOptionType::Enum) {
++        return;
++    }
++    auto &choices = std::get<ConfigOptionEnum>(option.variant).options;
++    for (size_t i = 0; i < choices.size() && i < new_names.size(); i++) {
++        choices[i].name = new_names[i];
++    }
++    report_config_option_update(option_index, ConfigOptionUpdateType::EnumNames);
++}
++
+ void Config::update_enum_option_disabled(const std::string& option_id, uint32_t enum_index, bool disabled) {
+     size_t option_index = schema.options_by_id[option_id];
+     if (!enum_options_disabled.contains(option_index)) {
+@@ -692,8 +761,89 @@ std::string Config::get_enum_option_details(size_t option_index) const {
      return enum_option_details.at(option_index);
  }
  

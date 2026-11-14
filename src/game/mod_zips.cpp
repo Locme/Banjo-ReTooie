@@ -5,8 +5,8 @@
 // one folder down (BT Reloaded: "BANJO TOOIE/rt64.json", "BANJO TOOIE/mod.json"
 // and the PNGs). Asset mods (model mods such as Smash Banjo) come the same way,
 // with an assets.json instead of or next to the rt64.json. At startup, before
-// the mods are scanned, every .zip in the mods folder that holds an rt64.json or
-// an assets.json is unpacked into a folder named after the zip, which the loader
+// the mods are scanned, every .zip in the mods folder that holds an rt64.json,
+// an assets.json or a translations.json (a language mod) is unpacked into a folder named after the zip, which the loader
 // then opens like any other mod folder. Refresh Mods does the same; in game it only
 // unpacks zips that have no folder yet, which the refresh then opens next to the loaded mods. A marker file in
 // that folder remembers which zip (size and date) it came from, so the zip is
@@ -55,7 +55,7 @@ namespace {
         return out;
     }
 
-    // The folder inside the zip that holds rt64.json or assets.json ("" for the root, else
+    // The folder inside the zip that holds rt64.json, assets.json or translations.json ("" for the root, else
     // ending in '/'). False if the zip has neither.
     bool find_pack_root(mz_zip_archive& zip, std::string& root) {
         bool found = false;
@@ -68,7 +68,7 @@ namespace {
             std::string entry = name;
             std::string dir;
             bool matched = false;
-            for (const std::string file : {"rt64.json", "assets.json"}) {
+            for (const std::string file : {"rt64.json", "assets.json", "translations.json"}) {
                 if (entry.size() >= file.size() && entry.compare(entry.size() - file.size(), file.size(), file) == 0) {
                     dir = entry.substr(0, entry.size() - file.size());
                     matched = true;
@@ -176,7 +176,7 @@ namespace {
         }
         std::string root;
         if (!find_pack_root(zip, root)) {
-            fprintf(stderr, "[mods] %s has no rt64.json or assets.json, so it is not a texture pack or asset mod; skipped\n",
+            fprintf(stderr, "[mods] %s has no rt64.json, assets.json or translations.json, so it is not a texture pack, asset mod or language mod; skipped\n",
                 (const char*)zip_path.filename().u8string().c_str());
             mz_zip_reader_end(&zip);
             return;

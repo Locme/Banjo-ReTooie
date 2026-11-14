@@ -54,6 +54,7 @@
 #include "tooie_debug.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
+#include "tooie_language.h"
 #include "tooie_original_honeycomb.h"
 #include "tooie_window_beams.h"
 #include "tooie_toast.h"
@@ -289,6 +290,10 @@ void tooie::asset_mods::reorder(const std::function<size_t(const std::string&)>&
     scanned = false;
 }
 
+void tooie::asset_mods::request_area_reload() {
+    refresh_wanted = true;
+}
+
 void tooie::asset_mods::tick(uint8_t* rdram) {
     // Back-Port: Original honeycomb switched: reload the area so the combs load again.
     static int honeycomb_before = -1;
@@ -308,7 +313,7 @@ void tooie::asset_mods::tick(uint8_t* rdram) {
     if (refresh_wanted.exchange(false) && tooie::debug::can_warp()) {
         uint16_t map = tooie::debug::current_map(rdram);
         uint8_t exit = MEM_B(0x13, game_state_addr);
-        printf("[assets] reloading the area (map 0x%X, exit %u) for the switched mod\n", map, exit);
+        printf("[assets] reloading the area (map 0x%X, exit %u) for the switched mod or language\n", map, exit);
         fflush(stdout);
         // The same map: a plain warp there is refused as "already in map".
         tooie::debug::request_warp(map, exit, true);
@@ -379,6 +384,12 @@ extern "C" int tooie_asset_replace(uint8_t* rdram, recomp_context* ctx) {
         if (in) {
             bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
         }
+    } else if (std::vector<uint8_t> font = tooie::language::font_asset(id); !font.empty()) {
+        // The two fonts with the accented letters translations use added (src/game/language_font.cpp).
+        bytes.assign(font.begin(), font.end());
+    } else if (std::vector<uint8_t> text = tooie::language::text_asset(id); !text.empty()) {
+        // General > Language: the text asset rebuilt with a translation's lines. An asset mod's file wins over it.
+        bytes.assign(text.begin(), text.end());
     } else if (id == tooie::original_honeycomb::health_model && tooie::original_honeycomb::enabled()) {
         // A model mod of the same comb wins over the back-port; the back-port is built from the ROM.
         static std::vector<uint8_t> built;

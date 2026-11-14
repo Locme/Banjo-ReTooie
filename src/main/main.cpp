@@ -48,6 +48,7 @@
 #include "tooie_launcher_background.h"
 #include "tooie_launcher_title.h"
 #include "tooie_asset_mods.h"
+#include "tooie_language.h"
 #include "tooie_boot_screen.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_game.h"
@@ -666,6 +667,14 @@ void reorder_asset_mods(recomp::mods::ModContext& context) {
     tooie::asset_mods::reorder([&](const std::string& mod_id) { return context.get_mod_order_index(mod_id); });
 }
 
+void enable_language_mod(recomp::mods::ModContext&, const recomp::mods::ModHandle& mod) {
+    tooie::language::enable_mod(mod.manifest.mod_id, mod.manifest.mod_root_path);
+}
+
+void disable_language_mod(recomp::mods::ModContext&, const recomp::mods::ModHandle& mod) {
+    tooie::language::disable_mod(mod.manifest.mod_id);
+}
+
 // Set by `--game bt`: start the game straight away when the ROM is installed,
 // skipping the launcher.
 bool autostart_game = false;
@@ -1021,6 +1030,17 @@ int main(int argc, char** argv) {
         .on_reordered = reorder_asset_mods,
     };
     recomp::mods::register_mod_content_type(asset_mod_content_type);
+
+    // Language mods (src/game/language.cpp): a mod folder with a translations.json and a translations/ folder of
+    // translation files and their flags, which join General > Language while the mod is on.
+    recomp::mods::ModContentType language_mod_content_type{
+        .content_filename = "translations.json",
+        .allow_runtime_toggle = true,
+        .on_enabled = enable_language_mod,
+        .on_disabled = disable_language_mod,
+        .on_reordered = nullptr,
+    };
+    recomp::mods::register_mod_content_type(language_mod_content_type);
 
     // The developer console (src/game/console.cpp): its queue reads stdin, --exec and TOOIE_CONSOLE from here.
     tooie::console::start(argc, argv);

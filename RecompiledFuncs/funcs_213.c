@@ -4388,6 +4388,7 @@ RECOMP_FUNC void func_80802464_chjiggygamenew(uint8_t* rdram, recomp_context* ct
 RECOMP_FUNC void func_800D35D0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_glyph_index(rdram, ctx)) return;
     // 0x800D35D0: addiu       $v0, $zero, 0x2
     ctx->r2 = ADD32(0, 0X2);
     // 0x800D35D4: beq         $a0, $v0, L_800D35F8

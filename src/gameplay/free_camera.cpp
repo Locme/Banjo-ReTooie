@@ -457,11 +457,11 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     }
 
     bool blocked = false;
-    bool easing = false;
-    float fade = 1.0f;
     // Floor clearance, for the log: whether the probe hit, where it stopped, its normal, and the lift.
     bool floor_hit = false;
     float floor_stop = 0.0f, floor_lift = 0.0f, floor_normal[3] = { 0.0f, 0.0f, 0.0f };
+    bool easing = false;
+    float fade = 1.0f;
     if (on && gameplay && !paused) {
         const bool stick = stick_x != 0.0f || stick_y != 0.0f || orbit_x != 0.0f || orbit_y != 0.0f ||
             wheel_notches != 0 || rb_zoom_input != 0.0f;
@@ -741,12 +741,12 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             map, mode, updating, paused, submode, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2],
             banjo[0], banjo[1], banjo[2], stick_x, stick_y, state.active, state.yaw, state.elevation, state.aim - state.elevation, state.zoom, blocked,
             player_state, speed, easing, state.wall, fade);
-        std::fflush(stdout);
-    }
         if (floor_hit) {
             std::printf("[freecam] floor probe stop y %.1f normal %.2f %.2f %.2f lift %.1f\n",
                 floor_stop, floor_normal[0], floor_normal[1], floor_normal[2], floor_lift);
         }
+        std::fflush(stdout);
+    }
 }
 
 bool tooie::free_camera::sweep_line(uint8_t* rdram, recomp_context* ctx, const float from[3], float to[3], float normal[3]) {

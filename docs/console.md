@@ -388,6 +388,29 @@ mod list
 mod off <id from mod list>
 ```
 
+### `language`
+
+Usage: `language [reload | check | export [file]]` (also `lang`)
+
+With nothing after it, prints the chosen language and every translation file found, with its key and name, and the
+folder for your own translation files. `reload` reads the chosen file again and reloads the area, so a translator sees
+an edit at once. `check` builds every text asset of the chosen translation and lists each asset whose line count is not
+the game's, each that is not a text asset, and each with characters that could not be used as written, then a summary
+with how many assets came out the same as the game's English. `export` writes the game's English from your ROM in the
+translation file format, to `translations/english.txt` in the app-data folder unless a file is given (a relative path
+is from the app-data folder). Choose the language with `set language <key>`. The file format is in
+[`translations.md`](translations.md).
+
+```
+language export
+set language french
+language check
+language reload
+```
+
+Catch: `export` and `check` need the game started (the ROM loaded). The Language setting's choices are the files found
+when the program started; a new file shows after a restart, while `reload` picks up edits to the chosen one.
+
 ### `texpack`
 
 Usage: `texpack reload`

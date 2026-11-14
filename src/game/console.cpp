@@ -37,6 +37,7 @@
 #include "tooie_game_frame_rate.h"
 #include "tooie_field_of_view.h"
 #include "tooie_free_camera.h"
+#include "tooie_language.h"
 #include "tooie_level_warp.h"
 #include "tooie_mirror_mode.h"
 #include "tooie_save_state.h"
@@ -1325,6 +1326,50 @@ void cmd_texpack(Ctx& c) {
     }
     recompui::renderer::trigger_texture_pack_update();
     print("texture packs reload on the next frame");
+}
+
+// language [reload | check | export [file]]: General > Language's translations (src/game/language.cpp).
+void cmd_language(Ctx& c) {
+    const std::string sub = c.w.size() >= 2 ? lower(c.w[1]) : "";
+    if (sub.empty()) {
+        const std::string key = tooie::language::current();
+        print("language: " + (key.empty() ? std::string("English (the game's own text)") : key));
+        for (const auto& [k, name] : tooie::language::available()) print("  " + k + "  (" + name + ")");
+        print("player's translation folder: " + std::string((const char*)tooie::language::user_folder().u8string().c_str()));
+        return;
+    }
+    if (sub == "reload") {
+        print(tooie::language::reload());
+        return;
+    }
+    if (sub == "rom") {
+        if (c.w.size() < 3) { error("language rom <file>"); return; }
+        std::filesystem::path from = std::filesystem::u8path(join(c.w, 2));
+        if (from.is_relative()) from = recompui::file::get_app_folder_path() / from;
+        std::string why;
+        if (!tooie::language::use_european_copy(from, &why)) { error("that file can't be used: " + why); return; }
+        tooie::language::apply_settings();
+        print("European copy kept; French, German and Spanish use it");
+        return;
+    }
+    if (sub == "check") {
+        for (const std::string& line : tooie::language::check()) print(line);
+        return;
+    }
+    if (sub == "export") {
+        std::filesystem::path to = tooie::language::user_folder() / "english.txt";
+        if (c.w.size() >= 3) {
+            to = std::filesystem::u8path(join(c.w, 2));
+            if (to.is_relative()) to = recompui::file::get_app_folder_path() / to;
+        }
+        size_t assets = 0, lines = 0;
+        std::string why;
+        if (!tooie::language::export_english(to, &assets, &lines, &why)) { error(why); return; }
+        print("wrote " + std::to_string(lines) + " lines from " + std::to_string(assets) + " text assets to " +
+              std::string((const char*)to.u8string().c_str()));
+        return;
+    }
+    error("language [reload | check | rom <file> | export [file]]");
 }
 
 // writewatch <address> [seconds]: which host code writes an RDRAM word (src/debug/write_watch.cpp).
@@ -4548,6 +4593,7 @@ const std::vector<Command>& commands() {
         { "screenshot", { "shot" }, false, "screenshot [ui]", "save the next frame as a PNG, as F12 does; with ui, the whole window with its menus", cmd_screenshot },
         { "burst", {}, true, "burst start | burst stop", "keep every frame from start to stop and save them, as F12 held does", cmd_burst },
         { "bench", {}, false, "bench [start|stop]", "record what the frame rate overlay measures to benchmarks/benchmark_<date>.csv", cmd_bench },
+        { "language", { "lang" }, false, "language [reload | check | rom <file> | export [file]]", "the Language setting's translations: list them, read the chosen file again, check it, give the European copy for French, German and Spanish, or export the game's English for translators", cmd_language },
         { "texpack", {}, false, "texpack reload", "load the enabled texture packs again from their folders, for tools that change a pack's files", cmd_texpack },
         { "writewatch", { "ww" }, true, "writewatch <address> [seconds]", "count which host functions write a RAM word, with their callers (Windows)", cmd_writewatch },
         { "hostprof", {}, false, "hostprof start [file] | label <text> | stop", "sample where the CPU time goes, by thread and function, into a file", cmd_hostprof },

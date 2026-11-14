@@ -44,6 +44,7 @@
 #include "tooie_cheats.h"
 #include "tooie_debug.h"
 #include "tooie_toast.h"
+#include "tooie_language.h"
 #include "tooie_rdram.h"
 
 namespace {
@@ -107,6 +108,15 @@ namespace {
             {}, {0x02A, 0x02B, 0x02C, 0x02D, 0x02E, 0x02F, 0x032, 0x035, 0x067}, {1, 6}},
     };
 
+
+    // An achievement's name and description in the chosen language (General > Language; the translation file's
+    // `=== port` section, keys achievement.<id>.name and achievement.<id>.description).
+    std::string name_of(const Achievement& a) {
+        return tooie::language::port_text(std::string("achievement.") + a.id + ".name", a.name);
+    }
+    std::string description_of(const Achievement& a) {
+        return tooie::language::port_text(std::string("achievement.") + a.id + ".description", a.description);
+    }
 
     // Counted achievements: the running count is kept with the unlocks under "<id>_count".
     struct Counted {
@@ -282,11 +292,11 @@ namespace {
             } else {
                 status = "Locked";
             }
-            Label* title = context.create_element<Label>(entry, std::string(a.name) + "  (" + std::to_string(a.points) + " G)", LabelStyle::Normal);
+            Label* title = context.create_element<Label>(entry, name_of(a) + "  (" + std::to_string(a.points) + " G)", LabelStyle::Normal);
             if (!done.contains(a.id)) {
                 title->set_opacity(0.6f);
             }
-            context.create_element<Label>(entry, a.description, LabelStyle::Small);
+            context.create_element<Label>(entry, description_of(a), LabelStyle::Small);
             Label* state = context.create_element<Label>(entry, status, LabelStyle::Small);
             state->set_opacity(0.7f);
         }
@@ -394,7 +404,7 @@ namespace {
 
     void unlock_message(const Achievement& a) {
         std::lock_guard lock{popup_mutex};
-        popups.push_back({a.name, a.points, portrait_of(a.id)});
+        popups.push_back({name_of(a), a.points, portrait_of(a.id)});
     }
 
     // Adds one to a counted achievement, unlocking it at its goal. Pass a key to count each thing once
@@ -494,6 +504,15 @@ bool tooie::achievements::take_popup(Popup& out) {
     return true;
 }
 
+std::vector<std::pair<std::string, std::string>> tooie::achievements::texts() {
+    std::vector<std::pair<std::string, std::string>> list;
+    for (const Achievement& a : achievement_list) {
+        list.emplace_back(std::string("achievement.") + a.id + ".name", a.name);
+        list.emplace_back(std::string("achievement.") + a.id + ".description", a.description);
+    }
+    return list;
+}
+
 std::vector<tooie::achievements::PauseEntry> tooie::achievements::pause_entries() {
     nlohmann::json done;
     {
@@ -503,8 +522,8 @@ std::vector<tooie::achievements::PauseEntry> tooie::achievements::pause_entries(
     std::vector<PauseEntry> entries;
     for (const Achievement& a : achievement_list) {
         PauseEntry e;
-        e.name = a.name;
-        e.description = a.description;
+        e.name = name_of(a);
+        e.description = description_of(a);
         e.points = a.points;
         e.portrait = portrait_of(a.id);
         e.unlocked = done.contains(a.id);

@@ -90,7 +90,8 @@ After a build, `Play Banjo Re-Tooie.cmd` checks the files the game needs and sta
 Press **Esc** on the keyboard, or **Back** / **Select** on a controller, to open
 settings. The tabs are General, QOL, Graphics, Controls, Sound, Cheats and Mods.
 
-- **General**: Back up saves, Save backups to keep, Timer save, Discord status,
+- **General**: Language (the game's text from a translation file, with a flag
+  for each; see [`docs/translations.md`](docs/translations.md)), Back up saves, Save backups to keep, Timer save, Discord status,
   Speed-up factor and Speed-up toggle.
 - **QOL**: Press Start Early to Skip Intro, Text speed and Level transitions.
 - **Cheats**: Enable cheats, which must be on for the cheat options to show.

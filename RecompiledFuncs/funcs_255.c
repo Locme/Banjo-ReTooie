@@ -3687,6 +3687,7 @@ RECOMP_FUNC void susplinet_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80800000_fxkern(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_title_kerning(rdram, ctx)) return;
     // 0x80800000: sw          $a0, 0x0($sp)
     MEM_W(0X0, ctx->r29) = ctx->r4;
     // 0x80800004: sw          $a1, 0x4($sp)

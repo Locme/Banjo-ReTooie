@@ -412,6 +412,8 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/texture_context.cpp
     ${CMAKE_SOURCE_DIR}/src/game/memory_guard.cpp
     ${CMAKE_SOURCE_DIR}/src/game/asset_mods.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/language.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/language_font.cpp
     ${CMAKE_SOURCE_DIR}/src/game/sound_dump.cpp
     ${CMAKE_SOURCE_DIR}/src/game/level_warp.cpp
     ${CMAKE_SOURCE_DIR}/src/game/achievements.cpp

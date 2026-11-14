@@ -173,6 +173,9 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   prompt context holds two panels, the plain one and one styled like the sidebar layout (brown, gold border, a Jiggy from `assets/icons/JiggyBadge.svg`, whose orange rim shows on brown,
   Luckiest Guy lettering, buttons that turn gold when picked); `open_choice_prompt`'s new `banjo_look` argument picks
   it, and the quit prompt is the only caller that does. `Button::get_label` lets the label's font be set.
+  The Banjo panel (`BanjoPanelElement`) pops in on each open through `Element::animate` (`ui_element.{h,cpp}`, a
+  wrapper over RmlUi's `Element::Animate` that takes RCSS values), takes the menu's Back (B) as Keep Playing, and shows
+  hints for Accept and Back from the controller or keyboard profile last used, refreshed when that changes.
 * **Esc menu slide** (`recompui/src/elements/ui_modal.{h,cpp}`, `recompui/include/recompui/config.h`, `ui_config.cpp`,
   `ui_element.h`, `ui_style.{h,cpp}`): a modal made animated (`Modal::set_animated`) slides in from the left past its
   place and back, its tabs following one after another and then the page's rows (`Modal::page_rows`: the children of

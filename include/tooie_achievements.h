@@ -36,6 +36,10 @@ namespace tooie::achievements {
     };
     std::vector<PauseEntry> pause_entries();
 
+    // Every achievement's name and description in English with the key a translation gives it
+    // (achievement.<id>.name, achievement.<id>.description), for `language export`.
+    std::vector<std::pair<std::string, std::string>> texts();
+
     // The unlock pop-up, drawn by the game at the end of its 2D (src/gameplay/totals_checklist.cpp, from
     // tooie_draw2d_mark) so its icon is the game's own portrait art, texture packs included.
     struct Popup {

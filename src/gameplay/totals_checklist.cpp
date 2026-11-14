@@ -25,11 +25,13 @@
 #include "recompui/config.h"
 
 #include "tooie_achievements.h"
+#include "tooie_language.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_totals_checklist.h"
 
 namespace {
+    std::string T(const char* key, const char* english);  // the port's own text, translated (defined below)
     using namespace std::chrono_literals;
     using Clock = std::chrono::steady_clock;
 
@@ -47,6 +49,7 @@ namespace {
     constexpr uint32_t text_font = 0x6;
     constexpr uint32_t text_colour = 0x9;
     constexpr uint32_t text_size = 0x14;
+    constexpr uint32_t text_proportional = 0x7;  // see print()
 
     // The pause menu's font, as the page titles use it (capitals only).
     constexpr int menu_font = 1;
@@ -179,6 +182,11 @@ namespace {
             MEM_B(text_font, text_settings) = (int8_t)menu_font;
             MEM_B(text_colour, text_settings) = (int8_t)(colour - 0xC24);
             MEM_W(text_size, text_settings) = (int32_t)size_bits;
+            // Letters side by side: with +7 clear func_800B8E28 draws every letter centred on the pen but moves the
+            // pen on by the whole letter, so a narrow letter after a wide one left a gap and a wide one after a
+            // narrow one overlapped it ("J IGGIES"). With it set only the first is centred and the rest start where
+            // the last one ended.
+            MEM_B(text_proportional, text_settings) = 1;
             if (right_align && pass == 0) {
                 x -= (int32_t)call(rdram, ctx, func_800B8CFC, addr);
             }
@@ -261,7 +269,7 @@ namespace {
         const int y = block_y + line_height * line;
         print(rdram, ctx, gfx, offset, colour_white, text_scale, block_x, y, name);
         if (c.got >= c.total) {
-            print(rdram, ctx, gfx, offset, colour_yellow, text_scale, now_x, y, "DONE", true);
+            print(rdram, ctx, gfx, offset, colour_yellow, text_scale, now_x, y, T("totals.done", "DONE"), true);
             return;
         }
         const uint32_t left = c.total - c.got;
@@ -576,11 +584,18 @@ namespace {
     int table_cursor = 0;
 
     // Only what the pause font has: capitals, digits, spaces and '-'.
+    // The port's own text in the chosen language (General > Language), as the game draws it (src/game/language.cpp).
+    std::string T(const char* key, const char* english) {
+        return tooie::language::port_game_text(key, english);
+    }
+
+    // Text the game's font can draw: capitals (accented ones as the game's codes, 0x5B and up), digits, '-' and single
+    // spaces.
     std::string printable(const std::string& text) {
         std::string out;
-        for (char c : text) {
-            if (c >= 'a' && c <= 'z') {
-                out += (char)(c - 'a' + 'A');
+        for (char c : tooie::language::game_text(text)) {
+            if ((uint8_t)c >= 0x5B && (uint8_t)c <= 0x7B) {
+                out += c;
             } else if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-') {
                 out += c;
             } else if (c == ' ' && !out.empty() && out.back() != ' ') {
@@ -628,15 +643,15 @@ namespace {
         return printable(name);
     }
 
-    const char* category_title(int category) {
+    std::string category_title(int category) {
         switch (category) {
-        case 0: return "JIGGIES";
-        case 1: return "HONEYCOMBS";
-        case 2: return "PAGES";
-        case 3: return "GLOWBOS";
-        case 4: return "NOTES";
-        case 5: return "JINJOS";
-        default: return "MOVES";
+        case 0: return T("totals.jiggies", "JIGGIES");
+        case 1: return T("totals.honeycombs", "HONEYCOMBS");
+        case 2: return T("totals.pages", "PAGES");
+        case 3: return T("totals.glowbos", "GLOWBOS");
+        case 4: return T("totals.notes", "NOTES");
+        case 5: return T("totals.jinjos", "JINJOS");
+        default: return T("totals.moves", "MOVES");
         }
     }
 
@@ -811,6 +826,7 @@ namespace {
         call(rdram, ctx, func_800B8C50);
         MEM_B(text_font, text_settings) = (int8_t)menu_font;
         MEM_W(text_size, text_settings) = (int32_t)size_bits;
+        MEM_B(text_proportional, text_settings) = 1;
         return call(rdram, ctx, func_800B8CFC, addr);
     }
 
@@ -871,7 +887,7 @@ namespace {
         const int header_y = block_y - line_height;
         print(rdram, ctx, gfx, offset, colour_blue, text_scale, block_x, header_y, list.title);
         if (list.entries.empty()) {
-            print(rdram, ctx, gfx, offset, colour_white, text_scale, block_x, block_y, "NONE HERE");
+            print(rdram, ctx, gfx, offset, colour_white, text_scale, block_x, block_y, T("totals.none_here", "NONE HERE"));
             return;
         }
         const int count = (int)list.entries.size();
@@ -895,7 +911,7 @@ namespace {
         // The picked entry.
         Entry& e = list.entries[list.cursor];
         int y = block_y + line_height * list_rows + 4;
-        std::string status = e.status == status_now ? "GET NOW" : e.status == status_done ? "DONE" : "LATER";
+        std::string status = e.status == status_now ? T("totals.get_now", "GET NOW") : e.status == status_done ? T("totals.done", "DONE") : T("totals.later", "LATER");
         if (list.category == totals_rules::C_NOTES && e.status != status_done) {
             status += " - " + std::to_string(e.left) + " NOTES LEFT";
         }
@@ -1002,9 +1018,9 @@ namespace {
         }
         const int header_y = block_y - line_height;
         print(rdram, ctx, gfx, offset, colour_blue, text_scale, ach_left, header_y,
-              std::to_string(unlocked) + " OF " + std::to_string(count) + " UNLOCKED");
+              std::to_string(unlocked) + " " + T("achievements.of", "OF") + " " + std::to_string(count) + " " + T("achievements.unlocked", "UNLOCKED"));
         print(rdram, ctx, gfx, offset, colour_blue, text_scale, ach_right, header_y,
-              std::to_string(points) + " OF " + std::to_string(total) + "G", true);
+              std::to_string(points) + " " + T("achievements.of", "OF") + " " + std::to_string(total) + "G", true);
 
         // The list; more above or below is shown by a "-" at the end of the first or last row.
         constexpr int points_width = 26;
@@ -1034,15 +1050,15 @@ namespace {
         std::string state;
         int colour = colour_white;
         if (e.unlocked) {
-            state = "UNLOCKED";
+            state = T("achievements.unlocked", "UNLOCKED");
             if (e.unlocked_at.size() >= 10) {
                 state += " " + e.unlocked_at.substr(0, 10);
             }
             colour = colour_yellow;
         } else if (e.count >= 0) {
-            state = "LOCKED - " + std::to_string(std::min(e.count, e.goal)) + " OF " + std::to_string(e.goal);
+            state = T("achievements.locked", "LOCKED") + " - " + std::to_string(std::min(e.count, e.goal)) + " " + T("achievements.of", "OF") + " " + std::to_string(e.goal);
         } else {
-            state = "LOCKED";
+            state = T("achievements.locked", "LOCKED");
         }
         print(rdram, ctx, gfx, offset, colour, text_scale, ach_left, y, state);
         if (page_in >= 1.0f) {
@@ -1134,7 +1150,7 @@ void tooie::achievements::draw_popup(uint8_t* rdram, recomp_context* ctx, uint32
         draw_portrait(rdram, ctx, gfx, popup.portrait, popup_x + popup_icon_size / 2, popup_y + popup_icon_size / 2, popup_icon_size);
     }
     const int text_x = popup_x + popup_icon_size + 6;
-    print(rdram, ctx, gfx, offset, colour_blue, text_scale, text_x, popup_y + 2, "ACHIEVEMENT UNLOCKED");
+    print(rdram, ctx, gfx, offset, colour_blue, text_scale, text_x, popup_y + 2, T("achievements.popup", "ACHIEVEMENT UNLOCKED"));
     print(rdram, ctx, gfx, offset, colour_yellow, text_scale, text_x, popup_y + 2 + line_height,
           printable(popup.name) + "  " + std::to_string(popup.points) + "G");
     page_in = saved_in;
@@ -1252,7 +1268,7 @@ extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx)
 
     // The table: one row per kind of collectible the page counts.
     struct Shown {
-        const char* name;
+        std::string name;  // in the chosen language
         int category;
         Count c;
         uint32_t now;
@@ -1271,12 +1287,12 @@ extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx)
             c = count_items(rdram, ctx, row.type, level);
         }
         if (c.total != 0) {
-            shown[line_count++] = { row.name, row.category, c, now_for(level, row.category) };
+            shown[line_count++] = { category_title(row.category), row.category, c, now_for(level, row.category) };
         }
     }
     const Count moves = count_moves(rdram, ctx, level);
     if (moves.total != 0) {
-        shown[line_count++] = { "MOVES", category_moves, moves, now_for(level, category_moves) };
+        shown[line_count++] = { category_title(category_moves), category_moves, moves, now_for(level, category_moves) };
     }
     if (line_count > 0) {
         table_cursor = std::clamp(table_cursor + steps, 0, line_count - 1);
@@ -1299,8 +1315,8 @@ extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx)
     input_mode.store(line_count > 0 ? mode_table : mode_none);
 
     const int header_y = block_y - line_height;
-    print(rdram, ctx, gfx, offset, colour_blue, text_scale, block_x, header_y, level < 0 ? "LEFT IN GAME" : "LEFT HERE");
-    print(rdram, ctx, gfx, offset, colour_green, text_scale, now_x, header_y, "NOW", true);
+    print(rdram, ctx, gfx, offset, colour_blue, text_scale, block_x, header_y, level < 0 ? T("totals.left_in_game", "LEFT IN GAME") : T("totals.left_here", "LEFT HERE"));
+    print(rdram, ctx, gfx, offset, colour_green, text_scale, now_x, header_y, T("totals.now", "NOW"), true);
     uint32_t things_left = 0;
     uint32_t things_now = 0;
     for (int line = 0; line < line_count; line++) {
@@ -1308,7 +1324,7 @@ extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx)
         if (line == table_cursor) {
             draw_a_button(rdram, ctx, gfx, button_x, block_y + line_height * line + button_dy, now_ms());
         }
-        print_row(rdram, ctx, gfx, offset, line, r.name, r.c, r.now);
+        print_row(rdram, ctx, gfx, offset, line, r.name.c_str(), r.c, r.now);
         if (r.c.got < r.c.total) {
             things_left += 1;
             things_now += r.now > 0 ? 1 : 0;
@@ -1319,16 +1335,16 @@ extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx)
     int y = block_y + line_height * line_count + 3;
     if (level < 0) {
         if (checklist.world_can_open) {
-            print(rdram, ctx, gfx, offset, colour_green, text_scale, block_x, y, "NEW WORLD READY");
+            print(rdram, ctx, gfx, offset, colour_green, text_scale, block_x, y, T("totals.new_world_ready", "NEW WORLD READY"));
             y += line_height;
         }
     } else {
         if (things_left == 0) {
-            print(rdram, ctx, gfx, offset, colour_yellow, text_scale, block_x, y, "ALL DONE HERE");
+            print(rdram, ctx, gfx, offset, colour_yellow, text_scale, block_x, y, T("totals.all_done_here", "ALL DONE HERE"));
         } else if (things_now > 0) {
-            print(rdram, ctx, gfx, offset, colour_green, text_scale, block_x, y, "MORE TO GET HERE");
+            print(rdram, ctx, gfx, offset, colour_green, text_scale, block_x, y, T("totals.more_to_get_here", "MORE TO GET HERE"));
         } else {
-            print(rdram, ctx, gfx, offset, colour_yellow, text_scale, block_x, y, "MOVE ON FOR NOW");
+            print(rdram, ctx, gfx, offset, colour_yellow, text_scale, block_x, y, T("totals.move_on_for_now", "MOVE ON FOR NOW"));
         }
         y += line_height;
     }
