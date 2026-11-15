@@ -10731,7 +10731,7 @@ diff --git a/src/shaders/VideoInterfacePS.hlsl b/src/shaders/VideoInterfacePS.hl
 index 3f33475..c711323 100644
 --- a/src/shaders/VideoInterfacePS.hlsl
 +++ b/src/shaders/VideoInterfacePS.hlsl
-@@ -32,10 +32,266 @@ float4 PixelAntialiasing(float2 uv) {
+@@ -32,10 +32,272 @@ float4 PixelAntialiasing(float2 uv) {
      return SampleInput(uvTexspace / gConstants.textureResolution);
  }
  
@@ -10766,7 +10766,13 @@ index 3f33475..c711323 100644
 +
 +    const float3 seen = mul(LMStoRGB, mul(simulate, mul(RGBtoLMS, rgb)));
 +    const float3 lost = rgb - seen;
-+    const float3 shifted = float3(0.0f, 0.7f * lost.r + lost.g, 0.7f * lost.r + lost.b);
++    // Where the lost difference goes: into green and blue for the red-green modes; into red and green for tritanopia,
++    // which loses blue-yellow, so adding it back into blue (as the red-green modes do) put it where the eye cannot see
++    // it, tinted greys purple and made purple and grey harder to tell apart than with no filter (L, 2026-11-15: rocks in
++    // Mayahem Temple). Checked with Machado, Oliveira and Fernandes' (2009) tritanopia as the judge: purple against grey
++    // 0.20 apart before, 0.60 after (0.08 unfiltered).
++    const float3 shifted = (mode == 3) ? float3(lost.r + 0.7f * lost.b, lost.g + 0.7f * lost.b, 0.0f) :
++        float3(0.0f, 0.7f * lost.r + lost.g, 0.7f * lost.r + lost.b);
 +    return saturate(rgb + shifted * strength);
 +}
 +
