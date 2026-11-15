@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-15
 
+- The colourblind filter moved from Graphics to the top of the Display tab, under an Accessibility heading next to Brightness & Colour Grading, with its strength slider under it while a filter is on.
 - Graphics > Colourblind Filter: Tritanopia now helps. It moved the colours a blue-yellow colourblind eye cannot tell apart into blue, the channel that eye lacks, so greys took a purple tint and purple and grey (rocks in Mayahem Temple) were harder to tell apart than with no filter; it now moves them into red and green. Deuteranopia and Protanopia are unchanged.
 - Ray tracing: the boulder in Mayahem Temple casts a whole shadow again. A see-through layer of the floor round it, lying just above the ground, was taken as solid by the traced rays, and cast dark spikes round a lit hole in the boulder's shadow; it is now left out of the traced scene.
 - Graphics > Lighting: Keep Game Look, on by default. With Relighting or Ray Tracing the picture keeps the game's own colours and its overall brightness, and the new lighting only moves the light and shade. The brightness is matched from frame to frame, so a new view settles within about half a second. Off, the new lighting sets colours and brightness as before.

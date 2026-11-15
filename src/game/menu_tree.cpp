@@ -104,6 +104,8 @@ void tooie::menu_tree::classify() {
                 &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option,
                 &ray_tracing_hit_colours_option, &ray_tracing_parallax_option, &ray_detail_half_option,
                 &ray_detail_quarter_option } },
+            // The colourblind filter's strength under the filter, shown while a filter is chosen (L, 2026-11-15).
+            { &colourblind_option, { &colourblind_strength_option } },
         };
         recomp::config::Config* graphics_config = &recompui::config::get_graphics_config();
         for (const auto& group : groups) {
@@ -112,7 +114,7 @@ void tooie::menu_tree::classify() {
             }
         }
         // The fur and lighting choices start open, so a coat's or a lighting's settings show as soon as it is picked.
-        for (const std::string* open : { &fur_option, &npc_fur_style_option, &lighting_option }) {
+        for (const std::string* open : { &fur_option, &npc_fur_style_option, &lighting_option, &colourblind_option }) {
             const auto& by_id = graphics_config->get_config_schema().options_by_id;
             if (const auto found = by_id.find(*open); found != by_id.end()) {
                 graphics_config->set_option_expanded(found->second, true);

@@ -6274,7 +6274,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         colourblind_strength_option,
         "Colourblind Filter Strength",
-        "How strongly the colourblind filter shifts the colours.",
+        "How strongly the colourblind filter shifts the colours. Lower keeps more of the game's own colours (bright greens, for instance, darken less under Tritanopia) while still telling the confused colours apart a little. 100 is the default.",
         0, 100, 10, 0, true, 100);
     graphics.add_option_hidden_dependency(colourblind_strength_option, colourblind_option, Colourblind::Off);
     // Brightness and the four Colour Grading settings (contrast, saturation, vignette, film grain) are hidden from this

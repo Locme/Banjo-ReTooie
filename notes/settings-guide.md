@@ -316,10 +316,11 @@ Graphics changes apply at once. Graphics API needs a restart: changing it asks "
 - **Brightness test pattern**: shows ten grey boxes (2% to 20%) over the game.
   Close the menu and set Brightness so the first box just disappears and the
   second is just visible, then turn the pattern off. Default: off.
-- **Colourblind filter**: Off, Deuteranopia, Protanopia (both red-green) or
-  Tritanopia (blue-yellow). It moves the colours you can't tell apart into ones
-  you can. **Colourblind filter strength** (0% to 100%) shows when a filter is
-  on. Default: Off, 100%.
+- **Colourblind filter** (Display tab, under Accessibility at the top): Off,
+  Deuteranopia, Protanopia (both red-green) or Tritanopia (blue-yellow). It
+  moves the colours you can't tell apart into ones you can. **Colourblind filter
+  strength** (0% to 100%) sits under it while a filter is on; lower keeps more
+  of the game's own colours. Default: Off, 100%.
 - **Retro: N64 3-point filtering**: the N64's own texture smoothing. Off uses
   plain bilinear smoothing. Default: on.
 - **Retro: N64 16-bit colour**: the N64's 16-bit colour with its dither pattern,

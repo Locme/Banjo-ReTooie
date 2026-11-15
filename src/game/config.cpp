@@ -1418,8 +1418,8 @@ void tooie::init_config() {
         "Simple Circle Shadow",
         "Banjo (and whoever you play as) gets the game's own round blob shadow under his feet, the one most other characters have, instead of the shadow shaped like him. Replaces HD Shadows for the player.",
         false);
-    // Under Retro And Demake, after the retro options (L, 2026-11-12).
-    recompui::config::set_option_display_before(tooie::circle_shadow::option, tooie::picture_filters::colourblind_option);
+    // Under Retro And Demake, after the retro options (L, 2026-11-12): the last option shown on the Graphics tab, now the
+    // colourblind filter is on the Display tab.
 
     // Display tab under Graphics (L, 2026-10-23; was Performance, L 2026-10-16): the Display section, Anti-Aliasing
     // and Scaling, and the frame rate and latency options. They stay in the graphics config (graphics.json), so
@@ -1435,6 +1435,13 @@ void tooie::init_config() {
             &tooie::fsr::option, &tooie::high_detail_models_option, &tooie::fov_offset_option, &tooie::cutscene_fov_offset_option,
             &tooie::draw_distance_option }) {
         recompui::config::set_option_page(*id, tooie::performance_tab_id);
+    }
+    // The colourblind filter and its strength (L, 2026-11-15): on the Display tab under Accessibility, at the top with the
+    // Brightness & Colour Grading button (the picture's own settings together). At the bottom it would land in the middle
+    // of Anti-Aliasing, as the options shown last keep the order they were added in.
+    for (const std::string* id : { &tooie::picture_filters::colourblind_option, &tooie::picture_filters::colourblind_strength_option }) {
+        recompui::config::set_option_page(*id, tooie::performance_tab_id);
+        recompui::config::set_option_display_before(*id, recompui::config::graphics::options::res_option);
     }
     // Brightness & Colour Grading (L, 2026-10-24): the button for its panel is on top of the Display tab.
     recompui::config::set_option_page(tooie::picture_filters::brightness_pattern_option, tooie::performance_tab_id);
