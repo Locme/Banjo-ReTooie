@@ -143,6 +143,14 @@ namespace RT64 {
         float furNoisiness = 0.5f;
         // Banjo's fur jiggle: the tips' lag behind his movement, world units at full length (SetSceneFurSway).
         float furSway[3] = { 0.0f, 0.0f, 0.0f };
+        // Clump Fur (SetSceneClumpFur): its coat (0 off), clump size and length (1 normal).
+        float clumpFur = 0.0f;
+        float clumpFurSize = 1.0f;
+        float clumpFurLength = 1.0f;
+        // The same for furry NPCs' white fur (SetSceneNpcClumpFur).
+        float npcClumpFur = 0.0f;
+        float npcClumpFurSize = 1.0f;
+        float npcClumpFurLength = 1.0f;
         float feathers = 0.0f;
         float featherSize = 1.0f;
         float featherLength = 1.0f;
@@ -450,6 +458,13 @@ namespace RT64 {
     // Banjo-Tooie: Banjo's fur (0 off, 1 the thickest coat) and its length (1 normal). The game marks his
     // model's draws (G_EX_SETFURSHELLS_V1); each is drawn again as shells pushed out along its normals.
     void SetSceneFur(float amount, float length, float density, float noisiness);
+    // Banjo-Tooie: Clump Fur (Fur.hlsli's ClumpShell): Banjo's fur shells draw big shingled tufts instead of strands.
+    // amount 0 is off, 1 the fullest coat; size and length 1 normal. While it is on it takes the place of Banjo Fur.
+    void SetSceneClumpFur(float amount, float size, float length);
+    // The same for furry NPCs' white fur (the yetis), in place of SetSceneNpcFur's strands.
+    void SetSceneNpcClumpFur(float amount, float size, float length);
+    // Whether Clump Fur is on (its tufts keep off his bare skin as well as his shorts, rt64_framebuffer_renderer.cpp).
+    bool SceneClumpFurOn();
     // The character surface layer (CharSurface.hlsli): how wet, snowy and dirty Banjo and Kazooie are, 0 to 1.
     void SetSceneCharSurface(float wet, float snow, float dirt, float sand);
     // How strongly they drip (0 to 1) and the time in seconds, for the wet layer's drips.

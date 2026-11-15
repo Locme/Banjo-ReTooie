@@ -75,14 +75,19 @@ bool WhiteFurColor(float3 color) {
 // blended across the triangle: 3 fur, 1 or 4 bare (his model tells them by their own colours, so the light on them
 // doesn't change the coat, L); 0 (unmarked) tells it by the colour as lit here. Between fur and bare only the last
 // quarter next to the fur grows it: his shorts' edge blends into his legs' brown, and stays clean (L).
-bool FurShell(float3 anchor, float3 baseColor, float share, bool white, float mark, inout float3 color) {
+bool FurCovered(float3 baseColor, bool white, float mark) {
     if (((mark >= 0.5f) && (mark < 2.5f)) || (mark >= 3.5f)) {
         return false;
     }
     else if (mark >= 2.5f) {
         // (Fur, told by his model.)
+        return true;
     }
-    else if (white ? !WhiteFurColor(baseColor) : !FurColor(baseColor)) {
+    return white ? WhiteFurColor(baseColor) : FurColor(baseColor);
+}
+
+bool FurShell(float3 anchor, float3 baseColor, float share, bool white, float mark, inout float3 color) {
+    if (!FurCovered(baseColor, white, mark)) {
         return false;
     }
 
@@ -103,6 +108,83 @@ bool FurShell(float3 anchor, float3 baseColor, float share, bool white, float ma
     const float rootShade = 1.0f - share;
     const float strand = FurValue(int3(floor(grid))) - 0.5f;
     color *= (1.0f - 0.55f * rootShade * rootShade * rootShade) * (1.0f + 0.12f * share) * (1.0f + 0.7f * params.w * strand);
+    return true;
+}
+
+// Banjo-Tooie: Clump Fur, after the stylised coat of Donkey Kong Bananza's DK (L, 2026-11-15): soft clumps of fur
+// instead of single strands. The same shells as FurShell, on the same parts of Banjo, but each shell keeps the pixels
+// near the middle of a clump, inside a radius that shrinks to nothing at the clump's own height: every clump is a
+// cone, and as the shells droop further down the further out they are (RasterVS.hlsl), its tip leans down over the
+// clump below. At his outline the cones show as a fluffy edge of pointed tufts. The clumps are the cells of a 3D
+// Voronoi noise over the model's own vertex positions, stretched up and down so they come out longer than wide.
+// Darker deep in the coat and at the clumps' rims, lighter at their tips, with strand lines running down each.
+// (Big leaf-shaped tufts with dark gaps between them, closer to DK's painted ones, looked worse on Banjo, L: this is
+// the look L picked.) Furry NPCs' white fur (the yetis) can have it too, with its own settings.
+
+// The nearest of the jittered points round p (one in each unit cell): its offset from p and a hash of its cell.
+void ClumpNearest(float3 p, out float3 nearest, out uint cellHash) {
+    const int3 base = int3(floor(p));
+    float best = 1e9f;
+    nearest = 0.0f;
+    cellHash = 0u;
+    for (int z = -1; z <= 1; z++) {
+        for (int y = -1; y <= 1; y++) {
+            for (int x = -1; x <= 1; x++) {
+                const int3 cell = base + int3(x, y, z);
+                const uint h = FurHash(cell);
+                const float3 jitter = float3(float(h & 0xFFu), float((h >> 8) & 0xFFu), float((h >> 16) & 0xFFu)) / 255.0f;
+                // Stretched up and down: a point's distance counts its height at 0.6 (the clumps are longer than wide).
+                float3 d = float3(cell) + 0.15f + 0.7f * jitter - p;
+                d.y *= 0.6f;
+                const float dist = dot(d, d);
+                if (dist < best) {
+                    best = dist;
+                    nearest = d;
+                    cellHash = h;
+                }
+            }
+        }
+    }
+}
+
+// Whether a shell's pixel at height share (0 to 1) is part of a clump; if so, shades it. As FurShell's arguments; white
+// picks a furry NPC's white fur and its settings (FrParams.npcClumpFur) instead of Banjo's (FrParams.clumpFur): y clumps
+// per unit, z how far a clump reaches at its root (in cells, how fully they cover him).
+bool ClumpShell(float3 anchor, float3 baseColor, float share, bool white, float mark, inout float3 color) {
+    if (!FurCovered(baseColor, white, mark)) {
+        return false;
+    }
+
+    const float4 clump = white ? FrParams.npcClumpFur : FrParams.clumpFur;
+    // (Only Banjo gets wet.)
+    const float wet = white ? 0.0f : FrParams.charSurface.x;
+    const float3 p = anchor * clump.y;
+    float3 nearest;
+    uint cellHash;
+    ClumpNearest(p, nearest, cellHash);
+
+    // Each clump stands 70% to 100% of the full length. At the edge of his fur (mark 2.5 to 3, or 3 to 3.5, where a
+    // triangle runs from fur to bare) they shrink to nothing, as tufts there drooped onto his bare arms in flecks (L).
+    const float edge = (mark < 0.5f) ? 1.0f : (smoothstep(2.5f, 3.0f, mark) * (1.0f - smoothstep(3.0f, 3.5f, mark)));
+    const float height = (0.7f + 0.3f * float((cellHash >> 24) & 0xFFu) / 255.0f) * edge;
+    if (share >= height) {
+        return false;
+    }
+    // Wet clumps are thinner.
+    const float t = share / height;
+    const float radius = clump.z * (1.0f - 0.3f * wet) * pow(1.0f - t, 0.8f);
+    const float dist = length(nearest);
+    if (dist > radius) {
+        return false;
+    }
+
+    // Dark deep in the coat, light at the tips; a little darker at a clump's rim, where one lies over the next; strand
+    // lines running down it (a noise stretched up and down); and each clump its own shade.
+    const float rootTip = lerp(0.6f, 1.15f, pow(t, 0.8f));
+    const float rim = 1.0f - 0.25f * smoothstep(0.55f, 1.0f, dist / max(radius, 1e-4f));
+    const float strands = 0.82f + 0.25f * FurNoise(p * float3(9.0f, 1.2f, 9.0f));
+    const float shade = 0.92f + 0.16f * float(cellHash & 0xFFu) / 255.0f;
+    color *= rootTip * rim * strands * shade;
     return true;
 }
 

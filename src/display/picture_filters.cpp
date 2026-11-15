@@ -110,6 +110,8 @@ namespace RT64 {
     void SetSceneSunShadows(float strength, bool onBanjo, float softness);
     void SetSceneSunShadowDistance(float distance);
     void SetSceneFur(float amount, float length, float density, float noisiness);
+    void SetSceneClumpFur(float amount, float size, float length);
+    void SetSceneNpcClumpFur(float amount, float size, float length);
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
     void SetSceneCharSurface(float wet, float snow, float dirt, float sand);
@@ -4223,12 +4225,12 @@ namespace {
         { &tooie::picture_filters::ground_displacement_option, 0.0 },
         { &tooie::picture_filters::ground_displacement_distance_option, 8000.0 },
         { &tooie::picture_filters::parallax_original_option, true },
-        { &tooie::picture_filters::banjo_fur_option, 0.0 },
+        { &tooie::picture_filters::fur_option, (uint32_t)tooie::picture_filters::Fur::None },
         { &tooie::picture_filters::char_wet_option, 0.0 },
         { &tooie::picture_filters::char_snow_option, 0.0 },
         { &tooie::picture_filters::char_dirt_option, 0.0 },
         { &tooie::picture_filters::kazooie_feathers_option, 0.0 },
-        { &tooie::picture_filters::npc_fur_option, 0.0 },
+        { &tooie::picture_filters::npc_fur_style_option, (uint32_t)tooie::picture_filters::Fur::None },
         { &tooie::picture_filters::npc_feathers_option, 0.0 },
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
         { &tooie::picture_filters::shore_foam_option, false },
@@ -4656,15 +4658,25 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneSunShadowDistance(shadow_distance);
     RT64::SetSceneRelighting(relighting ? (float)(value<double>(relighting_option, 100.0) / 100.0) : 0.0f);
     send_effect_textures();
-    // The Character Shaders switch turns all of the character shaders off; their settings stay as they are.
-    const bool character_on = value<bool>(character_section_option, true);
-    double fur = character_on ? value<double>(banjo_fur_option, 0.0) : 0.0;
+    // The Fur choice picks Banjo's coat (L, 2026-11-15); the old Character Shaders switch no longer turns them off. A
+    // coat's thickness left at 0 (its old off) counts as 100, so picking it always shows it.
+    const Fur fur_choice = (Fur)value<uint32_t>(fur_option, (uint32_t)Fur::None);
+    auto coat_thickness = [](double v) { return v > 0.0 ? v : 100.0; };
+    double fur = (fur_choice == Fur::Hair) ? coat_thickness(value<double>(banjo_fur_option, 0.0)) : 0.0;
     if (const char* forced = std::getenv("TOOIE_BANJO_FUR")) {
         fur = std::atof(forced);
     }
-    banjo_fur = fur > 0.0;
+    // Clump Fur: the same shells as Banjo Fur, drawn as shingled tufts; it takes Banjo Fur's place while it is above 0.
+    // TOOIE_CLUMP_FUR=<0-100> sets it instead (headless).
+    double clump_fur = (fur_choice == Fur::ClumpFur) ? coat_thickness(value<double>(clump_fur_option, 0.0)) : 0.0;
+    if (const char* forced = std::getenv("TOOIE_CLUMP_FUR")) {
+        clump_fur = std::atof(forced);
+    }
+    RT64::SetSceneClumpFur((float)(clump_fur / 100.0), (float)(value<double>(clump_fur_size_option, 100.0) / 100.0),
+        (float)(value<double>(clump_fur_length_option, 100.0) / 100.0));
+    banjo_fur = fur > 0.0 || clump_fur > 0.0;
     RT64::SetSceneFur((float)(fur / 100.0), (float)(value<double>(banjo_fur_length_option, 100.0) / 100.0),
-        (float)(value<double>(banjo_fur_density_option, 100.0) / 100.0), (float)(value<double>(banjo_fur_noisiness_option, 50.0) / 100.0));
+        (float)(value<double>(banjo_fur_density_option, 100.0) / 100.0), (float)(value<double>(banjo_fur_noisiness_option, 100.0) / 100.0));
     // The character surface layer: its sliders are the most each of wet, snow and dirt gets (tick works out how much Banjo
     // and Kazooie have). TOOIE_CHAR_WET, TOOIE_CHAR_SNOW and TOOIE_CHAR_DIRT=<0-100> hold one fixed instead (headless).
     {
@@ -4684,14 +4696,19 @@ void tooie::picture_filters::apply() {
         }
         char_surface = any;
     }
-    // NPCs' fur (the yetis' white fur), with its own sliders; TOOIE_NPC_FUR=<0-100> sets it instead (headless).
-    double npc_fur_amount = value<double>(npc_fur_option, 0.0);
+    // NPCs' fur (the yetis' white fur): the NPC Fur choice picks Clump Fur or NPC Hair, as Banjo Fur, each with its own
+    // sliders; TOOIE_NPC_FUR=<0-100> sets NPC Hair instead (headless).
+    const Fur npc_fur_choice = (Fur)value<uint32_t>(npc_fur_style_option, (uint32_t)Fur::None);
+    double npc_fur_amount = (npc_fur_choice == Fur::Hair) ? coat_thickness(value<double>(npc_fur_option, 0.0)) : 0.0;
     if (const char* forced = std::getenv("TOOIE_NPC_FUR")) {
         npc_fur_amount = std::atof(forced);
     }
-    npc_fur = npc_fur_amount > 0.0;
+    const double npc_clump_fur = (npc_fur_choice == Fur::ClumpFur) ? coat_thickness(value<double>(npc_clump_fur_option, 0.0)) : 0.0;
+    npc_fur = npc_fur_amount > 0.0 || npc_clump_fur > 0.0;
     RT64::SetSceneNpcFur((float)(npc_fur_amount / 100.0), (float)(value<double>(npc_fur_length_option, 100.0) / 100.0),
-        (float)(value<double>(npc_fur_density_option, 100.0) / 100.0), (float)(value<double>(npc_fur_noisiness_option, 50.0) / 100.0));
+        (float)(value<double>(npc_fur_density_option, 100.0) / 100.0), (float)(value<double>(npc_fur_noisiness_option, 100.0) / 100.0));
+    RT64::SetSceneNpcClumpFur((float)(npc_clump_fur / 100.0), (float)(value<double>(npc_clump_fur_size_option, 100.0) / 100.0),
+        (float)(value<double>(npc_clump_fur_length_option, 100.0) / 100.0));
     // Kazooie's feathers; TOOIE_KAZOOIE_FEATHERS=<0-100> sets them instead (headless).
     double feathers = value<double>(kazooie_feathers_option, 0.0);
     if (const char* forced = std::getenv("TOOIE_KAZOOIE_FEATHERS")) {
@@ -5727,11 +5744,51 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Character Shaders",
         "Turns Banjo's fur, Kazooie's feathers and the other character shaders on or off. Off also hides their settings below.",
         true);
+    graphics.add_enum_option(
+        fur_option,
+        "Banjo Fur",
+        "Banjo's brown fur. <recomp-color primary>Clump Fur</recomp-color> grows soft clumps of fur that droop down over each other. <recomp-color primary>Banjo Hair</recomp-color> grows real strands: layers of short hairs that stand out of him, darker at the roots. Both move with him in play and in cutscenes; Kazooie, his shorts, feet and backpack are left as they are. Drawn on the picture, so nothing in the game changes. Each choice shows its own settings under it.",
+        {
+            {Fur::None, "None", "None"},
+            {Fur::ClumpFur, "ClumpFur", "Clump Fur"},
+            {Fur::Hair, "BanjoHair", "Banjo Hair"},
+        },
+        Fur::None);
     graphics.add_number_option(
         banjo_fur_option,
-        "Banjo Fur",
-        "Banjo's brown fur grows real strands: layers of short hairs stand out of his model and move with him, darker at the roots, in play and in cutscenes. Kazooie, his shorts, feet and backpack are left as they are, and so is everyone else. Higher numbers give a thicker coat. Drawn on the picture, so nothing in the game changes. 0 is off.",
-        0, 100, 5, 0, false, 0);
+        "Banjo Hair Thickness",
+        "How thick Banjo Hair's coat is.",
+        5, 100, 5, 0, false, 100);
+    graphics.add_number_option(
+        banjo_fur_length_option,
+        "Banjo Hair Length",
+        "How long Banjo Hair's strands are, in percent. 100 is short and fluffy; 1500 is very long, for fun.",
+        25, 1500, 5, 0, false, 100);
+    graphics.add_number_option(
+        banjo_fur_density_option,
+        "Banjo Hair Density",
+        "How many hairs Banjo Hair has, in percent: higher is more, finer hairs, lower is fewer, thicker ones.",
+        25, 300, 5, 0, false, 100);
+    graphics.add_number_option(
+        banjo_fur_noisiness_option,
+        "Banjo Hair Noisiness",
+        "How uneven Banjo Hair is: higher gives tufts that stand taller or lower and hairs lighter or darker than their neighbours, 0 an even coat.",
+        0, 100, 5, 0, false, 100);
+    graphics.add_number_option(
+        clump_fur_option,
+        "Clump Fur Thickness",
+        "How full Clump Fur's coat is: higher numbers give wider clumps that cover him more.",
+        5, 100, 5, 0, false, 100);
+    graphics.add_number_option(
+        clump_fur_size_option,
+        "Clump Fur Size",
+        "How big Clump Fur's tufts are, in percent: higher is fewer, bigger tufts, lower is more, finer ones.",
+        20, 400, 5, 0, false, 100);
+    graphics.add_number_option(
+        clump_fur_length_option,
+        "Clump Fur Length",
+        "How far Clump Fur's tufts stand out, in percent.",
+        25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         char_wet_option,
         "Wet Characters",
@@ -5748,23 +5805,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Banjo and Kazooie get dirty as they run about: mud on the legs and undersides that builds up as they run about and kick up dust (Volumetric dust or the game's own puffs), and a pale coat of sand after they walk on sand. Both wash off in water. The number is how dirty they can get; 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
-        banjo_fur_length_option,
-        "Banjo Fur Length",
-        "How long Banjo's fur is, in percent. 100 is short and fluffy; 1500 is very long, for fun.",
-        25, 1500, 5, 0, false, 100);
-    graphics.add_number_option(
-        banjo_fur_density_option,
-        "Banjo Fur Density",
-        "How many hairs Banjo's fur has, in percent: higher is more, finer hairs, lower is fewer, thicker ones.",
-        25, 300, 5, 0, false, 100);
-    graphics.add_number_option(
-        banjo_fur_noisiness_option,
-        "Banjo Fur Noisiness",
-        "How uneven Banjo's fur is: higher gives tufts that stand taller or lower and hairs lighter or darker than their neighbours, 0 an even coat.",
-        0, 100, 5, 0, false, 50);
-    graphics.add_number_option(
-        kazooie_feathers_option,
-        "Kazooie Feathers",
+        kazooie_feathers_option,        "Kazooie Feathers",
         "Kazooie's red feathers grow real feathers: lots of little flat ones lying over each other down her body, each in her own colour there, so she looks feathered instead of smooth. Her beak and legs stay as they are. Higher numbers pack them more thickly. Needs a graphics card with geometry shaders (not on Mac). 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
@@ -5792,26 +5833,51 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Kazooie Feather Transparency",
         "How see-through Kazooie's feathers are, so more of her own colours show through them. 0 is solid.",
         0, 100, 5, 0, false, 0);
+    graphics.add_enum_option(
+        npc_fur_style_option,
+        "NPC Fur",
+        "Furry characters' white fur: the yetis on Hailfire Peaks' Icy Side, not on their faces or hands. <recomp-color primary>Clump Fur</recomp-color> grows soft clumps of fur that droop down over each other, as Banjo's. <recomp-color primary>NPC Hair</recomp-color> grows real strands, as Banjo Hair. Each choice shows its own settings under it.",
+        {
+            {Fur::None, "None", "None"},
+            {Fur::ClumpFur, "ClumpFur", "Clump Fur"},
+            {Fur::Hair, "NpcHair", "NPC Hair"},
+        },
+        Fur::None);
+    graphics.add_number_option(
+        npc_clump_fur_option,
+        "NPC Clump Fur Thickness",
+        "How full the NPCs' Clump Fur is: higher numbers give wider clumps that cover them more.",
+        5, 100, 5, 0, false, 100);
+    graphics.add_number_option(
+        npc_clump_fur_size_option,
+        "NPC Clump Fur Size",
+        "How big the NPCs' clumps are, in percent: higher is fewer, bigger clumps, lower is more, finer ones.",
+        20, 400, 5, 0, false, 100);
+    graphics.add_number_option(
+        npc_clump_fur_length_option,
+        "NPC Clump Fur Length",
+        "How far the NPCs' clumps stand out, in percent.",
+        25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         npc_fur_option,
-        "NPC Fur",
-        "Furry characters grow white fur like Banjo's: the yetis on Hailfire Peaks' Icy Side, not on their faces or hands. Higher numbers give a thicker coat. 0 is off.",
-        0, 100, 5, 0, false, 0);
+        "NPC Hair Thickness",
+        "How thick NPC Hair's coat is.",
+        5, 100, 5, 0, false, 100);
     graphics.add_number_option(
         npc_fur_length_option,
-        "NPC Fur Length",
-        "How long the NPCs' fur is, in percent. 100 is short and fluffy.",
+        "NPC Hair Length",
+        "How long NPC Hair's strands are, in percent. 100 is short and fluffy.",
         25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         npc_fur_density_option,
-        "NPC Fur Density",
-        "How many hairs the NPCs' fur has, in percent: higher is more, finer hairs, lower is fewer, thicker ones.",
+        "NPC Hair Density",
+        "How many hairs NPC Hair has, in percent: higher is more, finer hairs, lower is fewer, thicker ones.",
         25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         npc_fur_noisiness_option,
-        "NPC Fur Noisiness",
-        "How uneven the NPCs' fur is: higher gives tufts that stand taller or lower, 0 an even coat.",
-        0, 100, 5, 0, false, 50);
+        "NPC Hair Noisiness",
+        "How uneven NPC Hair is: higher gives tufts that stand taller or lower, 0 an even coat.",
+        0, 100, 5, 0, false, 100);
     graphics.add_number_option(
         npc_feathers_option,
         "NPC Feathers",
@@ -5963,7 +6029,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &crt_mask_option, &crt_curvature_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &toon_style_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &lighting_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &texture_cartoon_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &relighting_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &parallax_smoothness_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option,
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &toon_style_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &lighting_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &texture_cartoon_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &relighting_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &parallax_smoothness_option, &ground_displacement_option, &ground_displacement_distance_option, &fur_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &clump_fur_option, &clump_fur_size_option, &clump_fur_length_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_style_option, &npc_clump_fur_option, &npc_clump_fur_size_option, &npc_clump_fur_length_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option,
                                    &tessellation_section_option, &character_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
@@ -6002,6 +6068,22 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     for (const std::string* id : ray_tracing_settings) {
         graphics.add_option_hidden_dependency(*id, lighting_option, Lighting::None, Lighting::Relighting);
     }
+    // Fur shows only the settings of the coat it is set to (L, 2026-11-15), and the Character Shaders section is gone: its
+    // settings sit in the Characters group directly.
+    for (const std::string* id : { &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option }) {
+        graphics.add_option_hidden_dependency(*id, fur_option, Fur::None, Fur::ClumpFur);
+    }
+    for (const std::string* id : { &clump_fur_option, &clump_fur_size_option, &clump_fur_length_option }) {
+        graphics.add_option_hidden_dependency(*id, fur_option, Fur::None, Fur::Hair);
+    }
+    // NPC Fur the same way.
+    for (const std::string* id : { &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option }) {
+        graphics.add_option_hidden_dependency(*id, npc_fur_style_option, Fur::None, Fur::ClumpFur);
+    }
+    for (const std::string* id : { &npc_clump_fur_option, &npc_clump_fur_size_option, &npc_clump_fur_length_option }) {
+        graphics.add_option_hidden_dependency(*id, npc_fur_style_option, Fur::None, Fur::Hair);
+    }
+    graphics.update_option_hidden(character_section_option, true);
 
     // Hidden when the Shaders toggle is off; the effects keep their values either way.
 }

@@ -38,10 +38,8 @@ namespace {
         { "Water waves", { "Water wave speed", "Water detail" } },
         { "Underwater tint", { "Underwater haze", "Underwater distortion" } },
         { "Displaced ground", { "Displaced ground distance" } },
-        { "Banjo fur", { "Banjo fur length", "Banjo fur density", "Banjo fur noisiness" } },
         { "Kazooie feathers", { "Kazooie feather size", "Kazooie feather length", "Kazooie feather density",
             "Kazooie feather noisiness", "Kazooie feather transparency" } },
-        { "NPC fur", { "NPC fur length", "NPC fur density", "NPC fur noisiness" } },
         { "NPC feathers", { "NPC feather size", "NPC feather length", "NPC feather density",
             "NPC feather noisiness", "NPC feather transparency" } },
         { "Sun shadows", { "Sun Shadow On Banjo", "Sun shadow softness", "Sun shadow distance" } },
@@ -88,13 +86,24 @@ void tooie::menu_tree::classify() {
             { &toon_section_option, { &toon_style_option, &toon_characters_option, &toon_world_option } },
             { &tessellation_section_option, { &deep_snow_option, &tessellated_sand_option } },
             { &deep_snow_option, { &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option } },
-            { &character_section_option, { &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option,
-                &kazooie_feathers_option, &npc_fur_option, &npc_feathers_option } },
+            // Banjo Fur and NPC Fur: each coat's settings sit under its choice (only the chosen coat's show,
+            // picture_filters.cpp), so they read as part of it (L, 2026-11-15). The Character Shaders menu is gone.
+            { &fur_option, { &clump_fur_option, &clump_fur_size_option, &clump_fur_length_option, &banjo_fur_option,
+                &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option } },
+            { &npc_fur_style_option, { &npc_clump_fur_option, &npc_clump_fur_size_option, &npc_clump_fur_length_option,
+                &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option } },
         };
         recomp::config::Config* graphics_config = &recompui::config::get_graphics_config();
         for (const auto& group : groups) {
             for (const std::string* child : group.second) {
                 graphics_config->set_option_parent(*child, *group.first);
+            }
+        }
+        // The fur choices start open, so a coat's settings show as soon as it is picked.
+        for (const std::string* open : { &fur_option, &npc_fur_style_option }) {
+            const auto& by_id = graphics_config->get_config_schema().options_by_id;
+            if (const auto found = by_id.find(*open); found != by_id.end()) {
+                graphics_config->set_option_expanded(found->second, true);
             }
         }
     }

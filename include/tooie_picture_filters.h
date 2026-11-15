@@ -29,6 +29,8 @@ namespace tooie::picture_filters {
     enum class RayResolution : uint32_t { Half, Medium, High };
     // Graphics > Lighting: the game's own, Relighting (no ray tracing) or Ray tracing; each shows its own settings.
     enum class Lighting : uint32_t { None, Relighting, RayTracing };
+    // Banjo's fur and furry NPCs' (L, 2026-11-15): none, Clump Fur or Hair (the strands), each showing its own settings.
+    enum class Fur : uint32_t { None, ClumpFur, Hair };
 
     inline const std::string preset_option = "effects_preset";
     // Lighting, Water, Fog (Experimental) toggle: hides the effect options below it (they keep their values).
@@ -139,17 +141,25 @@ namespace tooie::picture_filters {
     inline const std::string ground_displacement_distance_option = "ground_displacement_distance";
     inline const std::string parallax_original_option = "parallax_original";
     inline const std::string parallax_smoothness_option = "parallax_smoothness";
-    // Banjo's fur: shells of strands over his brown fur (rt64-ext/src/shaders/Fur.hlsli).
+    // Banjo Fur: which fur Banjo has (Fur); its settings show under it.
+    inline const std::string fur_option = "fur_style";
+    // Banjo Hair: shells of strands over his brown fur (rt64-ext/src/shaders/Fur.hlsli). (Still named banjo_fur, so saved
+    // settings keep their values.)
     inline const std::string banjo_fur_option = "banjo_fur";
     inline const std::string banjo_fur_length_option = "banjo_fur_length";
     inline const std::string banjo_fur_density_option = "banjo_fur_density";
     inline const std::string banjo_fur_noisiness_option = "banjo_fur_noisiness";
+    // Clump Fur: clumps of fur over his brown fur instead of strands, after DK's in Donkey Kong Bananza (ClumpShell in
+    // rt64-ext/src/shaders/Fur.hlsli).
+    inline const std::string clump_fur_option = "clump_fur";
+    inline const std::string clump_fur_size_option = "clump_fur_size";
+    inline const std::string clump_fur_length_option = "clump_fur_length";
     // The character surface layer (rt64-ext/src/shaders/CharSurface.hlsli): how wet, snowy and dirty Banjo and Kazooie can
     // get, 0 (off) to 100.
     inline const std::string char_wet_option = "char_wet";
     inline const std::string char_snow_option = "char_snow";
     inline const std::string char_dirt_option = "char_dirt";
-    // The Character Shaders section's switch: shows Banjo's fur and Kazooie's feathers (hiding them turns none off).
+    // The old Character Shaders section's switch: hidden since 2026-11-15 (L), and no longer turns anything off.
     inline const std::string character_section_option = "character_shaders_section";
     // Kazooie's feathers (rt64-ext/src/shaders/FeatherGS.hlsl): how full (0 off) and how big.
     inline const std::string kazooie_feathers_option = "kazooie_feathers";
@@ -160,10 +170,15 @@ namespace tooie::picture_filters {
     inline const std::string kazooie_feather_noisiness_option = "kazooie_feather_noisiness";
     inline const std::string kazooie_feather_transparency_option = "kazooie_feather_transparency";
     // Furry NPCs' white fur (the yetis) and feathered NPCs' feathers (Canary Mary), each with its own sliders (L).
+    // NPC Fur: which fur they have (Fur), as Banjo Fur; NPC Hair's settings keep the old npc_fur ids.
+    inline const std::string npc_fur_style_option = "npc_fur_style";
     inline const std::string npc_fur_option = "npc_fur";
     inline const std::string npc_fur_length_option = "npc_fur_length";
     inline const std::string npc_fur_density_option = "npc_fur_density";
     inline const std::string npc_fur_noisiness_option = "npc_fur_noisiness";
+    inline const std::string npc_clump_fur_option = "npc_clump_fur";
+    inline const std::string npc_clump_fur_size_option = "npc_clump_fur_size";
+    inline const std::string npc_clump_fur_length_option = "npc_clump_fur_length";
     inline const std::string npc_feathers_option = "npc_feather_amount";
     inline const std::string npc_feather_size_option = "npc_feather_size";
     inline const std::string npc_feather_length_option = "npc_feather_length";

@@ -1384,7 +1384,7 @@ void tooie::init_config() {
         recompui::config::set_option_group(pf::reflections_section_option, "Reflections And Water");
         recompui::config::set_option_group(pf::fog_option, "Atmosphere And Camera Effects");
         recompui::config::set_option_group(pf::texture_upscale_option, "Surfaces And Textures");
-        recompui::config::set_option_group(pf::character_section_option, "Characters");
+        recompui::config::set_option_group(pf::fur_option, "Characters");
         recompui::config::set_option_group(pf::toon_section_option, "Toon Style");
         recompui::config::set_option_group(pf::three_point_option, "Retro And Demake");
         recompui::config::set_option_group(pf::colourblind_option, "Accessibility");

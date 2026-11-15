@@ -1811,6 +1811,25 @@ namespace RT64 {
         effectsSettings.furNoisiness = std::clamp(noisiness, 0.0f, 1.0f);
     }
 
+    void SetSceneClumpFur(float amount, float size, float length) {
+        const std::scoped_lock lock(effectsMutex);
+        effectsSettings.clumpFur = std::clamp(amount, 0.0f, 1.0f);
+        effectsSettings.clumpFurSize = std::clamp(size, 0.2f, 4.0f);
+        effectsSettings.clumpFurLength = std::clamp(length, 0.25f, 4.0f);
+    }
+
+    void SetSceneNpcClumpFur(float amount, float size, float length) {
+        const std::scoped_lock lock(effectsMutex);
+        effectsSettings.npcClumpFur = std::clamp(amount, 0.0f, 1.0f);
+        effectsSettings.npcClumpFurSize = std::clamp(size, 0.2f, 4.0f);
+        effectsSettings.npcClumpFurLength = std::clamp(length, 0.25f, 4.0f);
+    }
+
+    bool SceneClumpFurOn() {
+        const std::scoped_lock lock(effectsMutex);
+        return effectsSettings.clumpFur > 0.0f;
+    }
+
     namespace {
         struct FurVertexBlock {
             uint32_t address;
@@ -1946,7 +1965,7 @@ namespace RT64 {
 
     uint32_t SceneFurShells() {
         const std::scoped_lock lock(effectsMutex);
-        return ((effectsSettings.fur > 0.0f) || (effectsSettings.npcFur > 0.0f)) ? FurShells : 0;
+        return ((effectsSettings.fur > 0.0f) || (effectsSettings.clumpFur > 0.0f) || (effectsSettings.npcFur > 0.0f) || (effectsSettings.npcClumpFur > 0.0f)) ? FurShells : 0;
     }
 
     // The shaders read a depth as (z / w + 1) / 2, but RT64 writes z / w * scale + translate with the game's own viewport
@@ -1999,7 +2018,7 @@ namespace RT64 {
     {
         SceneEffectsSettings settings = GetSceneEffects();
         const bool charSurface = (settings.charWet > 0.0f) || (settings.charSnow > 0.0f) || (settings.charDirt > 0.0f) || (settings.charSand > 0.0f);
-        if (((settings.fur <= 0.0f) && (settings.npcFur <= 0.0f) && !charSurface) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
+        if (((settings.fur <= 0.0f) && (settings.clumpFur <= 0.0f) && (settings.npcFur <= 0.0f) && (settings.npcClumpFur <= 0.0f) && !charSurface) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
             return false;
         }
 
@@ -2031,11 +2050,29 @@ namespace RT64 {
         // 100), the amount making them thin out more slowly (a thicker coat).
         const float amount = std::min(settings.fur, 1.0f);
         frameParams.furParams = { 2.5f * std::max(settings.furLength, 0.1f), 2.4f * settings.furDensity, 0.6f - 0.3f * amount, settings.furNoisiness };
+        // Clump Fur takes Banjo Fur's place while it is on: tufts about 6 units long and 2.25 apart at 100 (Banjo is
+        // about 150 tall; L, 2026-11-15: 100 is what 75 was when 100 was 3 apart; the look L liked best was 1.5 apart,
+        // 65 here), reaching 0.7 to 0.95 of a cell at the root as the coat fills out.
+        if (settings.clumpFur > 0.0f) {
+            frameParams.furParams.x = 6.0f * settings.clumpFurLength;
+            frameParams.clumpFur = { 1.0f, 1.0f / (2.25f * settings.clumpFurSize), 0.7f + 0.25f * settings.clumpFur, 0.0f };
+        }
+        else {
+            frameParams.clumpFur = { 0.0f, 0.0f, 0.0f, 0.0f };
+        }
         frameParams.furSway = { settings.furSway[0], settings.furSway[1], settings.furSway[2], 0.0f };
         const float npcAmount = std::min(settings.npcFur, 1.0f);
         frameParams.charSurface = { settings.charWet, settings.charSnow, settings.charDirt, settings.charSand };
         frameParams.charSurface2 = { settings.charTime, settings.charDrip, settings.charSoaked, settings.charIcy };
         frameParams.npcFurParams = { 2.5f * std::max(settings.npcFurLength, 0.1f), 2.4f * settings.npcFurDensity, 0.6f - 0.3f * npcAmount, settings.npcFurNoisiness };
+        // NPC Clump Fur: as Banjo's, in place of the NPCs' strands while it is on.
+        if (settings.npcClumpFur > 0.0f) {
+            frameParams.npcFurParams.x = 6.0f * settings.npcClumpFurLength;
+            frameParams.npcClumpFur = { 1.0f, 1.0f / (2.25f * settings.npcClumpFurSize), 0.7f + 0.25f * settings.npcClumpFur, 0.0f };
+        }
+        else {
+            frameParams.npcClumpFur = { 0.0f, 0.0f, 0.0f, 0.0f };
+        }
         return true;
     }
 

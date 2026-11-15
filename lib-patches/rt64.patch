@@ -2745,7 +2745,7 @@ index 69a82ac..2164a89 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..652508f 100644
+index 9fae0d4..a7845b6 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,23 @@
@@ -4668,7 +4668,7 @@ index 9fae0d4..652508f 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +3416,1413 @@ namespace RT64 {
+@@ -1747,24 +3416,1424 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4795,8 +4795,8 @@ index 9fae0d4..652508f 100644
 +                            memset(why, 0, sizeof(why));
 +                        }
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: the 3D world's solid draws cast sun shadows from the shadow map (depth written, not
 +                // blended, not a decal). Cut-outs (alpha compare, coverage times alpha, or the texture's alpha as the
 +                // coverage) are left to the screen-space shadows: drawn without their textures they would cast solid
@@ -5013,8 +5013,8 @@ index 9fae0d4..652508f 100644
 +                        snowDraws = 0;
 +                        snowShellDraws = 0;
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                // Faded (the free camera pulled in close, or the game fading him), his and Kazooie's opaque parts are drawn
 +                // blended without an alpha test, still writing depth; they keep their fur and feathers, faded with them.
@@ -5662,6 +5662,7 @@ index 9fae0d4..652508f 100644
 +            return;
 +        }
 +        const float anchorScale = FurVertexAnchorScale();
++        const bool clumpFur = SceneClumpFurOn();
 +        const uint32_t call = furCallCount++;
 +        if (furNormalVector.size() < drawData.vertexCount()) {
 +            furNormalVector.resize(drawData.vertexCount(), interop::float4{ 0.0f, 0.0f, 0.0f, 0.0f });
@@ -5690,6 +5691,15 @@ index 9fae0d4..652508f 100644
 +            bool shorts = true;
 +            for (uint32_t k = 0; k < 3; k++) {
 +                shorts = shorts && (v[k] < drawData.furVertexFlags.size()) && ((drawData.furVertexFlags[v[k]] & FUR_VERTEX_SHORTS) != 0);
++            }
++            // Clump Fur keeps off his bare skin too: its tufts droop, and the ones by his shoulders hung down onto his
++            // bare arms in flecks (L). (Banjo Fur's short strands stand out instead, and keep growing up to his skin.)
++            if (!shorts && clumpFur) {
++                bool bare = true;
++                for (uint32_t k = 0; k < 3; k++) {
++                    bare = bare && (v[k] < drawData.furVertexFlags.size()) && ((drawData.furVertexFlags[v[k]] & FUR_VERTEX_MARK_MASK) == FUR_VERTEX_BARE);
++                }
++                shorts = bare;
 +            }
 +            if (shorts) {
 +                for (uint32_t k = 0; k < 3; k++) {
@@ -5821,7 +5831,8 @@ index 9fae0d4..652508f 100644
 +
 +        // The normal's w: how far the vertex is from his shorts (world units; far when they aren't drawn), for
 +        // RasterVS.hlsl to cut the fur short near them. His legs' and belly's fur starts under the shorts' hems and
-+        // waistband, and stood out over them (L: "hair still coming out of his pants").
++        // waistband, and stood out over them (L: "hair still coming out of his pants"). With Clump Fur on, his bare skin
++        // counts as shorts here (addFurNormals).
 +        const float sign = (outward < 0.0) ? -1.0f : 1.0f;
 +        for (uint32_t v : furVertexVector) {
 +            const interop::float4 &n = furNormalVector[v];
@@ -6083,7 +6094,7 @@ index 9fae0d4..652508f 100644
          };
  
  #   if RT_ENABLED
-@@ -1816,8 +4874,12 @@ namespace RT64 {
+@@ -1816,8 +4885,12 @@ namespace RT64 {
          }
  #   endif
  
@@ -8881,7 +8892,7 @@ index bc250a2..ec54841 100644
 +
 +#endif // RT64_FBRENDERERCOMMON_HLSLI
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..d171bff 100644
+index e7895c3..3fbb1ac 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,12 @@
@@ -9099,7 +9110,7 @@ index e7895c3..d171bff 100644
      // Preserve the value in the destination.
      if (otherMode.cvgDst() == CVG_DST_SAVE) {
          resultColor.a = 0.0f;
-@@ -254,6 +403,132 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +403,137 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -9180,9 +9191,14 @@ index e7895c3..d171bff 100644
 +    if (furShell != 0) {
 +        const bool whiteFur = (gConstants.furShells & RASTER_FUR_WHITE) != 0;
 +        const float3 furBase = (whiteFur && renderFlagUsesTexture0(rp.flags)) ? texVal0.rgb : combinerColor.rgb;
-+        if (!FurShell(vertexFurAnchor.xyz, furBase, float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK),
-+            whiteFur, vertexFurAnchor.w, resultColor.rgb))
-+        {
++        const float furShare = float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK);
++        // Clump Fur: the shells draw clumps instead of strands (Banjo's, or a furry NPC's white fur, each by its own setting).
++        if ((whiteFur ? FrParams.npcClumpFur.x : FrParams.clumpFur.x) > 0.0f) {
++            if (!ClumpShell(vertexFurAnchor.xyz, furBase, furShare, whiteFur, vertexFurAnchor.w, resultColor.rgb)) {
++                return false;
++            }
++        }
++        else if (!FurShell(vertexFurAnchor.xyz, furBase, furShare, whiteFur, vertexFurAnchor.w, resultColor.rgb)) {
 +            return false;
 +        }
 +        // Faded (drawn blended), a strand crosses about four shells where it shows, over his body: each shell gets the
@@ -9232,7 +9248,7 @@ index e7895c3..d171bff 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +536,29 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +541,29 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -9262,7 +9278,7 @@ index e7895c3..d171bff 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +585,7 @@ void PSMain(
+@@ -287,6 +590,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -9270,7 +9286,7 @@ index e7895c3..d171bff 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +602,7 @@ void PSMain(
+@@ -303,7 +607,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -9280,16 +9296,18 @@ index e7895c3..d171bff 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..0964042 100644
+index 74b1fa0..cc042dc 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
-@@ -11,16 +11,90 @@
+@@ -11,16 +11,110 @@
  
  [[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
  
 -LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in float2 iUV, in float4 iColor, out float4 oPosition, out float2 oUV, out float4 oSmoothColor, out float4 oFlatColor) {
 +LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in float2 iUV, in float4 iColor, in uint iVertexId, out float4 oPosition, out float2 oUV, out float4 oSmoothColor, out float4 oFlatColor, out float4 oFurAnchor) {
 +    oFurAnchor = 0.0f;
++    // Banjo-Tooie: Clump Fur's rim light on this vertex of a shell, 0 to 1 (below).
++    float clumpRim = 0.0f;
      float4 ndcPos = iPosition;
 +    // Banjo-Tooie: the shell redraws' code only in a shader built with it (RenderParams.features, RasterPS.hlsl).
 +    const bool shellFeatures = renderFeatureShells(rp.features);
@@ -9341,8 +9359,26 @@ index 74b1fa0..0964042 100644
 +            const float4 params = ((gConstants.furShells & RASTER_FUR_WHITE) != 0) ? FrParams.npcFurParams : FrParams.furParams;
 +            // Cut short near his shorts (w: how far from them, rt64_framebuffer_renderer.cpp), so his legs' and
 +            // belly's fur doesn't stand out over the hems and waistband (L).
-+            const float furLength = params.x * smoothstep(0.5f * params.x, 2.5f * params.x, furNormals[iVertexId * 2].w);
++            // (Clump Fur's tufts are longer, so they are cut over a shorter share of their length, or his short legs
++            // would lose them all.)
++            const bool clumpFur = ((((gConstants.furShells & RASTER_FUR_WHITE) != 0) ? FrParams.npcClumpFur.x : FrParams.clumpFur.x) > 0.0f);
++            const float furLength = params.x * (clumpFur ? smoothstep(0.15f * params.x, 0.6f * params.x, furNormals[iVertexId * 2].w) :
++                smoothstep(0.5f * params.x, 2.5f * params.x, furNormals[iVertexId * 2].w));
 +            float3 offset = normal * (furLength * share) - float3(0.0f, 0.5f * furLength * share * share * share, 0.0f);
++            // Clump Fur's tufts, after DK's in Donkey Kong Bananza (Fur.hlsli's ClumpShell): they droop more than the
++            // strands, by the square of the height, so each one's tip lies down over the one below.
++            // Near his shorts they droop less, as the belly's tufts hung down over his waistband (L: "fur coming out of
++            // his pants"): not at all within a third of their length, fully a length and a half away.
++            if (clumpFur) {
++                const float droop = smoothstep(0.3f * params.x, 1.5f * params.x, furNormals[iVertexId * 2].w);
++                offset = normal * (furLength * share) - float3(0.0f, 0.8f * droop * furLength * share * share, 0.0f);
++                // Its rim light, as DK's fur catches the light along his outline: strongest where the fur faces across
++                // the view, and out at the tufts' tips. The view's direction is the clip w's change along each world
++                // axis (furClipX to furClipZ's w).
++                const float3 forward = float3(FrParams.furClipX.w, FrParams.furClipY.w, FrParams.furClipZ.w);
++                const float facing = abs(dot(normal, forward)) / max(length(forward), 1e-6f);
++                clumpRim = pow(saturate(1.0f - facing), 2.5f) * (0.35f + 0.65f * share);
++            }
 +            // Banjo's fur jiggle: his strands' tips lag behind as he moves, more the further out (the square of the
 +            // height), scaled by the fur's length. Not furry NPCs' fur.
 +            if ((gConstants.furShells & RASTER_FUR_WHITE) == 0) {
@@ -9375,7 +9411,7 @@ index 74b1fa0..0964042 100644
      // Apply screen scale and offset.
      ndcPos.xy = (ndcPos.xy * gConstants.screenScale) + gConstants.screenOffset * ndcPos.w;
      
-@@ -33,6 +107,22 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+@@ -33,10 +127,34 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
      }
  
@@ -9398,7 +9434,19 @@ index 74b1fa0..0964042 100644
      oPosition = ndcPos;
      oUV = iUV;
      oSmoothColor = iColor;
-@@ -53,17 +143,19 @@ void VSMain(
+     oFlatColor = iColor;
++    // Clump Fur's rim light: the vertex's own lit colour brighter, with a touch of cool light (iColor is the game's
++    // lighting worked out per vertex).
++    if (clumpRim > 0.0f) {
++        // (Subtle: a strong one made the tips spotty, L.)
++        const float3 rimLit = iColor.rgb * (1.0f + 0.45f * clumpRim) + float3(0.02f, 0.03f, 0.045f) * clumpRim;
++        oSmoothColor.rgb = rimLit;
++        oFlatColor.rgb = rimLit;
++    }
+ }
+ 
+ #if defined(DYNAMIC_RENDER_PARAMS)
+@@ -53,17 +171,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR
@@ -9872,10 +9920,10 @@ index 3f33475..c711323 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..fddb7fd 100644
+index 2e62aaf..702dd3e 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,119 @@ namespace interop {
+@@ -13,6 +13,124 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -9992,6 +10040,11 @@ index 2e62aaf..fddb7fd 100644
 +        float4 charSurface;
 +        // The time in seconds (wrapping at 1000) for its drips, then how strongly Banjo drips (0 to 1), then 1 while he swims (his fur goes darker).
 +        float4 charSurface2;
++        // Banjo-Tooie: Clump Fur (Fur.hlsli's ClumpShell): 1 when Banjo's fur shells draw clumps instead of strands (x),
++        // clumps per unit (y), how far a clump reaches at its root in cells (z). Its length is furParams.x.
++        float4 clumpFur;
++        // Banjo-Tooie: the same for furry NPCs' white fur (its length is npcFurParams.x).
++        float4 npcClumpFur;
      };
  #ifdef HLSL_CPU
  };
