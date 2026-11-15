@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-11-15
 
+- Graphics > Lighting: Keep Game Look, on by default. With Relighting or Ray Tracing the picture keeps the game's own colours and its overall brightness, and the new lighting only moves the light and shade. The brightness is matched from frame to frame, so a new view settles within about half a second. Off, the new lighting sets colours and brightness as before.
 - Relighting and Traced Relighting: no more halo of copies round characters and objects. The light bounced off the surroundings, and the ground's colour that lights what faces down, were read from points set round each pixel, so a model standing there was stamped in a ring round itself (a hexagon of halos) and the wall behind it showed through it. They now come from the same points of the view for every pixel. Relighting without ray tracing also no longer glows round Banjo: its guess of the game's shading took in a character standing in front of the ground when the camera looked across it.
 - Graphics > Lighting: the settings of the choice made (Relighting's, or all of Ray Tracing's) sit under it, indented, the way Fur's coats do, and Lighting opens and shuts them with its arrow.
 - Esc menu: the Sound tab is gone; Main Volume, Music Player and Mix Rate are on General now, under a Sound heading after the controls and the language, before Saves. Your sound settings stay as they were.

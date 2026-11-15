@@ -50,6 +50,13 @@ ByteAddressBuffer gDust : register(t16);
 // Ray traced denoising: the indirect pass's target of the pass before (its four bands, the last each texel's distance), which
 // the indirect pass blends its new rays into (DenoiseBlend). Something else is bound when denoising is off; it is never read then.
 Texture2D<float4> gHistory : register(t17);
+
+// Keep Game Look (Graphics > Lighting): r the gain that keeps the picture's brightness at the game's, g 1 while it is on
+// (rt64_scene_effects.cpp, BloomPS pass 9).
+Texture2D<float2> gGameLook : register(t18);
+float2 GameLook() {
+    return gGameLook.Load(int3(0, 0, 0));
+}
 #ifdef RAY_TRACED
 // Banjo-Tooie: the 3D world's solid triangles in world space (Graphics > Ray tracing), rebuilt each frame; only in
 // the RAY_TRACED variant of the pass, which is used while the device has ray queries and the structure is built.
@@ -6080,7 +6087,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
     const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
     // Eye adaptation also draws the scene itself.
-    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (VolBits() != 0u) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f) || (RayRelight() > 0.0f) || (PointLampCount() > 0u)) && (gConstants.view.x < 0.5f);
+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (VolBits() != 0u) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f) || RayPbrOn() || (RaySssStrength() > 0.0f) || (RayRelight() > 0.0f) || (PointLampCount() > 0u) || (GameLook().y > 0.5f)) && (gConstants.view.x < 0.5f);
 
     if (depth >= 0.99999f) {
         // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -6368,6 +6375,8 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         // Ray Tracing Material Pick Mode: the albedo tints the surface before anything lights it. A metal has no diffuse
         // colour of its own, only what it reflects (below).
         scene *= DiffuseAlbedo(pbr);
+        // The game's own colour here, for Keep Game Look (below).
+        const float3 gameScene = scene;
 #ifdef RAY_TRACED
         // At Traced Relighting under 50 the view shows the game's own picture instead, to compare the shading with.
         if (RelightShadeView()) {
@@ -6421,6 +6430,16 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 #else
             scene += scene * indirect.rgb * (SsgiStrength() * 2.0f);
 #endif
+        }
+        // Keep Game Look: the lit surface takes the game's own colour back, keeping only how much brighter or darker the new
+        // lighting made it (relighting turned grass a stronger green, the bounce and sky light tinted what they lit). The
+        // reflections, lamps and fog after this keep their colours.
+        if (GameLook().y > 0.5f) {
+            const float3 luma = float3(0.299f, 0.587f, 0.114f);
+            const float gameLuma = dot(gameScene, luma);
+            if (gameLuma > 1e-3f) {
+                scene = gameScene * (dot(scene, luma) / gameLuma);
+            }
         }
         if (reflections) {
             // SSR: the reflected scene, more at grazing angles (Fresnel) and less in creases (GTAO's specular
@@ -6588,6 +6607,10 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
                 const float3 shaded = scene * (keep + lamp);
                 scene = (ToonHard() ? ToonShadeHard(shaded, toon) : ToonShade(shaded, toon)) / max(keep + lamp, 0.001f);
             }
+        }
+        // Keep Game Look: the picture's overall brightness back at the game's (the gain is measured from frame to frame).
+        if (GameLook().y > 0.5f) {
+            scene *= GameLook().x;
         }
         if (gConstants.bloom.z > 0.0f) {
             scene = Adapt(scene);

@@ -4,7 +4,8 @@
 // Banjo-Tooie: the scene effects' bloom. Pass 0 keeps the bright parts of the scene at a quarter of its
 // size (four bilinear taps cover each 4x4 block), passes 1 and 2 blur them across and down, pass 5 takes
 // them down to an eighth for a wider glow and pass 6 adds the two. Passes 3
-// and 4 measure the scene's brightness and adapt to it over time for eye adaptation. Pass 8 copies the scene at
+// and 4 measure the scene's brightness and adapt to it over time for eye adaptation, and pass 9 works out Keep Game
+// Look's gain from two such measurements. Pass 8 copies the scene at
 // half size for the bounce light.
 
 #include "shared/rt64_scene_effects.h"
@@ -43,6 +44,36 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         const float rate = (measured < 0.03f) ? 0.0f : (1.0f - exp(-seconds * ((measured > previous) ? 2.0f : 0.25f)));
         const float adapted = (previous > 0.0f) ? lerp(previous, measured, rate) : measured;
         return float4(adapted, measured, 0.0f, 1.0f);
+    }
+    else if (pass == 10) {
+        // Keep Game Look: the picture's plain average brightness over a 64x64 grid, into one pixel. Not the geometric mean
+        // of pass 3: deep shadows pull that down so far that matching it brightened the rest of a dark room too much. A
+        // 16x16 grid was too few points to compare a shadowed picture with the game's fairly (Jolly's came out a third
+        // brighter than the game).
+        float sum = 0.0f;
+        [loop] for (int y = 0; y < 64; y++) {
+            [loop] for (int x = 0; x < 64; x++) {
+                const float2 at = (float2(x, y) + 0.5f) / 64.0f;
+                sum += dot(saturate(gTexture0.SampleLevel(LinearSampler, at, 0).rgb), float3(0.2126f, 0.7152f, 0.0722f));
+            }
+        }
+        return float4(sum / 4096.0f, 0.0f, 0.0f, 1.0f);
+    }
+    else if (pass == 9) {
+        // Keep Game Look: the gain that brings the brightness of the picture the effects drew (gTexture0, measured with
+        // last frame's gain in it) to the game's own (gTexture1), moved towards from last frame's (gTexture2) over about
+        // half a second. A black screen (a fade, a cut) leaves it where it is. g = 1: on.
+        const float drawn = gTexture0.Load(int3(0, 0, 0)).r;
+        const float game = gTexture1.Load(int3(0, 0, 0)).r;
+        const float2 last = gTexture2.Load(int3(0, 0, 0)).rg;
+        const float previous = (last.g > 0.5f) ? last.r : 1.0f;
+        if ((drawn < 0.01f) || (game < 0.01f)) {
+            return float4(previous, 1.0f, 0.0f, 1.0f);
+        }
+        const float wanted = clamp(previous * game / drawn, 0.4f, 2.5f);
+        const float seconds = -log(max(1.0f - gConstants.params.w, 1e-4f));
+        const float rate = 1.0f - exp(-seconds * 2.0f);
+        return float4(lerp(previous, wanted, rate), 1.0f, 0.0f, 1.0f);
     }
     if (pass == 7) {
         // Modern water's ripples: one step of the wave equation on the grid (r height, g speed), read from where

@@ -96,7 +96,7 @@ void tooie::menu_tree::classify() {
             // Lighting: Relighting's settings (its strength, and Sun Shadows with its own under it) and Ray Tracing's sit
             // under the choice (only the chosen one's show, picture_filters.cpp), so they read as part of it, as Fur's
             // coats do (L, 2026-11-15).
-            { &lighting_option, { &relighting_option, &sun_shadows_option, &ray_tracing_strength_option,
+            { &lighting_option, { &keep_game_look_option, &relighting_option, &sun_shadows_option, &ray_tracing_strength_option,
                 &ray_tracing_resolution_option, &ray_tracing_denoise_option, &ray_tracing_smoothing_option,
                 &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option,
                 &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_brdf_option,

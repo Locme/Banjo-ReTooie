@@ -470,6 +470,14 @@ where their light reaches, the picture keeps half of the game's painted light
 and the lamps, with their shadows, light the rest; where none reaches, the
 game's picture stays. The sky and water keep the game's shading.
 
+**Keep Game Look** (Graphics > Lighting, shown with Relighting and Ray Tracing, on by
+default) keeps the game's own colours and its overall brightness under the new
+lighting: each lit surface takes the game's colour back and keeps only how much
+brighter or darker the lighting made it, and the whole picture's average
+brightness is brought to the game's own, measured each frame and eased in over
+about half a second. Reflections, lamps and fog keep their colours. Off, the new
+lighting sets colours and brightness too.
+
 **Ray traced denoising** (Graphics > Ray Tracing, off by default, experimental)
 keeps the traced light from frame to frame: the sun's and lamps' shadows, the
 bounce light and the occlusion. Each new frame's rays are blended into what the

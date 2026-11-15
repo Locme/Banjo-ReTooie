@@ -88,11 +88,13 @@ namespace RT64 {
             uint64_t bvh = 0;
             uint64_t dust = 0;
             uint64_t lights = 0;
+            uint64_t look = 0;
 
             bool operator==(const SceneSetKey &other) const {
                 return (depth == other.depth) && (bloom == other.bloom) && (color == other.color) && (adapted == other.adapted) && (water == other.water) &&
                     (waterColor == other.waterColor) && (ripples == other.ripples) && (sunMap == other.sunMap) && (fireflies == other.fireflies) &&
-                    (half == other.half) && (indirect == other.indirect) && (history == other.history) && (bvh == other.bvh) && (dust == other.dust) && (lights == other.lights);
+                    (half == other.half) && (indirect == other.indirect) && (history == other.history) && (bvh == other.bvh) && (dust == other.dust) && (lights == other.lights) &&
+                    (look == other.look);
             }
         };
 
@@ -333,6 +335,19 @@ namespace RT64 {
             std::unique_ptr<RenderTexture> luminanceTexture[3];
             std::unique_ptr<RenderFramebuffer> luminanceFramebuffer[3];
             std::unique_ptr<SmaaDescriptorSet> adaptSet;
+            // Keep Game Look: the brightness measured of the picture the effects drew [0] and of the game's picture [1]
+            // (BloomPS pass 10), the gain worked out from them [2] (pass 9) and last frame's [3], which the scene effects
+            // read (gGameLook: r the gain, g 1 while it is on; cleared to off when it is not).
+            std::unique_ptr<RenderTexture> lookTexture[4];
+            std::unique_ptr<RenderFramebuffer> lookFramebuffer[4];
+            std::unique_ptr<SmaaDescriptorSet> lookSet;
+            std::chrono::steady_clock::time_point lastLook;
+            bool lookWasOn = true;
+            // The largest picture the effects have drawn into lately: only it moves the gain. The game can draw a second,
+            // smaller view in the same frame (Jolly's window onto the room behind it), and measuring both pulled the gain
+            // towards a mix of the two (Jolly's came out a third brighter than the game).
+            uint64_t lookArea = 0;
+            uint32_t lookAreaAge = 0;
             std::chrono::steady_clock::time_point lastAdapt;
             // Replaced textures, framebuffers, views and descriptor sets, kept until the GPU can no longer be using
             // them: at least RetireAfterPasses passes and RetireAfterTime later. The source and measure sets are
@@ -1688,6 +1703,13 @@ namespace RT64 {
 
     void SetSceneRelighting(float amount) {
         relightPercent.store(uint32_t(std::round(std::clamp(amount, 0.0f, 1.0f) * 100.0f)));
+    }
+
+    // Keep Game Look (SetSceneGameLook): on while Relighting or Ray Tracing is on and the setting is.
+    static std::atomic<bool> gameLookOn{ false };
+
+    void SetSceneGameLook(bool on) {
+        gameLookOn.store(on);
     }
 
     void SetSceneRayMaterials(const uint64_t *hashes, const uint32_t *albedoRoughness, const uint32_t *metalnessEmissive, size_t count) {
@@ -4308,7 +4330,7 @@ namespace RT64 {
         // The set that reads source (null without one).
         SmaaDescriptorSet *sourceSet = nullptr;
         if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.volMist > 0.0f) || (settings.volFog > 0.0f) || (settings.volCloudType > 0) ||
-            ScenePointLights() || (relightPercent.load() > 0)) {
+            ScenePointLights() || (relightPercent.load() > 0) || gameLookOn.load()) {
             // The scene so far, without multisampling (Point Lights redraws the scene too: without this copy it drew black).: the target's resolve, or a copy of the target.
             const RenderTextureView *sourceView = nullptr;
             if (colorTarget->usesResolve()) {
@@ -4368,6 +4390,24 @@ namespace RT64 {
             res.adaptSet->setTexture(res.adaptSet->gTexture1, res.luminanceTexture[2].get(), RenderTextureLayout::SHADER_READ);
             res.adaptSet->setTexture(res.adaptSet->gTexture2, res.luminanceTexture[0].get(), RenderTextureLayout::SHADER_READ);
 
+            for (int i = 0; i < 4; i++) {
+                res.lookTexture[i] = worker->device->createTexture(RenderTextureDesc::ColorTarget(1, 1, RenderFormat::R32G32_FLOAT));
+                res.lookTexture[i]->setName("Scene Effects Game Look");
+                const RenderTexture *texture = res.lookTexture[i].get();
+                res.lookFramebuffer[i] = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
+            }
+            res.lookSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+                shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
+            res.lookSet->setTexture(res.lookSet->gTexture0, res.lookTexture[0].get(), RenderTextureLayout::SHADER_READ);
+            res.lookSet->setTexture(res.lookSet->gTexture1, res.lookTexture[1].get(), RenderTextureLayout::SHADER_READ);
+            res.lookSet->setTexture(res.lookSet->gTexture2, res.lookTexture[3].get(), RenderTextureLayout::SHADER_READ);
+            for (int i = 0; i < 4; i++) {
+                commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.lookTexture[i].get(), RenderTextureLayout::COLOR_WRITE));
+                commandList->setFramebuffer(res.lookFramebuffer[i].get());
+                commandList->clearColor(0, RenderColor(1.0f, 0.0f, 0.0f, 0.0f));
+                commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.lookTexture[i].get(), RenderTextureLayout::SHADER_READ));
+            }
+
             // Start with nothing adapted yet (0), so the first measurement is taken as it is.
             for (int i = 0; i < 3; i++) {
                 commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.luminanceTexture[i].get(), RenderTextureLayout::COLOR_WRITE));
@@ -4425,6 +4465,57 @@ namespace RT64 {
                 RenderTextureBarrier(res.luminanceTexture[2].get(), RenderTextureLayout::SHADER_READ)
             });
         }
+
+        // Keep Game Look: one pixel's pass of BloomPS into lookTexture[output].
+        auto lookPass = [&](const SmaaDescriptorSet *input, int output, float pass, float amount) {
+            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.lookTexture[output].get(), RenderTextureLayout::COLOR_WRITE));
+            interop::BloomCB lookConstants;
+            lookConstants.params = { 0.0f, 0.0f, pass, amount };
+            commandList->setFramebuffer(res.lookFramebuffer[output].get());
+            commandList->setViewports(RenderViewport(0.0f, 0.0f, 1.0f, 1.0f));
+            commandList->setScissors(RenderRect(0, 0, 1, 1));
+            commandList->setPipeline(shaderLibrary->luminance.pipeline.get());
+            commandList->setGraphicsPipelineLayout(shaderLibrary->luminance.pipelineLayout.get());
+            commandList->setGraphicsDescriptorSet(input->get(), 0);
+            commandList->setGraphicsPushConstants(0, &lookConstants);
+            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
+            commandList->drawInstanced(3, 1, 0, 0);
+            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.lookTexture[output].get(), RenderTextureLayout::SHADER_READ));
+        };
+        // The set that reads a texture's whole picture for BloomPS passes 3 and 10 (with its resolve's view when it has one).
+        auto lookMeasureSet = [&](RenderTexture *texture, const RenderTextureView *view) {
+            SmaaDescriptorSet *set = tr.measureSets.find(TextureKey{ IdOf(texture) }, res.passes);
+            if (set == nullptr) {
+                std::unique_ptr<SmaaDescriptorSet> made = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
+                    shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
+                made->setTexture(made->gTexture0, texture, RenderTextureLayout::SHADER_READ, view);
+                made->setTexture(made->gTexture1, texture, RenderTextureLayout::SHADER_READ, view);
+                made->setTexture(made->gTexture2, texture, RenderTextureLayout::SHADER_READ, view);
+                set = tr.measureSets.add(TextureKey{ IdOf(texture) }, std::move(made), res.passes,
+                    [&](std::unique_ptr<SmaaDescriptorSet> &&old) { res.retireLater(std::move(old)); });
+            }
+            return set;
+        };
+        const bool gameLook = gameLookOn.load() && (source != nullptr);
+        // Only the largest picture lately moves the gain (lookArea); a smaller one in the same frame uses it as it is.
+        const uint64_t lookAreaHere = uint64_t(colorTarget->width) * uint64_t(colorTarget->height);
+        if ((lookAreaHere >= res.lookArea) || (++res.lookAreaAge > 240)) {
+            res.lookArea = lookAreaHere;
+            res.lookAreaAge = 0;
+        }
+        const bool lookMeasure = gameLook && (lookAreaHere == res.lookArea);
+        if (lookMeasure) {
+            // The game's picture as it came in, before any effect.
+            lookPass(lookMeasureSet(source, colorTarget->usesResolve() ? colorTarget->getResolvedTextureView() : nullptr), 1, 10.0f, 0.0f);
+        }
+        else if (res.lookWasOn) {
+            // Off: the effects read gain 1 and off (g 0) from [3].
+            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.lookTexture[3].get(), RenderTextureLayout::COLOR_WRITE));
+            commandList->setFramebuffer(res.lookFramebuffer[3].get());
+            commandList->clearColor(0, RenderColor(1.0f, 0.0f, 0.0f, 0.0f));
+            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.lookTexture[3].get(), RenderTextureLayout::SHADER_READ));
+        }
+        res.lookWasOn = gameLook;
 
         if (settings.bloom > 0.0f) {
             // Bright parts at a quarter of the size into [0], blurred across into [1] and down into [0]; the same
@@ -4907,6 +4998,7 @@ namespace RT64 {
         sceneKey.bvh = IdOf(bindBvh ? res.bvhTlas.get() : nullptr);
         sceneKey.dust = IdOf(dustBuffer.get());
         sceneKey.lights = IdOf(bindBvh ? slotLights : nullptr);
+        sceneKey.look = IdOf(res.lookTexture[3].get());
         // A set for each key seen lately (the framebuffers drawn in turn and the upload slots each have theirs), made once.
         SceneEffectsDescriptorSet *sceneSet = tr.sceneSets.find(sceneKey, res.passes);
         if (sceneSet == nullptr) {
@@ -4926,6 +5018,7 @@ namespace RT64 {
             set->setTexture(set->gColorHalf, tr.halfTexture.get(), RenderTextureLayout::SHADER_READ);
             set->setTexture(set->gIndirect, tr.indirectTexture.get(), RenderTextureLayout::SHADER_READ);
             set->setTexture(set->gHistory, historyTexture, RenderTextureLayout::SHADER_READ);
+            set->setTexture(set->gGameLook, res.lookTexture[3].get(), RenderTextureLayout::SHADER_READ);
             if (bindBvh) {
                 set->setAccelerationStructure(set->gSceneBVH, res.bvhTlas.get());
                 set->setBuffer(set->gLights, slotLights, 16 * (SceneMaxLights + 4));
@@ -5071,6 +5164,40 @@ namespace RT64 {
         commandList->barriers(RenderBarrierStage::GRAPHICS, {
             RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE)
         });
+
+        // Keep Game Look: the picture just drawn measured as the game's was (pass 10), and the gain moved towards what
+        // brings the two to the same brightness (pass 9, about half a second), for the next frame.
+        if (lookMeasure) {
+            RenderTexture *drawn = nullptr;
+            const RenderTextureView *drawnView = nullptr;
+            if (colorTarget->usesResolve()) {
+                colorTarget->markForResolve();
+                colorTarget->resolveTarget(worker, shaderLibrary);
+                drawn = colorTarget->getResolvedTexture();
+                drawnView = colorTarget->getResolvedTextureView();
+            }
+            else {
+                drawn = colorTarget->texture.get();
+            }
+            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(drawn, RenderTextureLayout::SHADER_READ));
+            lookPass(lookMeasureSet(drawn, drawnView), 0, 10.0f, 0.0f);
+            const auto now = std::chrono::steady_clock::now();
+            const float seconds = std::min(std::chrono::duration<float>(now - res.lastLook).count(), 0.25f);
+            res.lastLook = now;
+            lookPass(res.lookSet.get(), 2, 9.0f, 1.0f - std::exp(-seconds));
+            commandList->barriers(RenderBarrierStage::COPY, {
+                RenderTextureBarrier(res.lookTexture[2].get(), RenderTextureLayout::COPY_SOURCE),
+                RenderTextureBarrier(res.lookTexture[3].get(), RenderTextureLayout::COPY_DEST)
+            });
+            commandList->copyTexture(res.lookTexture[3].get(), res.lookTexture[2].get());
+            commandList->barriers(RenderBarrierStage::GRAPHICS, {
+                RenderTextureBarrier(res.lookTexture[2].get(), RenderTextureLayout::SHADER_READ),
+                RenderTextureBarrier(res.lookTexture[3].get(), RenderTextureLayout::SHADER_READ)
+            });
+            if (!colorTarget->usesResolve()) {
+                commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(drawn, RenderTextureLayout::COLOR_WRITE));
+            }
+        }
 
         // The HUD drawn next changes the picture again, so the target needs resolving again for display.
         colorTarget->markForResolve();

@@ -392,6 +392,9 @@ namespace RT64 {
     // Banjo-Tooie: Graphics > Relighting (0 to 1): the same without ray tracing, with the sun shadow map's shadows. Used by the
     // pass without rays (ray tracing off, or a device without ray queries), and only while Sun shadows are on.
     void SetSceneRelighting(float amount);
+    // Banjo-Tooie: Keep Game Look (Graphics > Lighting, on by default): while Relighting or Ray Tracing is on, the picture keeps
+    // the game's own colours and its overall brightness; the light and shade still come from the new lighting.
+    void SetSceneGameLook(bool on);
     // Banjo-Tooie: Ray tracing noise smoothing, 0 (the raw rays) to 1.
     void SetSceneRayTracingSmoothing(float smoothing);
     // Banjo-Tooie: Path tracing, its bounces after the first (0 off, up to 4).

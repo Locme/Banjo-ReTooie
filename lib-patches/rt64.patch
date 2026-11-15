@@ -2592,7 +2592,7 @@ index 69a82ac..1b3798a 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +694,174 @@ namespace RT64 {
+@@ -659,6 +694,178 @@ namespace RT64 {
          }
      };
  
@@ -2682,6 +2682,9 @@ index 69a82ac..1b3798a 100644
 +        uint32_t gDust = 0;
 +        // Ray traced denoising: the indirect pass's target of the pass before (SceneEffectsPS.hlsl gHistory); a stand-in otherwise.
 +        uint32_t gHistory = 0;
++        // Keep Game Look: the gain that keeps the relit picture's brightness at the game's (r) and whether it is on (g),
++        // one pixel (SceneEffectsPS.hlsl gGameLook).
++        uint32_t gGameLook = 0;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, bool rayQuery, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -2698,6 +2701,7 @@ index 69a82ac..1b3798a 100644
 +            gIndirect = builder.addTexture(12);
 +            gDust = builder.addByteAddressBuffer(16);
 +            gHistory = builder.addTexture(17);
++            gGameLook = builder.addTexture(18);
 +            if (rayQuery) {
 +                gSceneBVH = builder.addAccelerationStructure(13);
 +                gLights = builder.addByteAddressBuffer(14);
