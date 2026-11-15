@@ -218,6 +218,28 @@ The hole's sides and floor are the blocks round it, drawn by us. So Banjo digs i
 - **Known flaws:** thin slivers at some hole edges (the level shows between faces); break sounds not picked; cells
   cut loose don't fall; no metal floor type found yet; not checked with `dxc-linux` for the Linux build.
 
+### 2026-11-15
+
+- The settings moved to the WIP tab under a Voxel Layer heading (L). That tab is a page of Graphics options, so they
+  save in graphics.json; `move_saved_voxel_layer` in config.cpp carries the old general.json values over once. A
+  Graphics change waits in the config's temporary copy until saved, so each voxel option saves on change (as the
+  other WIP options do), and `voxel on|off` saves too.
+- The Bill Drill (state 0xB6) holds Banjo at the height he landed at for the whole drill, so its blows only reached
+  just under his feet and the hole showed when the drill ended (L: "doesn't remove voxels until it's done").
+  `drill_sink` lowers him through dug cells under him at 150 units a second while he drills; tested in Jinjo
+  Village: he went down about 4 m, to the bedrock, in one drill.
+- A hole's faces get darker the deeper they are behind the level's surface: lit like the level round it, a hole
+  in a wall read as a flat patch stuck on the wall (L's picture, 2026-11-15).
+- The flat beige patches were the floor's own texture (Jinjo Village's dirt path, with its beige zigzag) drawn at
+  the grain's density, 16 texels a cell, where one texel covers a face. A floor's colour ask no longer gives any
+  column a texture: floors, and wall columns a floor's ask covered, take the grain in the floor's colour. Walls keep
+  their texture.
+- A hole's faces now get darker to 40% three cells behind the level's surface.
+- Still seen and not fixed (Jinjo Village, 2026-11-15): small tan slivers at a wall hole's bottom corners; a dark
+  hole-shaped patch on the floor in front of a dug wall (likely the hole's faces in the sun's shadow map); thin
+  green slivers across a floor hole by a wall; the lip round a hole dug down reads as a box with straight sides
+  from low angles.
+
 ## What voxel games do (sources at the end)
 
 - **Everything is voxels**, and each voxel has one material, a density, a damage value and a wetness value.

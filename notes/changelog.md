@@ -3,6 +3,10 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-15
+
+- Voxel Layer: moved from Gameplay to the WIP tab, under its own heading; your settings come with it. The Bill Drill bores down as it drills: Banjo sinks into the ground as it breaks, instead of the hole showing only when the drill ends. The inside of a hole gets darker the deeper it goes, so a hole in a wall reads as a hole and not as a patch on the wall. A hole dug into a floor shows dirt in the floor's colour, no longer a stretched copy of the floor's texture (a dirt path's zigzag showed as flat beige patches).
+
 ## 2026-11-14
 
 - Ray tracing shows more: traced sun shadows and the shadows of models now take away up to 80% of the light instead of 55%, so they read as shade instead of a light grey film. Shadow-map and screen-space shadows are unchanged.

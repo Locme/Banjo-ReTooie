@@ -1,4 +1,4 @@
-// Gameplay > Voxel Layer: a destructible voxel layer (notes/voxel-layer-plan.md).
+// WIP > Voxel Layer: a destructible voxel layer (notes/voxel-layer-plan.md).
 //
 // The layer is behind the level's own geometry (L, 2026-11-13: the level's design must not change). Untouched, it is
 // not there to see or to bump into: the level looks and plays as it always did. Banjo's blows and eggs dig into the
@@ -58,6 +58,7 @@
 #include "recompui/config.h"
 #include "tooie_debug.h"
 #include "tooie_effect_views.h"
+#include "tooie_game.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_gfx_budget.h"
 #include "tooie_rdram.h"
@@ -264,7 +265,7 @@ namespace {
     // A number setting (the sliders below the Voxel Layer switch), or its default when it can't be read.
     double number_option(const std::string& id, double fallback) {
         try {
-            return std::get<double>(recompui::config::get_general_config().get_option_value(id));
+            return std::get<double>(recompui::config::get_graphics_config().get_option_value(id));
         } catch (...) {
             return fallback;
         }
@@ -291,7 +292,7 @@ namespace {
             return true;
         }
         try {
-            return std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::voxel_layer::option));
+            return std::get<bool>(recompui::config::get_graphics_config().get_option_value(tooie::voxel_layer::option));
         } catch (...) {
             return false;
         }
@@ -1185,7 +1186,14 @@ namespace {
                     const DualVertex& dv = *v[reverse ? (4 - q) % 4 : q];
                     for (int c = 0; c < 3; c++) qd.v[q][c] = (int16_t)std::lround(dv.p[c] - base[c]);
                     const float lit = 0.5f + 0.5f * std::max(0.0f, dv.n[0] * light[0] + dv.n[1] * light[1] + dv.n[2] * light[2]);
-                    const float level = lit * dv.ao;
+                    // Darker the deeper the corner is behind the level's surface over the cell's column, to 40% three
+                    // cells in. Lit like the level round it, a hole in a wall read as a flat patch stuck on the wall (L,
+                    // 2026-11-15). A piled cell sits on the surface and keeps the full light.
+                    const int col_a = dir_axis(ch.dir[i]);
+                    const float depth = piled_cell ? 0.0f
+                        : (dir_sign(ch.dir[i]) > 0 ? ch.surface[i] - dv.p[col_a] : dv.p[col_a] - ch.surface[i]);
+                    const float deep = std::clamp(1.0f - 0.2f * std::max(0.0f, depth) / vs, 0.4f, 1.0f);
+                    const float level = lit * dv.ao * deep;
                     // A face with the level's texture takes only the light (the texture has the colour).
                     if (cell_slot > 0) for (int c = 0; c < 3; c++) qd.col[q][c] = shade_byte(235.0f * level * seam_dark);
                     else for (int c = 0; c < 3; c++) qd.col[q][c] = shade_byte(dv.col[c] * level);
@@ -1678,7 +1686,10 @@ namespace {
                 if (it == world.columns.end()) continue;
                 const bool floor = asked_floor && (key >> 58) == (uint64_t)dir_code(1, 1);
                 it->second.tinted = true;
-                it->second.tex = (green && floor) ? 0 : slot;
+                // A floor's texture is never used, on the floor's columns or the wall columns its ask covered: they
+                // take the grain in the floor's colour. At the grain's density one texel of a dirt path's beige zigzag
+                // filled whole faces with flat beige (L's pictures, 2026-11-15).
+                it->second.tex = asked_floor ? 0 : slot;
                 for (int c = 0; c < 3; c++) {
                     const float own = (c == 0 ? dirt.r : c == 1 ? dirt.g : dirt.b) / 255.0f;
                     it->second.tint[c] = (green && floor) ? own : std::clamp(rgb[c], 0.0f, 1.0f);
@@ -1686,7 +1697,7 @@ namespace {
             }
             const bool first_look = !arena.has_look;
             arena.has_look = true;
-            arena.look_slot = (green && asked_floor) ? 0 : slot;
+            arena.look_slot = asked_floor ? 0 : slot;
             for (int c = 0; c < 3; c++) {
                 const float own = (c == 0 ? dirt.r : c == 1 ? dirt.g : dirt.b) / 255.0f;
                 arena.look_tint[c] = (green && asked_floor) ? own : std::clamp(rgb[c], 0.0f, 1.0f);
@@ -2426,6 +2437,22 @@ namespace {
     uint32_t last_state = 0;
     float next_hit_time = 0.0f;
 
+    // Lowers Banjo through dug cells under his feet at the drill's pace, down to the top of the first cell that is not
+    // dug. Only dug cells: under the level's own ground (never filled in) he stays where the game holds him.
+    constexpr float drill_speed = 150.0f;   // units a second, about 8 cells
+    void drill_sink(uint8_t* rdram, const Player& pl) {
+        if (world.cut.empty()) return;
+        const int bx = cell_of(pl.pos[0]), bz = cell_of(pl.pos[2]);
+        int y = cell_of(pl.pos[1] - 1.0f);
+        if (state_at(bx, y, bz) != Dug) return;
+        while (state_at(bx, y - 1, bz) == Dug && y > world.cut_lo_y - 2) y--;
+        const float floor_y = y * vs;   // the bottom of the lowest dug cell in the run
+        const float to = std::max(floor_y, pl.pos[1] - drill_speed * last_dt);
+        if (to >= pl.pos[1] - 0.01f) return;
+        const float p[3] = { pl.pos[0], to, pl.pos[2] };
+        write_player_pos(rdram, pl, p);
+    }
+
     void attack(uint8_t* rdram, recomp_context* ctx) {
         Player pl;
         if (!read_player(rdram, pl)) return;
@@ -2440,6 +2467,11 @@ namespace {
             const float at[3] = { pl.pos[0], pl.pos[1] - 10.0f, pl.pos[2] };
             sound_for(rdram, ctx, strike(rdram, ctx, origin, at, 80.0f, 3, false, pl.pos[1]));
         }
+        // The Bill Drill bores down (L, 2026-11-15: "the drill move doesn't remove voxels until it's done"). The game
+        // holds Banjo at the height he landed at for the whole drill, so each blow only reached the cells just under
+        // his feet and the hole showed only when the drill ended and he dropped. While he drills, he sinks into the
+        // dug cells under him, so the next blow breaks deeper ground.
+        if (s == 0xB6) drill_sink(rdram, pl);
         for (const Attack& a : attacks) {
             if (a.state != s) continue;
             if (!entered && game_time < next_hit_time) return;
@@ -2757,8 +2789,8 @@ namespace {
     }
 }
 
-void tooie::voxel_layer::add_options(recomp::config::Config& general) {
-    general.add_bool_option(option, "Voxel Layer (WIP)",
+void tooie::voxel_layer::add_options(recomp::config::Config& graphics) {
+    graphics.add_bool_option(option, "Voxel Layer",
         "Lets Banjo dig into the levels' ground and walls. The level looks and plays as it "
         "always did until he strikes it; then the ground behind the surface (1 to 2 m deep, 2 to 4 m in sand and dirt) "
         "gives way: sand and dirt at one blow, anything else cracks on the first and breaks out on the next. Claw "
@@ -2766,23 +2798,39 @@ void tooie::voxel_layer::add_options(recomp::config::Config& general) {
         "Buster or Bill Drill. Of the eggs only the special ones dig: grenade, clockwork and proximity eggs blow "
         "holes, fire eggs melt ice, blue eggs dig only sand. Nothing near water or metal breaks. Holes fill back in when he leaves the level.",
         false);
-    general.add_number_option(strength_option, "Voxel Strength",
+    graphics.add_number_option(strength_option, "Voxel Strength",
         "How much Banjo breaks with each blow, egg and fall: 100 as made. Higher makes his blows reach further and break "
         "harder ground sooner (at 200 a claw swipe breaks stone); lower takes more blows.",
         25, 400, 25, 0, true, 100);
-    general.add_number_option(depth_soft_option, "Voxel Depth: Sand and Dirt",
+    graphics.add_number_option(depth_soft_option, "Voxel Depth: Sand and Dirt",
         "How deep the ground behind the level's surface goes, in metres, where the level's ground is soft: sand, dirt, "
         "grass, clay and snow. The depth varies from this to twice it. New ground takes it at once; holes already dug "
         "keep theirs until he leaves the level.",
         0.5, 8, 0.5, 1, false, 2);
-    general.add_number_option(depth_stone_option, "Voxel Depth: Stone",
+    graphics.add_number_option(depth_stone_option, "Voxel Depth: Stone",
         "As above, where the level's ground is stone, sandstone, brick or ice.",
         0.5, 8, 0.5, 1, false, 1);
-    general.add_number_option(depth_rock_option, "Voxel Depth: Rock",
+    graphics.add_number_option(depth_rock_option, "Voxel Depth: Rock",
         "As above, where the level's ground is rock, dark stone, ash rock or gold ore.",
         0.5, 8, 0.5, 1, false, 1);
     for (const std::string* id : { &strength_option, &depth_soft_option, &depth_stone_option, &depth_rock_option }) {
-        general.add_option_hidden_dependency(*id, option, false);
+        graphics.add_option_hidden_dependency(*id, option, false);
+    }
+    // In the WIP tab under its own heading (L, 2026-11-15). The tab is a page of Graphics options, so these save to
+    // graphics.json; config.cpp carries the values saved in general.json over once.
+    for (const std::string* id : { &option, &strength_option, &depth_soft_option, &depth_stone_option, &depth_rock_option }) {
+        recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+    }
+    recompui::config::set_option_group(option, "Voxel Layer");
+    // The Graphics settings keep a change aside until they are saved; saving at once makes it apply the moment it
+    // changes, as the other WIP options do.
+    for (const std::string* id : { &option, &strength_option, &depth_soft_option, &depth_stone_option, &depth_rock_option }) {
+        graphics.add_option_change_callback(*id,
+            [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+                if (context == recomp::config::OptionChangeContext::Temporary) {
+                    recompui::config::get_graphics_config().save_config();
+                }
+            });
     }
 }
 
@@ -2841,7 +2889,9 @@ std::string tooie::voxel_layer::console(uint8_t* rdram, recomp_context* ctx, con
     const std::string what = args.empty() ? "info" : args[0];
     char text[320];
     if (what == "on" || what == "off") {
-        recompui::config::get_general_config().update_option_value(option, what == "on");
+        recomp::config::Config& graphics = recompui::config::get_graphics_config();
+        graphics.update_option_value(option, what == "on");
+        graphics.save_config();
         return std::string("Voxel Layer ") + what;
     }
     if (what == "info") {

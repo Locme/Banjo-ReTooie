@@ -387,6 +387,35 @@ namespace {
     // Honeycombs Stay moved from the WIP tab (a page of Graphics options, graphics.json) to Gameplay >
     // Difficulty, a page of General options (L, 2026-11-12): carry a value saved in graphics.json into
     // general.json once, while general.json has none. Done on the files before the configs load.
+    // The Voxel Layer moved from Gameplay (general.json) to the WIP tab, a page of Graphics options (L, 2026-11-15):
+    // its values saved in general.json are carried over once, while graphics.json doesn't have them yet.
+    void move_saved_voxel_layer() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        auto load = [&](const std::string& file) {
+            std::ifstream in(dir / file);
+            nlohmann::json json = in ? nlohmann::json::parse(in, nullptr, false) : nlohmann::json();
+            return json.is_object() ? json : nlohmann::json::object();
+        };
+        nlohmann::json graphics_json = load("graphics.json");
+        if (graphics_json.contains(tooie::voxel_layer::option)) {
+            return;
+        }
+        const nlohmann::json source = load("general.json");
+        bool moved = false;
+        for (const std::string* id : { &tooie::voxel_layer::option, &tooie::voxel_layer::strength_option,
+                &tooie::voxel_layer::depth_soft_option, &tooie::voxel_layer::depth_stone_option,
+                &tooie::voxel_layer::depth_rock_option }) {
+            if (source.contains(*id)) {
+                graphics_json[*id] = source[*id];
+                moved = true;
+            }
+        }
+        if (moved) {
+            std::ofstream out(dir / "graphics.json", std::ios::trunc);
+            out << graphics_json.dump(4);
+        }
+    }
+
     void move_saved_honeycombs_stay() {
         const std::filesystem::path dir = recomp::get_config_path();
         auto load = [&](const std::string& file) {
@@ -869,7 +898,6 @@ void tooie::init_config() {
         "Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy.",
         false);
     tooie::torch_enemy::add_option(general);
-    tooie::voxel_layer::add_options(general);
     tooie::bottles_revenge::add_option(general);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(
@@ -1168,12 +1196,7 @@ void tooie::init_config() {
             &tooie::snout_jiggle::squash_across_option,
             &tooie::snout_jiggle::squash_walk_option,
             &tooie::snout_jiggle::nose_option,
-            &tooie::torch_enemy::option,
-            &tooie::voxel_layer::option,
-            &tooie::voxel_layer::strength_option,
-            &tooie::voxel_layer::depth_soft_option,
-            &tooie::voxel_layer::depth_stone_option,
-            &tooie::voxel_layer::depth_rock_option }) {
+            &tooie::torch_enemy::option }) {
         recompui::config::set_option_page(*id, tooie::gameplay_tab_id);
     }
 
@@ -1258,6 +1281,7 @@ void tooie::init_config() {
         recompui::config::set_option_group(vol::file_option, "Volumetric Levels");
     }
     tooie::volumetric_shadows::add_options(graphics);
+    tooie::voxel_layer::add_options(graphics);
     {
         // Volumetric shadows are WIP (L, 2026-10-23): the WIP tab, under their own heading, off by default.
         namespace vs = tooie::volumetric_shadows;
@@ -1531,6 +1555,7 @@ void tooie::init_config() {
     move_saved_canary_mary();
     move_saved_menu_mouse();
     move_saved_honeycombs_stay();
+    move_saved_voxel_layer();
     turn_on_saved_smooth_walls();
     split_saved_toon_shading();
     pick_saved_lighting();

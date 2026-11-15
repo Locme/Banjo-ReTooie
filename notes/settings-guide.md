@@ -31,32 +31,6 @@ on a controller.
   or your total time when all 13 are beaten. Turning it on starts a rush, it
   turns itself off when the rush ends, and turning it off stops after the
   current fight. Not with Bottles' Revenge on. Default: off.
-- **Voxel Layer (WIP)** (Gameplay): lets Banjo dig into the levels' ground and
-  walls. The level looks and plays as it always did
-  until he strikes it. The ground behind the surface is 1 to 2 m deep, or 2 to
-  4 m in sand and dirt. Sand and dirt break at one blow; anything else cracks on
-  the first blow and breaks out on the next. Nothing near water or metal breaks.
-  He can stand in the holes and walk into them, and light, shadows and
-  reflections go into them too. The holes are smooth, carved shapes: the inside
-  takes the texture and colour of the surface he broke (a green cliff is green
-  inside), with seams of the world's stone, and grass is dirt inside. Digging down
-  into sand or dirt throws up a rounded lip round the hole, and pieces cut
-  loose fall. Falling out of bounds through a hole puts everything back and
-  returns him to where he last stood, and so does ending up inside the ground. Claw swipes and
-  rolls dig soft ground. Stone needs the Rat-a-tat Rap or stronger, and rock the
-  Beak Barge, Beak Buster or Bill Drill. Of the eggs only the special ones dig:
-  grenade, clockwork and proximity eggs blow holes, fire eggs melt ice, and
-  golden and ice eggs chip; blue eggs break only sand. Each world has its own materials. Holes fill back in when he
-  leaves the level. Off by default.
-  - **Voxel Strength** (25 to 400, default 100): how much he breaks. His blows'
-    power is multiplied by it and their reach by its square root, so at 200 a
-    claw swipe breaks stone; lower takes more blows.
-  - **Voxel Depth: Sand and Dirt / Stone / Rock** (0.5 to 8 m; defaults 2, 1
-    and 1): how deep the ground behind the surface goes, by the level's ground
-    (sand, dirt, grass, clay and snow; stone, sandstone, brick and ice; rock,
-    dark stone, ash rock and gold ore). It varies from the setting to twice it.
-    New ground takes a change at once; holes already dug keep theirs until he
-    leaves the level. All four show only with the Voxel Layer on.
 - **Cut Content: Torch enemy** (Back-Ports and cut content): brings back the
   angry torch cut from the game. Level: Glitter Gulch Mine (the menu names only
   the level, to keep where they hide a surprise). Each one stands still like an
@@ -257,6 +231,33 @@ menus is already in QOL > Menu). The tab is a page of Graphics
 options: all of them save in graphics.json. 
 
 
+- **Voxel Layer** (its own heading; was in Gameplay until 2026-11-15): lets Banjo dig into the levels' ground and
+  walls. The level looks and plays as it always did
+  until he strikes it. The ground behind the surface is 1 to 2 m deep, or 2 to
+  4 m in sand and dirt. Sand and dirt break at one blow; anything else cracks on
+  the first blow and breaks out on the next. Nothing near water or metal breaks.
+  He can stand in the holes and walk into them, and light, shadows and
+  reflections go into them too. The holes are smooth, carved shapes: the inside
+  takes the texture and colour of the wall he broke (a green cliff is green
+  inside) or the floor's colour on dirt, darker the deeper it goes, with seams of the world's stone, and grass is dirt inside. Digging down
+  into sand or dirt throws up a rounded lip round the hole, and pieces cut
+  loose fall. Falling out of bounds through a hole puts everything back and
+  returns him to where he last stood, and so does ending up inside the ground. Claw swipes and
+  rolls dig soft ground. Stone needs the Rat-a-tat Rap or stronger, and rock the
+  Beak Barge, Beak Buster or Bill Drill. The Bill Drill bores down: he sinks into
+  the ground as it breaks, down to the bedrock under the layer. Of the eggs only the special ones dig:
+  grenade, clockwork and proximity eggs blow holes, fire eggs melt ice, and
+  golden and ice eggs chip; blue eggs break only sand. Each world has its own materials. Holes fill back in when he
+  leaves the level. Off by default.
+  - **Voxel Strength** (25 to 400, default 100): how much he breaks. His blows'
+    power is multiplied by it and their reach by its square root, so at 200 a
+    claw swipe breaks stone; lower takes more blows.
+  - **Voxel Depth: Sand and Dirt / Stone / Rock** (0.5 to 8 m; defaults 2, 1
+    and 1): how deep the ground behind the surface goes, by the level's ground
+    (sand, dirt, grass, clay and snow; stone, sandstone, brick and ice; rock,
+    dark stone, ash rock and gold ore). It varies from the setting to twice it.
+    New ground takes a change at once; holes already dug keep theirs until he
+    leaves the level. All four show only with the Voxel Layer on.
 - **Dive** (off by default): press the Run key (B on a controller) in the air as
   Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and stays
   lying on it until you jump (the stick can't walk him off it). Works from a jump, after the

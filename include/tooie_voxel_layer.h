@@ -11,7 +11,7 @@ namespace recomp::config {
     class Config;
 }
 
-// Gameplay > Voxel Layer (src/gameplay/voxel_layer.cpp, notes/voxel-layer-plan.md): Banjo digs into the level's
+// WIP > Voxel Layer (src/gameplay/voxel_layer.cpp, notes/voxel-layer-plan.md): Banjo digs into the level's
 // ground and walls with his attacks and eggs. The layer is behind the
 // level's own surface, so the level looks and plays as it always did until he strikes it.
 namespace tooie::voxel_layer {
@@ -24,7 +24,7 @@ namespace tooie::voxel_layer {
     inline const std::string depth_stone_option = "voxel_depth_stone";
     inline const std::string depth_rock_option = "voxel_depth_rock";
 
-    void add_options(recomp::config::Config& general);
+    void add_options(recomp::config::Config& graphics);
 
     // Once per game frame, from tooie_warp_tick: Banjo's attacks, eggs, falling debris; a map change resets it.
     void tick(uint8_t* rdram, recomp_context* ctx);
