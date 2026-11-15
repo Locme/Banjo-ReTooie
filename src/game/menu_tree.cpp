@@ -93,6 +93,17 @@ void tooie::menu_tree::classify() {
                 &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option } },
             { &npc_fur_style_option, { &npc_clump_fur_option, &npc_clump_fur_size_option, &npc_clump_fur_length_option,
                 &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option } },
+            // Lighting: Relighting's settings (its strength, and Sun Shadows with its own under it) and Ray Tracing's sit
+            // under the choice (only the chosen one's show, picture_filters.cpp), so they read as part of it, as Fur's
+            // coats do (L, 2026-11-15).
+            { &lighting_option, { &relighting_option, &sun_shadows_option, &ray_tracing_strength_option,
+                &ray_tracing_resolution_option, &ray_tracing_denoise_option, &ray_tracing_smoothing_option,
+                &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option,
+                &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_brdf_option,
+                &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &path_tracing_option,
+                &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option,
+                &ray_tracing_hit_colours_option, &ray_tracing_parallax_option, &ray_detail_half_option,
+                &ray_detail_quarter_option } },
         };
         recomp::config::Config* graphics_config = &recompui::config::get_graphics_config();
         for (const auto& group : groups) {
@@ -100,8 +111,8 @@ void tooie::menu_tree::classify() {
                 graphics_config->set_option_parent(*child, *group.first);
             }
         }
-        // The fur choices start open, so a coat's settings show as soon as it is picked.
-        for (const std::string* open : { &fur_option, &npc_fur_style_option }) {
+        // The fur and lighting choices start open, so a coat's or a lighting's settings show as soon as it is picked.
+        for (const std::string* open : { &fur_option, &npc_fur_style_option, &lighting_option }) {
             const auto& by_id = graphics_config->get_config_schema().options_by_id;
             if (const auto found = by_id.find(*open); found != by_id.end()) {
                 graphics_config->set_option_expanded(found->second, true);

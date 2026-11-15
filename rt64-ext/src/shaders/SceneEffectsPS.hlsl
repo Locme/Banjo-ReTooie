@@ -557,14 +557,32 @@ float3 ViewNormal(int2 pixel, float3 center) {
 
 // The normal averaged over a few pixels round about (eight taps r pixels out), only where the depth says it is the
 // same surface: rounded over a furry or low-poly character, whose own normal turns pixel to pixel.
-float3 SmoothedNormal(int2 pixel, float3 center, float3 normal, int r) {
+// How far a point another pixel shows (there, view space) is from where that pixel's line of sight meets the plane of
+// this pixel's surface (center, normal), along the line of sight. The distance from the plane itself let in a model
+// standing in front of the ground when the camera looks across it: the model is set off along the line of sight, which
+// at a low angle runs nearly along the plane (L, 2026-11-15: a glow round Banjo under Relighting).
+float PlaneGap(float3 center, float3 normal, float3 there) {
+    const float3 sight = there / max(length(there), 1e-3f);
+    const float facing = dot(sight, normal);
+    if (abs(facing) < 1e-3f) {
+        return 1e9f;
+    }
+    return length(there - sight * (dot(center, normal) / facing));
+}
+
+float3 SmoothedNormal(int2 pixel, float3 center, float3 normal, int r, bool onPlane = false) {
     const int2 offsets[8] = { int2(-r, 0), int2(r, 0), int2(0, -r), int2(0, r), int2(-r, -r), int2(r, r), int2(r, -r), int2(-r, r) };
-    const float tolerance = 8.0f - center.z * 0.02f * float(r);
+    // onPlane (Relighting's shading): a neighbour counts only when it lies near this pixel's own plane. The depth alone
+    // let in whatever stood within a few hundred units (8 + 0.02 * distance * r), so the ground round a model took the
+    // model's normals and showed a ring of its outline, 8 copies r pixels out (L, 2026-11-15: "a hexagon halo"). The
+    // plane's tolerance grows with the step across the surface, so a low-poly fold of a few degrees still counts.
+    // Banjo's fur keeps the depth test: its normals turn every pixel, and the plane test would leave them unsmoothed.
+    const float tolerance = onPlane ? (2.0f - center.z * 0.003f * float(r)) : (8.0f - center.z * 0.02f * float(r));
     float3 sum = normal;
     [unroll] for (int k = 0; k < 8; k++) {
         const int2 at = clamp(pixel + offsets[k], int2(1, 1), int2(gConstants.projection.zw) - 2);
         const float3 there = ViewPositionAt(at);
-        if (abs(there.z - center.z) < tolerance) {
+        if ((onPlane ? PlaneGap(center, normal, there) : abs(there.z - center.z)) < tolerance) {
             sum += ViewNormal(at, there);
         }
     }
@@ -1016,26 +1034,39 @@ bool RelightShadeView() {
 // four taps of the half-size picture below the pixel, a twentieth of the screen's width out, leaving out the sky. Only the
 // hue is taken, a third as strong, at the brightness the fit to Traced Relighting used (about 0.27). So grass bounces green and
 // lava red without the shading's level changing.
+// The picture's average colour over a fixed 4 by 4 grid of points on the screen (rows from firstRow down), leaving out the
+// sky, and how many points counted. The same points for every pixel, so the colour is the view's as a whole: points
+// placed round each pixel (a ring a tenth of the screen out) took in whatever model stood there, and stamped copies of it
+// round the model in a ring, a hexagon of halos, with the wall behind it showing through it (L, 2026-11-15, Jiggywiggy
+// in front of his temple's gold wall).
+float3 ScreenAverage(int firstRow, out float count) {
+    const float2 size = gConstants.projection.zw;
+    float3 sum = 0.0f;
+    count = 0.0f;
+    [unroll] for (int y = 0; y < 4; y++) {
+        [unroll] for (int x = 0; x < 4; x++) {
+            if (y < firstRow) {
+                continue;
+            }
+            const float2 at = (float2(x, y) + 0.5f) / 4.0f;
+            if (LoadDepth(int2(at * size)) < 0.99999f) {
+                sum += gColorHalf.SampleLevel(LinearSampler, at, 0).rgb;
+                count += 1.0f;
+            }
+        }
+    }
+    return (count > 0.5f) ? (sum / count) : 0.0f;
+}
+
 float3 RelitGround(int2 pixel) {
     const float3 luma = float3(0.299f, 0.587f, 0.114f);
     const float3 neutral = float3(0.30f, 0.27f, 0.24f);
-    const float2 size = gConstants.projection.zw;
-    const float2 uv = (float2(pixel) + 0.5f) / size;
-    const float aspect = size.x / size.y;
-    const float2 taps[4] = { float2(-0.05f, 0.03f), float2(0.05f, 0.03f), float2(-0.025f, 0.07f), float2(0.025f, 0.07f) };
-    float3 sum = 0.0f;
-    float count = 0.0f;
-    [unroll] for (int k = 0; k < 4; k++) {
-        const float2 at = uv + float2(taps[k].x, taps[k].y * aspect);
-        if (all(at > 0.0f) && all(at < 1.0f) && (LoadDepth(int2(at * size)) < 0.99999f)) {
-            sum += gColorHalf.SampleLevel(LinearSampler, at, 0).rgb;
-            count += 1.0f;
-        }
-    }
+    // The ground's colour from the lower half of the view, where the ground is (see ScreenAverage).
+    float count;
+    const float3 average = ScreenAverage(2, count);
     if (count < 0.5f) {
         return neutral;
     }
-    const float3 average = sum / count;
     const float level = dot(neutral, luma);
     const float3 hue = min(average / max(dot(average, luma), 0.02f), 2.0f);
     // A third of the ground's colour (it was half: with the bounce from round about, green levels went green all over).
@@ -1066,7 +1097,7 @@ float3 RelitLight(int2 pixel, float3 center, float3 normal, float3 own, float su
     // Smoothed over a few pixels of the same surface (more at higher resolutions), so the low-poly level's faces don't
     // show in the sun's shading, and wrapped a little round the side turned away, so a ridge between two faces turns
     // from lit to shaded softly instead of along a line.
-    const float3 smooth = SmoothedNormal(pixel, center, normal, max(3, int(gConstants.projection.w / 270.0f)));
+    const float3 smooth = SmoothedNormal(pixel, center, normal, max(3, int(gConstants.projection.w / 270.0f)), true);
     const float3 sunDirection = normalize(gConstants.sun.xyz);
     const float facing = saturate((dot(smooth, sunDirection) + 0.25f) / 1.25f);
     const float3 up = normalize(gConstants.worldY.xyz);
@@ -1173,28 +1204,16 @@ bool EnclosedOnScreen(int2 pixel, float3 center, float3 normal) {
 // Relighting without ray tracing: light bounced off bright surroundings, which Traced Relighting's traced bounce light
 // gives and the sky and ground terms leave out. In a pale level (Cloud Cuckooland's white and pastel) the traced picture's
 // shade and middle tones came out a third brighter than without ray tracing (median 163 against 126 out of 255), while in
-// darker levels (Spiral Mountain, Mayahem Temple) the two matched. So it is the picture's colour round about (eight taps of
-// the half-size picture a tenth of the screen out, leaving out the sky) only as far as it is brighter than those levels'
+// darker levels (Spiral Mountain, Mayahem Temple) the two matched. So it is the view's colour (ScreenAverage) only as far
+// as it is brighter than those levels'
 // (a brightness of 0.3), 1.6 times that: nothing in a dark or middling level, about 0.4 in Cloud Cuckooland.
 float3 RelitBounce(int2 pixel) {
     const float3 luma = float3(0.299f, 0.587f, 0.114f);
-    const float2 size = gConstants.projection.zw;
-    const float2 uv = (float2(pixel) + 0.5f) / size;
-    const float aspect = size.x / size.y;
-    float3 sum = 0.0f;
-    float count = 0.0f;
-    [unroll] for (int k = 0; k < 8; k++) {
-        const float angle = float(k) * 0.785398f + 0.39f;
-        const float2 at = uv + float2(cos(angle), sin(angle) * aspect) * 0.1f;
-        if (all(at > 0.0f) && all(at < 1.0f) && (LoadDepth(int2(at * size)) < 0.99999f)) {
-            sum += gColorHalf.SampleLevel(LinearSampler, at, 0).rgb;
-            count += 1.0f;
-        }
-    }
+    float count;
+    const float3 average = ScreenAverage(0, count);
     if (count < 0.5f) {
         return 0.0f;
     }
-    const float3 average = sum / count;
     const float brightness = dot(average, luma);
     // A third of the surroundings' colour, the rest white: at full colour the grass round about turned everything green,
     // the grey stone paths in Mayahem Temple as green as the grass (L, burst-2026-11-12_11-09-25).
@@ -1218,14 +1237,14 @@ float3 Relit(int2 pixel, float3 center, float3 normal, float3 scene, float sunBl
     const float2 size = gConstants.projection.zw;
     const float2 uv = (float2(pixel) + 0.5f) / size;
     const float2 step = float2(0.012f, 0.012f * size.x / size.y);
-    const float tolerance = 4.0f - center.z * 0.02f;
+    const float tolerance = 4.0f - center.z * 0.04f;
     float around = 0.0f;
     float weights = 0.0f;
     [unroll] for (int y = -1; y <= 1; y++) {
         [unroll] for (int x = -1; x <= 1; x++) {
             const float2 at = uv + float2(x, y) * step;
             const float3 there = ViewPositionAt(int2(clamp(at, 0.0f, 1.0f) * size));
-            const float weight = ((x == 0) && (y == 0)) ? 1.0f : saturate(1.0f - abs(dot(there - center, normal)) / tolerance);
+            const float weight = ((x == 0) && (y == 0)) ? 1.0f : saturate(1.0f - PlaneGap(center, normal, there) / tolerance);
             around += dot(gColorHalf.SampleLevel(LinearSampler, at, 0).rgb, luma) * weight;
             weights += weight;
         }
