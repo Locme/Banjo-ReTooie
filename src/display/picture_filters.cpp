@@ -26,6 +26,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -42,6 +45,7 @@
 #include "tooie_fxaa.h"
 #include "tooie_smaa.h"
 #include "tooie_picture_filters.h"
+#include "util/file.h"
 #include "tooie_debug.h"
 #include "tooie_window_beams.h"
 #include "tooie_toast.h"
@@ -119,6 +123,17 @@ namespace RT64 {
     bool SceneSandUnderfoot();
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand);
+    void SetSceneGrass(bool on, float density, float distance, float height, float wind, bool tall, bool flowers);
+    void SetSceneGrassStyle(int type, float longHeight, float flowerAmount, float patches);
+    void SetSceneGrassFlowerBeds(float beds, float size);
+    void SetSceneGrassKinds(const uint8_t *amounts, size_t count);
+    void SetSceneCritters(bool insects, bool fish, float amount);
+    void SetSceneCritterPlayerAction(uint32_t state);
+    void SetSceneCritterHives(const uint32_t *hiveMaps, const float *places, size_t count);
+    void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
+    void SetSceneTallGrassTextures(const uint64_t *hashes, size_t count);
+    void SetSceneGrassMap(uint32_t map);
+    void SetSceneWeedTextures(const uint64_t *hashes, size_t count);
     void SetSceneSandTextures(const uint64_t *hashes, size_t count);
     void SetSceneLampTextures(const uint64_t *hashes, size_t count);
     void SetSceneFireTextures(const uint64_t *hashes, size_t count);
@@ -607,6 +622,30 @@ namespace {
         0x1a5b229900cf51dc, 0x5df2bd92df810920, 0x65d7f51774d6f517, 0x38d2eb489e460671, 0x37ea7fb53d8476bf,
         0x864c46576cf6d66f, 0x6496a585b38c359e, 0x5fc7747fd3682881, 0x051417523e95e419, 0x0094046121ae7630,
         0x85919b047554690d, 0x2134e632976c842b, 0xdeb45d22885ce6ae, 0xeb54025ce2d6dfff, 0xd3a3c48b65567f1c,
+    };
+
+    // 3D grass grows on the levels' grass textures (their RT64 texture hashes, picked by eye from a texture dump of 22
+    // outdoor maps on 2026-10-16 for the old 3D grass), not on other green textures (moss, leaves, walls).
+    constexpr uint64_t grass_textures[] = {
+        0x04b8e6560d7f0373, 0x07e2adeaace237bf, 0x0ba0f140a35638fc, 0x0e4d9a802c7dc7ea,
+        0x131bc9d029e49793, 0x177db5c49582b48d, 0x1acbb6681f918b72, 0x1dd2ae664d368548,
+        0x1fcb6c5e87f783fb, 0x27eae30b3613e31d, 0x37cf9756bf11bfcc, 0x4550fe11ee0e4d34,
+        0x48b2654886cd15c6, 0x4a0cddf9edc01dab, 0x4b0e8cd3ac96bba8, 0x543f46bc9510c161,
+        0x55950894b7abc374, 0x583f4a61dea0c60c, 0x5d56d430aeacb7cf, 0x6f7c66122a9e73d4,
+        0x7557553c55ab1a8a, 0x7727582b32eebc5f, 0x7b5eec9bafbe1838, 0x887e31b8771d7b91,
+        0x9069a11fede45381, 0x92912c9af8ac974f, 0x94e63a3b4b78fc54, 0x9ec2455f025b64df,
+        0x9f1986bf06a9fde4, 0x9fa547ff3c838199, 0xa0b40729970090fe, 0xa181e8f7c27c9e43,
+        0xa4235f087bde04cd, 0xa45e6eb6df215fff, 0xb092ded1029decac, 0xb4e2f23be6235ed4,
+        0xb586ef9810cd32d7, 0xbea28b5e576eeebc, 0xbfcb26d86de25a81, 0xc0555349975fe317,
+        0xc65609b0a5b03fe4, 0xdfe83dc2f43dcf40, 0xe333ef8b4a0b2512, 0xe6a78e76ed50374a,
+        0xe6e8cc803fb5cc26, 0xe6fb1ff1fd886251, 0xe83affdc5057bd6d, 0xea8789c9031a539d,
+        0xf13b3cfd0e5fc100, 0xfbcd4c5990eee6c0,
+    };
+
+    // Tall grass grows along the foot of walls with these textures: the strip of long grass on the sides of the raised
+    // lawns in front of Jiggywiggy's Temple (Wooded Hollow; picked 2026-11-12 with the headless pick and a texture dump).
+    constexpr uint64_t tall_grass_textures[] = {
+        0x9ecdd16b47696c54, 0x8cba02d249bdd9ec,
     };
 
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).
@@ -4399,6 +4438,17 @@ namespace {
         std::vector<uint64_t> fires = build(std::begin(fire_textures), std::end(fire_textures), tooie::effect_pick::effect_fire, true);
         RT64::SetSceneFireTextures(fires.data(), fires.size());
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
+        // 3D grass grows on the grass textures and on every texture the parallax sweep tagged as grassy ground (Grass
+        // shape): a grass layer the game blends over a hill (Jinjo Village) is one of those, and left off the list it was
+        // taken for a track laid over the grass, and the hill went bald.
+        std::vector<uint64_t> grass_all(std::begin(grass_textures), std::end(grass_textures));
+        for (const ParallaxTexture& texture : parallax_textures) {
+            if ((texture.shape == Grass) && (std::find(grass_all.begin(), grass_all.end(), texture.hash) == grass_all.end())) {
+                grass_all.push_back(texture.hash);
+            }
+        }
+        RT64::SetSceneGrassTextures(grass_all.data(), grass_all.size());
+        RT64::SetSceneTallGrassTextures(tall_grass_textures, std::size(tall_grass_textures));
         // Light Source picks make the object itself shine (Slight Glow) and light nothing round it: a light of its own
         // drew a ball of light round the object however it was cast (L, 2026-10-22: "Object glows only").
         std::vector<uint64_t> glow = build(nullptr, nullptr, tooie::effect_pick::effect_glow, true);
@@ -4544,6 +4594,8 @@ namespace {
         }
         RT64::SetSceneParallaxTextures(hashes.data(), ranges.data(), hashes.size(), styles.data(), fines.data());
         RT64::SetSceneSandTextures(sand.data(), sand.size());
+        // Seabed weed grows on the sand under the sea (3D grass).
+        RT64::SetSceneWeedTextures(sand.data(), sand.size());
         parallax_sent_version = version;
     }
 }
@@ -4732,6 +4784,28 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneNpcFeathers((float)(npc_feather_amount / 100.0), (float)(value<double>(npc_feather_size_option, 100.0) / 100.0),
         (float)(value<double>(npc_feather_length_option, 100.0) / 100.0), (float)(value<double>(npc_feather_density_option, 100.0) / 100.0),
         (float)(value<double>(npc_feather_noisiness_option, 50.0) / 100.0), (float)(value<double>(npc_feather_transparency_option, 0.0) / 100.0));
+    // 3D grass (WIP); TOOIE_GRASS=0 or 1 sets it instead (headless).
+    bool grass = shaders && value<bool>(grass_option, false);
+    if (const char* forced = std::getenv("TOOIE_GRASS")) {
+        grass = std::atoi(forced) != 0;
+    }
+    RT64::SetSceneGrass(grass, (float)(value<double>(grass_density_option, 100.0) / 100.0), (float)value<double>(grass_distance_option, 20000.0),
+        (float)(value<double>(grass_height_option, 100.0) / 100.0), 0.5f, value<bool>(grass_long_option, true), value<bool>(grass_flowers_option, true));
+    RT64::SetSceneGrassStyle((int)value<double>(grass_type_option, 4.0), (float)(value<double>(grass_long_height_option, 100.0) / 100.0),
+        (float)(value<double>(grass_flower_amount_option, 100.0) / 100.0), (float)(value<double>(grass_patches_option, 0.0) / 100.0));
+    RT64::SetSceneGrassFlowerBeds((float)(value<double>(grass_flower_beds_option, 100.0) / 100.0), (float)(value<double>(grass_bed_size_option, 100.0) / 100.0));
+    {
+        // Each kind of grass and flower's Amount, a byte each (255 is 300%), the flowers from 48.
+        uint8_t amounts[96] = {};
+        for (const GrassKindOption& kind : grass_kind_options) {
+            const double percent = std::clamp(value<double>(kind.id, 100.0), 0.0, 300.0);
+            amounts[(kind.flower ? 48u : 0u) + kind.bit] = (uint8_t)std::lround(percent * 255.0 / 300.0);
+        }
+        RT64::SetSceneGrassKinds(amounts, sizeof(amounts));
+    }
+    // The small creatures in the 3D grass: insects, fish and how many (they live on the grass, so need it on).
+    RT64::SetSceneCritters(value<bool>(critter_insects_option, true), value<bool>(critter_fish_option, true),
+        (float)(value<double>(critter_amount_option, 100.0) / 100.0));
     const bool tessellation_on = value<bool>(tessellation_section_option, true);
     bool snow = shaders && tessellation_on && value<bool>(deep_snow_option, false);
     if (const char* forced = std::getenv("TOOIE_DEEP_SNOW")) {
@@ -4915,6 +4989,97 @@ bool tooie::picture_filters::applying_effects_preset() {
     return applying_preset;
 }
 
+// The 3D grass's bee hives (critter_hives.txt), kept here and sent to RT64 (rt64_critters.h).
+namespace {
+    struct CritterHive {
+        uint32_t map;
+        float p[3];
+    };
+    std::mutex critter_hives_mutex;
+    std::vector<CritterHive> critter_hives;
+
+    std::filesystem::path critter_hives_path() {
+        return recompui::file::get_app_folder_path() / "critter_hives.txt";
+    }
+
+    // load: read the file first. Then writes the file (when not loading) and sends the list.
+    void critter_hives_send(bool load) {
+        std::lock_guard lock{ critter_hives_mutex };
+        if (load) {
+            critter_hives.clear();
+            std::ifstream in(critter_hives_path());
+            std::string line;
+            while (std::getline(in, line)) {
+                std::istringstream fields(line);
+                std::string map;
+                CritterHive hive{};
+                if ((fields >> map >> hive.p[0] >> hive.p[1] >> hive.p[2]) && !map.empty() && (map[0] != '#')) {
+                    hive.map = (uint32_t)std::strtoul(map.c_str(), nullptr, 16);
+                    critter_hives.push_back(hive);
+                }
+            }
+        }
+        else {
+            std::ofstream out(critter_hives_path(), std::ios::trunc);
+            out << "# The 3D grass's bee hives: map (hex), x, y, z. Made with the console's critters hive add.\n";
+            for (const CritterHive& hive : critter_hives) {
+                char line[96];
+                std::snprintf(line, sizeof(line), "%X %.0f %.0f %.0f\n", hive.map, hive.p[0], hive.p[1], hive.p[2]);
+                out << line;
+            }
+        }
+        std::vector<uint32_t> maps;
+        std::vector<float> places;
+        for (const CritterHive& hive : critter_hives) {
+            maps.push_back(hive.map);
+            places.insert(places.end(), hive.p, hive.p + 3);
+        }
+        RT64::SetSceneCritterHives(maps.data(), places.data(), maps.size());
+    }
+}
+
+void tooie::picture_filters::critter_hive_add(uint32_t map, const float place[3]) {
+    {
+        std::lock_guard lock{ critter_hives_mutex };
+        critter_hives.push_back({ map, { place[0], place[1], place[2] } });
+    }
+    critter_hives_send(false);
+}
+
+bool tooie::picture_filters::critter_hive_remove(uint32_t map, const float place[3], float reach) {
+    {
+        std::lock_guard lock{ critter_hives_mutex };
+        int nearest = -1;
+        float best = reach;
+        for (size_t i = 0; i < critter_hives.size(); i++) {
+            const CritterHive& hive = critter_hives[i];
+            const float d = std::sqrt((hive.p[0] - place[0]) * (hive.p[0] - place[0]) + (hive.p[1] - place[1]) * (hive.p[1] - place[1]) +
+                (hive.p[2] - place[2]) * (hive.p[2] - place[2]));
+            if ((hive.map == map) && (d <= best)) {
+                best = d;
+                nearest = (int)i;
+            }
+        }
+        if (nearest < 0) {
+            return false;
+        }
+        critter_hives.erase(critter_hives.begin() + nearest);
+    }
+    critter_hives_send(false);
+    return true;
+}
+
+std::vector<std::string> tooie::picture_filters::critter_hive_lines() {
+    std::lock_guard lock{ critter_hives_mutex };
+    std::vector<std::string> lines;
+    for (const CritterHive& hive : critter_hives) {
+        char line[96];
+        std::snprintf(line, sizeof(line), "hive on map 0x%X at %.0f %.0f %.0f", hive.map, hive.p[0], hive.p[1], hive.p[2]);
+        lines.push_back(line);
+    }
+    return lines;
+}
+
 void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
     {
@@ -4989,6 +5154,15 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
 
     // The underwater look eases in and out over a fifth of a second.
     const uint32_t state = player_state(rdram);
+    // (The 3D grass's creatures are knocked about by Banjo's attacks, and their hives are read once.)
+    RT64::SetSceneCritterPlayerAction(state);
+    {
+        static bool hives_sent = false;
+        if (!hives_sent) {
+            hives_sent = true;
+            critter_hives_send(true);
+        }
+    }
     const auto now = std::chrono::steady_clock::now();
     const float dt = (underwater_at == std::chrono::steady_clock::time_point{}) ? 0.0f :
         std::min(std::chrono::duration<float>(now - underwater_at).count(), 0.25f);
@@ -5123,6 +5297,12 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     // Deep snow on the maps with snow only.
     {
         const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
+        // (3D grass takes the map too, for each level's own look and the seabed weed.)
+        static uint16_t grass_map_sent = 0xFFFF;
+        if (map != grass_map_sent) {
+            grass_map_sent = map;
+            RT64::SetSceneGrassMap(map);
+        }
         // (Elsewhere tessellated sand, through the same: most of the snow's ankle depth (a third was too shallow to
         // see a footprint), on sand only.)
         const bool sand = tessellated_sand && !(deep_snow && snowy_map(map));
@@ -5739,6 +5919,89 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Tessellated Sand",
         "Sandy ground takes footprints: Banjo, the NPCs and the enemies press shallow, detailed prints into it wherever they touch it, and the wind has left ripples over it, big and small, with grains glittering in the sun and a sheen off the ripples seen low across them. As Tessellated Snow, with its detail, fills back in and distance settings. Needs a graphics card with tessellation.",
         false);
+    // Graphics > 3D Grass (notes/cheap-grass-plan.md), after Tessellation: detail on the ground as it is. Its settings
+    // open under its switch (menu_tree.cpp).
+    graphics.add_bool_option(
+        grass_option,
+        "3D Grass",
+        "Short tufts of grass blades grow on the grassy ground, coloured by the ground they stand on, swaying in the wind and pushed aside by Banjo; long grass grows along the sides of the raised lawns. The blades are placed once and kept, and only those near enough are drawn, so it stays cheap. Drawn on the picture, so nothing in the game changes. Work in progress.",
+        false);
+    graphics.add_number_option(
+        grass_density_option,
+        "3D Grass Density",
+        "How close together the blades grow, in percent. Lower is lighter on the graphics card.",
+        25, 200, 5, 0, false, 100);
+    graphics.add_number_option(
+        grass_distance_option,
+        "3D Grass Distance",
+        "How far from the camera blades grow, in the game's units: 20000 covers a whole level. Further away they are fewer and broader, about as far apart on screen near and far, and drawn simpler, so the cost stays small; they fade out over the last part.",
+        2000, 40000, 1000, 0, false, 20000);
+    graphics.add_number_option(
+        grass_height_option,
+        "Grass Height",
+        "How tall the grass on the ground is, in percent. 100 is about up to Banjo's shins. Tall Grass Height sets the long grass on the lawns' sides.",
+        50, 200, 5, 0, false, 100);
+    graphics.add_bool_option(
+        grass_long_option,
+        "Replace Long Grass",
+        "Long 3D blades grow along the foot of the sides of the raised lawns (in front of Jiggywiggy's Temple), slopes too, and the game's flat painted strip of grass behind them is smoothed out. Tall Grass Height sets how tall. Off keeps the game's strip.",
+        true);
+    graphics.add_bool_option(
+        grass_flowers_option,
+        "Flowers",
+        "Little flowers grow among the 3D grass near the camera: five petals round a yellow or orange centre on a stem standing a little above the blades, some bigger than others, in beds of the game's bright colours (yellow, white, pink, red, blue and violet) with plain lawn between. Off leaves them out. Costs next to nothing.",
+        true);
+    graphics.add_number_option(
+        grass_flower_amount_option,
+        "Flower Amount",
+        "How many flowers grow, in percent: 100 is a few beds of flowers with a lone one here and there, 300 three times as full. 0 is none.",
+        0, 300, 10, 0, false, 100);
+    graphics.add_number_option(
+        grass_flower_beds_option,
+        "Flower Beds",
+        "How much of the grass is flower beds, in percent: 100 is about a tenth of it, 300 about a third, 0 none (only a lone flower here and there). Flower Amount sets how full each bed is. The grass near you is worked out again when this changes.",
+        0, 300, 10, 0, false, 100);
+    graphics.add_number_option(
+        grass_bed_size_option,
+        "Bed Size",
+        "How big each flower bed is, in percent: 25 gives many small beds dotted about, 400 a few big fields of flowers. The share of the grass in beds stays the same. The grass near you is worked out again when this changes.",
+        25, 400, 25, 0, false, 100);
+    graphics.add_number_option(
+        grass_long_height_option,
+        "Tall Grass Height",
+        "How tall the long grass on the lawns' sides is, in percent (with Replace Long Grass). Grass Height sets the rest.",
+        50, 200, 5, 0, false, 100);
+    graphics.add_number_option(
+        grass_patches_option,
+        "Grass Patches",
+        "The grass grows in patches with bare ground between, instead of as an even lawn, in percent: low gives big patches close together, high small ones far apart. 0 is an even lawn. Changes at once, without working the grass out again.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_bool_option(
+        critter_insects_option,
+        "Land Creatures",
+        "Small low-poly creatures live round Banjo, each level its own: bees and butterflies in the meadows, dragonflies in Terrydactyland, flies and beetles in Glitter Gulch Mine, frosty moths on Hailfire Peaks' icy side, fireflies and moths at night; birds that peck on the ground and wheel overhead (seagulls by the sea, crows in Grunty Industries), frogs that hop, and crabs scuttling on Jolly Roger's Lagoon's shore. They scatter when Banjo comes near and settle back once he has gone, a bee may buzz round him first, his attacks send them tumbling, and the wind carries the light ones. Costs next to nothing.",
+        true);
+    graphics.add_bool_option(
+        critter_fish_option,
+        "Sea Creatures",
+        "Under the sea in Jolly Roger's Lagoon: small schools of chunky, brightly coloured fish letting bubbles go, crabs on the seabed, and a sea turtle and a ray gliding past. They dart away when Banjo swims at them. Costs next to nothing.",
+        true);
+    graphics.add_number_option(
+        critter_amount_option,
+        "Creature Amount",
+        "How many insects and fish there are, in percent: 100 is a few about at a time, 200 twice as many, 0 none.",
+        0, 200, 10, 0, false, 100);
+    graphics.add_number_option(
+        grass_type_option,
+        "Grass Type",
+        "1: grass. 2: clover, low three-leaved clovers with a few blades among them. 3: meadow, grass with patches of clover. 4 (the default): wild grass, taller and thinner blades. The grass is worked out again when this changes, so it blinks once.",
+        1, 4, 1, 0, false, 4);
+    for (const GrassKindOption& kind : grass_kind_options) {
+        const std::string description = std::string(kind.description) + (kind.flower
+            ? " In percent of its usual share of the level's flowers: 0 none, 300 up to three times as many (Flower Amount sets how many flowers there are)."
+            : " In percent of its usual share of the level's blades: 0 none, 300 up to three times as many.");
+        graphics.add_number_option(kind.id, kind.name, description, 0, 300, 10, 0, false, 100);
+    }
     graphics.add_bool_option(
         character_section_option,
         "Character Shaders",
@@ -6029,7 +6292,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &crt_mask_option, &crt_curvature_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &toon_style_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &lighting_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &texture_cartoon_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &relighting_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &parallax_smoothness_option, &ground_displacement_option, &ground_displacement_distance_option, &fur_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &clump_fur_option, &clump_fur_size_option, &clump_fur_length_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_style_option, &npc_clump_fur_option, &npc_clump_fur_size_option, &npc_clump_fur_length_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option,
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &toon_style_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &lighting_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &ray_tracing_relighting_option, &ray_tracing_denoise_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &texture_cartoon_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &relighting_option, &deep_snow_option, &tessellated_sand_option, &grass_option, &grass_density_option, &grass_distance_option, &grass_height_option, &grass_long_option, &grass_flowers_option, &grass_flower_amount_option, &grass_flower_beds_option, &grass_bed_size_option, &grass_long_height_option, &grass_type_option, &grass_patches_option, &critter_insects_option, &critter_fish_option, &critter_amount_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &parallax_smoothness_option, &ground_displacement_option, &ground_displacement_distance_option, &fur_option, &banjo_fur_option, &char_wet_option, &char_snow_option, &char_dirt_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &clump_fur_option, &clump_fur_size_option, &clump_fur_length_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_style_option, &npc_clump_fur_option, &npc_clump_fur_size_option, &npc_clump_fur_length_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &reflections_section_option, &toon_section_option,
                                    &tessellation_section_option, &character_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
@@ -6037,7 +6300,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
             [in_presets, id](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
                 // Not while graphics.json is loading: the file's Lighting and Ray Tracing already agree, and the one
                 // loaded first would otherwise be "corrected" against the other's default, which saves the file half
-                // loaded and writes every setting not yet read back at its default.
+                // loaded and writes every setting not yet read (3D Grass among them) back at its default.
                 if (context != recomp::config::OptionChangeContext::Load) {
                     sync_lighting(*id, value);
                 }
@@ -6057,6 +6320,22 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
             });
     }
 
+
+    // The grass and flower kinds' Amounts apply the moment they change, as the other settings do.
+    for (const GrassKindOption& kind : grass_kind_options) {
+        graphics.add_option_change_callback(kind.id,
+            [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+                if (context == recomp::config::OptionChangeContext::Temporary) {
+                    if (applying_preset) {
+                        return;
+                    }
+                    // Saving applies the change, which calls back here as Permanent.
+                    graphics_config().save_config();
+                } else {
+                    apply();
+                }
+            });
+    }
 
     // Lighting shows only the settings of what it is set to (L, 2026-11-12): Relighting's strength, or all of Ray Tracing's.
     graphics.update_option_hidden(ray_tracing_option, true);
@@ -6118,6 +6397,7 @@ std::vector<tooie::picture_filters::CostEffect> tooie::picture_filters::cost_eff
     if (value<uint32_t>(lighting_option, (uint32_t)Lighting::None) == (uint32_t)Lighting::Relighting) {
         add(&relighting_option, 0.0);
     }
+    add(&grass_option, false);
     // Ray tracing as a whole (its effects fall back to their screen-space forms), then its own extras.
     add(&ray_tracing_option, false);
     if (ray_tracing_active()) {

@@ -555,6 +555,58 @@ or not Parallax on original textures is on, and its height map wins over the
 game's brightness for that texture. Height maps are loaded the first time
 their texture is drawn.
 
+## Graphics: 3D Grass
+
+- **3D Grass** (off by default; on the Graphics tab after Tessellation, its settings under its switch): tufts of broad grass blades
+  grow on the grassy ground, coloured by the ground under them (its texture, shading and fog),
+  swaying in the wind, out across the whole level. Banjo treads it down where he walks: the
+  blades lie flat and a little darker in his trail and rise again over about three seconds,
+  and grass he runs past ripples.
+  No blades grow under roads, paths or floors laid on the grass. Each patch of grass has its
+  blades worked out once, the first time it comes within reach, and keeps them; each frame
+  only picks the tiles near enough and in view. Ground that comes into view near the camera
+  gets its grass the frame it appears. On an RTX 5080 at
+  2534x1140 it measured within the noise (under 0.05 ms of GPU time) at the defaults and
+  0.13 ms at Density 200, with about 0.03 ms of CPU a frame; the old 3D grass measured 0.8
+  to 1.0 ms at its default reach in the same spot. Settings: **Density** (25 to 200%),
+  **Distance** (2000 to 40000 game units, 20000 by default: past 900 units the blades thin
+  out with the square of the distance and grow broader, so they stay about as far apart on
+  screen; past 1000 each is one triangle; they fade out over the last 15%), **Grass Height**
+  (50 to 200%), **Grass Type** (1 grass, 2 clover: a carpet of three-leaved clovers, 3 meadow:
+  grass with clover patches, 4 wild, the default: taller, thinner blades; the grass is worked
+  out again when it changes, so it blinks once), **Grass Patches** (0 to 100%, 0 by default:
+  the grass grows in patches with bare ground between, small and far apart at high values;
+  changes at once), **Replace Long Grass** (on: long blades, about 1.4
+  times the side's height, grow along the foot of the sides of the raised lawns in front of
+  Jiggywiggy's Temple, down sloping feet too, and the game's painted strip behind them is
+  smoothed out; off keeps the strip), **Tall Grass Height** (50 to 200%), **Flowers** (on:
+  flowers of five petals round a yellow or orange centre, a third of them bigger, on stems
+  a little above the blades, in beds of the game's bright colours with plain lawn between,
+  out as far as the grass, thinning and growing bigger with distance; drawn in their own
+  small pass), **Flower Amount** (0 to 300%: how full the beds are), **Flower Beds** (0 to
+  300%, 100 by default: how much of the grass is flower beds, about a tenth at 100 and a
+  third at 300; 0 leaves only a lone flower here and there) and **Bed Size** (25 to 400%,
+  100 by default: small beds dotted about to a few big fields of flowers, the same share of
+  the grass either way; both work the nearby grass out again when changed), then an Amount for each kind of grass and flower the levels grow (0 to
+  300% of its usual share, 100 by default, 0 none): **Fine Blades**, **Broad Blades** and
+  **Curling Blades** (the mix in every level's usual grass; the rest are plain blades), each
+  level's own grasses (Timothy, Sedge and Blue Fescue in the meadows, Horsetails, Tussocks, Club Moss and Ferns in
+  Terrydactyland, Palm Fronds, Cattail Reeds, Bamboo Shoots and Jungle Leaves in Mayahem Temple, Yucca Spikes,
+  Tumbleweed Tufts and Sagebrush in Glitter Gulch Mine, Pennant Grass, Topiary Tufts and Neon Grass in Witchyworld,
+  Ice Shards, Frozen Tufts and Cotton Grass, Charred Stalks, Ash Grass and Obsidian Spikes in Hailfire Peaks, Dock Leaves,
+  Wire Grass and Toxic Weeds in Grunty Industries, Sea Oats, Beach Succulents and Sea Rushes in Jolly Roger's Lagoon, Candy
+  Grass, Cloud Tufts and Rainbow Grass in Cloud Cuckooland; the level's usual blade makes up the rest), the
+  seaweeds (Kelp, Eelgrass, Sea Lettuce, Bladder Wrack, Red Weed; lower, fewer plants) and each level's
+  three flowers (Daisies, Bluebells, Buttercups, Orchids, Bromeliads, Birds of Paradise,
+  Cycads, Magnolias, Giant Puffballs, Barrel Cacti, Crystal Sprouts, Desert Marigolds,
+  Carnival Pinwheels, Toadstools, Balloon Flowers, Snowdrops, Ice Crystal Clusters,
+  Edelweiss, Fire Lilies, Flame Poppies, Ember Puffs, Dandelions, Dandelion Clocks,
+  Thistles, Sea Pinks, Sea Holly, Sea Lavender, Candy Puffs, Lollipop Swirls, Sugar Stars;
+  the meadows and Cloud Cuckooland grow the usual flowers in the rest, the
+  other levels fewer flowers when lowered). All apply at once. Console:
+  `grass` prints what it holds and drew last frame and how long it took, `grass rebake` works
+  the blades out again. Plan and research: notes/cheap-grass-plan.md.
+
 ## Graphics: SMAA Anti-Aliasing
 
 - **SMAA Anti-Aliasing**: Off, Low, Medium, High or Ultra. Smooths jagged edges

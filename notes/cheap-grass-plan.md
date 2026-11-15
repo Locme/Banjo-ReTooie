@@ -4,6 +4,58 @@ Goal: 3D grass blades on the grassy ground, and the game's tall grass replaced w
 small enough to leave on. Budget: **under 0.5 ms GPU at 1440p on L's card in Spiral Mountain, under 0.1 ms CPU a
 frame**, measured with the console's `costcheck`. Nothing here is built or tested yet.
 
+## Status (2026-11-12, branch grass-cheap)
+
+Built and run headless on this PC (RTX 5080, 2534x1140, Vulkan); not yet played on L's PC or a Steam Deck.
+
+- Steps 1 to 6 are in: the bake, near and mid bands, wind, Banjo's push, the tall grass and the four settings
+  (Graphics > 3D Grass), with the `grass` console command.
+- Measured with `costcheck`. Wooded Hollow at the defaults: 0.00 to 0.02 ms of GPU time (about 10,000 blades).
+  Spiral Mountain: 0.02 to 0.05 ms. Density 200 and Distance 10000 (the frame budget reached): 0.13 ms. The CPU
+  spends about 0.03 ms a frame on grass, and baking about 3 to 7 ms on a frame a patch first comes within reach.
+
+What changed from the plan below, and why:
+
+- **Colour.** Each blade's colour is worked out in the vertex shader: the ground's own texture, colour combiner and
+  fog. The pixel shader returns it at once. The first try ran the full material per blade pixel: 0.53 ms for 10,000
+  blades.
+- **Blade shape.** Near blades are 9 vertices (one bend and a tip), not 15. The frame budget is 80,000 blades, not
+  150,000. That halved the worst case.
+- **Bake timing.** Blades are baked at the end of a frame and only for patches within reach (1.3 x Distance), at
+  most about 3 ms a frame. Baking a whole level at once was a 98 ms stall.
+- **Roads and paths.** These are the frame's flat non-grass draws. A decal covers the grass it lies on; other
+  ground only covers grass when it sits above it.
+- **Tufts.** Tufts of 4 blades fan out from one root, with one colour and one rank each, so a tuft thins out as one.
+- **Edge-on blades.** A blade seen edge-on turns part of the way to the camera. Its widening to one pixel is capped
+  at 3x: uncapped, edge-on far blades became giant slabs.
+- **Tall grass.** It only grows on walls up to 90 units high.
+
+Later the same day (L: "0.5 is also too high", "really good view distance", replace the long grass):
+
+- **Distance.** Distance is 15000 by default (up to 40000). Past 900 units the share of blades kept falls with the
+  square of the distance (about even spacing on screen), and kept blades widen up to 4x. A whole draw is passed over
+  at once when its box is out of view or reach.
+- **Replace Long Grass** (on by default). The strip's draw (one whose triangles are all wall) is drawn through the
+  uber pixel shader with RASTER_GRASS_WALL: its texture averaged to a soft plain green. Skipping it left holes, since
+  the strip is the lawn's side. Tall blades (half again the strip's height) have their own tiles, drawn whole
+  wherever in reach.
+- **Old against new**, same spot (Wooded Hollow start, RTX 5080, 2534x1140, the Effect Cost Check):
+
+  | Version | Setting | GPU time |
+  |---|---|---|
+  | Old 3D grass (commit 792ef342) | amount 50, default 1800 reach | 0.81 and 1.01 ms (two runs) |
+  | Old 3D grass | 6000 reach | 2.05 ms |
+  | New 3D grass | defaults, 15000 reach | -0.12 to 0.02 ms (within the noise) |
+  | New 3D grass | Density 200 (frame budget reached) | 0.13 ms |
+
+  The old runs were noisy: no pipeline cache, and frame times of 33 to 36 ms against 8.3 ms.
+
+Still to do:
+
+- Re-add grass and tall-grass picks to Shader Effects pick mode.
+- A trample map for Banjo's trail.
+- Check more levels: Mayahem Temple, Witchyworld's edges, Cloud Cuckooland.
+
 ## The look: like EmmetOT/HDRPGrass
 
 L's reference is https://github.com/EmmetOT/HDRPGrass, a stylised blade field after Roystan's grass tutorial:

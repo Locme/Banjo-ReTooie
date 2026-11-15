@@ -31,6 +31,7 @@
 #include "tooie_point_lights.h"
 #include "tooie_voxel_layer.h"
 #include "tooie_player_cheats.h"
+#include "tooie_picture_filters.h"
 #include "tooie_progress_cheats.h"
 #include "tooie_rdram.h"
 #include "tooie_game.h"
@@ -107,6 +108,17 @@ namespace RT64 {
 
 extern SDL_Window* window; // src/main/main.cpp
 extern "C" void func_800D035C(uint8_t* rdram, recomp_context* ctx); // RecompiledFuncs: a collectible's count (1 Jiggies)
+
+// 3D grass (rt64_grass.cpp), for the grass command.
+namespace RT64 {
+    void SceneGrassStatsText(char *out, size_t size);
+    void SceneGrassRebake();
+    // The small creatures in the grass (rt64_critters.cpp), for the critters command.
+    void SceneCrittersStatsText(char *out, size_t size);
+    void SceneCrittersListText(char *out, size_t size);
+    void SceneCrittersSpawn(int kind, int count);
+    void SceneCrittersReset();
+}
 
 namespace {
 using recomp::config::Config;
@@ -3595,6 +3607,117 @@ void cmd_version(Ctx&) {
     print("Banjo Re-Tooie " + recomp::get_project_version().to_string());
 }
 
+// grass [rebake]: 3D grass's blades and what it drew last frame (rt64_grass.cpp), or throws them away to be baked again.
+void cmd_grass(Ctx& c) {
+    if ((c.w.size() >= 2) && (lower(c.w[1]) == "rebake")) {
+        RT64::SceneGrassRebake();
+        print("3D grass is baked again as its ground is drawn");
+        return;
+    }
+    if (c.w.size() >= 2) { error("grass [rebake]"); return; }
+    char text[1024];
+    RT64::SceneGrassStatsText(text, sizeof(text));
+    print(text);
+}
+
+// critters [list | spawn [kind] [n] | reset]: the small creatures in the 3D grass (rt64_critters.cpp): what is about,
+// each one, setting some down round Banjo (to walk into and watch scatter), or starting them all afresh.
+void cmd_critters(Ctx& c) {
+    static const char* kinds[] = { "bee", "butterfly", "dragonfly", "moth", "firefly", "beetle", "fly", "fish", "bird", "frog", "crab", "turtle", "ray", "bubble" };
+    const std::string sub = (c.w.size() >= 2) ? lower(c.w[1]) : std::string();
+    if (sub.empty()) {
+        char text[1024];
+        RT64::SceneCrittersStatsText(text, sizeof(text));
+        print(text);
+        return;
+    }
+    if (sub == "list") {
+        static char text[16384];
+        RT64::SceneCrittersListText(text, sizeof(text));
+        std::string all(text);
+        size_t start = 0;
+        while (start < all.size()) {
+            const size_t end = all.find('\n', start);
+            print(all.substr(start, (end == std::string::npos) ? std::string::npos : end - start));
+            if (end == std::string::npos) {
+                break;
+            }
+            start = end + 1;
+        }
+        return;
+    }
+    if (sub == "reset") {
+        RT64::SceneCrittersReset();
+        print("the critters go, and the level's own come back");
+        return;
+    }
+    if (sub == "hive") {
+        // critters hive add | remove | list | bees: the hives bees live round (critter_hives.txt).
+        const std::string what = (c.w.size() >= 3) ? lower(c.w[2]) : std::string("list");
+        if (what == "list") {
+            const std::vector<std::string> lines = tooie::picture_filters::critter_hive_lines();
+            if (lines.empty()) {
+                print("no hives yet (stand at one and use critters hive add)");
+            }
+            for (const std::string& line : lines) {
+                print(line);
+            }
+            return;
+        }
+        if (what == "bees") {
+            RT64::SceneCrittersSpawn(-2, 6);
+            print("bees set down at the hives near Banjo");
+            return;
+        }
+        float p[3];
+        if (!tooie::player_cheats::position(c.rdram, p)) { error("there is no player yet"); return; }
+        const uint32_t map = (uint32_t)(uint16_t)tooie::rdram::read_half(c.rdram, 0x80132DC2u);
+        if (what == "add") {
+            // (A little above his feet: the mouth of the hive, round which its bees buzz.)
+            const float place[3] = { p[0], p[1] + 60.0f, p[2] };
+            tooie::picture_filters::critter_hive_add(map, place);
+            print(format("hive added on map 0x%X at %.0f %.0f %.0f (kept in critter_hives.txt)", map, place[0], place[1], place[2]));
+            return;
+        }
+        if (what == "remove") {
+            print(tooie::picture_filters::critter_hive_remove(map, p, 600.0f) ? "the nearest hive is taken away" : "no hive within 600 units");
+            return;
+        }
+        error("critters hive [add | remove | list | bees]");
+        return;
+    }
+    if (sub == "spawn") {
+        int kind = -1;
+        int count = 6;
+        size_t next = 2;
+        if (c.w.size() > next) {
+            const std::string name = lower(c.w[next]);
+            for (int k = 0; k < (int)std::size(kinds); k++) {
+                if ((name == kinds[k]) || (name == std::string(kinds[k]) + "s") || ((k == 6) && (name == "flies")) || ((k == 1) && (name == "butterflies")) ||
+                    ((k == 2) && (name == "dragonflies")) || ((k == 4) && (name == "fireflies"))) {
+                    kind = k;
+                    next++;
+                    break;
+                }
+            }
+            if ((kind < 0) && (name != "any") && !std::isdigit((unsigned char)name[0])) {
+                error("critters spawn [bee|butterfly|dragonfly|moth|firefly|beetle|fly|fish|bird|frog|crab|turtle|ray|bubble|any] [n]");
+                return;
+            }
+            if (name == "any") {
+                next++;
+            }
+        }
+        if (c.w.size() > next) {
+            count = std::clamp(std::atoi(c.w[next].c_str()), 1, 96);
+        }
+        RT64::SceneCrittersSpawn(kind, count);
+        print(format("%d %s set down round Banjo (with 3D grass on, on its ground)", count, (kind < 0) ? "of the level's critters" : kinds[kind]));
+        return;
+    }
+    error("critters [list | spawn [kind] [n] | reset | hive [add|remove|list|bees]]");
+}
+
 void cmd_vram(Ctx&) {
     std::string s = tooie::vram_log::summary();
     print(s.empty() ? "no VRAM figures yet" : s);
@@ -4583,6 +4706,8 @@ const std::vector<Command>& commands() {
         { "challenge", {}, true, "challenge [n]", "Jiggywiggy's challenges done (0 to 11), so challenge n + 1 is next (flags 0x35C; saving keeps it)", cmd_challenge },
         { "version", {}, false, "version", "the build's version", cmd_version },
         { "vram", {}, false, "vram", "the VRAM figures the VRAM log keeps", cmd_vram },
+        { "grass", {}, false, "grass [rebake]", "3D grass: blades kept, what the last frame drew and the time it took, or bake them again", cmd_grass },
+        { "critters", { "critter" }, false, "critters [list | spawn [kind] [n] | reset | hive [add|remove|list|bees]]", "the creatures in the 3D grass and the sea: what is about, each one, set some down near Banjo, start afresh, or place bee hives", cmd_critters },
         { "gfx", { "gfxbudget" }, true, "gfx", "how full the last display list was", cmd_gfx },
         { "crash", {}, false, "crash test confirm", "crash the game on purpose, to check the crash report", cmd_crash },
         { "hang", {}, true, "hang test <seconds>", "hold the game thread, to check the hang watchdog", cmd_hang },

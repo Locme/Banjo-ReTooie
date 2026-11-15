@@ -30,6 +30,8 @@
 namespace RT64 {
     // rt64-ext/src/render/rt64_scene_effects.h.
     void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
+    // rt64-ext/src/render/rt64_critters.h: how light the day is, for the small creatures in the 3D grass.
+    void SetSceneCritterDaylight(bool cycle, float light);
     void SetSceneSun(bool custom, float x, float y, float z);
     void SetSceneWeather(float rain, float flash, bool snow);
     void SetSceneRainDetail(float wet, bool drops);
@@ -460,6 +462,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
             const float none[3] = { 1.0f, 1.0f, 1.0f };
             RT64::SetSceneTimeOfDay(false, none, 1.0f, false, false, false);
             RT64::SetSceneWeather(0.0f, 0.0f, false);
+            RT64::SetSceneCritterDaylight(false, 1.0f);
         }
         return;
     }
@@ -584,6 +587,8 @@ void tooie::day_night::tick(uint8_t* rdram) {
     // Height: half to twice the usual; thickness: a third to five thirds; speed: still to four times.
     RT64::SetSceneClouds(cloud[0], std::pow(4.0f, cloud[1] - 0.5f), 0.2f + 0.8f * cloud[2], (cloud[3] * 2.0f) * (cloud[3] * 2.0f));
     RT64::SetSceneTimeOfDay(true, look.tint, shafts, option_on(tooie::day_night::flare_option), fireflies, clouds);
+    // (The grass's insects turn to fireflies and moths from dusk to dawn: the light's brightness, 1 by day.)
+    RT64::SetSceneCritterDaylight(true, 0.3f * look.tint[0] + 0.59f * look.tint[1] + 0.11f * look.tint[2]);
     RT64::SetSceneSun(true, sky[0], sky[1], sky[2]);
     // The moon goes round its phases in eight days: full on the first night, waning, new on the fifth, waxing.
     // Held at full when a time of day is held. Test aid: TOOIE_MOON_PHASE=<0 new to 7>.

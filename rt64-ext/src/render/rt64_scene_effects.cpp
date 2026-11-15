@@ -4,6 +4,7 @@
 
 #include "rt64_scene_effects.h"
 #include "rt64_scene_lights.h"
+#include "rt64_grass.h"
 #include "shared/rt64_gpu_tile.h"
 #include "shared/rt64_rdp_tile.h"
 #include "rt64_gpu_sections.h"
@@ -2126,8 +2127,9 @@ namespace RT64 {
         float viewportWidth, float viewportHeight, uint64_t workloadId, interop::FrameParams &frameParams)
     {
         SceneEffectsSettings settings = GetSceneEffects();
-        // (Deep snow, Kazooie's and NPCs' feathers and parallax mapping need the camera's terms worked out here too.)
-        if ((!settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f) && (settings.groundDisplacement <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
+        // (Deep snow, Kazooie's and NPCs' feathers, parallax mapping and 3D grass need the camera's terms worked out here too.)
+        if ((!settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f) && (settings.groundDisplacement <= 0.0f) &&
+            !SceneGrassSettings().on) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
             return false;
         }
         UsePlayerFrame(settings, workloadId);

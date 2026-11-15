@@ -86,6 +86,7 @@ void tooie::menu_tree::classify() {
             { &toon_section_option, { &toon_style_option, &toon_characters_option, &toon_world_option } },
             { &tessellation_section_option, { &deep_snow_option, &tessellated_sand_option } },
             { &deep_snow_option, { &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option } },
+            { &grass_option, { &grass_density_option, &grass_distance_option, &grass_height_option, &grass_type_option, &grass_patches_option, &grass_long_option, &grass_long_height_option, &grass_flowers_option, &grass_flower_amount_option, &grass_flower_beds_option, &grass_bed_size_option, &critter_insects_option, &critter_fish_option, &critter_amount_option } },
             // Banjo Fur and NPC Fur: each coat's settings sit under its choice (only the chosen coat's show,
             // picture_filters.cpp), so they read as part of it (L, 2026-11-15). The Character Shaders menu is gone.
             { &fur_option, { &clump_fur_option, &clump_fur_size_option, &clump_fur_length_option, &banjo_fur_option,
@@ -105,6 +106,10 @@ void tooie::menu_tree::classify() {
             if (const auto found = by_id.find(*open); found != by_id.end()) {
                 graphics_config->set_option_expanded(found->second, true);
             }
+        }
+        // (Each grass and flower kind's switch under 3D Grass too.)
+        for (const GrassKindOption& kind : grass_kind_options) {
+            graphics_config->set_option_parent(kind.id, grass_option);
         }
     }
     {

@@ -142,7 +142,12 @@ namespace {
         const char* v = std::getenv("TOOIE_BURST_FRAMES");
         return v != nullptr && std::atoi(v) > 0 ? (size_t)std::atoi(v) : (size_t)150;
     }();
-    constexpr uint32_t burst_shrink = 4;
+    // TOOIE_BURST_SHRINK=<1 to 8> shrinks bursts less (1 keeps them full size, for flicker a pixel wide).
+    const uint32_t burst_shrink = [] {
+        const char* v = std::getenv("TOOIE_BURST_SHRINK");
+        const int n = v != nullptr ? std::atoi(v) : 0;
+        return (n >= 1 && n <= 8) ? (uint32_t)n : 4u;
+    }();
     struct Small {
         uint32_t width;
         uint32_t height;

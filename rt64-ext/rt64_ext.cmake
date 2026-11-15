@@ -25,6 +25,8 @@ target_sources(rt64 PRIVATE
     ${RT64_EXT_DIR}/src/render/rt64_dlss.cpp
     ${RT64_EXT_DIR}/src/render/rt64_ffx_upscaler.cpp
     ${RT64_EXT_DIR}/src/render/rt64_photo_grade.cpp
+    ${RT64_EXT_DIR}/src/render/rt64_grass.cpp
+    ${RT64_EXT_DIR}/src/render/rt64_critters.cpp
     ${RT64_EXT_DIR}/src/hle/rt64_present_queue_ext.cpp
     ${RT64_EXT_DIR}/src/hle/rt64_texture_dump_writer.cpp
     ${RT64_EXT_DIR}/src/render/rt64_texture_cache_ext.cpp
@@ -97,6 +99,11 @@ rt64_ext_shader(build_compute_shader rt64 "src/shaders/HeightBakeCS.hlsl")
 
 # Kazooie's feathers (geometry shader; D3D12 and Vulkan only, see build_geometry_shader in RT64's CMakeLists.txt).
 rt64_ext_shader(build_geometry_shader rt64 "src/shaders/FeatherGS.hlsl")
+# 3D grass blades (vertex shader with no vertex buffers, drawn with the uber pixel shader; rt64_grass.cpp).
+rt64_ext_shader(build_vertex_shader rt64 "src/shaders/GrassBladeVS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/GrassBladePS.hlsl")
+# The small creatures in the 3D grass (the same, their shapes built from the vertex number; rt64_critters.cpp).
+rt64_ext_shader(build_vertex_shader rt64 "src/shaders/CritterVS.hlsl")
 
 # Displaced ground: floors tessellated and pushed down (hull and domain shaders; D3D12 and Vulkan only).
 rt64_ext_shader(build_tessellation_shaders rt64 "src/shaders/GroundTess.hlsl" "src/shaders/GroundTessHS.hlsl" "src/shaders/GroundTessDS.hlsl")

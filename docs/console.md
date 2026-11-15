@@ -2112,6 +2112,57 @@ holds. It does not measure anything itself.
 vram
 ```
 
+### `grass`
+
+Usage: `grass [rebake]`
+
+With no word, prints what 3D grass (Graphics > 3D Grass) holds: how many blades are kept and from how many ground draws,
+and for the last frame how many draws had blades in view (slots), how many tiles of blades were drawn and how many
+blades. It also prints how long the last bake took and the grass's CPU time a frame, timed one frame in eight: how much of it went on picking which tiles to draw (and over how many tiles), and how much on the renderer's checks of each draw (and over how many draws). `grass rebake` throws every blade
+away. They are worked out again as their ground is next drawn, which is a quick way to time a bake.
+
+```
+set grass_blades on
+grass
+grass rebake
+```
+
+Catch: the counts are the renderer's last frame. With 3D Grass off, or before any 3D world is drawn, they stay at 0.
+
+### `critters`
+
+Usage: `critters [list | spawn [kind] [n] | reset | hive [add | remove | list | bees]]` (also `critter`)
+
+The small creatures in the 3D grass and the sea (Graphics > 3D Grass > Land Creatures, Sea Creatures, Creature Amount).
+With no word, prints how many of each kind are about, how many are resting, flying, fleeing, buzzing Banjo, hovering,
+hopping, soaring or tumbling, how many were drawn last frame, how often they have fled from Banjo, how often a bee buzzed
+him, how often a sea creature darted off, how often his attacks knocked one, how many hives the map has, how many spots
+to land on are kept for the map, and the CPU time of the last frame's update. `critters list` prints every one: its kind
+and colour, what it is doing, where it is and how far from Banjo and from the camera. `critters spawn` sets some down
+about 330 units past Banjo the way the camera looks (or round him when there is no ground there), so they are in the
+picture and can be walked into: a kind (`bee`, `butterfly`, `dragonfly`, `moth`, `firefly`, `beetle`, `fly`, `bird`,
+`frog`, `crab`, `fish`, `turtle`, `ray`, `bubble` or `any`, the level's own insects) and how many (6 if left out; fish
+come in schools of about four). `critters reset` sends them all away; the level's own come back over a moment.
+
+`critters hive add` puts a bee hive where Banjo stands (a little above his feet: stand at a hive's mouth), kept in
+`critter_hives.txt` next to the game; while Banjo is within 1300 units of it, a few bees buzz round it and fly out to
+the grass and back. `critters hive remove` takes away the nearest hive within 600 units, `critters hive list` lists
+them, and `critters hive bees` sets bees down at the hives near Banjo at once.
+
+```
+set grass_blades on
+critters spawn bee 8
+critters spawn frog 4
+critters
+critters list
+critters hive add
+```
+
+Catch: they live on the ground the 3D grass sees, so they need 3D Grass on, and they land only where the level's
+ground has been seen since the map was entered. Insects, birds and frogs are on the land levels (no birds by night),
+and fish, turtles, rays and bubbles under the sea (Jolly Roger's Lagoon's Atlantis and Sea Bottom); crabs are on Jolly
+Roger's Lagoon's shore and the seabed. Spawning a sea creature on land, or a land one under the sea, does nothing.
+
 ### `gfx`
 
 Usage: `gfx` (also `gfxbudget`)
