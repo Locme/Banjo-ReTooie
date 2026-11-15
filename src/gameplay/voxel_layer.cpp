@@ -527,6 +527,14 @@ namespace {
         return false;
     }
 
+    // A dug cell among the 26 round (x, y, z): a solid cell there draws at least its face to the surface (build_mesh).
+    bool near_dug(int x, int y, int z) {
+        for (int dz = -1; dz <= 1; dz++) for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+            if (state_at(x + dx, y + dy, z + dz) == Dug) return true;
+        }
+        return false;
+    }
+
     // The column through cell (x, y, z) running along `code`'s axis, its surface found from `ref` (a coordinate
     // along the axis near the surface).
     // The depth slider for a level's ground: soft ground (sand on top, or soft ground under it), stone, or rock, by the
@@ -651,6 +659,18 @@ namespace {
             if (!want && solid_state(st)) {
                 const Chunk* ck = chunk_at(a, b, c, false);
                 want = ck != nullptr && ck->dmg[local_index(*ck, a, b, c)] > 0;
+                // A whole cell with dug cells on both sides of it across its column (left and right, or above and
+                // below) is inside the hole's opening: cut too, with its face to the surface drawn. Kept, the level's
+                // surface over it showed as a thin sliver across the hole (2026-11-15).
+                if (!want && ck != nullptr) {
+                    const int axis = dir_axis(ck->dir[local_index(*ck, a, b, c)]);
+                    for (int t = 1; t < 3 && !want; t++) {
+                        int lo[3] = { a, b, c }, hi[3] = { a, b, c };
+                        const int k = (axis + t) % 3;
+                        lo[k]--; hi[k]++;
+                        want = state_at(lo[0], lo[1], lo[2]) == Dug && state_at(hi[0], hi[1], hi[2]) == Dug;
+                    }
+                }
             }
             const bool has = world.cut.count(key) != 0;
             if (want != has) {
@@ -971,6 +991,25 @@ namespace {
             *slot = col->second.tex;
             return true;
         }
+        // A column no ask covered (a wall cell filled in from beside the blow) takes the look of the nearest column the
+        // same way round that has one. The last look found was often the floor's, and a wall hole's bottom edge showed
+        // a bright tan strip of floor colour (2026-11-15).
+        {
+            const int a = dir_axis(code);
+            for (int r = 1; r <= 4; r++) {
+                for (int du = -r; du <= r; du++) for (int dv = -r; dv <= r; dv++) {
+                    if (std::max(std::abs(du), std::abs(dv)) != r) continue;
+                    int cell[3] = { x, y, z };
+                    cell[(a + 1) % 3] += du;
+                    cell[(a + 2) % 3] += dv;
+                    auto near = world.columns.find(column_key(code, cell[0], cell[1], cell[2]));
+                    if (near == world.columns.end() || !near->second.tinted) continue;
+                    for (int c = 0; c < 3; c++) tint[c] = near->second.tint[c];
+                    *slot = near->second.tex;
+                    return true;
+                }
+            }
+        }
         if (!arena.has_look) return false;
         for (int c = 0; c < 3; c++) tint[c] = arena.look_tint[c];
         *slot = arena.look_slot;
@@ -1103,6 +1142,18 @@ namespace {
             else {
                 for (int c = 0; c < 3; c++) d.p[c] = sum[c] / crossings;
             }
+            // The outer top edge of a pile (one or two piled cells, all in the lower layer of the group) comes down most
+            // of a cell, so the lip slopes away to the ground instead of standing up with a straight side.
+            {
+                int piled = 0, upper = 0;
+                for (int dz = 0; dz < 2; dz++) for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++) {
+                    if (!s[dx][dy][dz]) continue;
+                    if (dy == 1) upper++;
+                    const Chunk* pc = chunk_at(mx + dx, my + dy, mz + dz, false);
+                    if (pc != nullptr && (pc->flags[local_index(*pc, mx + dx, my + dy, mz + dz)] & cell_piled)) piled++;
+                }
+                if (solids > 0 && solids <= 2 && piled == solids && upper == 0) d.p[1] -= vs * 0.45f;
+            }
             // The slope of the solid cells: the normal points to the open side.
             float g[3] = { 0, 0, 0 };
             for (int dz = 0; dz < 2; dz++) for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++) {
@@ -1135,8 +1186,16 @@ namespace {
             const int i = Chunk::index(lx, ly, lz);
             if (!solid_state(ch.state[i])) continue;
             const int x = ox + lx, y = oy + ly, z = oz + lz;
-            if (!shown(x, y, z)) continue;
-            ch.shown++;
+            // A whole cell touching a dug cell only at an edge or a corner isn't shown, but the level's cut blends across
+            // the cells round a point and can take its surface away: it draws its face to the surface alone. Without
+            // it the level showed through under a wall hole's floor, a tan strip of the sand behind Jinjo Village's
+            // cliff (2026-11-15).
+            bool rim_only = false;
+            if (!shown(x, y, z)) {
+                if (!near_dug(x, y, z)) continue;
+                rim_only = true;
+            }
+            else ch.shown++;
             const bool cracked_cell = ch.dmg[i] > 0;
             const bool piled_cell = (ch.flags[i] & cell_piled) != 0;
             int cell_slot = 0;
@@ -1149,16 +1208,34 @@ namespace {
                 // A seam stays stone (the map's stone colour on the grain): L likes the bits of stone in a mountain's hole
                 // (2026-11-13).
                 if (!seam && column_look(ch.dir[i], x, y, z, tint, &slot_here)) cell_slot = slot_here;
+                // A rim-only cell shows through the cut of the dug cell beside it, so it takes that cell's look: a floor
+                // cell under a wall hole showed in the floor's dirt colour, a tan bit under the hole (2026-11-15).
+                if (rim_only) {
+                    for (int dz = -1; dz <= 1; dz++) for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+                        const Chunk* dc = chunk_at(x + dx, y + dy, z + dz, false);
+                        if (dc == nullptr) continue;
+                        const int di = local_index(*dc, x + dx, y + dy, z + dz);
+                        if (dc->state[di] != Dug || dc->dir[di] == ch.dir[i]) continue;
+                        if (column_look(dc->dir[di], x + dx, y + dy, z + dz, tint, &slot_here)) cell_slot = slot_here;
+                        dz = dy = dx = 2;   // the first one found
+                    }
+                }
             }
             const uint32_t uv_off = hash3(ch.mat[i], 3, 5) & 15;
             static constexpr int n6[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
             for (const auto& d : n6) {
-                // Toward a dug cell always; toward open air for a piled cell, and for a cracked cell only on its face to the
-                // level's surface (its column's way out): its level surface is cut away and this face stands in for it. A
-                // cracked cell's other faces to open air stuck out through the level's surface as thin slivers.
+                // Toward a dug cell always; toward open air for a piled cell, and otherwise only on the face to the
+                // level's surface (its column's way out): where that surface is cut away this face stands in for it. The
+                // other faces to open air stuck out through the level's surface as thin slivers.
                 const uint8_t nb = state_at(x + d[0], y + d[1], z + d[2]);
                 const bool surface_face = d[dir_axis(ch.dir[i])] == dir_sign(ch.dir[i]);
-                if (nb != Dug && !(nb == Air && (piled_cell || (cracked_cell && surface_face)))) continue;
+                if (rim_only && !surface_face) continue;
+                // Every shown cell draws its face to the surface too, a little behind the level's surface (below): where
+                // the level's wall stays it hides the face; where the wall's cut reaches past the hole's own faces (a
+                // sloped wall, under a hole's floor) the face fills the gap, which showed the ground behind the wall as
+                // a tan strip along a hole's bottom edge (2026-11-15).
+                // (The cell in front of the surface is often never filled in, Unknown, rather than Air.)
+                if (nb != Dug && !((nb == Air && piled_cell) || ((nb == Air || nb == Unknown) && surface_face))) continue;
                 int k = 0;
                 for (int c = 0; c < 3; c++) if (d[c] != 0) k = c;
                 const int i1 = (k + 1) % 3, i2 = (k + 2) % 3;
@@ -1184,7 +1261,19 @@ namespace {
                 Quad qd{};
                 for (int q = 0; q < 4; q++) {
                     const DualVertex& dv = *v[reverse ? (4 - q) % 4 : q];
-                    for (int c = 0; c < 3; c++) qd.v[q][c] = (int16_t)std::lround(dv.p[c] - base[c]);
+                    // Never in front of the level's surface over the cell's column (a piled cell is on top of it):
+                    // a corner mixed from the crossings round a curved wall stuck out of it as a spike (2026-11-15).
+                    float at[3] = { dv.p[0], dv.p[1], dv.p[2] };
+                    if (!piled_cell) {
+                        // (Four units behind it, so the level's own surface wins where it is kept: at one unit, faces
+                        // showed through a curved wall between the columns as thin lines. Not much more: Jinjo
+                        // Village's cliff has a tan layer a few units behind its surface, and at eight it showed in front.)
+                        const int sa = dir_axis(ch.dir[i]);
+                        const float back = 4.0f;
+                        if (dir_sign(ch.dir[i]) > 0) at[sa] = std::min(at[sa], ch.surface[i] - back);
+                        else at[sa] = std::max(at[sa], ch.surface[i] + back);
+                    }
+                    for (int c = 0; c < 3; c++) qd.v[q][c] = (int16_t)std::lround(at[c] - base[c]);
                     const float lit = 0.5f + 0.5f * std::max(0.0f, dv.n[0] * light[0] + dv.n[1] * light[1] + dv.n[2] * light[2]);
                     // Darker the deeper the corner is behind the level's surface over the cell's column, to 40% three
                     // cells in. Lit like the level round it, a hole in a wall read as a flat patch stuck on the wall (L,
@@ -1220,7 +1309,11 @@ namespace {
             static constexpr int n6b[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
             const int col_axis = dir_axis(ch.dir[i]), col_sign = dir_sign(ch.dir[i]);
             for (const auto& d : n6b) {
-                if (state_at(x + d[0], y + d[1], z + d[2]) != Air) continue;
+                // Open air, or a cell never filled in (Unknown): nothing is drawn there either, and where the wall's cut
+                // reached over one the level behind the wall showed through, a tan sliver of Jinjo Village's sand at a
+                // wall hole's corner (2026-11-15).
+                const uint8_t nb_state = state_at(x + d[0], y + d[1], z + d[2]);
+                if (nb_state != Air && nb_state != Unknown) continue;
                 int k = 0;
                 for (int c = 0; c < 3; c++) if (d[c] != 0) k = c;
                 // Not across the hole's mouth (the way out of the column): from inside the hole it would wall him in.
@@ -1276,6 +1369,13 @@ namespace {
                 qd.slot = (uint8_t)back_slot;
                 quads.push_back(qd);
             }
+        }
+        // (Test aid, TOOIE_VOXEL_RED=1: every face plain red, untextured, to tell the layer's faces from the level's.)
+        static const bool red = std::getenv("TOOIE_VOXEL_RED") != nullptr;
+        if (red) for (Quad& q : quads) {
+            q.slot = 0;
+            q.cracked = false;
+            for (auto& c : q.col) { c[0] = 255; c[1] = 0; c[2] = 0; }
         }
         if (quads.empty()) {
             retire(ch.mesh);
@@ -1376,6 +1476,9 @@ namespace {
         return true;
     }
 
+    // Each texel's share of light in the cracked texture (255 whole), for the level textures' cracked copies.
+    uint8_t crack_shade[1024];
+
     // The grain texture (32 x 32 I8, soft value noise, ours) and one debris cube a material.
     void make_texture_and_cubes(uint8_t* rdram) {
         float cells[9][9];
@@ -1400,8 +1503,10 @@ namespace {
                 rdram[((arena.texture + y * 32 + x) ^ 3) - 0x80000000u] = (uint8_t)value;
             }
         }
-        // The cracked texture (a cell hit once but not yet broken): the grain, lighter, with dark cracks across it
-        // (random walks from a few seeds, branching), so a dent reads as struck and about to give.
+        // The cracked texture (a cell hit once but not yet broken): the grain with cracks across it (random walks from a
+        // few seeds, branching), so a dent reads as struck and about to give. The cracks darken the grain by a third
+        // and their edge a little: near-black cracks on a white ground looked like they didn't belong on the stone
+        // (L, 2026-11-15). crack_shade keeps each texel's share, for the level textures' cracked copies too.
         {
             uint8_t crack[32][32];
             for (int y = 0; y < 32; y++) for (int x = 0; x < 32; x++) crack[y][x] = 255;
@@ -1412,10 +1517,10 @@ namespace {
                 const int steps = 18 + (int)(cr.f() * 16);
                 for (int k = 0; k < steps; k++) {
                     const int ix = ((int)std::floor(px) % 32 + 32) % 32, iy = ((int)std::floor(py) % 32 + 32) % 32;
-                    crack[iy][ix] = (uint8_t)(55 + cr.f() * 30);
+                    crack[iy][ix] = (uint8_t)(160 + cr.f() * 20);
                     // The crack's soft edge.
                     const int jx = (ix + 1) % 32;
-                    crack[iy][jx] = (uint8_t)std::min<int>(crack[iy][jx], 140);
+                    crack[iy][jx] = (uint8_t)std::min<int>(crack[iy][jx], 215);
                     ang += cr.range(-0.6f, 0.6f);
                     px += std::cos(ang);
                     py += std::sin(ang);
@@ -1423,7 +1528,9 @@ namespace {
                 }
             }
             for (int y = 0; y < 32; y++) for (int x = 0; x < 32; x++) {
-                rdram[((arena.texture + texture_bytes + y * 32 + x) ^ 3) - 0x80000000u] = crack[y][x];
+                crack_shade[y * 32 + x] = crack[y][x];
+                const uint8_t grain = rdram[((arena.texture + y * 32 + x) ^ 3) - 0x80000000u];
+                rdram[((arena.texture + texture_bytes + y * 32 + x) ^ 3) - 0x80000000u] = (uint8_t)(grain * crack[y][x] / 255);
             }
         }
         // Stones (L, 2026-11-13: square debris ruined the illusion): an icosahedron of radius 50 round its middle, each
@@ -1657,7 +1764,7 @@ namespace {
                         // Its cracked copy: darkened along the cracks of the crack texture (I8 in the arena).
                         static uint16_t cracked[1024];
                         for (int t = 0; t < 1024; t++) {
-                            const uint8_t crack = rdram_now[((arena.texture + texture_bytes + t) ^ 3) - 0x80000000u];
+                            const uint8_t crack = crack_shade[t];
                             const float f = crack / 255.0f;
                             const uint16_t c = texels[t];
                             auto dim = [&](int v) { return (uint16_t)std::clamp((int)std::lround(v * f), 0, 31); };
@@ -1741,14 +1848,19 @@ namespace {
         }
         if (dug_cols.empty()) return;
         auto field = [](uint64_t v) { int32_t f = (int32_t)(v & 0x1FFFFF); return (f & 0x100000) ? f - 0x200000 : f; };
-        // The rings round the dug columns: the nearest ring's height 2, the next 1 (the higher wins).
+        // The rings round the dug columns, round rather than square (square rings stood up as a box round the hole,
+        // 2026-11-15): height 2 within 1.5 cells, 1 within 2.5, the outer ring broken up so its edge is ragged
+        // (the higher wins).
         std::unordered_map<uint64_t, std::pair<int, Mat>> heights;
         for (const auto& [key, mat] : dug_cols) {
             const int x = field(key >> 42), z = field(key);
             for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++) {
                 const uint64_t col = pack3(x + dx, 0, z + dz);
                 if (dug_cols.count(col)) continue;
-                const int h = std::max(std::abs(dx), std::abs(dz)) == 1 ? 2 : 1;
+                const float r = std::sqrt((float)(dx * dx + dz * dz));
+                int h = r <= 1.5f ? 2 : r <= 2.5f ? 1 : 0;
+                if (h == 1 && unit(hash3((uint32_t)(x + dx) * 977u, 41u, (uint32_t)(z + dz) * 613u)) < 0.4f) h = 0;
+                if (h == 0) continue;
                 auto& e = heights[col];
                 if (h > e.first) e = { h, mat };
             }
@@ -3032,7 +3144,7 @@ std::string tooie::voxel_layer::console(uint8_t* rdram, recomp_context* ctx, con
             }
             return sum;
         };
-        auto surface_cut = [&](const float w[3], int axis) { return std::max(row_cut(w, axis, -1.0f), row_cut(w, axis, 1.0f)) >= 0.65f; };
+        auto surface_cut = [&](const float w[3], int axis) { return std::max(row_cut(w, axis, -1.0f), row_cut(w, axis, 1.0f)) >= 0.75f; };
         int visible = 0, voids = 0, markers = 0;
         int why[3] = { 0, 0, 0 };   // what a void ran into: cells not filled, too far, inside a solid cell
         std::unordered_set<uint64_t> seen;
@@ -3079,7 +3191,7 @@ std::string tooie::voxel_layer::console(uint8_t* rdram, recomp_context* ctx, con
                         const int qx = cell_of(q[0]), qy = cell_of(q[1]), qz = cell_of(q[2]);
                         const Chunk* qc = chunk_at(qx, qy, qz, false);
                         const bool piled = qc != nullptr && (qc->flags[local_index(*qc, qx, qy, qz)] & cell_piled);
-                        if (last == -1 && !piled) { kind = 2; break; }
+                        if (last == -1 && !piled && !near_dug(qx, qy, qz)) { kind = 2; break; }
                         covered = true;
                         break;
                     }

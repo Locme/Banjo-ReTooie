@@ -1663,6 +1663,8 @@ everything back.
 - `voxel void [on|off]` (no word: switch it) paints every pixel nothing was drawn on bright magenta: the sky, and any
   gap a hole lets the camera see through, so a void stands out against the level. It is a view of the picture effects
   pass (it needs that pass, as the effect debug views do) and is not saved.
+- Started with `TOOIE_VOXEL_RED=1`, every face the layer draws is plain red and untextured, so a strip or speck at a
+  hole's edge can be told apart: red is the layer's own, anything else is the level showing through.
 - `voxel mtx rel` draws the cells with places relative to the camera instead of world places, and `voxel mtx abs`
   goes back; `voxel flip` turns the triangles' winding over. Both are for checking the drawing on a new setup.
 

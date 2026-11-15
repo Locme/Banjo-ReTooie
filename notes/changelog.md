@@ -6,6 +6,7 @@ regenerated code, CI, notes and tooling are left out.
 ## 2026-11-15
 
 - Voxel Layer: moved from Gameplay to the WIP tab, under its own heading; your settings come with it. The Bill Drill bores down as it drills: Banjo sinks into the ground as it breaks, instead of the hole showing only when the drill ends. The inside of a hole gets darker the deeper it goes, so a hole in a wall reads as a hole and not as a patch on the wall. A hole dug into a floor shows dirt in the floor's colour, no longer a stretched copy of the floor's texture (a dirt path's zigzag showed as flat beige patches).
+- Voxel Layer: no more slivers round the holes. Tan strips under a hole in a wall (the ground behind the cliff showing through), thin green strips of the wall across a hole, and spikes poking out of the wall beside one are gone, and `voxel voidscan` finds no gaps. The lip thrown up round a hole dug down is a low, round, uneven mound instead of a box. Cracks in struck stone are a soft darkening of the stone, no longer black lines on a white patch.
 
 ## 2026-11-14
 

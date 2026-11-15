@@ -235,10 +235,28 @@ The hole's sides and floor are the blocks round it, drawn by us. So Banjo digs i
   column a texture: floors, and wall columns a floor's ask covered, take the grain in the floor's colour. Walls keep
   their texture.
 - A hole's faces now get darker to 40% three cells behind the level's surface.
-- Still seen and not fixed (Jinjo Village, 2026-11-15): small tan slivers at a wall hole's bottom corners; a dark
-  hole-shaped patch on the floor in front of a dug wall (likely the hole's faces in the sun's shadow map); thin
-  green slivers across a floor hole by a wall; the lip round a hole dug down reads as a box with straight sides
-  from low angles.
+- Later the same day (L: "fix those issues"), tested in Jinjo Village with `TOOIE_VOXEL_RED=1` (every voxel face
+  plain red, so the layer's faces can be told from the level's) and `voxel voidscan`:
+  - The dark hole-shaped patch on the floor was Banjo's own shadow, with Banjo hidden by `playerfade 0`.
+  - The tan strips under a wall hole were the level behind the cliff, seen where the wall's cut reached solid cells
+    that drew nothing: cells in front of the surface are mostly never filled (Unknown, not Air), and cells touching a
+    dug cell only at an edge or corner weren't shown. Every shown cell now draws its face to the surface, toward Air
+    or Unknown; a cell with a dug cell among its 26 neighbours draws that face alone, in the dug cell's look. These
+    faces sit four units behind the level's surface (one let them show through a curved wall; eight put them behind
+    a tan layer of the cliff a few units in). The backstop faces also face Unknown cells. voidscan: 71 voids, then 0.
+  - Thin green strips across a hole were the level's surface over a whole cell with dug cells on both sides of it
+    across its column: such a cell is now cut, and draws its surface face.
+  - Spikes: face corners mixed from crossings round a curved wall stood in front of it; a face's corners are now
+    kept behind the level's surface over its column.
+  - The cut threshold is 0.75 instead of 0.65 (VoxelCuts.hlsli and voidscan), a quarter cell from the cut cells'
+    middles, so the level's edge overlaps the hole's rim more.
+  - The lip: round rings (2 cells high within 1.5 cells, 1 within 2.5, the outer ring broken up at random) instead
+    of square ones, and its outer top edge comes down most of a cell.
+  - Cracks (L: "the black in the stone textures look like they don't belong"): a crack darkens the grain to about
+    two thirds and its edge a little, on the grain itself instead of white; the level textures' cracked copies take
+    the same shade (crack_shade).
+- Seen, not the layer's: a `goto` to (-7700, -900, -1034) in Jinjo Village sometimes left Banjo falling through the
+  floor or hanging in the air, with the Voxel Layer off too and no cells cut.
 
 ## What voxel games do (sources at the end)
 

@@ -87,9 +87,10 @@ bool VoxelSurfaceCut(StructuredBuffer<uint> cuts, float3 world, float3 normal) {
     }
     const float3 a = abs(normal);
     const uint axis = (a.x >= a.y) ? ((a.x >= a.z) ? 0u : 2u) : ((a.y >= a.z) ? 1u : 2u);
-    // (Cut a little inside the cells' half-way curve, at 0.65: the smooth surface's rim lies on about that curve, so the
-    // level's edge then always overlaps it, and no sliver of the empty inside of the world shows between them.)
-    return max(VoxelRowCut(cuts, world, axis, -1.0f), VoxelRowCut(cuts, world, axis, 1.0f)) >= 0.65f;
+    // (Cut inside the cells' half-way curve, at 0.75, a quarter of a cell from the cut cells' middles: the smooth
+    // surface's rim lies about half way, so the level's edge always overlaps it and nothing behind the wall shows
+    // between them. At 0.65 a sloped wall's cut reached under a hole's floor, and the level behind showed in a sliver.)
+    return max(VoxelRowCut(cuts, world, axis, -1.0f), VoxelRowCut(cuts, world, axis, 1.0f)) >= 0.75f;
 }
 
 #endif
