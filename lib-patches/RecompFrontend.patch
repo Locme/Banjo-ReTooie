@@ -1187,6 +1187,38 @@ index 30c463b..dd5122e 100644
      void update_supported_options();
  
      bool get_cont_active(void);
+diff --git a/recompui/include/recompui/renderer.h b/recompui/include/recompui/renderer.h
+index 33f79ab..1ce5d36 100644
+--- a/recompui/include/recompui/renderer.h
++++ b/recompui/include/recompui/renderer.h
+@@ -1,6 +1,8 @@
+ #pragma once
+ 
+ #include <unordered_set>
++#include <string>
++#include <vector>
+ #include <filesystem>
+ 
+ #include "common/rt64_user_configuration.h"
+@@ -58,5 +60,18 @@ namespace recompui {
+         // Texture pack enable option. Must be an enum with two options.
+         // The first option is treated as disabled and the second option is treated as enabled.
+         bool is_texture_pack_enable_config_option(const recomp::config::ConfigOption& option, bool show_errors);
++
++        // A texture pack's image for a texture of the game (Banjo-Tooie, 2026-11-15: the Esc menu's portraits show a
++        // pack's HD versions). `tmem` is the 4 KB of texture memory the game's load would leave, the texture at 0 and
++        // a palette's colours from 0x800; fmt, siz and line are the drawing tile's and tlut the palette mode, as the
++        // RDP has them. The texture is found by its RT64 hash in the packs in use, the first in the mod list winning,
++        // as the game's own textures are; bytes and path are the replacement file's (a PNG or a DDS). False when no
++        // pack in use replaces it. Any thread.
++        bool read_texture_replacement(const uint8_t* tmem, uint8_t fmt, uint8_t siz, uint16_t line, uint16_t width, uint16_t height,
++            uint32_t tlut, std::vector<uint8_t>& bytes, std::string& path);
++        // The texture's RT64 hash (current version) from the same inputs, as texture packs and texture dumps name it.
++        uint64_t texture_hash(const uint8_t* tmem, uint8_t fmt, uint8_t siz, uint16_t line, uint16_t width, uint16_t height, uint32_t tlut);
++        // Goes up each time the texture packs in use have changed and been loaded.
++        uint32_t texture_packs_version();
+     }
+ }
 diff --git a/recompui/src/base/ui_game_option.cpp b/recompui/src/base/ui_game_option.cpp
 index 13f3f5c..6cac348 100644
 --- a/recompui/src/base/ui_game_option.cpp
@@ -6450,10 +6482,36 @@ index af97fc4..d57ecbb 100644
          }
  
 diff --git a/recompui/src/renderer/rt64_render_context.cpp b/recompui/src/renderer/rt64_render_context.cpp
-index a7954c7..5856f29 100644
+index a7954c7..2e33777 100644
 --- a/recompui/src/renderer/rt64_render_context.cpp
 +++ b/recompui/src/renderer/rt64_render_context.cpp
-@@ -155,6 +155,27 @@ void set_application_user_config(RT64::Application* application, const ultramode
+@@ -1,9 +1,13 @@
+ #include <memory>
++#include <atomic>
++#include <mutex>
+ #include <cstring>
+ #include <variant>
+ #include <algorithm>
+ 
+ #include "hle/rt64_application.h"
++#include "xxHash/xxh3.h"
++#include "common/rt64_tmem_hasher.h"
+ #include "rt64_render_hooks.h"
+ #include "overloaded.h"
+ 
+@@ -47,6 +51,11 @@ using TexturePackAction = std::variant<TexturePackEnableAction, TexturePackDisab
+ 
+ static moodycamel::ConcurrentQueue<TexturePackAction> texture_pack_action_queue;
+ 
++// The renderer whose texture packs read_texture_replacement looks in (Banjo-Tooie), and how often they have changed.
++static std::mutex replacement_context_mutex;
++static RT64::Application* replacement_app = nullptr;
++static std::atomic<uint32_t> texture_packs_loaded{ 0 };
++
+ unsigned int MI_INTR_REG = 0;
+ 
+ unsigned int DPC_START_REG = 0;
+@@ -155,6 +164,27 @@ void set_application_user_config(RT64::Application* application, const ultramode
              application->userConfig.resolutionMultiplier = 2.0 * std::max(config.ds_option, 1);
              application->userConfig.downsampleMultiplier = std::max(config.ds_option, 1);
              break;
@@ -6481,7 +6539,83 @@ index a7954c7..5856f29 100644
      }
  
      switch (config.hr_option) {
-@@ -351,7 +372,11 @@ void renderer::RT64Context::send_dummy_workload(uint32_t fb_address) {
+@@ -335,7 +365,74 @@ renderer::RT64Context::RT64Context(uint8_t* rdram, ultramodern::renderer::Window
+     high_precision_fb_enabled = app->shaderLibrary->usesHDR;
+ }
+ 
+-renderer::RT64Context::~RT64Context() = default;
++renderer::RT64Context::~RT64Context() {
++    std::lock_guard lock(replacement_context_mutex);
++    if (replacement_app == app.get()) {
++        replacement_app = nullptr;
++    }
++}
++
++bool renderer::read_texture_replacement(const uint8_t* tmem, uint8_t fmt, uint8_t siz, uint16_t line, uint16_t width, uint16_t height,
++    uint32_t tlut, std::vector<uint8_t>& bytes, std::string& path)
++{
++    std::lock_guard context_lock(replacement_context_mutex);
++    if (replacement_app == nullptr || replacement_app->textureCache == nullptr) {
++        return false;
++    }
++
++    RT64::LoadTile tile{};
++    tile.fmt = fmt;
++    tile.siz = siz;
++    tile.line = line;
++    RT64::TextureCache& cache = *replacement_app->textureCache;
++    std::unique_lock lock(cache.textureMapMutex);
++    const RT64::ReplacementMap& map = cache.textureMap.replacementMap;
++    if (!cache.textureMap.replacementMapEnabled) {
++        return false;
++    }
++
++    // As TextureCache does for a texture it loads: each pack is looked in with its own hash version, the last
++    // (the first in the mod list) first. Switching the last pack off leaves the packs' lists in place and only
++    // empties the hash versions in use, so a pack whose version is not among them is not in use.
++    for (int32_t i = int32_t(map.fileSystemResolvedPaths.size()) - 1; i >= 0; i--) {
++        if (i >= int32_t(map.fileSystemHashVersions.size()) || i >= int32_t(map.fileSystems.size())) {
++            continue;
++        }
++        if (std::find(map.resolvedHashVersions.begin(), map.resolvedHashVersions.end(), map.fileSystemHashVersions[i]) == map.resolvedHashVersions.end()) {
++            continue;
++        }
++        const uint64_t hash = RT64::TMEMHasher::hash(tmem, tile, width, height, tlut, map.fileSystemHashVersions[i]);
++        const auto it = map.fileSystemResolvedPaths[i].find(hash);
++        if (it == map.fileSystemResolvedPaths[i].end() || it->second.relativePath.empty()) {
++            continue;
++        }
++        const RT64::FileSystem* file_system = map.fileSystems[it->second.fileSystemIndex].get();
++        const size_t size = file_system != nullptr ? file_system->getSize(it->second.relativePath) : 0;
++        if (size == 0) {
++            continue;
++        }
++        bytes.resize(size);
++        if (!file_system->load(it->second.relativePath, bytes.data(), size)) {
++            bytes.clear();
++            continue;
++        }
++        path = it->second.relativePath;
++        return true;
++    }
++    return false;
++}
++
++uint64_t renderer::texture_hash(const uint8_t* tmem, uint8_t fmt, uint8_t siz, uint16_t line, uint16_t width, uint16_t height, uint32_t tlut) {
++    RT64::LoadTile tile{};
++    tile.fmt = fmt;
++    tile.siz = siz;
++    tile.line = line;
++    return RT64::TMEMHasher::hash(tmem, tile, width, height, tlut, RT64::TMEMHasher::CurrentHashVersion);
++}
++
++uint32_t renderer::texture_packs_version() {
++    return texture_packs_loaded.load();
++}
+ 
+ void renderer::RT64Context::send_dl(const OSTask* task) {
+     check_texture_pack_actions();
+@@ -351,7 +448,11 @@ void renderer::RT64Context::send_dummy_workload(uint32_t fb_address) {
      // G_AC_NONE | G_ZS_PIXEL | G_RM_NOOP | G_RM_NOOP2
      app->state->rdp->setOtherMode(0x382C30, 0);
      app->state->rdp->fillRect(0, 0, 320 << 2, 240 << 2);
@@ -6491,5 +6625,17 @@ index a7954c7..5856f29 100644
      app->state->fullSync();
 +    app->state->dummyWorkload = false;
      app->state->listProcessEnd();
+ }
+ 
+@@ -476,6 +577,11 @@ void renderer::RT64Context::check_texture_pack_actions() {
+         else {
+             app->textureCache->clearReplacementDirectories();
+         }
++        {
++            std::lock_guard lock(replacement_context_mutex);
++            replacement_app = app.get();
++        }
++        texture_packs_loaded++;
+     }
  }
  

@@ -2278,7 +2278,13 @@ void cmd_portraits(Ctx& c) {
         tooie::menu_portraits::speak(c.rdram, c.ctx, portrait);
         return;
     }
-    if (c.w.size() < 2 || lower(c.w[1]) != "dump") { error("portraits dump [last id in hex, D1 when not given] | portraits voice <id>"); return; }
+    if (c.w.size() == 2 && lower(c.w[1]) == "hashes") {
+        for (const std::string& line : tooie::menu_portraits::hashes()) {
+            print(line);
+        }
+        return;
+    }
+    if (c.w.size() < 2 || lower(c.w[1]) != "dump") { error("portraits dump [last id in hex, D1 when not given] | portraits voice <id> | portraits hashes"); return; }
     if (c.ctx == nullptr) { error("no game update is running"); return; }
     int last = 0xD1;
     if (c.w.size() >= 3) {
@@ -4664,7 +4670,7 @@ const std::vector<Command>& commands() {
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
         { "menu", {}, false, "menu open | menu close | menu tab <id> | menu expand <setting> [off]", "open or shut the Esc menu, show a tab, open a setting's arrow", cmd_menu },
         { "menupos", {}, false, "menupos [<x> <y> | reset]", "move the Esc menu from the middle by x, y (dp), at once", cmd_menupos },
-        { "portraits", {}, true, "portraits dump [last hex id] | portraits voice <hex id>", "voice: list a portrait's voice sounds and play one; dump: write every talking-head portrait (0 to D1) to Dev Files/portraits as pictures, to pick them for the Esc menu's tabs", cmd_portraits },
+        { "portraits", {}, true, "portraits dump [last hex id] | portraits voice <hex id> | portraits hashes", "hashes: the Esc menu portraits' RT64 texture hashes and which a texture pack replaces; voice: list a portrait's voice sounds and play one; dump: write every talking-head portrait (0 to D1) to Dev Files/portraits as pictures, to pick them for the Esc menu's tabs", cmd_portraits },
         { "cursor", {}, false, "cursor <x> <y> [click|right]", "point the mouse at x, y in the window (pixels from its top left) and click there, as the real mouse would", cmd_cursor },
         { "uimove", {}, false, "uimove list | <entry> <x> <y> | <entry> reset | reset | save", "move single tabs, rows and buttons of the Esc menu by x, y (dp), at once; save writes assets/ui_layout.json", cmd_uimove },
         { "cam", {}, true, "cam", "the camera's position and angles as drawn, and its mode", cmd_cam },

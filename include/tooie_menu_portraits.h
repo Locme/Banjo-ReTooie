@@ -11,7 +11,8 @@
 // 2026-11-12). The game draws them from sprites in the ROM; these are decoded to pictures for the menu.
 namespace tooie::menu_portraits {
     // Call each game frame from the game thread (tooie_warp_tick): once the game runs, finds each tab's
-    // portrait sprite, decodes it and hands the pictures to the menu.
+    // portrait sprite, decodes it and hands the pictures to the menu, a texture pack's picture for a frame where
+    // one replaces it; again whenever the texture packs in use change.
     void tick(uint8_t* rdram, recomp_context* ctx);
 
     // A portrait (an id in gczoomboxdata's table) as a picture, RGBA, its first frame. False when it can't be
@@ -33,6 +34,10 @@ namespace tooie::menu_portraits {
     // Plays one of a portrait's voice sounds, picked at random (console `portraits voice`). Game thread. False when
     // it has none, or there is no player to play it on.
     bool speak(uint8_t* rdram, recomp_context* ctx, int portrait);
+    // Each tab's portrait frames' RT64 hashes (the still frame and the blink's), as texture packs know them, and
+    // which a texture pack in use replaces (console `portraits hashes`). Game thread.
+    std::vector<std::string> hashes();
+
     // Another tab was picked in the Esc menu (L, 2026-11-12: "Banjo tab = Banjo sound"): its character speaks on the
     // next game frame. Any thread. False for a tab with no portrait.
     bool tab_voice(const std::string& tab_id);

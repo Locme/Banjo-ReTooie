@@ -205,6 +205,14 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 * **Hand cursor reach** (`recompui/src/base/ui_state.cpp`, `hand_reach`): when nothing focusable or no scroll bar is
   under the mouse, its motion and clicks go to the nearest point within 22 pixels that has one, so the hand cursor
   (64 pixels across, its click point in its middle) picks what it covers. A drag keeps the shift its press had.
+* **Texture pack pictures for the menus** (`recompui/include/recompui/renderer.h`, `rt64_render_context.cpp`):
+  `renderer::read_texture_replacement(tmem, fmt, siz, line, width, height, tlut, bytes, path)` gives the file of the
+  texture pack picture that replaces a texture of the game, found as RT64's TextureCache finds one: the texture's
+  RT64 hash (`TMEMHasher`, with each pack's own hash version) looked up in the packs in use, the first in the mod list
+  first, and read through that pack's file system (folder, zip or .rtz). Packs switched off are skipped as RT64 skips
+  them (their hash version is no longer among `resolvedHashVersions`). `renderer::texture_hash` gives the hash alone,
+  and `renderer::texture_packs_version()` goes up after each change of the packs in use. The game's Esc menu
+  portraits use it (src/ui/menu_portraits.cpp).
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.

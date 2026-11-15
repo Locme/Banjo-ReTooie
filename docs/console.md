@@ -1289,7 +1289,11 @@ Catch: a large move can put part of the menu off the screen. Works from the laun
 
 ### `portraits`
 
-Usage: `portraits dump [last hex id]`, `portraits voice <hex id>`
+Usage: `portraits dump [last hex id]`, `portraits voice <hex id>`, `portraits hashes`
+
+`portraits hashes` prints, for each Esc menu tab, its portrait's frames (the still one and the blink's) with the
+RT64 hash each gets when the game draws it, `(pack)` after the ones a texture pack in use replaces. A texture pack
+that replaces these hashes shows its pictures on the Esc menu's tabs too.
 
 `portraits voice` lists a portrait's voice sounds (each sound id, volume and pitch, as its character's dialogue
 chatters with them) and plays one of them, as the Esc menu does when that portrait's tab is picked.
