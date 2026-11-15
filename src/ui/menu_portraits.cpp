@@ -213,7 +213,6 @@ namespace {
         { "graphics", 0xA5, 0x0BCF },         // Mumbo and his magic
         { "performance", 0xB0, 0x0BF2 },      // Bottles and his glasses (Display)
         { "controls", 0x04, 0x0C00 },         // a machine of buttons
-        { "sound", 0x9B, 0x0BE8 },            // the singing bird
         { "cheats", 0xA7, 0x0BFA },           // Cheato, the spell book of cheats
         { "debug", 0x47, 0x0BF5 },            // Boggy, the polar bear (Warp)
         { "achievements", 0xAE, 0x0BCE },     // King Jingaling, who hands out rewards

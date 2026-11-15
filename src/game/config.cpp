@@ -1442,14 +1442,13 @@ void tooie::init_config() {
 
     recompui::config::create_controls_tab();
     {
-        recomp::config::Config& sound = recompui::config::create_sound_tab();
+        // No Sound tab (L, 2026-11-15): its options are on General, under a Sound heading after the controls and
+        // the language and before Saves. They still save to sound.json, so volumes set before stay.
+        recomp::config::Config& sound = recompui::config::create_sound_config();
         tooie::music_player::add_options(sound);
         tooie::mix_rate::add_option(sound);
-        // The Sound tab's options on General, under a Sound heading, and no Sound tab (L, 2026-11-15). They still
-        // save to sound.json, so volumes set before stay.
-        recompui::config::add_page_config(recompui::config::general::id, recompui::config::sound::id);
+        recompui::config::add_page_config(recompui::config::general::id, recompui::config::sound::id, tooie::save_backups_option);
         recompui::config::set_option_group(recompui::config::sound::options::main_volume, "Sound");
-        recompui::config::set_tab_visible(recompui::config::sound::id, false);
     }
     tooie::cheats::create_tab();
     tooie::level_warp::create_tab();

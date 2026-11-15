@@ -1019,7 +1019,7 @@ index 4dce8e0..15bd9e3 100644
  endif()
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..ba22997 100644
+index 38b84f5..34bd038 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
 @@ -1,6 +1,7 @@
@@ -1039,7 +1039,26 @@ index 38b84f5..ba22997 100644
              void toggle_fullscreen();
          }
  
-@@ -133,10 +136,101 @@ namespace recompui {
+@@ -94,6 +97,9 @@ namespace recompui {
+          * @param requires_confirmation  Whether the tab requires confirmation before closing. Adds an Apply button at the footer, and if the user tries to switch tabs or close the modal, they will be prompted to confirm or cancel changes.
+          */
+         recomp::config::Config &create_config_tab(const std::string &name, const std::string &id, bool requires_confirmation);
++        // A config with no tab of its own (Banjo-Tooie, 2026-11-15): it loads and saves as a tab's does, and its
++        // options show on another tab's page through add_page_config, and in Search.
++        recomp::config::Config &create_config(const std::string &name, const std::string &id, bool requires_confirmation);
+ 
+         /**
+          * @brief Adds a new tab to the config modal. This is for manually rendering your own tab's UI.
+@@ -124,6 +130,8 @@ namespace recompui {
+         void create_controls_tab(const std::string &name = config::controls::tab_name);
+         recomp::config::Config &create_graphics_tab(const std::string &name = config::graphics::tab_name);
+         recomp::config::Config &create_sound_tab(const std::string &name = config::sound::tab_name);
++        // The sound config with no Sound tab (Banjo-Tooie: its options are on General).
++        recomp::config::Config &create_sound_config(const std::string &name = config::sound::tab_name);
+         void create_mods_tab(const std::string &name = config::mods::tab_name);
+ 
+         // Must be called after all tabs have been created.
+@@ -133,10 +141,106 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
@@ -1085,12 +1104,17 @@ index 38b84f5..ba22997 100644
 +        // Adds a tab that shows some of another tab's options (the ones given to it with set_option_page).
 +        // The options still belong to that tab's config, so they save and apply as before.
 +        void create_page_tab(const std::string &name, const std::string &page_id, const std::string &config_id);
-+        // Shows another config's own options at the bottom of a tab's page, after the tab's own options (Banjo-Tooie,
-+        // L 2026-11-15: the Sound options on General, the Sound tab hidden). They still belong to their own config, so
-+        // they save to its file and apply as before; a change to one is saved at once. Searching names the host tab.
-+        void add_page_config(const std::string &tab_config_id, const std::string &extra_config_id);
++        // Shows another config's own options on a tab's page (Banjo-Tooie, L 2026-11-15: the Sound options on General,
++        // with no Sound tab): just above the tab's option before_option_id, or after all of the tab's own options when
++        // it is empty or not on the page. They still belong to their own config, so they save to its file and apply
++        // as before; a change to one is saved at once. Searching names the host tab.
++        void add_page_config(const std::string &tab_config_id, const std::string &extra_config_id, const std::string &before_option_id = "");
++        struct PageConfig {
++            std::string config_id;
++            std::string before_option_id;
++        };
 +        // The configs add_page_config put on this tab's page, in the order they were added.
-+        std::vector<std::string> get_page_configs(const std::string &tab_config_id);
++        std::vector<PageConfig> get_page_configs(const std::string &tab_config_id);
 +        // The tab whose page shows this config's options (add_page_config), or nullptr when it is shown on its own.
 +        const std::string *get_page_host(const std::string &extra_config_id);
 +        // Shows the option with this ID on the page tab page_id instead of its own tab.
@@ -1141,7 +1165,7 @@ index 38b84f5..ba22997 100644
          // Get the config modal instance. nullptr until created with init_modal() internally.
          // Will throw an error if it hasn't been created yet.
          recompui::TabbedModal *get_config_modal();
-@@ -146,6 +240,8 @@ namespace recompui {
+@@ -146,6 +250,8 @@ namespace recompui {
          // Get any added config by ID.
          recomp::config::Config &get_config(const std::string &id);
          recomp::config::Config &get_general_config();
@@ -2250,7 +2274,7 @@ index 56a0b70..1bdf8e2 100644
              prompt_state.cancel_action();
          }
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..cc8a587 100644
+index 6c84c05..e78ac7a 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
 @@ -1,7 +1,15 @@
@@ -2384,7 +2408,19 @@ index 6c84c05..cc8a587 100644
      void config::create_tab(
          const std::string &name,
          const std::string &id,
-@@ -121,7 +230,161 @@ namespace recompui {
+@@ -56,6 +165,11 @@ namespace recompui {
+         });
+     }
+ 
++    recomp::config::Config &config::create_config(const std::string &name, const std::string &id, bool requires_confirmation) {
++        configs.push_back(std::make_pair(id, recomp::config::Config(name, id, requires_confirmation)));
++        return configs.back().second;
++    }
++
+     recomp::config::Config &config::create_config_tab(const std::string &name, const std::string &id, bool requires_confirmation) {
+         configs.push_back(std::make_pair(id, recomp::config::Config(name, id, requires_confirmation)));
+         recomp::config::Config &new_config = configs.back().second;
+@@ -121,7 +235,161 @@ namespace recompui {
          loaded_configs = true;
      }
  
@@ -2461,17 +2497,17 @@ index 6c84c05..cc8a587 100644
 +    static std::unordered_map<std::string, std::string> option_pages;
 +    static std::unordered_map<std::string, std::string> page_names;
 +    // add_page_config: each host tab's guest configs, and each guest's host.
-+    static std::unordered_map<std::string, std::vector<std::string>> page_configs;
++    static std::unordered_map<std::string, std::vector<config::PageConfig>> page_configs;
 +    static std::unordered_map<std::string, std::string> page_hosts;
 +
-+    void config::add_page_config(const std::string &tab_config_id, const std::string &extra_config_id) {
-+        page_configs[tab_config_id].push_back(extra_config_id);
++    void config::add_page_config(const std::string &tab_config_id, const std::string &extra_config_id, const std::string &before_option_id) {
++        page_configs[tab_config_id].push_back({ extra_config_id, before_option_id });
 +        page_hosts[extra_config_id] = tab_config_id;
 +    }
 +
-+    std::vector<std::string> config::get_page_configs(const std::string &tab_config_id) {
++    std::vector<config::PageConfig> config::get_page_configs(const std::string &tab_config_id) {
 +        auto it = page_configs.find(tab_config_id);
-+        return it == page_configs.end() ? std::vector<std::string>{} : it->second;
++        return it == page_configs.end() ? std::vector<PageConfig>{} : it->second;
 +    }
 +
 +    const std::string *config::get_page_host(const std::string &extra_config_id) {
@@ -2546,7 +2582,7 @@ index 6c84c05..cc8a587 100644
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
                  if (tab.id == id) {
-@@ -135,6 +398,31 @@ namespace recompui {
+@@ -135,6 +403,31 @@ namespace recompui {
          }
      }
  
@@ -2578,7 +2614,7 @@ index 6c84c05..cc8a587 100644
      void config::init_modal() {
          if (!loaded_configs) {
              throw std::runtime_error("Configurations have not been loaded. Call recompui::config::finalize() first.");
-@@ -152,9 +440,12 @@ namespace recompui {
+@@ -152,9 +445,12 @@ namespace recompui {
                  config_modal->set_tab_visible(tab.id, false);
              }
          }
@@ -2591,7 +2627,7 @@ index 6c84c05..cc8a587 100644
          quit_button->add_pressed_callback([]() {
              if (ultramodern::is_game_started()) {
                  recompui::open_quit_game_prompt();
-@@ -163,6 +454,7 @@ namespace recompui {
+@@ -163,6 +459,7 @@ namespace recompui {
              }
          });
          auto close_button = config_modal->modal_root_context.create_element<IconButton>(header_right, "icons/X.svg", ButtonStyle::Basic);
@@ -2599,7 +2635,7 @@ index 6c84c05..cc8a587 100644
          close_button->add_pressed_callback([]() {
              config::close();
          });
-@@ -177,6 +469,14 @@ namespace recompui {
+@@ -177,6 +474,14 @@ namespace recompui {
          return config_modal->modal_root_context;
      }
  
@@ -2614,7 +2650,7 @@ index 6c84c05..cc8a587 100644
      void config::set_tab(const std::string &id) {
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
-@@ -185,6 +485,83 @@ namespace recompui {
+@@ -185,6 +490,83 @@ namespace recompui {
          config_modal->set_selected_tab(id);
      }
  
@@ -3320,7 +3356,7 @@ index f379a6f..7bbf136 100644
      recompui::GameInputRowsWrapper *last = nullptr;
      for (auto *wrapper : rows_wrappers) {
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..11dfd49 100644
+index 6ba64e2..2c3a1a0 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,10 @@
@@ -3334,7 +3370,7 @@ index 6ba64e2..11dfd49 100644
  
  
  namespace recompui {
-@@ -7,33 +13,180 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
+@@ -7,33 +13,181 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
      ResourceId rid,
      Element *parent,
      recomp::config::Config *config,
@@ -3353,8 +3389,9 @@ index 6ba64e2..11dfd49 100644
      set_as_navigation_container(NavigationType::Vertical);
  
 +    if (page_id.empty()) {
-+        for (const std::string &extra_id : recompui::config::get_page_configs(config->id)) {
-+            extra_configs.push_back(&recompui::config::get_config(extra_id));
++        for (const recompui::config::PageConfig &extra : recompui::config::get_page_configs(config->id)) {
++            extra_configs.push_back(&recompui::config::get_config(extra.config_id));
++            extra_before.push_back(extra.before_option_id);
 +        }
 +    }
      render_config_options();
@@ -3522,7 +3559,7 @@ index 6ba64e2..11dfd49 100644
          }
      }
  }
-@@ -47,19 +200,33 @@ ConfigOptionElement* ConfigPageOptionsMenu::get_element_from_option_id(const std
+@@ -47,19 +201,33 @@ ConfigOptionElement* ConfigPageOptionsMenu::get_element_from_option_id(const std
      return nullptr;
  }
  
@@ -3558,7 +3595,7 @@ index 6ba64e2..11dfd49 100644
              continue;
          }
          for (auto &update_type :option_update.updates) {
-@@ -86,6 +253,14 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
+@@ -86,6 +254,14 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
                      element->update_value();
                      break;
                  }
@@ -3573,7 +3610,7 @@ index 6ba64e2..11dfd49 100644
                  case ConfigOptionUpdateType::Description: {
                      if (description_container && description_option_id == option_id) {
                          set_description_text(config->get_option(option_index).description);
-@@ -97,6 +272,7 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
+@@ -97,6 +273,7 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
      }
  
      config->clear_config_option_updates();
@@ -3581,7 +3618,7 @@ index 6ba64e2..11dfd49 100644
  }
  
  void ConfigPageOptionsMenu::process_event(const Event &e) {
-@@ -109,6 +285,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -109,6 +286,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
          break;
      }
      case EventType::Update: {
@@ -3591,7 +3628,7 @@ index 6ba64e2..11dfd49 100644
          if (apply_button != nullptr) {
              bool apply_enabled = this->apply_button->is_enabled();
              bool is_dirty = config->is_dirty();
-@@ -117,6 +296,10 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -117,6 +297,10 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
              }
          }
          perform_option_render_updates();
@@ -3602,7 +3639,7 @@ index 6ba64e2..11dfd49 100644
          break;
      }
      case EventType::MenuAction: {
-@@ -148,7 +331,20 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -148,7 +332,20 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  }
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
@@ -3623,7 +3660,7 @@ index 6ba64e2..11dfd49 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -172,8 +368,23 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -172,8 +369,23 @@ void ConfigPageOptionsMenu::render_config_options() {
          body_left_scroll->set_padding(16.0f);
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
@@ -3647,7 +3684,7 @@ index 6ba64e2..11dfd49 100644
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
          };
-@@ -181,8 +392,64 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +393,73 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
@@ -3659,7 +3696,8 @@ index 6ba64e2..11dfd49 100644
 +                order.push_back(i);
 +            }
 +        }
-+        for (size_t i = 0; i < schema.options.size(); i++) {
+         for (size_t i = 0; i < schema.options.size(); i++) {
+-            auto &config_option = schema.options[i];
 +            const std::string *before = recompui::config::get_option_display_before(schema.options[i].id);
 +            if (before == nullptr || !schema.options_by_id.contains(*before)) {
 +                continue;
@@ -3672,8 +3710,7 @@ index 6ba64e2..11dfd49 100644
 +            order.insert(std::find(order.begin(), order.end(), schema.options_by_id.at(*before)), i);
 +        }
 +        // Options set with set_option_display_last go to the bottom, in schema order.
-         for (size_t i = 0; i < schema.options.size(); i++) {
--            auto &config_option = schema.options[i];
++        for (size_t i = 0; i < schema.options.size(); i++) {
 +            auto from = std::find(order.begin(), order.end(), i);
 +            if (from == order.end() || !recompui::config::get_option_display_last(schema.options[i].id)) {
 +                continue;
@@ -3681,20 +3718,29 @@ index 6ba64e2..11dfd49 100644
 +            order.erase(from);
 +            order.push_back(i);
 +        }
-+        // Then the options of the configs shown on this page too (config::add_page_config), their own ones in order.
++        // With the options of the configs shown on this page too (config::add_page_config), their own ones in order,
++        // each config's just above its option of this page, or after them all.
 +        std::vector<std::pair<recomp::config::Config *, size_t>> items;
 +        for (const size_t i : order) {
 +            items.emplace_back(config, i);
 +        }
 +        std::vector<recomp::config::ConfigSchema> extra_schemas;
 +        extra_schemas.reserve(extra_configs.size());
-+        for (recomp::config::Config *extra : extra_configs) {
++        for (size_t e = 0; e < extra_configs.size(); e++) {
++            recomp::config::Config *extra = extra_configs[e];
 +            extra_schemas.push_back(extra->get_config_schema());
++            std::vector<std::pair<recomp::config::Config *, size_t>> extra_items;
 +            for (size_t i = 0; i < extra_schemas.back().options.size(); i++) {
 +                if (recompui::config::get_option_page(extra_schemas.back().options[i].id) == nullptr) {
-+                    items.emplace_back(extra, i);
++                    extra_items.emplace_back(extra, i);
 +                }
 +            }
++            auto at = items.end();
++            if (!extra_before[e].empty() && schema.options_by_id.contains(extra_before[e])) {
++                const size_t before_index = schema.options_by_id.at(extra_before[e]);
++                at = std::find(items.begin(), items.end(), std::make_pair(config, before_index));
++            }
++            items.insert(at, extra_items.begin(), extra_items.end());
 +        }
 +        for (size_t position = 0; position < items.size(); position++) {
 +            recomp::config::Config *config = items[position].first;
@@ -3713,7 +3759,7 @@ index 6ba64e2..11dfd49 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +500,10 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +510,10 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -3724,7 +3770,7 @@ index 6ba64e2..11dfd49 100644
              element->update_disabled();
              element->update_hidden();
              config_option_elements.push_back(element);
-@@ -240,10 +511,45 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -240,10 +521,45 @@ void ConfigPageOptionsMenu::render_config_options() {
      }
  }
  
@@ -3772,7 +3818,7 @@ index 6ba64e2..11dfd49 100644
  }
  
 diff --git a/recompui/src/config/ui_config_page_options_menu.h b/recompui/src/config/ui_config_page_options_menu.h
-index 49e05db..0e53520 100644
+index 49e05db..bf76c4b 100644
 --- a/recompui/src/config/ui_config_page_options_menu.h
 +++ b/recompui/src/config/ui_config_page_options_menu.h
 @@ -1,5 +1,7 @@
@@ -3783,12 +3829,14 @@ index 49e05db..0e53520 100644
  #include "config/ui_config_option.h"
  #include "elements/ui_config_page.h"
  #include "elements/ui_modal.h"
-@@ -11,12 +13,28 @@ namespace recompui {
+@@ -11,12 +13,30 @@ namespace recompui {
      class ConfigPageOptionsMenu : public ConfigPage {
      protected:
          recomp::config::Config *config;
-+        // Other configs whose options show after this page's own (config::add_page_config).
++        // Other configs whose options show on this page too (config::add_page_config), and the option of this page's
++        // own config each goes above (empty: after them all).
 +        std::vector<recomp::config::Config *> extra_configs;
++        std::vector<std::string> extra_before;
          bool is_internal = false;
 +        // For a page tab (config::create_page_tab): only the options set_option_page gives it, under its own name.
 +        // Empty for a config's own tab, which leaves those options out.
@@ -3812,7 +3860,7 @@ index 49e05db..0e53520 100644
  
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "ConfigPageOptionsMenu"; }
-@@ -27,16 +45,30 @@ namespace recompui {
+@@ -27,16 +47,30 @@ namespace recompui {
          void render_config_options();
          void render_confirmation_footer();
          void on_option_hover(const std::string &option_id);
@@ -4068,6 +4116,41 @@ index 4fdf81f..43b3302 100644
              return config;
          }
      }
+diff --git a/recompui/src/config/ui_config_tab_sound.cpp b/recompui/src/config/ui_config_tab_sound.cpp
+index ecdd7cc..025442a 100644
+--- a/recompui/src/config/ui_config_tab_sound.cpp
++++ b/recompui/src/config/ui_config_tab_sound.cpp
+@@ -22,17 +22,26 @@ namespace config {
+         return get_sound_config_number_value<double>(sound::options::main_volume);
+     }
+ 
+-    recomp::config::Config &create_sound_tab(const std::string &name) {
+-        created_sound_config = true;
+-        recomp::config::Config &config = recompui::config::create_config_tab(name, sound::id, false);
+-
++    static void add_sound_options(recomp::config::Config &config) {
+         config.add_percent_number_option(
+             sound::options::main_volume,
+             "Main Volume",
+             "Controls the main volume of the game.",
+             100.0
+         );
++    }
++
++    recomp::config::Config &create_sound_tab(const std::string &name) {
++        created_sound_config = true;
++        recomp::config::Config &config = recompui::config::create_config_tab(name, sound::id, false);
++        add_sound_options(config);
++        return config;
++    }
+ 
++    recomp::config::Config &create_sound_config(const std::string &name) {
++        created_sound_config = true;
++        recomp::config::Config &config = recompui::config::create_config(name, sound::id, false);
++        add_sound_options(config);
+         return config;
+     }
+ } // namespace config
 diff --git a/recompui/src/core/ui_context.cpp b/recompui/src/core/ui_context.cpp
 index e99229a..8276d4f 100644
 --- a/recompui/src/core/ui_context.cpp
