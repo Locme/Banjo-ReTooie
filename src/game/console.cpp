@@ -2465,10 +2465,11 @@ void cmd_uimove(Ctx& c) {
 
 // menu open|close: opens or shuts the Esc menu, as the Esc key does. menu tab <id>: shows that settings tab.
 // menu expand <setting> [off]: opens (or shuts) the arrow of a setting with settings under it, as clicking it does.
+// menu show <setting>: scrolls the setting's row into view on the tab shown, for a screenshot of it.
 void cmd_menu(Ctx& c) {
     const std::string what = c.w.size() >= 2 ? lower(c.w[1]) : "";
-    const char* usage = "menu open | menu close | menu tab <id> | menu expand <setting> [off]";
-    if (what == "tab" || what == "expand") {
+    const char* usage = "menu open | menu close | menu tab <id> | menu expand <setting> [off] | menu show <setting>";
+    if (what == "tab" || what == "expand" || what == "show") {
         if (c.w.size() < 3) { error(usage); return; }
         auto lifetime = recompui::lock_context_lifetime();
         if (!recompui::contexts_alive()) { error("the menus are not up"); return; }
@@ -2482,6 +2483,13 @@ void cmd_menu(Ctx& c) {
                 error("no tab \"" + id + "\" (or the Esc menu is not made yet)");
                 return;
             }
+        } else if (what == "show") {
+            SettingRef ref;
+            if (!lookup_setting(c.w[2], &ref)) return;
+            with_context(recompui::config::get_config_context_id(), [&] {
+                recompui::layout_offsets::scroll_into_view("row." + ref.id());
+            });
+            said = ref.full_id() + " scrolled into view";
         } else {
             SettingRef ref;
             if (!lookup_setting(c.w[2], &ref)) return;
@@ -4708,7 +4716,7 @@ const std::vector<Command>& commands() {
         { "lights", {}, true, "lights [add [r g b [radius [height]]] | undo | clear | list]", "Point Lights's lamps for this map: add one above Banjo (warm, radius 500, 80 up), remove the last, all, or list them (saved to Dev Files/point_lights.txt)", cmd_lights },
         { "goto", { "tp" }, true, "goto <x> <y> <z>", "move Banjo to a position in this map", cmd_goto },
         { "walkto", { "walk" }, true, "walkto <x> <z> [radius] [timeout s]", "walk Banjo to a point with controller 1's stick, the way the camera faces (holds the queue; radius 30, 10 s)", cmd_walkto },
-        { "menu", {}, false, "menu open | menu close | menu tab <id> | menu expand <setting> [off]", "open or shut the Esc menu, show a tab, open a setting's arrow", cmd_menu },
+        { "menu", {}, false, "menu open | menu close | menu tab <id> | menu expand <setting> [off] | menu show <setting>", "open or shut the Esc menu, show a tab, open a setting's arrow, scroll to a setting", cmd_menu },
         { "menupos", {}, false, "menupos [<x> <y> | reset]", "move the Esc menu from the middle by x, y (dp), at once", cmd_menupos },
         { "portraits", {}, true, "portraits dump [last hex id] | portraits voice <hex id> | portraits hashes", "hashes: the Esc menu portraits' RT64 texture hashes and which a texture pack replaces; voice: list a portrait's voice sounds and play one; dump: write every talking-head portrait (0 to D1) to Dev Files/portraits as pictures, to pick them for the Esc menu's tabs", cmd_portraits },
         { "key", {}, false, "key <up|down|left|right|enter|escape|tab|letter|digit> [times]", "press a key of the keyboard in the window, as the real keyboard would (to walk through the menus)", cmd_key },

@@ -1251,11 +1251,12 @@ Catch: needs a player in the game. Until there is one, it reports an error.
 
 ### `menu`
 
-Usage: `menu open | menu close | menu tab <id> | menu expand <setting> [off]`
+Usage: `menu open | menu close | menu tab <id> | menu expand <setting> [off] | menu show <setting>`
 
 Opens or shuts the Esc menu, as the Esc key does. `menu tab` shows a settings tab (`general`, `graphics`, `sound`,
 `qol`, `cheats`, `wip`). `menu expand` opens the arrow of a setting that has settings under it, as clicking the arrow
-does, and `off` shuts it again. The row is scrolled into view. The setting is named as for `get` and `set`.
+does, and `off` shuts it again. The row is scrolled into view. `menu show` scrolls any setting's row into view on the tab
+shown, for a screenshot of it. The setting is named as for `get` and `set`.
 
 ```
 menu open
@@ -1263,6 +1264,7 @@ menu tab graphics
 menu expand ground_displacement
 screenshot ui
 menu expand ground_displacement off
+menu show circle_shadow
 menupos 150 0
 menu close
 ```
