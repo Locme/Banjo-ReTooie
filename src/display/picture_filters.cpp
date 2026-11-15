@@ -506,6 +506,10 @@ namespace {
         { 0xa95b7ee485b02d15, fx(effect_rt_off) },
         { 0xaa4fb767534de6b1, fx(effect_rt_off) },
         { 0xbfca5f9eff23e2ab, fx(effect_glow) },
+        // Mayahem Temple's boulder's painted shadow: a flat, blended star lying just over the ground, which the rays took as
+        // solid and cast again as a traced shadow, dark spikes round a lit hole under the boulder (L, 2026-11-15; found by
+        // leaving the map's see-through level textures out in halves, TOOIE_RT_OFF, with TOOIE_RT_DRAWLOG's list).
+        { 0x5a6d35dcdd798e6f, fx(effect_rt_off) },
         // The grenade egg's blast fireball (8x8 fire), found with a headless blow-up run (TOOIE_EXPLODE=a15D@<ms>).
         { 0x0f99c88fb5007ceb, fx(effect_glow, effect_light) },
         // L's parallax, shader effect and ray tags of 2026-10-22 (the Metal, Stone and Disable picks there too).

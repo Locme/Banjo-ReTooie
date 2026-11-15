@@ -5029,7 +5029,7 @@ index 9fae0d4..36ae314 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +3757,1929 @@ namespace RT64 {
+@@ -1747,24 +3757,1959 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -5185,6 +5185,36 @@ index 9fae0d4..36ae314 100644
 +                            emissive = SceneLampTexture(tileHash) || SceneGlowTexture(tileHash) || SceneShineModelTexture(tileHash) || (SceneLightSourceReach(tileHash) > 0.0f);
 +                        }
 +                        materialFlags |= emissive ? SceneRayDrawEmissive : 0u;
++                    }
++                    // TOOIE_RT_DRAWLOG=1: the models drawn with what decides how they go into the traced scene, each once every
++                    // 3 s (texture, blend, alpha compare, coverage, depth, triangles, world position, combiner), to find a draw.
++                    {
++                        static const bool drawLog = (getenv("TOOIE_RT_DRAWLOG") != nullptr);
++                        const interop::OtherMode &lm = call.shaderDesc.otherMode;
++                        const bool logLevel = levelGeometry(drawData, call);
++                        if (drawLog && (proj.type == Projection::Type::Perspective) && (call.callDesc.minWorldMatrix < drawData.worldTransforms.size()) &&
++                            (!logLevel || interop::Blender::usesAlphaBlend(lm) || (lm.alphaCompare() != G_AC_NONE) || lm.cvgXAlpha() || lm.alphaCvgSel())) {
++                            static auto lastDrawLog = std::chrono::steady_clock::now();
++                            static std::vector<uint64_t> seenDraws;
++                            if (std::chrono::steady_clock::now() - lastDrawLog > std::chrono::seconds(3)) {
++                                lastDrawLog = std::chrono::steady_clock::now();
++                                seenDraws.clear();
++                            }
++                            const float (&dw)[4][4] = drawData.worldTransforms[call.callDesc.minWorldMatrix].m;
++                            const uint64_t drawHash = (call.callDesc.tileCount > 0) ? drawData.callTiles[call.callDesc.tileIndex].tmemHashOrID : 0;
++                            const uint64_t drawKey = drawHash ^ (uint64_t(int64_t(dw[3][0])) * 73856093ull) ^ (uint64_t(int64_t(dw[3][2])) * 19349663ull) ^ uint64_t(call.callDesc.triangleCount);
++                            if (std::find(seenDraws.begin(), seenDraws.end(), drawKey) == seenDraws.end()) {
++                                seenDraws.push_back(drawKey);
++                                const interop::OtherMode &dm = call.shaderDesc.otherMode;
++                                fprintf(stdout, "[rt-draw] %s tex %016llx at %.0f %.0f %.0f tris %u mats %u-%u blend %d ac %d cvgxa %d zupd %d zcmp %d excl %d off %d fbz %d vtz %d cc %08x %08x\n",
++                                    logLevel ? "level" : "model", (unsigned long long)drawHash, dw[3][0], dw[3][1], dw[3][2], call.callDesc.triangleCount,
++                                    unsigned(call.callDesc.minWorldMatrix), unsigned(call.callDesc.maxWorldMatrix),
++                                    int(interop::Blender::usesAlphaBlend(dm)), int(dm.alphaCompare()), int(dm.cvgXAlpha()), int(dm.zUpd()), int(dm.zCmp()),
++                                    int(excluded), int(rayOff), int(fbPair.depthWrite), int(instanceDrawCall.triangles.vertexTestZ),
++                                    unsigned(call.callDesc.colorCombiner.L), unsigned(call.callDesc.colorCombiner.H));
++                                fflush(stdout);
++                            }
++                        }
 +                    }
 +                    if (!excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
@@ -6960,7 +6990,7 @@ index 9fae0d4..36ae314 100644
          };
  
  #   if RT_ENABLED
-@@ -1816,8 +5731,13 @@ namespace RT64 {
+@@ -1816,8 +5761,13 @@ namespace RT64 {
          }
  #   endif
  
