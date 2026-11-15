@@ -1310,6 +1310,20 @@ portraits voice C
 
 Catch: needs the game running. The few large portraits that are cut into tiles don't decode, so they have no PNG.
 
+### `key`
+
+Usage: `key <up|down|left|right|enter|escape|tab|letter|digit> [times]`
+
+Presses and lets go of a key of the keyboard, `times` times (1 when not given), as the window's own key events, so
+the Esc menu and the launcher take it as they take the real keyboard: `key down 30` walks down a settings page, which
+scrolls it as it goes.
+
+```
+menu open
+key down 30
+screenshot ui
+```
+
 ### `cursor`
 
 Usage: `cursor <x> <y> [click|right]`

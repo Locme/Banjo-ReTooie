@@ -2297,6 +2297,46 @@ void cmd_portraits(Ctx& c) {
     print(format("%d portraits written to %s", written, folder.c_str()));
 }
 
+// key <name> [times]: presses and lets go of a key of the keyboard (up, down, left, right, enter, escape, tab, or a
+// letter or digit), as the window's own key events, so the menus take it as they take the real keyboard (2026-11-15:
+// to walk down a settings page, which scrolls it).
+void cmd_key(Ctx& c) {
+    if (c.w.size() != 2 && c.w.size() != 3) { error("key <up|down|left|right|enter|escape|tab|a letter or digit> [times]"); return; }
+    const std::string name = lower(c.w[1]);
+    SDL_Keycode sym = SDLK_UNKNOWN;
+    if (name == "up") sym = SDLK_UP;
+    else if (name == "down") sym = SDLK_DOWN;
+    else if (name == "left") sym = SDLK_LEFT;
+    else if (name == "right") sym = SDLK_RIGHT;
+    else if (name == "enter" || name == "return") sym = SDLK_RETURN;
+    else if (name == "escape" || name == "esc") sym = SDLK_ESCAPE;
+    else if (name == "tab") sym = SDLK_TAB;
+    else if (name.size() == 1 && std::isalnum((unsigned char)name[0])) sym = (SDL_Keycode)name[0];
+    if (sym == SDLK_UNKNOWN) { error("no key " + name); return; }
+    int times = 1;
+    if (c.w.size() == 3) {
+        double t = 0;
+        if (!parse_double(c.w[2], &t) || t < 1 || t > 100) { error("times is 1 to 100"); return; }
+        times = (int)t;
+    }
+    if (window == nullptr) { error("no window yet"); return; }
+    const Uint32 id = SDL_GetWindowID(window);
+    for (int i = 0; i < times; i++) {
+        SDL_Event down{};
+        down.type = SDL_KEYDOWN;
+        down.key.windowID = id;
+        down.key.state = SDL_PRESSED;
+        down.key.keysym.sym = sym;
+        down.key.keysym.scancode = SDL_GetScancodeFromKey(sym);
+        SDL_PushEvent(&down);
+        SDL_Event up = down;
+        up.type = SDL_KEYUP;
+        up.key.state = SDL_RELEASED;
+        SDL_PushEvent(&up);
+    }
+    print(format("pressed %s %d time%s", name.c_str(), times, times == 1 ? "" : "s"));
+}
+
 // cursor <x> <y> [click|right]: the mouse pointer to (x, y) in the window's pixels, from its top left, and a click
 // there, as SDL events from the window, so the menus take them as they take the real mouse's (the hand cursor's
 // reach included). The real pointer is not moved.
@@ -4671,6 +4711,7 @@ const std::vector<Command>& commands() {
         { "menu", {}, false, "menu open | menu close | menu tab <id> | menu expand <setting> [off]", "open or shut the Esc menu, show a tab, open a setting's arrow", cmd_menu },
         { "menupos", {}, false, "menupos [<x> <y> | reset]", "move the Esc menu from the middle by x, y (dp), at once", cmd_menupos },
         { "portraits", {}, true, "portraits dump [last hex id] | portraits voice <hex id> | portraits hashes", "hashes: the Esc menu portraits' RT64 texture hashes and which a texture pack replaces; voice: list a portrait's voice sounds and play one; dump: write every talking-head portrait (0 to D1) to Dev Files/portraits as pictures, to pick them for the Esc menu's tabs", cmd_portraits },
+        { "key", {}, false, "key <up|down|left|right|enter|escape|tab|letter|digit> [times]", "press a key of the keyboard in the window, as the real keyboard would (to walk through the menus)", cmd_key },
         { "cursor", {}, false, "cursor <x> <y> [click|right]", "point the mouse at x, y in the window (pixels from its top left) and click there, as the real mouse would", cmd_cursor },
         { "uimove", {}, false, "uimove list | <entry> <x> <y> | <entry> reset | reset | save", "move single tabs, rows and buttons of the Esc menu by x, y (dp), at once; save writes assets/ui_layout.json", cmd_uimove },
         { "cam", {}, true, "cam", "the camera's position and angles as drawn, and its mode", cmd_cam },

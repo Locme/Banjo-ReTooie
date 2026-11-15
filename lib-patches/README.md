@@ -213,6 +213,12 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   them (their hash version is no longer among `resolvedHashVersions`). `renderer::texture_hash` gives the hash alone,
   and `renderer::texture_packs_version()` goes up after each change of the packs in use. The game's Esc menu
   portraits use it (src/ui/menu_portraits.cpp).
+* **Another config's options on a page** (`recompui/include/recompui/config.h`, `ui_config.cpp`,
+  `ui_config_page_options_menu.{h,cpp}`): `config::add_page_config(tab_config_id, extra_config_id)` shows a config's
+  own options at the bottom of another tab's page, after that tab's own (the game puts Sound on General and hides the
+  Sound tab). Each option still belongs to its config: `ConfigPageOptionsMenu::owner_of` routes a change, its
+  description and its updates to it, and a change to a guest config is saved at once (it has no tab of its own whose
+  closing saves it; Search saves it at once too). Search names the host tab for them (`get_option_tab_name`).
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.
