@@ -255,6 +255,12 @@ The hole's sides and floor are the blocks round it, drawn by us. So Banjo digs i
   - Cracks (L: "the black in the stone textures look like they don't belong"): a crack darkens the grain to about
     two thirds and its edge a little, on the grain itself instead of white; the level textures' cracked copies take
     the same shade (crack_shade).
+- Still there: a small tan speck at a wall hole's lower corner from some angles. `TOOIE_VOXEL_RED=1` shows it is the
+  level, not the layer, and the void view shows it is not empty. Tried and dropped: the rim faces at 2 or 8 units
+  behind the surface (8 showed more of it, 2 no less than 4), and cutting any level surface inside a cut cell
+  (VoxelCuts.hlsli), which cut square steps into the cliff round the hole.
+- With Ray Tracing on, a hole's inside is black and the rim faces show as lighter rectangles on the cliff; not
+  looked into.
 - Seen, not the layer's: a `goto` to (-7700, -900, -1034) in Jinjo Village sometimes left Banjo falling through the
   floor or hanging in the air, with the Voxel Layer off too and no cells cut.
 
