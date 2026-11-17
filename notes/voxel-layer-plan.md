@@ -272,6 +272,11 @@ The hole's sides and floor are the blocks round it, drawn by us. So Banjo digs i
   overlaps the hole's faces more there. A plain 0.9 everywhere also closed it but left lens-shaped strips of wall
   inside the hole. A one-pixel nick can still show from one angle. Also tried and dropped: cutting only the cell
   behind a surface as seen from the camera, two-sided faces, and one shared depth for faces meeting at a corner.
+- The lighter band round a hole under Ray Tracing, fixed 2026-11-17: VoxelHitCut counted a level hit as cut when the
+  cell 18 units before or after it along the ray was cut, a square test wider than the picture's rounded cut, so the
+  rays went through the wall the picture keeps round a hole and lit it as open. It now takes the hit triangle's normal
+  from its corners (gRayPositions, as HitFaceNormal does) and runs the picture's own rule (VoxelRowCutDust, the same
+  as VoxelRowCut). The old cell test is kept for passes that can't read the triangles (RayTexturesOn off).
 - (Earlier note) The tan speck, 2026-11-17: it is Jinjo Village's sky (tan below the horizon, seen from under the level), so a real
   look through the cliff. Tried and dropped: bringing the rim faces up to the surface where the cut is, and all of
   them to four units behind the surface; both showed more tan along the hole's bottom edge, not less.

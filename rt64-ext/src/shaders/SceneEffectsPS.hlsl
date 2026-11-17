@@ -1374,24 +1374,79 @@ bool VoxelCellCutDust(int3 cell) {
     return false;
 }
 
-// A hit t along the ray over a cut cell: the cell a cell's size on along the ray (a ray meets a surface from its front,
-// so that is behind it, in the outermost solid cell; the cells in front of the level's surfaces are never cut).
-bool VoxelHitCut(RayDesc ray, float t) {
+// How much of a point's row of cells is cut round it, as VoxelRowCut (VoxelCuts.hlsli) works it out for the picture:
+// the row a cell's size along the normal's main axis (side: -1 or 1), its four cells nearest the point blended, and the
+// blend held further in at a hole's edges. The same rule here as there, so the level the rays pass by is the level the
+// picture leaves out.
+float VoxelRowCutDust(float3 world, uint axis, float side) {
+    float3 q = world;
+    q[axis] += side * 18.0f;
+    const uint t1 = (axis + 1u) % 3u, t2 = (axis + 2u) % 3u;
+    const float3 f = q / 18.0f - 0.5f;
+    const float2 g = float2(f[t1], f[t2]);
+    const float2 g0 = floor(g);
+    const float2 w = g - g0;
+    int3 cell;
+    cell[axis] = int(floor(q[axis] / 18.0f));
+    cell[t1] = int(floor(q[t1] / 18.0f));
+    cell[t2] = int(floor(q[t2] / 18.0f));
+    if (!VoxelCellCutDust(cell)) {
+        return 0.0f;
+    }
+    float sum = 0.0f;
+    uint count = 0u;
+    [unroll] for (int k = 0; k < 4; k++) {
+        const int2 o = int2(k & 1, k >> 1);
+        cell[t1] = int(g0.x) + o.x;
+        cell[t2] = int(g0.y) + o.y;
+        const float weight = ((o.x != 0) ? w.x : 1.0f - w.x) * ((o.y != 0) ? w.y : 1.0f - w.y);
+        if (VoxelCellCutDust(cell)) {
+            sum += weight;
+            count++;
+        }
+    }
+    if (count == 4u) {
+        return 1.0f;
+    }
+    return (count == 3u) ? sum : sum * (0.75f / 0.9f);
+}
+
+// A level hit t along the ray (world space), on the triangle primitive of geometry, over the cut cells: the picture's
+// own test (VoxelSurfaceCut), with the triangle's normal from its corners. Before, a hit counted as cut when the cell a
+// cell's size before or after it along the ray was, a square test the picture doesn't use: round a hole the wall the
+// picture keeps was passed by in squares, the light came through it and the wall there was lighter (L, 2026-11-17).
+// Where this pass can't read the triangles (RayTexturesOn), that cell test stands in.
+bool VoxelHitCut(RayDesc ray, float t, uint geometry, uint primitive) {
     if (!VoxelCutsOn()) {
         return false;
     }
-    // Either side of the hit: a ray from inside a hole out through its mouth meets the cut surface from behind, and the
-    // cell a cell's size on is then in front of the surface, never cut. Only the cell past the hit was looked at, so
-    // light never came out of a hole (or into it, traced from inside), and under Ray Tracing a hole was black
-    // (L, 2026-11-15). The cell in front of a surface is never cut, so looking on both sides can't pass a whole one.
-    const float step = 18.0f / max(length(ray.Direction), 1e-6f);
+    const float3 p = ray.Origin + ray.Direction * t;
     const int3 lo = asint(gDust.Load3(DustVoxelOffset + 16u));
     const int3 hi = asint(gDust.Load3(DustVoxelOffset + 32u));
+    const int3 pc = int3(floor(p / 18.0f));
+    // Outside the cut cells' bounds (with the two cells round them the test looks at): not cut, without a look in the
+    // table.
+    if (any(pc < lo - 2) || any(pc > hi + 2)) {
+        return false;
+    }
+    if (RayTexturesOn()) {
+        const uint base = (gRayGeometries.Load(geometry * 16u) + primitive * 3u) * 4u;
+        const uint3 v = uint3(gRayIndices.Load(base), gRayIndices.Load(base + 4u), gRayIndices.Load(base + 8u));
+        const float3 p0 = asfloat(gRayPositions.Load3(v.x * 16u));
+        const float3 p1 = asfloat(gRayPositions.Load3(v.y * 16u));
+        const float3 p2 = asfloat(gRayPositions.Load3(v.z * 16u));
+        const float3 a = abs(cross(p1 - p0, p2 - p0));
+        if (dot(a, a) > 1e-12f) {
+            const uint axis = (a.x >= a.y) ? ((a.x >= a.z) ? 0u : 2u) : ((a.y >= a.z) ? 1u : 2u);
+            return max(VoxelRowCutDust(p, axis, -1.0f), VoxelRowCutDust(p, axis, 1.0f)) >= 0.75f;
+        }
+    }
+    // Either side of the hit: a ray from inside a hole out through its mouth meets the cut surface from behind, and the
+    // cell a cell's size on is then in front of the surface, never cut (L, 2026-11-15: a hole was black).
+    const float step = 18.0f / max(length(ray.Direction), 1e-6f);
     [unroll]
     for (int side = 0; side < 2; side++) {
-        const float3 p = ray.Origin + ray.Direction * (t + ((side == 0) ? step : -step));
-        const int3 cell = int3(floor(p / 18.0f));
-        // Outside the cut cells' bounds: not cut, without a look in the table.
+        const int3 cell = int3(floor((ray.Origin + ray.Direction * (t + ((side == 0) ? step : -step))) / 18.0f));
         if (any(cell < lo) || any(cell > hi)) {
             continue;
         }
@@ -1404,8 +1459,8 @@ bool VoxelHitCut(RayDesc ray, float t) {
 
 // After a nearest-hit trace: a level hit (instance 0) over a cut cell moves the ray's start just past it, to be traced
 // again (true); anything else stands (false).
-bool VoxelPassThrough(bool hit, uint instance, float t, inout RayDesc ray) {
-    if (!hit || (instance != 0u) || !VoxelHitCut(ray, t)) {
+bool VoxelPassThrough(bool hit, uint instance, float t, uint geometry, uint primitive, inout RayDesc ray) {
+    if (!hit || (instance != 0u) || !VoxelHitCut(ray, t, geometry, primitive)) {
         return false;
     }
     ray.TMin = t + 1.0f / max(length(ray.Direction), 1e-6f);
@@ -1420,6 +1475,8 @@ bool VoxelBlockedNearest(RayDesc ray, uint mask, bool forceOpaque) {
         bool hit;
         uint instance;
         float t;
+        uint geometry;
+        uint primitive;
         if (forceOpaque) {
             RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
             query.TraceRayInline(gSceneBVH, 0, mask, ray);
@@ -1427,6 +1484,8 @@ bool VoxelBlockedNearest(RayDesc ray, uint mask, bool forceOpaque) {
             hit = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
             instance = query.CommittedInstanceID();
             t = query.CommittedRayT();
+            geometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
+            primitive = query.CommittedPrimitiveIndex();
         }
         else {
             RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
@@ -1436,11 +1495,13 @@ bool VoxelBlockedNearest(RayDesc ray, uint mask, bool forceOpaque) {
             hit = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
             instance = query.CommittedInstanceID();
             t = query.CommittedRayT();
+            geometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
+            primitive = query.CommittedPrimitiveIndex();
         }
         if (!hit) {
             return false;
         }
-        if (!VoxelPassThrough(hit, instance, t, ray)) {
+        if (!VoxelPassThrough(hit, instance, t, geometry, primitive, ray)) {
             return true;
         }
     }
@@ -1547,7 +1608,7 @@ bool SurfaceAlbedo(float3 center, out float3 albedo) {
                 query.CommitNonOpaqueTriangleHit();
             }
         }
-        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex(), ray)) {
             break;
         }
     }
@@ -1677,7 +1738,7 @@ bool TraceAnyNearest(RayDesc ray, uint mask) {
         if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
             return false;
         }
-        if (!VoxelPassThrough(true, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+        if (!VoxelPassThrough(true, query.CommittedInstanceID(), query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex(), ray)) {
             return true;
         }
     }
@@ -1702,7 +1763,7 @@ bool TraceAny(RayDesc ray, uint mask) {
     if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
         return false;
     }
-    if ((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT())) {
+    if ((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex())) {
         return TraceAnyNearest(ray, mask);
     }
     return true;
@@ -1894,7 +1955,7 @@ bool SurfaceGeometryTraced(float3 center, out uint geometry) {
     for (uint voxelPass = 0u; voxelPass < 6u; voxelPass++) {
         query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
         query.Proceed();
-        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex(), ray)) {
             break;
         }
     }
@@ -1992,7 +2053,7 @@ float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
                 query.CommitNonOpaqueTriangleHit();
             }
         }
-        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex(), ray)) {
             break;
         }
     }
@@ -2408,7 +2469,7 @@ float TraceDistance(float3 origin, float3 direction, float reach) {
         query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
         while (query.Proceed()) {
         }
-        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex(), ray)) {
             break;
         }
     }
@@ -2442,7 +2503,7 @@ float TraceDistanceGeometry(float3 origin, float3 direction, float reach, out ui
         query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
         while (query.Proceed()) {
         }
-        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex(), ray)) {
             break;
         }
     }
@@ -2468,7 +2529,7 @@ bool TraceBlocked(float3 origin, float3 direction, float reach) {
     if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
         return false;
     }
-    if ((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT())) {
+    if ((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex())) {
         return VoxelBlockedNearest(ray, RayWorldMask, false);
     }
     return true;
@@ -2595,7 +2656,7 @@ float TraceDistanceSolid(float3 origin, float3 direction, float reach) {
     for (uint voxelPass = 0u; voxelPass < 6u; voxelPass++) {
         query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
         query.Proceed();
-        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+        if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex(), ray)) {
             break;
         }
     }
@@ -2685,7 +2746,7 @@ float3 PathDirectLight(float3 at, float3 normal) {
         query.Proceed();
         // (A level hit over the Voxel Layer's cut cells is checked again nearest first.)
         if ((query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) &&
-            !((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT()) && !VoxelBlockedNearest(ray, RayWorldMask, false))) {
+            !((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex()) && !VoxelBlockedNearest(ray, RayWorldMask, false))) {
             continue;
         }
         const float falloff = saturate(1.0f - fromSurface / lamp.w);
@@ -2836,7 +2897,7 @@ float3 TracedSubsurface(float3 center, float3 normal) {
         query.Proceed();
         // (A level hit over the Voxel Layer's cut cells is checked again nearest first.)
         if ((query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) &&
-            !((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT()) && !VoxelBlockedNearest(ray, RayWorldMask, false))) {
+            !((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex()) && !VoxelBlockedNearest(ray, RayWorldMask, false))) {
             continue;
         }
         const float falloff = saturate(1.0f - fromSurface / lamp.w);
@@ -5204,7 +5265,7 @@ bool SunThroughCutout(float3 worldStart, float3 worldSun, bool unblocked) {
         for (uint voxelPass = 0u; voxelPass < 6u; voxelPass++) {
             query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
             query.Proceed();
-            if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), ray)) {
+            if (!VoxelPassThrough(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT, query.CommittedInstanceID(), query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex(), ray)) {
                 break;
             }
         }
@@ -5224,7 +5285,7 @@ bool SunThroughCutout(float3 worldStart, float3 worldSun, bool unblocked) {
         query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
         query.Proceed();
         if ((query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) &&
-            !((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT()) && !VoxelBlockedNearest(ray, RayWorldMask, true))) {
+            !((query.CommittedInstanceID() == 0u) && VoxelHitCut(ray, query.CommittedRayT(), RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), query.CommittedPrimitiveIndex()) && !VoxelBlockedNearest(ray, RayWorldMask, true))) {
             hits++;
         }
         else if (k == 0) {
