@@ -52,6 +52,223 @@ index eb973875..3455b6b6 100644
  	TextureHandle texture_handle = {};
  	if (!legacy.GenerateTexture(texture_handle, unpremultiplied_copy.get(), source_dimensions))
  		texture_handle = {};
+diff --git a/Source/Core/ScrollController.cpp b/Source/Core/ScrollController.cpp
+index a406bece..8aaa20f3 100644
+--- a/Source/Core/ScrollController.cpp
++++ b/Source/Core/ScrollController.cpp
+@@ -27,6 +27,9 @@
+  */
+ 
+ #include "ScrollController.h"
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
+ #include "../../Include/RmlUi/Core/ComputedValues.h"
+ #include "../../Include/RmlUi/Core/Core.h"
+ #include "../../Include/RmlUi/Core/Element.h"
+@@ -37,10 +40,11 @@ namespace Rml {
+ static constexpr float AUTOSCROLL_SPEED_FACTOR = 0.09f;
+ static constexpr float AUTOSCROLL_DEADZONE = 10.0f; // [dp]
+ 
+-static constexpr float SMOOTHSCROLL_WINDOW_SIZE = 50.f;        // The window where smoothing is applied, as a distance from scroll start and end. [dp]
+-static constexpr float SMOOTHSCROLL_MAX_VELOCITY = 10'000.f;   // [dp/s]
+-static constexpr float SMOOTHSCROLL_VELOCITY_CONSTANT = 800.f; // [dp/s]
+-static constexpr float SMOOTHSCROLL_VELOCITY_SQUARE_FACTOR = 0.05f;
++// Banjo Re-Tooie: the smooth scroll's ease: the distance left shrinks by e (to 37%) every this long [s]; the top speed
++// [dp/s]; and how near the end counts as there [dp].
++static constexpr float SMOOTHSCROLL_EASE_TIME = 0.075f;
++static constexpr float SMOOTHSCROLL_MAX_VELOCITY = 6'000.f;
++static constexpr float SMOOTHSCROLL_SETTLE = 0.5f;
+ 
+ // Clamp the delta time to some reasonable FPS range, to avoid large steps in case of stuttering or freezing.
+ static constexpr float DELTA_TIME_CLAMP_LOW = 1.f / 500.f; // [s]
+@@ -59,34 +63,6 @@ static Vector2f CalculateAutoscrollVelocity(Vector2f target_delta, float dp_rati
+ 	return AUTOSCROLL_SPEED_FACTOR * target_delta * Math::Absolute(target_delta);
+ }
+ 
+-// Determines the smoothscroll velocity based on the distance to the target, and the distance scrolled so far. [px/s]
+-static Vector2f CalculateSmoothscrollVelocity(Vector2f target_delta, Vector2f scrolled_distance, float dp_ratio)
+-{
+-	scrolled_distance = Math::Absolute(scrolled_distance) / dp_ratio;
+-	target_delta = target_delta / dp_ratio;
+-
+-	const Vector2f target_delta_abs = Math::Absolute(target_delta);
+-	Vector2f target_delta_signum = {
+-		target_delta.x > 0.f ? 1.f : (target_delta.x < 0.f ? -1.f : 0.f),
+-		target_delta.y > 0.f ? 1.f : (target_delta.y < 0.f ? -1.f : 0.f),
+-	};
+-
+-	// The window provides velocity smoothing near the start and end of the scroll.
+-	const Tween tween(Tween::Exponential, Tween::Out);
+-	const Vector2f alpha_in = Math::Min(scrolled_distance / SMOOTHSCROLL_WINDOW_SIZE, Vector2f(1.f));
+-	const Vector2f alpha_out = Math::Min(target_delta_abs / SMOOTHSCROLL_WINDOW_SIZE, Vector2f(1.f));
+-	const Vector2f smooth_window = {
+-		0.2f + 0.8f * tween(alpha_in.x) * tween(alpha_out.x),
+-		0.2f + 0.8f * tween(alpha_in.y) * tween(alpha_out.y),
+-	};
+-
+-	const Vector2f velocity_constant = Vector2f(SMOOTHSCROLL_VELOCITY_CONSTANT);
+-	const Vector2f velocity_square = SMOOTHSCROLL_VELOCITY_SQUARE_FACTOR * target_delta_abs * target_delta_abs;
+-
+-	// Short scrolls are dominated by the smoothed constant velocity, while the square term is added for quick longer scrolls.
+-	return dp_ratio * target_delta_signum * smooth_window * Math::Min(velocity_constant + velocity_square, Vector2f(SMOOTHSCROLL_MAX_VELOCITY));
+-}
+-
+ void ScrollController::ActivateAutoscroll(Element* in_target, Vector2i start_position)
+ {
+ 	Reset();
+@@ -116,6 +92,8 @@ void ScrollController::ActivateSmoothscroll(Element* in_target, Vector2f delta_d
+ 
+ 	mode = Mode::Smoothscroll;
+ 	UpdateTime();
++	smoothscroll_position = {target->GetScrollLeft(), target->GetScrollTop()};
++	smoothscroll_goal = smoothscroll_position;
+ 	IncrementSmoothscrollTarget(delta_distance);
+ 
+ 	// If the target is scrolled to its edge already, simply cancel the smoothscroll operation.
+@@ -159,41 +137,62 @@ void ScrollController::UpdateSmoothscroll(float dp_ratio)
+ {
+ 	RMLUI_ASSERT(mode == Mode::Smoothscroll && target);
+ 
+-	const Vector2f target_delta = Vector2f(smoothscroll_target_distance - smoothscroll_scrolled_distance);
+-	const Vector2f velocity = CalculateSmoothscrollVelocity(target_delta, smoothscroll_scrolled_distance, dp_ratio);
+-
++	// Banjo Re-Tooie: the scroll eases out towards where it is going, by how much time has passed, and keeps its place
++	// between pixels. The stock model moved a whole number of pixels a frame (rounded from a speed that changed with
++	// the distance left, at least 1), so frame to frame the steps went 5, 6, 5, 7 pixels and the list juddered,
++	// worse the higher the frame rate (2026-11-17). Long scrolls are held to a top speed, then ease out the same way.
+ 	const float dt = UpdateTime();
+-	Vector2f scroll_distance = (smoothscroll_speed_factor * velocity * dt).Round();
++	const Vector2f actual = {target->GetScrollLeft(), target->GetScrollTop()};
++	for (int i = 0; i < 2; i++)
++	{
++		// Moved by something else (a scrollbar drag, the list's size changing): carry on from where it is.
++		if (Math::Absolute(actual[i] - Math::Round(smoothscroll_position[i])) > 1.5f)
++			smoothscroll_position[i] = actual[i];
++	}
++	const Vector2f max_offset = {target->GetScrollWidth() - target->GetClientWidth(), target->GetScrollHeight() - target->GetClientHeight()};
++	smoothscroll_goal = Math::Clamp(smoothscroll_goal, Vector2f(0.f), Math::Max(max_offset, Vector2f(0.f)));
+ 
++	const float ease = 1.f - std::exp(-dt * smoothscroll_speed_factor / SMOOTHSCROLL_EASE_TIME);
++	const float max_step = SMOOTHSCROLL_MAX_VELOCITY * dp_ratio * smoothscroll_speed_factor * dt;
++	bool done = true;
+ 	for (int i = 0; i < 2; i++)
+ 	{
+-		// Ensure minimum scroll speed of 1px/frame, and clamp the distance to the target in case of overshooting
+-		// integration. As opposed to autoscroll, we don't care about fractional speeds here since we want to be fast.
+-		if (target_delta[i] > 0.f)
+-			scroll_distance[i] = Math::Min(Math::Max(scroll_distance[i], 1.f), target_delta[i]);
+-		else if (target_delta[i] < 0.f)
+-			scroll_distance[i] = Math::Max(Math::Min(scroll_distance[i], -1.f), target_delta[i]);
++		const float left = smoothscroll_goal[i] - smoothscroll_position[i];
++		const float step = Math::Clamp(left * ease, -max_step, max_step);
++		if (Math::Absolute(left - step) < SMOOTHSCROLL_SETTLE * dp_ratio)
++			smoothscroll_position[i] = smoothscroll_goal[i];
+ 		else
+-			scroll_distance[i] = 0.f;
++		{
++			smoothscroll_position[i] += step;
++			done = false;
++		}
+ 	}
+ 
+-#if 0
+-	// Useful debugging output for velocity model tuning.
+-	Log::Message(Log::LT_INFO, "Scroll  y0 %8.2f   y1 %8.2f   v %8.2f   d %8.2f", smoothscroll_scrolled_distance.y, target_delta.y, velocity.y,
+-		scroll_distance.y);
+-#endif
+-
+-	smoothscroll_scrolled_distance += scroll_distance;
+-	PerformScrollOnTarget(scroll_distance);
++	auto overflow_is_scrollable = [](Style::Overflow overflow) { return overflow == Style::Overflow::Auto || overflow == Style::Overflow::Scroll; };
++	const auto& computed_values = target->GetComputedValues();
++	if (overflow_is_scrollable(computed_values.overflow_x()))
++		target->SetScrollLeft(smoothscroll_position.x);
++	if (overflow_is_scrollable(computed_values.overflow_y()))
++		target->SetScrollTop(smoothscroll_position.y);
++
++	// TOOIE_UI_SCROLL_LOG=1: each step of a smooth scroll, to check it moves evenly: the time since the last, where it
++	// is (between pixels), where the list is drawn and where it is going.
++	static const bool log_steps = std::getenv("TOOIE_UI_SCROLL_LOG") != nullptr;
++	if (log_steps)
++	{
++		std::printf("[ui-scroll] dt %.2f ms pos %.2f drawn %.0f goal %.0f\n", dt * 1000.f, smoothscroll_position.y, target->GetScrollTop(),
++			smoothscroll_goal.y);
++		std::fflush(stdout);
++	}
+ 
+-	if (HasSmoothscrollReachedTarget())
++	if (done)
+ 		Reset();
+ }
+ 
+ bool ScrollController::HasSmoothscrollReachedTarget() const
+ {
+ 	constexpr float epsilon = 0.1f;
+-	return (smoothscroll_target_distance - smoothscroll_scrolled_distance).SquaredMagnitude() < epsilon;
++	return (smoothscroll_goal - smoothscroll_position).SquaredMagnitude() < epsilon;
+ }
+ 
+ void ScrollController::PerformScrollOnTarget(Vector2f delta_distance)
+@@ -211,26 +210,18 @@ void ScrollController::PerformScrollOnTarget(Vector2f delta_distance)
+ void ScrollController::IncrementSmoothscrollTarget(Vector2f delta_distance)
+ {
+ 	auto OppositeDirection = [](float a, float b) { return (a < 0.f && b > 0.f) || (a > 0.f && b < 0.f); };
+-	Vector2f delta = smoothscroll_target_distance - smoothscroll_scrolled_distance;
++	const Vector2f delta = smoothscroll_goal - smoothscroll_position;
+ 
+-	// Reset movement state if we start scrolling in the opposite direction.
++	// Turned round: the new scroll starts from where the list is now, not from where it was going.
+ 	for (int i = 0; i < 2; i++)
+ 	{
+ 		if (OppositeDirection(delta_distance[i], delta[i]))
+-		{
+-			smoothscroll_target_distance[i] = 0.f;
+-			smoothscroll_scrolled_distance[i] = 0.f;
+-		}
++			smoothscroll_goal[i] = smoothscroll_position[i];
+ 	}
+ 
+-	// Clamp the delta distance to the scrollable area.
+-	const Vector2f scroll_offset = {target->GetScrollLeft(), target->GetScrollTop()};
++	// Kept to the scrollable area.
+ 	const Vector2f max_offset = {target->GetScrollWidth() - target->GetClientWidth(), target->GetScrollHeight() - target->GetClientHeight()};
+-
+-	const Vector2f target_offset = scroll_offset + smoothscroll_target_distance - smoothscroll_scrolled_distance;
+-	const Vector2f clamped_delta = Math::Clamp(delta_distance + target_offset, Vector2f(0.f), max_offset) - target_offset;
+-
+-	smoothscroll_target_distance += clamped_delta;
++	smoothscroll_goal = Math::Clamp(smoothscroll_goal + delta_distance, Vector2f(0.f), Math::Max(max_offset, Vector2f(0.f)));
+ }
+ 
+ void ScrollController::Reset()
+@@ -242,8 +233,8 @@ void ScrollController::Reset()
+ 	autoscroll_accumulated_length = Vector2f{};
+ 	autoscroll_moved = false;
+ 
+-	smoothscroll_target_distance = Vector2f{};
+-	smoothscroll_scrolled_distance = Vector2f{};
++	smoothscroll_position = Vector2f{};
++	smoothscroll_goal = Vector2f{};
+ 	// Keep smoothscroll configuration parameters.
+ }
+ 
+diff --git a/Source/Core/ScrollController.h b/Source/Core/ScrollController.h
+index 3e61bd2d..ccf1a8ca 100644
+--- a/Source/Core/ScrollController.h
++++ b/Source/Core/ScrollController.h
+@@ -95,8 +95,9 @@ private:
+ 	bool smoothscroll_prefer_instant = false;
+ 	float smoothscroll_speed_factor = 1.f;
+ 
+-	Vector2f smoothscroll_target_distance;
+-	Vector2f smoothscroll_scrolled_distance;
++	// Banjo Re-Tooie: where the smooth scroll is, between pixels, and where it is going, as scroll offsets.
++	Vector2f smoothscroll_position;
++	Vector2f smoothscroll_goal;
+ };
+ 
+ } // namespace Rml
 diff --git a/Source/SVG/ElementSVG.cpp b/Source/SVG/ElementSVG.cpp
 index 0e8d834a..6289db57 100644
 --- a/Source/SVG/ElementSVG.cpp

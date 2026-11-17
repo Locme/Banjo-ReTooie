@@ -79,6 +79,13 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   centred place, and `get_box_position` reads where it is laid out (the console's `menupos`).
 * **Settings search** (`recompui/src/config/ui_config.cpp`, `create_search_tab()`): a Search tab with a hidden row for every option of every other tab; typing in its box shows the matching rows.
 * **Focus scrolls into view** (`recompui/src/elements/ui_button.cpp`): a button that gets focus scrolls itself into view, so moving down a long list with a controller keeps the selection visible.
+* **Blinking portraits without layout** (`recompui/src/elements/ui_tab_set.cpp/.h`): each Esc menu tab's portrait holds
+  one image per frame of its blink, laid over each other, and the blink shows one at a time by visibility. It changed
+  the one image's `src` before, and RmlUi lays out the whole menu again on every `src` change: some 20 ms a draw with
+  the blinks going, the menu at 25 to 55 frames a second and its scrolling and slides uneven (2026-11-17). It is now
+  about 0.5 ms and 160 to 190 frames a second on the same PC.
+* **Menu frame log** (`recompui/src/base/ui_state.cpp`): `TOOIE_UI_FRAME_LOG=1` prints once a second how evenly the
+  menus were drawn and what a draw cost.
 * **1440p resolution** (`ui_config_tab_graphics.cpp`, `rt64_render_context.cpp`, and `ultramodern/include/ultramodern/config.hpp` in N64ModernRuntime.patch): `R1440p` is 6x the game's 240 lines. The Resolution row names are 3x/4.5x/6x/9x with the pixel height in brackets (the saved keys stay 720p, 1080p, 2160p).
 * **All Graphics options are live** (`ui_config_page_options_menu.cpp`): any change in the Graphics tab calls `save_config()` at once, so options added by the port need no callback of their own.
 * **Section headings** (`recompui/include/recompui/config.h`, `ui_config.cpp`,
@@ -466,6 +473,11 @@ Applied in `lib/RecompFrontend/recompui/lib/RmlUi`.
   a generated texture's clear pixels white when it converts it to straight alpha, and the renderer's linear filter
   blended that white into the edge beside it: a white outline round the start menu's art whenever a layer moved by
   part of a pixel (L, 2026-11-03). Clear pixels now take the colour of a neighbour that isn't clear, two pixels out.
+* **Even smooth scrolling** (`Source/Core/ScrollController.cpp`, `.h`): a smooth scroll (the mouse wheel, and a row
+  scrolled into view as a controller moves down the Esc menu) eases out towards where it is going by the time passed,
+  keeps its place between pixels, and is held to 6000 dp a second on long scrolls. RmlUi's own moved a whole number of
+  pixels each frame, rounded from a speed that changed with the distance left, so the steps went 5, 6, 5, 7 pixels and
+  the list juddered (2026-11-17). `TOOIE_UI_SCROLL_LOG=1` prints each step.
 
 ## N64Recomp.patch
 

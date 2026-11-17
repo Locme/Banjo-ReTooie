@@ -1455,18 +1455,20 @@ index eb8833e..8388dc1 100644
          Element *default_title_wrapper;
          GameOptionsMenu *game_options_menu = nullptr;
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..97780fc 100644
+index 277a421..5ec9888 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
-@@ -5,6 +5,7 @@
+@@ -4,7 +4,9 @@
+ #else
  #include <SDL2/SDL_video.h>
  #endif
++#include <algorithm>
  #include <chrono>
 +#include <cmath>
  
  #include "rt64_render_hooks.h"
  
-@@ -37,16 +38,17 @@ static std::atomic_bool cursor_enabled = true;
+@@ -37,16 +39,17 @@ static std::atomic_bool cursor_enabled = true;
  
  void recompui::open_quit_game_prompt() {
      recompui::open_choice_prompt(
@@ -1487,7 +1489,7 @@ index 277a421..97780fc 100644
          true
      );
  }
-@@ -202,6 +204,18 @@ struct ContextDetails {
+@@ -202,6 +205,18 @@ struct ContextDetails {
      Rml::ElementDocument* document;
  };
  
@@ -1506,7 +1508,7 @@ index 277a421..97780fc 100644
  class UIState {
      bool mouse_is_active_changed = false;
      std::vector<ContextDetails> shown_contexts{};
-@@ -224,7 +238,7 @@ public:
+@@ -224,7 +239,7 @@ public:
  
      UIState(SDL_Window* window, plume::RenderInterface* interface, plume::RenderDevice* device) {
  
@@ -1515,7 +1517,7 @@ index 277a421..97780fc 100644
          system_interface->SetWindow(window);
          render_interface.init(interface, device);
  
-@@ -244,7 +258,8 @@ public:
+@@ -244,7 +259,8 @@ public:
          
          context = Rml::CreateContext("main", Rml::Vector2i(width, height));
  
@@ -1525,7 +1527,7 @@ index 277a421..97780fc 100644
          {
              struct FontFace {
                  const char* filename;
-@@ -311,6 +326,14 @@ public:
+@@ -311,6 +327,14 @@ public:
              recompui::set_cursor_visible(mouse_is_active);
          }
  
@@ -1540,7 +1542,7 @@ index 277a421..97780fc 100644
          Rml::ElementDocument* current_document = top_mouse_document();
          if (current_document == nullptr) {
              return;
-@@ -346,6 +369,13 @@ public:
+@@ -346,6 +370,13 @@ public:
                  // Check if not focused or focused element is not focusable.
                  if (focused_el == nullptr || focused_el->is_focusable() != recompui::Element::CanFocus::Yes) {
                      auto recompui_doc = top_context.get_root_element();
@@ -1554,7 +1556,7 @@ index 277a421..97780fc 100644
                      auto last_hovered = recompui_doc->get_last_focusable_hovered_element();
                      if (last_hovered && last_hovered->is_focusable() == recompui::Element::CanFocus::Yes) {
                          last_hovered->focus();
-@@ -484,7 +514,9 @@ public:
+@@ -484,7 +515,9 @@ public:
      }
  
      void update_contexts() {
@@ -1565,7 +1567,7 @@ index 277a421..97780fc 100644
              context_details.context.open();
              context_details.context.process_updates();
              context_details.context.close();
-@@ -493,6 +525,7 @@ public:
+@@ -493,6 +526,7 @@ public:
  };
  
  std::unique_ptr<UIState> ui_state;
@@ -1573,7 +1575,7 @@ index 277a421..97780fc 100644
  std::recursive_mutex ui_state_mutex{};
  
  // TODO make this not be global
-@@ -570,6 +603,142 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
+@@ -570,6 +604,142 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
      return identifier;
  }
  
@@ -1716,7 +1718,60 @@ index 277a421..97780fc 100644
  bool check_menu_button_pressed(int profile_index, recompinput::GameInput input, int32_t event_button) {
      auto menuBinding0 = recompinput::profiles::get_input_binding(profile_index, input, 0);
      auto menuBinding1 = recompinput::profiles::get_input_binding(profile_index, input, 1);
-@@ -696,6 +865,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -646,7 +816,52 @@ void recompui::activate_mouse() {
+     ui_state->update_focus(true, false);
+ }
+ 
++// TOOIE_UI_FRAME_LOG=1: once a second while a menu is drawn, how often it was drawn (the gap from one draw to the
++// next: average, 99th percentile and worst) and what a draw cost (events and input, the contexts' own updates with
++// RmlUi's Update and layout, and RmlUi's Render), all in ms. Uneven gaps show as a menu that moves unevenly.
++static void ui_frame_log(std::chrono::steady_clock::time_point frame_start, std::chrono::steady_clock::time_point contexts_start,
++    std::chrono::steady_clock::time_point update_done, std::chrono::steady_clock::time_point end) {
++    static const bool on = std::getenv("TOOIE_UI_FRAME_LOG") != nullptr;
++    if (!on) {
++        return;
++    }
++    using ms = std::chrono::duration<double, std::milli>;
++    static std::chrono::steady_clock::time_point last_start{}, window_start{};
++    static std::vector<double> gaps;
++    static double events_ms = 0.0, contexts_ms = 0.0, render_ms = 0.0;
++    static int draws = 0;
++    if (last_start != std::chrono::steady_clock::time_point{} && frame_start - last_start < std::chrono::milliseconds(500)) {
++        gaps.push_back(ms(frame_start - last_start).count());
++    } else {
++        window_start = frame_start;
++    }
++    last_start = frame_start;
++    draws++;
++    events_ms += ms(contexts_start - frame_start).count();
++    contexts_ms += ms(update_done - contexts_start).count();
++    render_ms += ms(end - update_done).count();
++    const double seconds = std::chrono::duration<double>(end - window_start).count();
++    if (seconds < 1.0 || gaps.empty()) {
++        return;
++    }
++    std::vector<double> sorted = gaps;
++    std::sort(sorted.begin(), sorted.end());
++    double sum = 0.0;
++    for (double g : gaps) {
++        sum += g;
++    }
++    std::printf("[ui-frame] %d draws in %.2f s; gap avg %.2f p99 %.2f max %.2f min %.2f ms; per draw: events+input %.3f, contexts+rml update %.3f, render %.3f ms\n",
++        draws, seconds, sum / gaps.size(), sorted[std::min(sorted.size() - 1, size_t(sorted.size() * 0.99))], sorted.back(), sorted.front(),
++        events_ms / draws, contexts_ms / draws, render_ms / draws);
++    std::fflush(stdout);
++    gaps.clear();
++    draws = 0;
++    events_ms = contexts_ms = render_ms = 0.0;
++    window_start = end;
++}
++
+ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer* swap_chain_framebuffer) {
++    const auto frame_start = std::chrono::steady_clock::now();
+ 
+     apply_background_input_mode();
+ 
+@@ -696,6 +911,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
          if (!all_input_is_disabled) {
              bool is_mouse_input = false;
@@ -1727,7 +1782,7 @@ index 277a421..97780fc 100644
              // Implement some additional behavior for specific events on top of what RmlUi normally does with them.
              switch (cur_event.type) {
              case SDL_EventType::SDL_MOUSEMOTION: {
-@@ -705,6 +878,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -705,6 +924,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                      float xD = cur_event.motion.x - last_mouse_pos[0];
                      float yD = cur_event.motion.y - last_mouse_pos[1];
                      if (sqrt(xD * xD + yD * yD) < 100) {
@@ -1735,7 +1790,7 @@ index 277a421..97780fc 100644
                          break;
                      }
                  }
-@@ -713,6 +887,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -713,6 +933,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                  // if controller is the primary input, don't use mouse movement to allow cursor to reactivate
                  if (recompui::get_cont_active()) {
@@ -1743,7 +1798,7 @@ index 277a421..97780fc 100644
                      break;
                  }
              }
-@@ -731,7 +906,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -731,7 +952,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              case SDL_EventType::SDL_CONTROLLERBUTTONDOWN: {
                  int sdl_key = cont_button_to_key(cur_event.cbutton);
                  if (context_capturing_input && sdl_key) {
@@ -1752,7 +1807,7 @@ index 277a421..97780fc 100644
                      latest_controller_key_pressed = sdl_key;
                      next_repeat_time = clock::now() + start_repeat_delay;
                  }
-@@ -747,6 +922,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -747,6 +968,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                      if (cur_event.key.keysym.scancode == SDL_Scancode::SDL_SCANCODE_F8) {
                          if (recompui::config::general::get_debug_mode_enabled()) {
@@ -1762,7 +1817,7 @@ index 277a421..97780fc 100644
                              Rml::Debugger::SetVisible(!Rml::Debugger::IsVisible());
                          }
                      }
-@@ -776,7 +954,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -776,7 +1000,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                          non_mouse_interacted = true;
                          int sdl_key = cont_axis_to_key(cur_event.caxis, axis_value);
                          if (context_capturing_input && sdl_key) {
@@ -1771,7 +1826,7 @@ index 277a421..97780fc 100644
                              latest_controller_key_pressed = sdl_key;
                              next_repeat_time = clock::now() + start_repeat_delay;
                          }
-@@ -796,14 +974,36 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -796,14 +1020,36 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
  
              // Send the event to RmlUi if this type of event is being captured.
@@ -1810,7 +1865,7 @@ index 277a421..97780fc 100644
                  }
              }
          }
-@@ -837,7 +1037,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -837,7 +1083,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
              }
  
@@ -1819,7 +1874,7 @@ index 277a421..97780fc 100644
                  recompui::config::open();
              }
          }
-@@ -847,7 +1047,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -847,7 +1093,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      if (latest_controller_key_pressed != SDLK_UNKNOWN) {
          clock::time_point now = clock::now();
          if (now >= next_repeat_time) {
@@ -1828,7 +1883,26 @@ index 277a421..97780fc 100644
              next_repeat_time += repeat_rate;
          }
      }
-@@ -893,7 +1093,10 @@ void deinit_hook() {
+@@ -864,6 +1110,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+             recompui::update_launcher_menu();
+         }
+ 
++        const auto contexts_start = std::chrono::steady_clock::now();
+         ui_state->update_contexts();
+ 
+         int width = swap_chain_framebuffer->getWidth();
+@@ -884,8 +1131,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+         prev_height = height;
+ 
+         ui_state->context->Update();
++        const auto update_done = std::chrono::steady_clock::now();
+         ui_state->context->Render();
+         ui_state->render_interface.end(command_list, swap_chain_framebuffer);
++        ui_frame_log(frame_start, contexts_start, update_done, std::chrono::steady_clock::now());
+     }
+ }
+ 
+@@ -893,7 +1142,10 @@ void deinit_hook() {
      recompui::destroy_all_contexts();
  
      std::lock_guard lock {ui_state_mutex};
@@ -4286,7 +4360,7 @@ index a60c585..cae83dd 100644
              if (next_top_element == nullptr) {
                  return false;
 diff --git a/recompui/src/elements/ui_element.cpp b/recompui/src/elements/ui_element.cpp
-index 4517152..ccadcba 100644
+index 4517152..1bd1747 100644
 --- a/recompui/src/elements/ui_element.cpp
 +++ b/recompui/src/elements/ui_element.cpp
 @@ -1,14 +1,37 @@
@@ -4547,7 +4621,7 @@ index 4517152..ccadcba 100644
 +    return layout_kept;
 +}
 +
-+bool scroll_into_view(const std::string &name) {
++bool scroll_into_view(const std::string &name, bool smooth) {
 +    Element *element = nullptr;
 +    {
 +        std::lock_guard<std::mutex> lock(layout_mutex);
@@ -4557,7 +4631,7 @@ index 4517152..ccadcba 100644
 +        }
 +        element = *it->second.begin();
 +    }
-+    element->scroll_into_view();
++    element->scroll_into_view(smooth);
 +    return true;
 +}
 +
@@ -4565,7 +4639,7 @@ index 4517152..ccadcba 100644
 +
  } // namespace recompui
 diff --git a/recompui/src/elements/ui_element.h b/recompui/src/elements/ui_element.h
-index 34eec3f..7c9e118 100644
+index 34eec3f..90d1c61 100644
 --- a/recompui/src/elements/ui_element.h
 +++ b/recompui/src/elements/ui_element.h
 @@ -6,8 +6,11 @@
@@ -4657,7 +4731,7 @@ index 34eec3f..7c9e118 100644
  
      Element *select_add_option(std::string_view text, std::string_view value);
      void select_set_selection(std::string_view option_value);
-@@ -187,4 +218,28 @@ public:
+@@ -187,4 +218,29 @@ public:
  
  void queue_ui_callback(recompui::ResourceId resource, const Event& e, const UICallback& callback);
  
@@ -4681,8 +4755,9 @@ index 34eec3f..7c9e118 100644
 +    void reset_all();
 +    bool is_live(const std::string &name);
 +    std::map<std::string, std::pair<float, float>> offsets();
-+    // Scrolls the first live element under the name into view (the console's menu expand); false when none is live.
-+    bool scroll_into_view(const std::string &name);
++    // Scrolls the first live element under the name into view (the console's menu expand), smoothly as the
++    // controller does when smooth (menu glide); false when none is live.
++    bool scroll_into_view(const std::string &name, bool smooth = false);
 +}
 +
  } // namespace recompui
@@ -6155,7 +6230,7 @@ index 3fe8e04..8fccccc 100644
          void set_align_items(AlignItems align_items);
          void set_overflow(Overflow overflow);
 diff --git a/recompui/src/elements/ui_tab_set.cpp b/recompui/src/elements/ui_tab_set.cpp
-index 2c5dc52..2de860a 100644
+index 2c5dc52..233f3e1 100644
 --- a/recompui/src/elements/ui_tab_set.cpp
 +++ b/recompui/src/elements/ui_tab_set.cpp
 @@ -1,5 +1,11 @@
@@ -6170,7 +6245,7 @@ index 2c5dc52..2de860a 100644
  
  namespace recompui {
  
-@@ -49,6 +55,168 @@ Tab::Tab(ResourceId rid, Element *parent, int tab_index, std::string_view text,
+@@ -49,6 +55,189 @@ Tab::Tab(ResourceId rid, Element *parent, int tab_index, std::string_view text,
      add_style(&disabled_style, { disabled_state });
  }
  
@@ -6248,7 +6323,7 @@ index 2c5dc52..2de860a 100644
 +        }
 +    } else {
 +        if (portrait == nullptr) {
-+            portrait = get_current_context().create_element<Image>(this, src);
++            portrait = get_current_context().create_element<Element>(this);
 +            portrait->set_position(Position::Absolute);
 +            // The sprites leave a margin round the face, so the picture is drawn larger than the Jiggy was.
 +            // About as large as the Start menu's (a face some 60 pixels across in a 900 pixel high window): the
@@ -6259,11 +6334,32 @@ index 2c5dc52..2de860a 100644
 +            portrait->set_height(88.0f);
 +            portrait->set_margin_top(-44.0f);
 +            portrait->set_pointer_events(PointerEvents::None);
-+        } else {
-+            portrait->set_src(src);
 +        }
++        // One picture for each frame, laid over each other, and only the frame shown is visible. Changing an
++        // image's src makes RmlUi lay out the whole menu again, which a blink did for every frame of it, every
++        // tab, many times a second: the menu dropped to some 30 frames a second and its scrolling and slides
++        // stuttered (2026-11-17). Visibility changes need no layout.
++        portrait->clear_children();
++        portrait_images.clear();
++        for (const std::string &frame : frames) {
++            Element *image = get_current_context().create_element<Image>(portrait, frame);
++            image->set_position(Position::Absolute);
++            image->set_left(0.0f);
++            image->set_top(0.0f);
++            image->set_width(100.0f, Unit::Percent);
++            image->set_height(100.0f, Unit::Percent);
++            image->set_pointer_events(PointerEvents::None);
++            portrait_images.push_back(image);
++        }
++        show_portrait_frame(0);
 +    }
 +    show_portrait();
++}
++
++void Tab::show_portrait_frame(int frame) {
++    for (size_t i = 0; i < portrait_images.size(); i++) {
++        portrait_images[i]->set_visibility(static_cast<int>(i) == frame ? Visibility::Visible : Visibility::Hidden);
++    }
 +}
 +
 +// How long a portrait keeps its eyes open: 1.5 to 4 s, different for each tab, as the Start menu's portraits blink
@@ -6301,11 +6397,11 @@ index 2c5dc52..2de860a 100644
 +    if (blink_step >= steps) {
 +        blink_step = -1;
 +        next_blink = now + blink_wait();
-+        portrait->set_src(portrait_frames[0]);
++        show_portrait_frame(0);
 +        return;
 +    }
 +    const int frame = blink_step < closing ? blink_step + 1 : steps - blink_step;
-+    portrait->set_src(portrait_frames[frame]);
++    show_portrait_frame(frame);
 +}
 +
 +void Tab::set_fade(float value) {
@@ -6339,7 +6435,7 @@ index 2c5dc52..2de860a 100644
  void Tab::set_visible(bool is_visible) {
      visible = is_visible;
      set_enabled(visible);
-@@ -66,6 +234,9 @@ void Tab::process_event(const Event &e) {
+@@ -66,6 +255,9 @@ void Tab::process_event(const Event &e) {
      switch (e.type) {
      case EventType::Click:
          on_select_tab(tab_index);
@@ -6349,7 +6445,7 @@ index 2c5dc52..2de860a 100644
          break;
      case EventType::Hover:
          set_style_enabled(hover_state, std::get<EventHover>(e.variant).active);
-@@ -82,12 +253,25 @@ void Tab::process_event(const Event &e) {
+@@ -82,12 +274,25 @@ void Tab::process_event(const Event &e) {
              set_style_enabled(focus_state, active);
              if (active) {
                  queue_update();
@@ -6375,7 +6471,7 @@ index 2c5dc52..2de860a 100644
              pulsing_style.set_color(pulse_color);
              if (is_selected) {
                  indicator->set_background_color(pulse_color);
-@@ -104,7 +288,24 @@ void Tab::process_event(const Event &e) {
+@@ -104,7 +309,24 @@ void Tab::process_event(const Event &e) {
  }
  
  void Tab::set_selected(bool enable) {
@@ -6400,7 +6496,7 @@ index 2c5dc52..2de860a 100644
      set_as_primary_focus(enable);
      set_style_enabled(checked_state, enable);
      indicator->set_background_color(enable ? theme::color::BorderSolid : theme::color::Transparent);
-@@ -125,12 +326,33 @@ void TabSet::set_change_tab_callback(on_change_tab_callback callback) {
+@@ -125,12 +347,33 @@ void TabSet::set_change_tab_callback(on_change_tab_callback callback) {
      change_tab_callback = std::move(callback);
  }
  
@@ -6434,7 +6530,7 @@ index 2c5dc52..2de860a 100644
      if (active_tab < 0) {
          active_tab = 0;
          tab->set_selected(true);
-@@ -194,6 +416,39 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
+@@ -194,6 +437,39 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
      return new_index;
  }
  
@@ -6475,7 +6571,7 @@ index 2c5dc52..2de860a 100644
      if (tab_index < 0 || tab_index >= static_cast<int>(tabs.size())) {
          return;
 diff --git a/recompui/src/elements/ui_tab_set.h b/recompui/src/elements/ui_tab_set.h
-index b8d3783..03f298a 100644
+index b8d3783..6b61b46 100644
 --- a/recompui/src/elements/ui_tab_set.h
 +++ b/recompui/src/elements/ui_tab_set.h
 @@ -1,6 +1,10 @@
@@ -6489,7 +6585,7 @@ index b8d3783..03f298a 100644
  #include "ui_label.h"
  
  namespace recompui {
-@@ -18,6 +22,23 @@ namespace recompui {
+@@ -18,6 +22,26 @@ namespace recompui {
          on_change_tab_callback on_select_tab;
          Element *label = nullptr;
          Element *indicator = nullptr;
@@ -6506,6 +6602,9 @@ index b8d3783..03f298a 100644
 +        std::chrono::steady_clock::time_point blink_frame_at;
 +        std::chrono::steady_clock::duration blink_wait();
 +        void update_blink();
++        // The portrait's frames, one image each over the other, in portrait_frames' order; one is visible.
++        std::vector<Element *> portrait_images;
++        void show_portrait_frame(int frame);
 +        void show_portrait();
 +        // How far the tab has faded in as the menu slides in (1 in place).
 +        float fade = 1.0f;
@@ -6513,7 +6612,7 @@ index b8d3783..03f298a 100644
  
          bool visible = true;
  
-@@ -32,6 +53,17 @@ namespace recompui {
+@@ -32,6 +56,17 @@ namespace recompui {
          void set_selected(bool selected);
          void set_visible(bool is_visible);
          bool get_visible() { return visible; }
@@ -6531,7 +6630,7 @@ index b8d3783..03f298a 100644
      };
  
      class TabSet : public Element {
-@@ -47,10 +79,23 @@ namespace recompui {
+@@ -47,10 +82,23 @@ namespace recompui {
          int add_tab(std::string_view text);
          void set_active_tab(int tab_index, bool report_change = true);
          void focus_on_active_tab();

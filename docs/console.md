@@ -1251,12 +1251,13 @@ Catch: needs a player in the game. Until there is one, it reports an error.
 
 ### `menu`
 
-Usage: `menu open | menu close | menu tab <id> | menu expand <setting> [off] | menu show <setting>`
+Usage: `menu open | menu close | menu tab <id> | menu expand <setting> [off] | menu show <setting> | menu glide <setting>`
 
 Opens or shuts the Esc menu, as the Esc key does. `menu tab` shows a settings tab (`general`, `graphics`, `sound`,
 `qol`, `cheats`, `wip`). `menu expand` opens the arrow of a setting that has settings under it, as clicking the arrow
 does, and `off` shuts it again. The row is scrolled into view. `menu show` scrolls any setting's row into view on the tab
-shown, for a screenshot of it. The setting is named as for `get` and `set`.
+shown, for a screenshot of it. `menu glide` scrolls there smoothly instead, as moving to the row with a controller
+does, to test the scroll (`TOOIE_UI_SCROLL_LOG=1` prints each step). The setting is named as for `get` and `set`.
 
 ```
 menu open
