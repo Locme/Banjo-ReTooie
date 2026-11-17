@@ -1647,7 +1647,7 @@ lights undo
 
 ### `voxel`
 
-Usage: `voxel [on|off|info|hit [power] [radius] [wall]|dig [power] [radius]|surface [ahead]|metal [type [off]]|restore|sound <id> [material]|debris [size]|voidscan|void [on|off]|mtx rel|abs|flip]`
+Usage: `voxel [on|off|info|hit [power] [radius] [wall]|dig [power] [radius]|surface [ahead]|metal [type [off]]|restore|sound <id> [material]|debris [size]|voidscan|cells [x|y|z]|void [on|off]|mtx rel|abs|flip]`
 
 The Voxel Layer (Gameplay tab): Banjo digs into the level's ground and walls. The ground behind the level's surface is
 made of cells of 18 units, 1 to 2 m deep (2 to 4 m in sand and dirt), filled only where something strikes. Sand and dirt break
@@ -1681,6 +1681,10 @@ everything back.
   when the line meets a cell's face or the backstop behind a dug cell, and a void when it starts inside a whole cell,
   runs into cells not filled yet, or goes six cells without meeting anything. It prints the counts by kind and puts a
   magenta marker at up to 160 voids for 10 s, so a screenshot shows where they are.
+- `voxel cells [x|y|z]` writes the cells round the cut ones into the log, one slice at a time across the axis given
+  (x when none): `#` solid, `c` solid but cut (cracked, or a whole cell inside a hole's opening), `D` dug, `.` open
+  air, `?` never filled. Each slice's header names the first row and column; rows run down the next axis, columns
+  along the one after. It shows which cells a gap at a hole's edge runs through.
 - `voxel void [on|off]` (no word: switch it) paints every pixel nothing was drawn on bright magenta: the sky, and any
   gap a hole lets the camera see through, so a void stands out against the level. It is a view of the picture effects
   pass (it needs that pass, as the effect debug views do) and is not saved.

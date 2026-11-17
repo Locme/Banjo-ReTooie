@@ -9,6 +9,7 @@ regenerated code, CI, notes and tooling are left out.
 - Voxel Layer: the tan speck at a wall hole's corner is gone. It was the ground behind Jinjo Village's thin cliff, seen past the corner of the hole's faces; the level's wall is now kept a little further in at a hole's edges and corners, so it overlaps them.
 - Voxel Layer with Ray Tracing: no lighter band round a hole. The traced light passed through the wall round a hole in cell-sized squares, wider than the hole the picture shows, so the wall there was lit as if it were open; it now leaves out only the wall the picture leaves out.
 - Voxel Layer: no dark grey squares inside a hole. The seams of stone in the layer were drawn in the map's plain stone colour, which in a green wall read as flat grey squares; they now take the wall's own texture, a little darker.
+- Voxel Layer: the sky no longer shows through a wall hole's lower corner. A whole cell at the corner, under a sloping wall, took its depth from the ground above and drew only its top; the wall over its front was cut away, so the view went in past it and out of the back of Jinjo Village's thin cliff. It now draws its face wherever the wall over it is cut.
 
 ## 2026-11-15
 

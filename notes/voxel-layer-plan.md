@@ -280,12 +280,21 @@ The hole's sides and floor are the blocks round it, drawn by us. So Banjo digs i
 - Seams, 2026-11-17 (L: "the darker grey cells inside the hole"): seam cells kept the map's stone colour on the grain,
   flat dark grey squares in a green wall's hole, with or without Ray Tracing. They now take the level's texture like
   the cells round them, at 0.8 of the light.
-- Still there, 2026-11-17: a small tan corner at a wall hole's lower-left edge in Jinjo Village, seen from the side.
-  `TOOIE_VOXEL_RED=1` shows it lies just outside the hole's faces; `TOOIE_VOXEL_HIDE=1` shows tan level geometry behind
-  the cliff's face there. Tried and dropped: a cut cell cutting only surfaces facing within 45 degrees of its column (left
-  strips of a slanted wall across the hole, tan still there), and cutting any level surface with dug (then any cut)
-  space 2 units either side of it (no change to the tan). The holes differ a little from run to run, so compare
-  several runs before calling a change a fix.
+- The tan corner at a wall hole's lower-left edge, fixed 2026-11-17 (L: "missing voxels to fill in the empty gap"): it
+  was the sky, seen past the back of Jinjo Village's thin cliff (`voxel void on` never showed it magenta because the
+  test copy had the picture effects pass off, so it read as level geometry). The cell at the corner, under the hole's
+  floor where the wall slopes out, was whole but had taken its column from the ground above (surface facing up), so it
+  drew only its top and its faces to dug cells. The wall over its front was cut (the cell behind is dug), and the view
+  went in through its bare front, through the whole cells behind (no faces between them) and out to the sky. A whole
+  cell now draws its face to open air wherever the level over that side is cut by the picture's rule (level_cut_at,
+  tried a few places into the cell, since the level's surface is somewhere inside it), set back to four units behind
+  where the cut starts, so it never stands in front of the kept wall. The hole's side faces are also held only to the
+  surface, not four units behind it: held at four, both ends of a side face at a sloping wall's mouth came to the same
+  depth and the face had no width. `voxel cells` prints the cells round a hole to find such a gap.
+  Tried and dropped on the way: the 3-of-4 cut at a bend in the outline held in like an edge (halved the speck),
+  filling air behind the hole, faces to air beside a dug cell, digging or filling the partly buried cell in front of a
+  dug one (flaps on the wall), square backstop faces into whole cells (blocky patches inside the hole), drawing the
+  layer two-sided, pulling faces up to 0.5 behind the surface, and one shared depth per corner.
 - (Earlier note) The tan speck, 2026-11-17: it is Jinjo Village's sky (tan below the horizon, seen from under the level), so a real
   look through the cliff. Tried and dropped: bringing the rim faces up to the surface where the cut is, and all of
   them to four units behind the surface; both showed more tan along the hole's bottom edge, not less.

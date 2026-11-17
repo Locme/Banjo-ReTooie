@@ -38,6 +38,7 @@
 // Console: voxel (docs/console.md).
 
 #include <algorithm>
+#include <climits>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -525,6 +526,35 @@ namespace {
             if (state_at(x + d[0], y + d[1], z + d[2]) == Dug) return true;
         }
         return false;
+    }
+
+    // How much of a point's row of cells is cut round it, and whether the level's surface at a point facing along axis is
+    // cut away: the picture's rule (rt64-ext/src/shaders/VoxelCuts.hlsli, VoxelRowCut and VoxelSurfaceCut).
+    float level_row_cut(const float w[3], int axis, float side) {
+        float q[3] = { w[0], w[1], w[2] };
+        q[axis] += side * vs;
+        const int t1 = (axis + 1) % 3, t2 = (axis + 2) % 3;
+        int cell[3];
+        for (int c = 0; c < 3; c++) cell[c] = (int)std::floor(q[c] / vs);
+        if (!is_cut(cell[0], cell[1], cell[2])) return 0.0f;
+        const float g1 = q[t1] / vs - 0.5f, g2 = q[t2] / vs - 0.5f;
+        const float f1 = std::floor(g1), f2 = std::floor(g2);
+        const float w1 = g1 - f1, w2 = g2 - f2;
+        float sum = 0.0f;
+        int count = 0;
+        for (int k = 0; k < 4; k++) {
+            const int o1 = k & 1, o2 = k >> 1;
+            cell[t1] = (int)f1 + o1;
+            cell[t2] = (int)f2 + o2;
+            const float weight = (o1 ? w1 : 1.0f - w1) * (o2 ? w2 : 1.0f - w2);
+            if (is_cut(cell[0], cell[1], cell[2])) { sum += weight; count++; }
+        }
+        // (As the shader: tighter at a hole's edges and outer corners, as if at 0.9 instead of 0.75.)
+        if (count == 4) return 1.0f;
+        return count == 3 ? sum : sum * (0.75f / 0.9f);
+    }
+    bool level_cut_at(const float w[3], int axis) {
+        return !world.cut.empty() && std::max(level_row_cut(w, axis, -1.0f), level_row_cut(w, axis, 1.0f)) >= 0.75f;
     }
 
     // A dug cell among the 26 round (x, y, z): a solid cell there draws at least its face to the surface (build_mesh).
@@ -1233,13 +1263,30 @@ namespace {
                 // other faces to open air stuck out through the level's surface as thin slivers.
                 const uint8_t nb = state_at(x + d[0], y + d[1], z + d[2]);
                 const bool surface_face = d[dir_axis(ch.dir[i])] == dir_sign(ch.dir[i]);
-                if (rim_only && !surface_face) continue;
+                // Toward open air too where the level's surface over that side is cut (by the picture's own rule,
+                // level_cut_at): the whole cell there is bare. A cell under a hole's floor at a sloping wall took its
+                // column from the ground above and drew only its top, the wall over its front was cut (the cell behind
+                // is dug), and the view went in through its front and out of the back of Jinjo Village's thin cliff:
+                // the sky showed as a tan speck at the hole's corner (L, 2026-11-17: "missing voxels to fill in the gap").
+                bool bare_face = false;
+                float bare_in = 0.0f;
+                if ((nb == Air || nb == Unknown) && !surface_face) {
+                    int k2 = 0;
+                    for (int c = 0; c < 3; c++) if (d[c] != 0) k2 = c;
+                    // (The level's surface is somewhere in the cell, partly in front of it: a few places in from the side.)
+                    for (float in = 0.1f; in < 1.0f && !bare_face; in += 0.2f) {
+                        const float mid[3] = { (x + 0.5f + d[0] * (0.5f - in)) * vs, (y + 0.5f + d[1] * (0.5f - in)) * vs, (z + 0.5f + d[2] * (0.5f - in)) * vs };
+                        bare_face = level_cut_at(mid, k2);
+                        bare_in = in;
+                    }
+                }
+                if (rim_only && !surface_face && !bare_face) continue;
                 // Every shown cell draws its face to the surface too, a little behind the level's surface (below): where
                 // the level's wall stays it hides the face; where the wall's cut reaches past the hole's own faces (a
                 // sloped wall, under a hole's floor) the face fills the gap, which showed the ground behind the wall as
                 // a tan strip along a hole's bottom edge (2026-11-15).
                 // (The cell in front of the surface is often never filled in, Unknown, rather than Air.)
-                if (nb != Dug && !((nb == Air && piled_cell) || ((nb == Air || nb == Unknown) && surface_face))) continue;
+                if (nb != Dug && !((nb == Air && piled_cell) || ((nb == Air || nb == Unknown) && (surface_face || bare_face)))) continue;
                 int k = 0;
                 for (int c = 0; c < 3; c++) if (d[c] != 0) k = c;
                 const int i1 = (k + 1) % 3, i2 = (k + 2) % 3;
@@ -1268,15 +1315,20 @@ namespace {
                     // Never in front of the level's surface over the cell's column (a piled cell is on top of it):
                     // a corner mixed from the crossings round a curved wall stuck out of it as a spike (2026-11-15).
                     float at[3] = { dv.p[0], dv.p[1], dv.p[2] };
+                    // A face along the hole's side only to the surface itself: held four behind it, both its ends came to
+                    // the same depth at a sloping wall's mouth and the face had no width (L, 2026-11-17).
                     if (!piled_cell) {
                         // (Four units behind it, so the level's own surface wins where it is kept: at one unit, faces
                         // showed through a curved wall between the columns as thin lines. Not much more: Jinjo
                         // Village's cliff has a tan layer a few units behind its surface, and at eight it showed in front.)
                         const int sa = dir_axis(ch.dir[i]);
-                        const float back = 4.0f;
+                        const float back = k == sa ? 4.0f : 0.0f;
                         if (dir_sign(ch.dir[i]) > 0) at[sa] = std::min(at[sa], ch.surface[i] - back);
                         else at[sa] = std::max(at[sa], ch.surface[i] + back);
                     }
+                    // A bare face goes in to where the level's surface over it is cut, and four units further: on its
+                    // cell's side it stood in front of a sloping wall kept below the hole, a dark flap.
+                    if (bare_face) at[k] -= (float)d[k] * (bare_in * vs + 4.0f);
                     for (int c = 0; c < 3; c++) qd.v[q][c] = (int16_t)std::lround(at[c] - base[c]);
                     const float lit = 0.5f + 0.5f * std::max(0.0f, dv.n[0] * light[0] + dv.n[1] * light[1] + dv.n[2] * light[2]);
                     // Darker the deeper the corner is behind the level's surface over the cell's column, to 40% three
@@ -3129,32 +3181,8 @@ std::string tooie::voxel_layer::console(uint8_t* rdram, recomp_context* ctx, con
         if (!valid_ptr(camera)) return "ERR no camera";
         const float cam[3] = { read_float(rdram, camera + 0), read_float(rdram, camera + 4), read_float(rdram, camera + 8) };
         auto field = [](uint64_t v) { int32_t f = (int32_t)(v & 0x1FFFFF); return (f & 0x100000) ? f - 0x200000 : f; };
-        // The shader's rule: the cell a cell's size behind the point (either side) is cut, and so much of the four
-        // cells round it that the blend reaches 0.65.
-        auto row_cut = [&](const float w[3], int axis, float side) {
-            float q[3] = { w[0], w[1], w[2] };
-            q[axis] += side * vs;
-            const int t1 = (axis + 1) % 3, t2 = (axis + 2) % 3;
-            int cell[3];
-            for (int c = 0; c < 3; c++) cell[c] = (int)std::floor(q[c] / vs);
-            if (!is_cut(cell[0], cell[1], cell[2])) return 0.0f;
-            const float g1 = q[t1] / vs - 0.5f, g2 = q[t2] / vs - 0.5f;
-            const float f1 = std::floor(g1), f2 = std::floor(g2);
-            const float w1 = g1 - f1, w2 = g2 - f2;
-            float sum = 0.0f;
-            int count = 0;
-            for (int k = 0; k < 4; k++) {
-                const int o1 = k & 1, o2 = k >> 1;
-                cell[t1] = (int)f1 + o1;
-                cell[t2] = (int)f2 + o2;
-                const float weight = (o1 ? w1 : 1.0f - w1) * (o2 ? w2 : 1.0f - w2);
-                if (is_cut(cell[0], cell[1], cell[2])) { sum += weight; count++; }
-            }
-            // (As the shader: tighter at a hole's edges and outer corners, as if at 0.9 instead of 0.75.)
-            if (count == 4) return 1.0f;
-            return count == 3 ? sum : sum * (0.75f / 0.9f);
-        };
-        auto surface_cut = [&](const float w[3], int axis) { return std::max(row_cut(w, axis, -1.0f), row_cut(w, axis, 1.0f)) >= 0.75f; };
+        // The shader's rule (level_cut_at).
+        auto surface_cut = [&](const float w[3], int axis) { return level_cut_at(w, axis); };
         int visible = 0, voids = 0, markers = 0;
         int why[3] = { 0, 0, 0 };   // what a void ran into: cells not filled, too far, inside a solid cell
         std::unordered_set<uint64_t> seen;
@@ -3227,6 +3255,35 @@ std::string tooie::voxel_layer::console(uint8_t* rdram, recomp_context* ctx, con
         }
         snprintf(text, sizeof(text), "voidscan: %d cut points in sight, %d see into a void (%d into cells not filled, %d past six cells, "
             "%d where a whole cell lost its surface); magenta markers at %d of them for 10 s", visible, voids, why[0], why[1], why[2], markers);
+        return text;
+    }
+    if (what == "cells") {
+        // The cells round the cut ones, slice by slice across `axis` (x, y or z; x when not given), into the log: # solid,
+        // c cut solid (cracked, or a whole cell inside a hole's opening), D dug, . air, ? never filled. Each slice's
+        // rows run down the next axis round, highest first, its columns along the one after.
+        if (world.cut.empty()) return "no cut cells";
+        const int a = args.size() >= 2 ? std::clamp(args[1][0] - 'x', 0, 2) : 0;
+        const int t1 = (a + 1) % 3, t2 = (a + 2) % 3;
+        auto field = [](uint64_t v) { int32_t f = (int32_t)(v & 0x1FFFFF); return (f & 0x100000) ? f - 0x200000 : f; };
+        int lo[3] = { INT_MAX, INT_MAX, INT_MAX }, hi[3] = { INT_MIN, INT_MIN, INT_MIN };
+        for (uint64_t key : world.cut) {
+            const int c[3] = { field(key >> 42), field(key >> 21), field(key) };
+            for (int k = 0; k < 3; k++) { lo[k] = std::min(lo[k], c[k] - 2); hi[k] = std::max(hi[k], c[k] + 2); }
+        }
+        for (int u = lo[a]; u <= hi[a]; u++) {
+            fprintf(stderr, "[voxel] cells %c = %d (%c %d down, %c %d on):\n", 'x' + a, u, 'x' + t1, hi[t1], 'x' + t2, lo[t2]);
+            for (int v = hi[t1]; v >= lo[t1]; v--) {
+                std::string row = "[voxel]   ";
+                for (int w = lo[t2]; w <= hi[t2]; w++) {
+                    int c[3];
+                    c[a] = u; c[t1] = v; c[t2] = w;
+                    const uint8_t st = state_at(c[0], c[1], c[2]);
+                    row += st == Dug ? 'D' : st == Air ? '.' : st == Unknown ? '?' : is_cut(c[0], c[1], c[2]) ? 'c' : '#';
+                }
+                fprintf(stderr, "%s\n", row.c_str());
+            }
+        }
+        snprintf(text, sizeof(text), "cells %d..%d %d..%d %d..%d written to the log", lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]);
         return text;
     }
     if (what == "void") {
