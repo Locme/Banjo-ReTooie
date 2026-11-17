@@ -1455,7 +1455,7 @@ index eb8833e..8388dc1 100644
          Element *default_title_wrapper;
          GameOptionsMenu *game_options_menu = nullptr;
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..5ec9888 100644
+index 277a421..29130a8 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
 @@ -4,7 +4,9 @@
@@ -1718,7 +1718,7 @@ index 277a421..5ec9888 100644
  bool check_menu_button_pressed(int profile_index, recompinput::GameInput input, int32_t event_button) {
      auto menuBinding0 = recompinput::profiles::get_input_binding(profile_index, input, 0);
      auto menuBinding1 = recompinput::profiles::get_input_binding(profile_index, input, 1);
-@@ -646,7 +816,52 @@ void recompui::activate_mouse() {
+@@ -646,7 +816,58 @@ void recompui::activate_mouse() {
      ui_state->update_focus(true, false);
  }
  
@@ -1740,6 +1740,12 @@ index 277a421..5ec9888 100644
 +        gaps.push_back(ms(frame_start - last_start).count());
 +    } else {
 +        window_start = frame_start;
++    }
++    // TOOIE_UI_FRAME_LOG=2: each draw that came late (over 12 ms after the last) or cost over 2 ms, as well.
++    static const bool each = std::getenv("TOOIE_UI_FRAME_LOG")[0] == '2';
++    if (each && !gaps.empty() && (gaps.back() > 12.0 || ms(end - frame_start).count() > 2.0)) {
++        std::printf("[ui-frame] slow: gap %.2f ms, events+input %.3f, contexts+rml update %.3f, render %.3f ms\n", gaps.back(),
++            ms(contexts_start - frame_start).count(), ms(update_done - contexts_start).count(), ms(end - update_done).count());
 +    }
 +    last_start = frame_start;
 +    draws++;
@@ -1771,7 +1777,7 @@ index 277a421..5ec9888 100644
  
      apply_background_input_mode();
  
-@@ -696,6 +911,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -696,6 +917,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
          if (!all_input_is_disabled) {
              bool is_mouse_input = false;
@@ -1782,7 +1788,7 @@ index 277a421..5ec9888 100644
              // Implement some additional behavior for specific events on top of what RmlUi normally does with them.
              switch (cur_event.type) {
              case SDL_EventType::SDL_MOUSEMOTION: {
-@@ -705,6 +924,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -705,6 +930,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                      float xD = cur_event.motion.x - last_mouse_pos[0];
                      float yD = cur_event.motion.y - last_mouse_pos[1];
                      if (sqrt(xD * xD + yD * yD) < 100) {
@@ -1790,7 +1796,7 @@ index 277a421..5ec9888 100644
                          break;
                      }
                  }
-@@ -713,6 +933,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -713,6 +939,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                  // if controller is the primary input, don't use mouse movement to allow cursor to reactivate
                  if (recompui::get_cont_active()) {
@@ -1798,7 +1804,7 @@ index 277a421..5ec9888 100644
                      break;
                  }
              }
-@@ -731,7 +952,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -731,7 +958,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              case SDL_EventType::SDL_CONTROLLERBUTTONDOWN: {
                  int sdl_key = cont_button_to_key(cur_event.cbutton);
                  if (context_capturing_input && sdl_key) {
@@ -1807,7 +1813,7 @@ index 277a421..5ec9888 100644
                      latest_controller_key_pressed = sdl_key;
                      next_repeat_time = clock::now() + start_repeat_delay;
                  }
-@@ -747,6 +968,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -747,6 +974,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
  
                      if (cur_event.key.keysym.scancode == SDL_Scancode::SDL_SCANCODE_F8) {
                          if (recompui::config::general::get_debug_mode_enabled()) {
@@ -1817,7 +1823,7 @@ index 277a421..5ec9888 100644
                              Rml::Debugger::SetVisible(!Rml::Debugger::IsVisible());
                          }
                      }
-@@ -776,7 +1000,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -776,7 +1006,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                          non_mouse_interacted = true;
                          int sdl_key = cont_axis_to_key(cur_event.caxis, axis_value);
                          if (context_capturing_input && sdl_key) {
@@ -1826,7 +1832,7 @@ index 277a421..5ec9888 100644
                              latest_controller_key_pressed = sdl_key;
                              next_repeat_time = clock::now() + start_repeat_delay;
                          }
-@@ -796,14 +1020,36 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -796,14 +1026,36 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
  
              // Send the event to RmlUi if this type of event is being captured.
@@ -1865,7 +1871,7 @@ index 277a421..5ec9888 100644
                  }
              }
          }
-@@ -837,7 +1083,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -837,7 +1089,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              }
              }
  
@@ -1874,7 +1880,7 @@ index 277a421..5ec9888 100644
                  recompui::config::open();
              }
          }
-@@ -847,7 +1093,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -847,7 +1099,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      if (latest_controller_key_pressed != SDLK_UNKNOWN) {
          clock::time_point now = clock::now();
          if (now >= next_repeat_time) {
@@ -1883,7 +1889,7 @@ index 277a421..5ec9888 100644
              next_repeat_time += repeat_rate;
          }
      }
-@@ -864,6 +1110,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -864,6 +1116,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              recompui::update_launcher_menu();
          }
  
@@ -1891,7 +1897,7 @@ index 277a421..5ec9888 100644
          ui_state->update_contexts();
  
          int width = swap_chain_framebuffer->getWidth();
-@@ -884,8 +1131,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -884,8 +1137,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
          prev_height = height;
  
          ui_state->context->Update();
@@ -1902,7 +1908,7 @@ index 277a421..5ec9888 100644
      }
  }
  
-@@ -893,7 +1142,10 @@ void deinit_hook() {
+@@ -893,7 +1148,10 @@ void deinit_hook() {
      recompui::destroy_all_contexts();
  
      std::lock_guard lock {ui_state_mutex};
@@ -4762,10 +4768,15 @@ index 34eec3f..90d1c61 100644
 +
  } // namespace recompui
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..5affce1 100644
+index b057f46..9c07956 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
-@@ -3,6 +3,12 @@
+@@ -1,8 +1,17 @@
+ #include "ui_modal.h"
++
++#include <cstdio>
++#include <cstdlib>
+ #include "ui_element.h"
  #include "ui_document.h"
  #include "recompinput/recompinput.h"
  #include "recompinput/profiles.h"
@@ -4778,7 +4789,7 @@ index b057f46..5affce1 100644
  
  namespace recompui {
  
-@@ -106,35 +112,144 @@ Modal::Modal(
+@@ -106,35 +115,140 @@ Modal::Modal(
      body->set_width(100.0f, Unit::Percent);
  
      set_menu_action_callback(MenuAction::Toggle, [this]() {
@@ -4844,10 +4855,6 @@ index b057f46..5affce1 100644
 +    // Leaving, the rows go one after another too, quicker, within the box's own slide out.
 +    constexpr float row_leave_gap = 0.006f;
 +    constexpr float row_leave_time = 0.1f;
-+
-+    float slide_seconds(std::chrono::steady_clock::time_point since) {
-+        return std::chrono::duration<float>(std::chrono::steady_clock::now() - since).count();
-+    }
 +
 +    // Goes about 5% past 1 and comes back (ease out back, gentler than the usual 1.70158).
 +    float overshoot(float t) {
@@ -4928,7 +4935,7 @@ index b057f46..5affce1 100644
      }
  
      is_open = false;
-@@ -146,7 +261,323 @@ bool Modal::close() {
+@@ -146,7 +260,335 @@ bool Modal::close() {
      return true;
  }
  
@@ -4944,7 +4951,7 @@ index b057f46..5affce1 100644
 +void Modal::start_slide(Slide to) {
 +    slide_from = slide_out_now;
 +    slide = to;
-+    slide_start = std::chrono::steady_clock::now();
++    slide_clock.start();
 +}
 +
 +void Modal::update_peek() {
@@ -5059,10 +5066,11 @@ index b057f46..5affce1 100644
 +
 +void Modal::start_page_slide(const std::string &tab_id) {
 +    page_sliding = true;
-+    page_slide_start = std::chrono::steady_clock::now();
++    page_slide_clock.start();
 +    page_sound_landed = true;
-+    if (std::chrono::duration<float>(page_slide_start - last_page_sound).count() >= page_sound_every) {
-+        last_page_sound = page_slide_start;
++    const auto now = std::chrono::steady_clock::now();
++    if (std::chrono::duration<float>(now - last_page_sound).count() >= page_sound_every) {
++        last_page_sound = now;
 +        // The tab's own sound when the game gives one (its character's voice), else the Start menu's page pair.
 +        if (!recompui::config::notify_tab_sound(tab_id)) {
 +            recompui::config::notify_slide(recompui::config::SlideSound::RowIn);
@@ -5073,7 +5081,18 @@ index b057f46..5affce1 100644
 +}
 +
 +void Modal::update_page_slide() {
-+    const float t = slide_seconds(page_slide_start);
++    const float t = page_slide_clock.tick();
++    // TOOIE_UI_SLIDE_LOG=1: each frame of a page's slide in, its own time and the wall clock's (ms).
++    static const bool log_slide = std::getenv("TOOIE_UI_SLIDE_LOG") != nullptr;
++    if (log_slide) {
++        static auto wall_start = std::chrono::steady_clock::now();
++        if (t == 0.0f) {
++            wall_start = std::chrono::steady_clock::now();
++        }
++        std::printf("[ui-slide] page t %.1f ms, wall %.1f ms\n", t * 1000.0f,
++            std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - wall_start).count());
++        std::fflush(stdout);
++    }
 +    if (!page_sound_landed && t >= page_land_time) {
 +        recompui::config::notify_slide(recompui::config::SlideSound::RowLand);
 +        page_sound_landed = true;
@@ -5109,7 +5128,7 @@ index b057f46..5affce1 100644
 +        return;
 +    }
 +    page_sliding = false;
-+    const float t = slide_seconds(slide_start);
++    const float t = slide_clock.tick();
 +    if (slide == Slide::In) {
 +        const float k = overshoot(t / slide_in_time);
 +        const float out = slide_from * (1.0f - k);
@@ -5252,7 +5271,7 @@ index b057f46..5affce1 100644
      if (current_tab_index < tab_contexts.size() && current_tab_index >= 0) {
          if (tab_contexts[current_tab_index].can_close(TabCloseContext::ModalClose)) {
              tab_contexts[current_tab_index].on_close(TabCloseContext::ModalClose);
-@@ -155,6 +586,9 @@ bool TabbedModal::close() {
+@@ -155,6 +597,9 @@ bool TabbedModal::close() {
          }
      }
  
@@ -5262,7 +5281,7 @@ index b057f46..5affce1 100644
      return Modal::close();
  }
  
-@@ -178,6 +612,8 @@ static std::pair<recompinput::InputDevice, int> get_last_input_info() {
+@@ -178,6 +623,8 @@ static std::pair<recompinput::InputDevice, int> get_last_input_info() {
  void Modal::process_event(const Event &e) {
      switch (e.type) {
          case EventType::Update: {
@@ -5271,7 +5290,7 @@ index b057f46..5affce1 100644
              if (is_open) {
                  bool update_action_labels = false;
                  auto [current_device, current_profile] = get_last_input_info();
-@@ -283,6 +719,13 @@ void Modal::render_menu_actions() {
+@@ -283,6 +730,13 @@ void Modal::render_menu_actions() {
          }
  
          auto action_wrapper = context.create_element<Element>(menu_actions_wrapper, 0, "span", false);
@@ -5285,7 +5304,7 @@ index b057f46..5affce1 100644
          action_wrapper->set_display(Display::Flex);
          action_wrapper->set_flex_direction(FlexDirection::Row);
          action_wrapper->set_align_items(AlignItems::Center);
-@@ -299,6 +742,24 @@ void Modal::render_menu_actions() {
+@@ -299,6 +753,24 @@ void Modal::render_menu_actions() {
      }
  }
  
@@ -5310,7 +5329,7 @@ index b057f46..5affce1 100644
  void Modal::set_on_close_callback(std::function<void()> callback) {
      on_close_callback = callback;
  }
-@@ -311,6 +772,90 @@ Modal *Modal::create_modal(ModalType modal_type) {
+@@ -311,6 +783,90 @@ Modal *Modal::create_modal(ModalType modal_type) {
      return modal;
  }
  
@@ -5401,7 +5420,7 @@ index b057f46..5affce1 100644
  TabbedModal::TabbedModal(
      ResourceId rid,
      Document *parent,
-@@ -319,6 +864,12 @@ TabbedModal::TabbedModal(
+@@ -319,6 +875,12 @@ TabbedModal::TabbedModal(
  ) : Modal(rid, parent, modal_root_context, modal_type)
  {
      set_menu_action_callback(MenuAction::Back, [this]() {
@@ -5414,7 +5433,7 @@ index b057f46..5affce1 100644
          if (this->tabs != nullptr) {
              this->tabs->focus_on_active_tab();
          }
-@@ -331,15 +882,159 @@ TabbedModal::TabbedModal(
+@@ -331,15 +893,159 @@ TabbedModal::TabbedModal(
      }, "Next Tab");
  }
  
@@ -5574,7 +5593,7 @@ index b057f46..5affce1 100644
              }
              queue_update();
              break;
-@@ -362,7 +1057,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
+@@ -362,7 +1068,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
          return;
      }
      int next_index = tabs->get_next_tab_in_direction(tabs->get_active_tab(), direction);
@@ -5595,7 +5614,7 @@ index b057f46..5affce1 100644
      // Only focus if the tab changed to the intended tab, otherwise the tab change was cancelled.
      if (current_tab_index == next_index) {
          tabs->focus_on_active_tab();
-@@ -383,6 +1091,28 @@ void TabbedModal::on_tab_change(int tab_index) {
+@@ -383,6 +1102,28 @@ void TabbedModal::on_tab_change(int tab_index) {
      }
  }
  
@@ -5624,7 +5643,7 @@ index b057f46..5affce1 100644
  void TabbedModal::set_selected_tab(int tab_index) {
      if (tabs != nullptr) {
          tabs->set_active_tab(tab_index, true);
-@@ -404,12 +1134,21 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+@@ -404,12 +1145,21 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
      ContextId context = get_current_context();
      if (tabs == nullptr) {
          header->set_padding_left(0.0f); // tabs hug to left side
@@ -5648,17 +5667,18 @@ index b057f46..5affce1 100644
  
  void TabbedModal::add_tab(TabContext &&tab_context) {
 diff --git a/recompui/src/elements/ui_modal.h b/recompui/src/elements/ui_modal.h
-index d065a14..74c254b 100644
+index d065a14..8b19494 100644
 --- a/recompui/src/elements/ui_modal.h
 +++ b/recompui/src/elements/ui_modal.h
-@@ -1,5 +1,6 @@
+@@ -1,5 +1,7 @@
  #pragma once
  
++#include <algorithm>
 +#include <atomic>
  #include "recompui/recompui.h"
  #include "elements/ui_element.h"
  #include "elements/ui_document.h"
-@@ -8,6 +9,8 @@
+@@ -8,6 +10,8 @@
  
  #include "recompinput/recompinput.h"
  
@@ -5667,7 +5687,7 @@ index d065a14..74c254b 100644
  namespace recompui {
  
      class Modal;
-@@ -74,6 +77,66 @@ namespace recompui {
+@@ -74,6 +78,95 @@ namespace recompui {
          recompinput::InputDevice last_input_device = recompinput::InputDevice::COUNT;
          int last_input_profile = -1;
  
@@ -5676,7 +5696,36 @@ index d065a14..74c254b 100644
 +        enum class Slide { None, In, Out };
 +        bool animated = false;
 +        Slide slide = Slide::None;
-+        std::chrono::steady_clock::time_point slide_start;
++        // A slide's own clock: the time since it started, but a frame counts for at most a thirtieth of a second, and
++        // the first frame after the start counts for nothing. A new page is built on the frame it is asked for, which
++        // takes 30 to 100 ms; timed by the wall clock, the slide was a third of the way through on its first frame and
++        // jumped (2026-11-17). Now it waits for the page, then plays from its start. Ticks within one frame (under a
++        // millisecond apart) are not the next frame.
++        struct SlideClock {
++            std::chrono::steady_clock::time_point last;
++            float seconds = 0.0f;
++            bool started = false;
++            bool first_frame_passed = false;
++            void start() {
++                seconds = 0.0f;
++                started = false;
++                first_frame_passed = false;
++            }
++            float tick() {
++                const auto now = std::chrono::steady_clock::now();
++                const float dt = std::chrono::duration<float>(now - last).count();
++                if (!started) {
++                    started = true;
++                } else if (!first_frame_passed) {
++                    first_frame_passed = dt > 0.001f;
++                } else {
++                    seconds += std::min(dt, 1.0f / 30.0f);
++                }
++                last = now;
++                return seconds;
++            }
++        };
++        SlideClock slide_clock;
 +        // How far out the box was when the slide started (0 in place, 1 off the left edge), so a slide turned
 +        // round half way starts where the last one was.
 +        float slide_from = 0.0f;
@@ -5697,7 +5746,7 @@ index d065a14..74c254b 100644
 +        // menu's two sounds for a page coming in, at most every quarter second.
 +        bool page_sliding = false;
 +        bool page_sound_landed = true;
-+        std::chrono::steady_clock::time_point page_slide_start;
++        SlideClock page_slide_clock;
 +        std::chrono::steady_clock::time_point last_page_sound;
 +        // The page of the tab with this id comes in; its sound plays (at most every quarter second).
 +        void start_page_slide(const std::string &tab_id);
@@ -5734,7 +5783,7 @@ index d065a14..74c254b 100644
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "Modal"; }
  
-@@ -85,8 +148,18 @@ namespace recompui {
+@@ -85,8 +178,18 @@ namespace recompui {
          virtual void open();
          virtual bool close();
          bool is_open_now() const { return is_open; }
@@ -5753,7 +5802,7 @@ index d065a14..74c254b 100644
          Element *get_body() { return body; }
  
          void set_on_close_callback(std::function<void()> callback);
-@@ -101,12 +174,36 @@ namespace recompui {
+@@ -101,12 +204,36 @@ namespace recompui {
          std::vector<TabContext> tab_contexts;
          TabSet *tabs = nullptr;
          int previous_tab_index = -1;
@@ -5790,7 +5839,7 @@ index d065a14..74c254b 100644
      public:
          virtual void open() override;
          virtual bool close() override;
-@@ -122,6 +219,9 @@ namespace recompui {
+@@ -122,6 +249,9 @@ namespace recompui {
          );
          void set_selected_tab(int tab_index);
          void set_selected_tab(const std::string &id);

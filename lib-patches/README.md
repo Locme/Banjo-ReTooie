@@ -85,7 +85,12 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   the blinks going, the menu at 25 to 55 frames a second and its scrolling and slides uneven (2026-11-17). It is now
   about 0.5 ms and 160 to 190 frames a second on the same PC.
 * **Menu frame log** (`recompui/src/base/ui_state.cpp`): `TOOIE_UI_FRAME_LOG=1` prints once a second how evenly the
-  menus were drawn and what a draw cost.
+  menus were drawn and what a draw cost; `=2` also prints each draw that came late or cost over 2 ms.
+* **Slides wait for the page** (`recompui/src/elements/ui_modal.h/.cpp`, `SlideClock`): the Esc menu's slide in and out
+  and a tab's page coming in keep their own clock, on which a frame counts for at most a thirtieth of a second and the
+  first frame after the start counts for nothing. A page is built on the frame it is asked for (30 to 100 ms), and
+  timed by the wall clock the page's slide was a third of the way through on its first frame and jumped (2026-11-17).
+  `TOOIE_UI_SLIDE_LOG=1` prints each frame of a page's slide.
 * **1440p resolution** (`ui_config_tab_graphics.cpp`, `rt64_render_context.cpp`, and `ultramodern/include/ultramodern/config.hpp` in N64ModernRuntime.patch): `R1440p` is 6x the game's 240 lines. The Resolution row names are 3x/4.5x/6x/9x with the pixel height in brackets (the saved keys stay 720p, 1080p, 2160p).
 * **All Graphics options are live** (`ui_config_page_options_menu.cpp`): any change in the Graphics tab calls `save_config()` at once, so options added by the port need no callback of their own.
 * **Section headings** (`recompui/include/recompui/config.h`, `ui_config.cpp`,
