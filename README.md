@@ -4,12 +4,11 @@
 
 ![The Banjo Re-Tooie start menu: Locme's art of Spiral Mountain, with the title dropping in](docs/media/start-menu.gif)
 
-Banjo Re-Tooie is a native PC port of **Banjo-Tooie (USA, N64)**, with modern
-graphics, smooth frame rates and quality-of-life options, made by statically recompiling the
-game's MIPS code to C with [N64Recomp](https://github.com/N64Recomp/N64Recomp),
-running it on [N64ModernRuntime](https://github.com/N64Recomp/N64ModernRuntime)
-and rendering it with [RT64](https://github.com/rt64/rt64). There is no
-emulator at runtime.
+Banjo Re-Tooie is a native PC port of **Banjo-Tooie (USA, N64)**. It isn't an emulator. The game's own code was
+recompiled to C with [N64Recomp](https://github.com/N64Recomp/N64Recomp), runs on
+[N64ModernRuntime](https://github.com/N64Recomp/N64ModernRuntime), and is drawn by
+[RT64](https://github.com/rt64/rt64). By default it plays like the N64 game. Every enhancement below is a setting
+you can turn on or off, and it applies straight away.
 
 > ### Made by Locme with the assistance of AI
 >
@@ -27,97 +26,86 @@ emulator at runtime.
 > `rsp/`), so that the game can be built with just a compiler. No art, audio,
 > textures or models are included.
 
-## Current Status
+## Features
 
-- The game boots, plays and saves natively on Windows.
-  Linux builds too. An Android build (64-bit ARM phones with Vulkan, Android 10 or newer) is in its first stage.
-- Graphics: widescreen and ultrawide, 60 FPS and higher with interpolation, any resolution, SMAA, FSR, DLSS,
-  screen-space and ray-traced effects (shadows, reflections, ambient occlusion, light), and fur.
-- Quality of life: skip the intro, faster text and transitions, a free camera, save backups and save states,
-  cheats, achievements, a level warp and a photo mode. Mods load from zip files.
+### Play it your way
+- **Any frame rate.** 60 FPS and above, with interpolation, while the game logic runs at its own speed, so physics and timing stay as on the N64.
+- **Any screen.** Widescreen and ultrawide, any resolution, windowed or fullscreen (F11 / Alt+Enter), and HUD placement options.
+- **Controller, keyboard and mouse.** Mouse aiming in first person, the mouse in the game's menus, and rebindable controls and hotkeys.
+- **Settings that apply at once.** Press Esc (or Back / Select) at any time to open the menu. There's no Apply button.
 
-What changed, newest first: [`notes/changelog.md`](notes/changelog.md).
+### Modern graphics that still look like Banjo-Tooie
+- **Upscaling and anti-aliasing:** DLSS and DLAA, FSR 1, FSR 3 and FSR 4, and SMAA.
+- **Lighting:** Relighting, Ray Tracing and Path Tracing, with traced shadows, reflections and light, plus SSGI, screen-space reflections, ambient occlusion and Traced Light Beams. *Keep Game Look* holds the game's own colours and brightness while the light and shade change.
+- **A living world:** Day and Night, weather, clouds, northern lights, wet ground, raindrops on the screen, mist, lens flare, fireflies and night sounds.
+- **3D grass** with flower beds, and small creatures living in it: bees, butterflies, birds, frogs and crabs on land, and fish, turtles and rays under the sea. They scatter when Banjo comes close.
+- **Characters:** Banjo's fur, Kazooie's feathers (also when she's on her own), high-detail models, toon style and tessellation.
+- **Surfaces:** parallax and displaced ground, stylised water, and ice reflections.
+- **Retro options:** N64 3-point filtering, 16-bit colour and a CRT filter, for a picture closer to the console's.
+- **Accessibility:** brightness and colour grading, with colourblind filters for Deuteranopia, Protanopia and Tritanopia.
 
-## The Experience We Want to Build
+### Quality of life
+- Skip the intro, faster text and level transitions.
+- A free camera, a water camera, fine aim and running.
+- Transform anywhere, from a ring menu of the forms you've unlocked.
+- A Totals checklist of what's left to find in each level.
+- Save backups, save states, and a timer save.
+- A level warp, and replays of races and bosses (including a boss rush).
 
-- Banjo-Tooie exactly as it plays on the N64, with the same physics, timing and secrets, by default.
-- Smooth play at your monitor's refresh rate without changing the game's own speed.
-- Any window size and aspect ratio, with the HUD where you want it.
-- Optional modern graphics that look like the game, not like a different one.
-- Settings that apply at once, in a menu you can reach any time with Esc or Back.
-- Mods and texture packs that are easy to install and turn on or off.
+### Extras
+- **Photo mode:** pick a character and a pose, mirror it, and set the face.
+- **Achievements** and a **music player**, plus a sound test in Developer Mode.
+- **Cheats:** infinite items, transformations, levitation, speed-up and Cheato codes. See [`notes/cheats.md`](notes/cheats.md).
+- **Gameplay options:** harder enemies, enemy respawns, and back-ports from Banjo-Kazooie (old Banjo sounds, the Get Jiggy animation). Plus some cut content brought back.
+- **Languages:** English, French, German and Spanish. See [`docs/translations.md`](docs/translations.md).
 
-## How It Works
+### Mods and texture packs
+- Mods load from zip files and can be turned on or off on the Mods tab.
+- Texture packs replace the game's textures, including the menu's portraits, and can carry height maps for parallax.
+- Model mods replace characters, and the fur and feathers follow them.
 
-1. The [Banjo-Tooie decompilation](https://github.com/Mr-Wiseguy/banjo-tooie)
-   (a submodule in `lib/bt-decomp`) splits your ROM and links a byte-matching
-   ELF with full relocations.
-2. N64Recomp turns that ELF into C (`RecompiledFuncs/`); RSPRecomp turns the
-   audio microcode into C++ (`rsp/`).
-3. CMake builds that code together with the runtime, RT64 and the menus into
-   one executable.
+### Work in progress
+Still being built: Voxel Layer (the Bill Drill digs real holes), Dive, and volumetric mist, fog and clouds (all on
+the WIP tab), and HD shadows (experimental).
 
-There is no emulator at runtime: the game's own code runs as native code, and RT64 draws its display lists
-with Direct3D 12 or Vulkan.
+Every option, with its default, is in [`notes/settings-guide.md`](notes/settings-guide.md). Every shortcut is
+in [`notes/keys.md`](notes/keys.md). What changed, newest first, is in
+[`notes/changelog.md`](notes/changelog.md).
 
-## Testing and Development
+## Platforms
 
-### Building
+- **Windows:** the main target. There are two builds: *Any 64-bit PC (2008 and up)*, and *Optimized for newer CPUs (2013 and up)*, which needs AVX2.
+- **Linux:** builds too.
+- **Android:** early stage. It needs a 64-bit ARM phone running Android 10 or newer with Vulkan, and aims to reach the title screen. Ray tracing, DLSS/FSR 3/4 and mouse options aren't available there.
 
-See [`BUILDING.md`](BUILDING.md). On Windows, `update_and_build.bat` pulls the latest code and builds;
-`build.bat` builds what you have.
+## Getting started
 
-### Playing
+1. Get a build: download one from [Releases](https://github.com/Locme/Banjo-ReTooie/releases), or build it yourself (see [`BUILDING.md`](BUILDING.md)). On Windows, `update_and_build.bat` pulls the latest code and builds it.
+2. Run `BanjoReTooie.exe`, choose **Play** and pick your Banjo-Tooie (USA) ROM. It's remembered after the first time. `--game bt` skips the start menu.
+3. Press **Esc** (or **Back** / **Select**) to open the settings at any time.
 
-You need your own legally obtained Banjo-Tooie (US) ROM. On Windows, `build.bat`
-(or `update_and_build.bat`) leaves the finished game in a `Release` subfolder:
-`Release\Any 64-bit PC (2008 and up)` works on any 64-bit PC from 2008 on, and
-`Release\Optimized for newer CPUs (2013 and up)` is faster but needs a CPU from
-2013 or newer. See [`BUILDING.md`](BUILDING.md). Run `BanjoReTooie.exe` in
-the folder you want. The first time you
-start the game, choose **Start Game** in the launcher and pick the ROM file;
-it is remembered afterwards. To skip the launcher and go straight into the
-game, start the exe with `--game bt`. Settings and saves are kept next to the
-exe (in its `Release` subfolder after `build.bat`) when that folder is writable; otherwise they
-go to your user profile.
+Settings and saves are kept next to the exe when that folder is writable, and in your user profile otherwise. An
+empty `portable.txt` next to the exe keeps them there. If the game crashes or freezes,
+[`notes/reporting-crashes.md`](notes/reporting-crashes.md) says which logs to send.
 
-If the game crashes or freezes, see [`notes/reporting-crashes.md`](notes/reporting-crashes.md) for which logs to send.
+## How it works
 
-After a build, `Play Banjo Re-Tooie.cmd` checks the files the game needs and starts it.
+1. The [Banjo-Tooie decompilation](https://github.com/Mr-Wiseguy/banjo-tooie) (a submodule in `lib/bt-decomp`)
+   splits your ROM and links a byte-matching ELF with full relocations.
+2. N64Recomp turns that ELF into C (`RecompiledFuncs/`), and RSPRecomp turns the audio microcode into C++ (`rsp/`).
+3. CMake builds that code together with the runtime, RT64 and the menus into one executable.
 
-### Settings
+The game's own code runs as native code, and RT64 draws its display lists with Direct3D 12 or Vulkan.
 
-Press **Esc** on the keyboard, or **Back** / **Select** on a controller, to open
-settings. The tabs are General, QOL, Graphics, Controls, Sound, Cheats and Mods.
-
-- **General**: Language (the game's text from a translation file, with a flag
-  for each; see [`docs/translations.md`](docs/translations.md)), Back up saves, Save backups to keep, Timer save, Discord status,
-  Speed-up factor and Speed-up toggle.
-- **QOL**: Press Start Early to Skip Intro, Text speed and Level transitions.
-- **Cheats**: Enable cheats, which must be on for the cheat options to show.
-- **DEV** (shown with General > Developer Mode): its Additional Tabs section
-  shows the Achievements, Cheats and Warp tabs.
-- **Graphics**: changes apply at once, with no Apply button. Aspect Ratio offers
-  4:3, Fill and Letterbox 16:9. Graphics API needs a restart.
-- **F11** or **Alt+Enter** toggles fullscreen.
-
-Every menu option, with its default, is in [`notes/settings-guide.md`](notes/settings-guide.md).
-Every keyboard and controller shortcut is in [`notes/keys.md`](notes/keys.md).
-What each cheat does is in [`notes/cheats.md`](notes/cheats.md).
-What changed, newest first, is in [`notes/changelog.md`](notes/changelog.md).
-
-## Foundations, History, and Documentation
+## Foundations and licence
 
 Banjo Re-Tooie stands on N64Recomp, N64ModernRuntime and RT64, and follows the structure of BanjoRecomp, the
-Banjo-Kazooie port. An earlier attempt at a port started from the Xbox 360 (XBLA) version; it was dropped in
-October 2026 and this port was restarted from the N64 game.
+Banjo-Kazooie port. An earlier attempt at a port started from the Xbox 360 (XBLA) version. It was dropped in
+October 2026, and this port was restarted from the N64 game.
 
 - [`BUILDING.md`](BUILDING.md): how to build on Windows, Linux and Android.
-- [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md): every third-party library, font and piece of art, its licence,
-  and credits.
-- [`notes/settings-guide.md`](notes/settings-guide.md), [`notes/keys.md`](notes/keys.md),
-  [`notes/cheats.md`](notes/cheats.md): every option, shortcut and cheat.
-- [`notes/changelog.md`](notes/changelog.md).
+- [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md): every third-party library, font and piece of art, with its licence, and credits.
+- [`docs/console.md`](docs/console.md): the developer console's commands.
 
 Banjo Re-Tooie is GPL-3.0, see [`COPYING`](COPYING). The DLSS and FSR 3 / FSR 4 DLLs that Windows builds ship
 are under NVIDIA's and AMD's own licences; see [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md).
