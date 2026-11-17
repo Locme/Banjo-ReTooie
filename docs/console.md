@@ -1685,6 +1685,7 @@ everything back.
   pass (it needs that pass, as the effect debug views do) and is not saved.
 - Started with `TOOIE_VOXEL_RED=1`, every face the layer draws is plain red and untextured, so a strip or speck at a
   hole's edge can be told apart: red is the layer's own, anything else is the level showing through.
+  `TOOIE_VOXEL_HIDE=1` draws nothing of the layer but still cuts the level, to see what is behind a hole.
 - `voxel mtx rel` draws the cells with places relative to the camera instead of world places, and `voxel mtx abs`
   goes back; `voxel flip` turns the triangles' winding over. Both are for checking the drawing on a new setup.
 

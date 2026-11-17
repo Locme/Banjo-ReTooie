@@ -63,14 +63,26 @@ float VoxelRowCut(StructuredBuffer<uint> cuts, float3 world, uint axis, float si
         return 0.0f;
     }
     float sum = 0.0f;
+    uint count = 0u;
     [unroll] for (int k = 0; k < 4; k++) {
         const int2 o = int2(k & 1, k >> 1);
         cell[t1] = int(g0.x) + o.x;
         cell[t2] = int(g0.y) + o.y;
         const float weight = ((o.x != 0) ? w.x : 1.0f - w.x) * ((o.y != 0) ? w.y : 1.0f - w.y);
-        sum += VoxelCellCut(cuts, cell) ? weight : 0.0f;
+        if (VoxelCellCut(cuts, cell)) {
+            sum += weight;
+            count++;
+        }
     }
-    return sum;
+    // At a hole's edge or outer corner (two cut cells of the four or fewer) the cut stays further inside, as if it were
+    // tested at 0.9 rather than 0.75: there the smooth surface's corner stops short of the half-way curve, and the
+    // level behind a thin cliff showed past it in a tan wedge at a wall hole's corner (Jinjo Village, 2026-11-17).
+    // Three of four (inside the hole, beside one whole cell) keep 0.75: tighter, strips of the wall stayed across
+    // the hole there.
+    if (count == 4u) {
+        return 1.0f;
+    }
+    return (count == 3u) ? sum : sum * (0.75f / 0.9f);
 }
 
 // Whether a point of the level's surface (its normal either way round) lies over the cut cells.

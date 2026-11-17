@@ -2727,6 +2727,9 @@ namespace {
         const float cam[3] = { read_float(rdram, camera + 0), read_float(rdram, camera + 4), read_float(rdram, camera + 8) };
         for (float v : cam) if (!std::isfinite(v)) return;
         if (world.cut_changed) publish_cuts();
+        // (Test aid, TOOIE_VOXEL_HIDE=1: the level is cut but nothing of the layer is drawn, to see what is behind it.)
+        static const bool hide = std::getenv("TOOIE_VOXEL_HIDE") != nullptr;
+        if (hide) return;
         if (world.chunks.empty() && debris.empty()) return;
 
         // Chunks that changed, at most a few a frame. One that found the arena full waits a second before it tries again.
@@ -3135,14 +3138,17 @@ std::string tooie::voxel_layer::console(uint8_t* rdram, recomp_context* ctx, con
             const float f1 = std::floor(g1), f2 = std::floor(g2);
             const float w1 = g1 - f1, w2 = g2 - f2;
             float sum = 0.0f;
+            int count = 0;
             for (int k = 0; k < 4; k++) {
                 const int o1 = k & 1, o2 = k >> 1;
                 cell[t1] = (int)f1 + o1;
                 cell[t2] = (int)f2 + o2;
                 const float weight = (o1 ? w1 : 1.0f - w1) * (o2 ? w2 : 1.0f - w2);
-                if (is_cut(cell[0], cell[1], cell[2])) sum += weight;
+                if (is_cut(cell[0], cell[1], cell[2])) { sum += weight; count++; }
             }
-            return sum;
+            // (As the shader: tighter at a hole's edges and outer corners, as if at 0.9 instead of 0.75.)
+            if (count == 4) return 1.0f;
+            return count == 3 ? sum : sum * (0.75f / 0.9f);
         };
         auto surface_cut = [&](const float w[3], int axis) { return std::max(row_cut(w, axis, -1.0f), row_cut(w, axis, 1.0f)) >= 0.75f; };
         int visible = 0, voids = 0, markers = 0;

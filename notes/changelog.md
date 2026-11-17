@@ -6,6 +6,7 @@ regenerated code, CI, notes and tooling are left out.
 ## 2026-11-17
 
 - Voxel Layer with Ray Tracing: a hole is lit inside instead of black. Traced light coming out of a hole through its mouth met the wall's cut surface from behind and counted it as solid, so no sky or sun reached in.
+- Voxel Layer: the tan speck at a wall hole's corner is gone. It was the ground behind Jinjo Village's thin cliff, seen past the corner of the hole's faces; the level's wall is now kept a little further in at a hole's edges and corners, so it overlaps them.
 
 ## 2026-11-15
 

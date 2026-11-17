@@ -264,7 +264,15 @@ The hole's sides and floor are the blocks round it, drawn by us. So Banjo digs i
   mouth meets the cut wall from behind, the cell past it is in front of the wall and never cut, so every traced ray
   from inside a hole counted as blocked. It now looks on both sides of the hit. The rim faces can still show as
   slightly lighter patches round a hole under Ray Tracing.
-- The tan speck, 2026-11-17: it is Jinjo Village's sky (tan below the horizon, seen from under the level), so a real
+- The tan speck, fixed 2026-11-17: `TOOIE_VOXEL_HIDE=1` (the level cut, the layer not drawn) showed the cliff is thin
+  there, with the rest of Jinjo Village and a tan sandy ground behind it; the speck was that ground, seen past the
+  corner of the hole's faces, between them and the cut's rounder corner. VoxelRowCut now scales its blend by how
+  many of the four cells round the point are cut: all four, cut; three (inside a hole, beside one whole cell), the
+  blend as before against 0.75; two or fewer (a hole's edges and outer corners), as if against 0.9, so the wall
+  overlaps the hole's faces more there. A plain 0.9 everywhere also closed it but left lens-shaped strips of wall
+  inside the hole. A one-pixel nick can still show from one angle. Also tried and dropped: cutting only the cell
+  behind a surface as seen from the camera, two-sided faces, and one shared depth for faces meeting at a corner.
+- (Earlier note) The tan speck, 2026-11-17: it is Jinjo Village's sky (tan below the horizon, seen from under the level), so a real
   look through the cliff. Tried and dropped: bringing the rim faces up to the surface where the cut is, and all of
   them to four units behind the surface; both showed more tan along the hole's bottom edge, not less.
 - Seen, not the layer's: a `goto` to (-7700, -900, -1034) in Jinjo Village sometimes left Banjo falling through the
