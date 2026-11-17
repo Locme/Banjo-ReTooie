@@ -1205,9 +1205,13 @@ namespace {
                 const bool seam = ch.mat[i] == pal_here.vein && ch.mat[i] != pal_here.top && ch.mat[i] != pal_here.base;
                 float tint[3];
                 int slot_here = 0;
-                // A seam stays stone (the map's stone colour on the grain): L likes the bits of stone in a mountain's hole
-                // (2026-11-13).
-                if (!seam && column_look(ch.dir[i], x, y, z, tint, &slot_here)) cell_slot = slot_here;
+                // A seam takes the level's texture too, a little darker. It was the map's stone colour on the grain (L,
+                // 2026-11-13: bits of stone in a mountain's hole), but in a green wall's hole those cells read as flat dark
+                // grey squares that didn't belong (L, 2026-11-17).
+                if (column_look(ch.dir[i], x, y, z, tint, &slot_here)) {
+                    cell_slot = slot_here;
+                    if (seam) seam_dark = 0.8f;
+                }
                 // A rim-only cell shows through the cut of the dug cell beside it, so it takes that cell's look: a floor
                 // cell under a wall hole showed in the floor's dirt colour, a tan bit under the hole (2026-11-15).
                 if (rim_only) {

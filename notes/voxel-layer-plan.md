@@ -277,6 +277,15 @@ The hole's sides and floor are the blocks round it, drawn by us. So Banjo digs i
   rays went through the wall the picture keeps round a hole and lit it as open. It now takes the hit triangle's normal
   from its corners (gRayPositions, as HitFaceNormal does) and runs the picture's own rule (VoxelRowCutDust, the same
   as VoxelRowCut). The old cell test is kept for passes that can't read the triangles (RayTexturesOn off).
+- Seams, 2026-11-17 (L: "the darker grey cells inside the hole"): seam cells kept the map's stone colour on the grain,
+  flat dark grey squares in a green wall's hole, with or without Ray Tracing. They now take the level's texture like
+  the cells round them, at 0.8 of the light.
+- Still there, 2026-11-17: a small tan corner at a wall hole's lower-left edge in Jinjo Village, seen from the side.
+  `TOOIE_VOXEL_RED=1` shows it lies just outside the hole's faces; `TOOIE_VOXEL_HIDE=1` shows tan level geometry behind
+  the cliff's face there. Tried and dropped: a cut cell cutting only surfaces facing within 45 degrees of its column (left
+  strips of a slanted wall across the hole, tan still there), and cutting any level surface with dug (then any cut)
+  space 2 units either side of it (no change to the tan). The holes differ a little from run to run, so compare
+  several runs before calling a change a fix.
 - (Earlier note) The tan speck, 2026-11-17: it is Jinjo Village's sky (tan below the horizon, seen from under the level), so a real
   look through the cliff. Tried and dropped: bringing the rim faces up to the surface where the cut is, and all of
   them to four units behind the surface; both showed more tan along the hole's bottom edge, not less.
