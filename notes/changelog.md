@@ -3,6 +3,10 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 1.0
+
+- Kazooie feathers: Kazooie on her own (after a Split Up pad, or the Transformation cheat) gets her feathers too, on her head, neck, body, wings and tail, with her crest, beak and legs left bare as on Banjo's back. Before, only the Kazooie in Banjo's backpack had them. A few feathers still show along her mouth and over the tops of her eyes.
+
 ## 2026-11-17
 
 - Voxel Layer with Ray Tracing: a hole is lit inside instead of black. Traced light coming out of a hole through its mouth met the wall's cut surface from behind and counted it as solid, so no sky or sun reached in.

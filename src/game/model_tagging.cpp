@@ -49,6 +49,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "recomp.h"
@@ -403,6 +404,7 @@ namespace {
         uint32_t from = 0, to = 0; // physical addresses of her first and last list
         uint32_t bone_count = 0;
         int32_t kazooie_parent = -1; // bone 18's parent: 13 in Banjo's skeleton
+        bool solo = false; // Kazooie's own model (asset 0x061C, her form without Banjo): every list is hers
         std::vector<uint32_t> bare; // lists that get no fur or feathers (his feet and hips, her crest), sorted
         std::vector<uint32_t> lists; // her lists (physical addresses), sorted: a model mod can put his among them
     };
@@ -476,6 +478,43 @@ namespace {
         return (uint8_t)MEM_BU(0, kseg0(phys));
     }
 
+    // Kazooie alone (asset 0x061C, 58 bones, the Split Up form): the whole model is hers, so every draw gets feathers
+    // but her crest. Told apart by its bone count and the parents of a few bones; a model mod of it keeps the skeleton.
+    // Her crest is the chain on her head (head 7 -> 8 -> 9 -> 10), the same as the pair model's (20 -> 21 -> 22); as
+    // there, its second bone and on stay bare (L). TOOIE_KAZOOIE_BARE_BONES=<n>,... picks them instead (headless aid).
+    bool is_solo_kazooie(uint8_t* rdram, uint32_t model, uint32_t bones, uint32_t bone_count) {
+        constexpr std::pair<uint32_t, int32_t> parents[] = { { 7, 6 }, { 11, 7 }, { 18, 17 }, { 22, 5 }, { 56, 5 }, { 57, 56 } };
+        if (bone_count != 58) {
+            return false;
+        }
+        for (const auto& [bone, parent] : parents) {
+            if ((int16_t)half(rdram, model + bones + 8 + bone * 16 + 14) != parent) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    const std::vector<uint32_t>& solo_kazooie_bare() {
+        static const std::vector<uint32_t> bones = [] {
+            std::vector<uint32_t> out{ 9, 10 };
+            if (const char* text = std::getenv("TOOIE_KAZOOIE_BARE_BONES"); text != nullptr && *text != 0) {
+                out.clear();
+                for (char* p = const_cast<char*>(text); *p != 0;) {
+                    char* next = p;
+                    const uint32_t bone = (uint32_t)std::strtoul(p, &next, 10);
+                    if (next == p) {
+                        break;
+                    }
+                    out.push_back(bone);
+                    p = *next == ',' ? next + 1 : next;
+                }
+            }
+            return out;
+        }();
+        return bones;
+    }
+
     // A model's header, found back from its vertices (segment 1 = model + its vertex block offset + 0x18; the header
     // starts with 0x0B and holds that offset at +0x10); 0 if not found.
     uint32_t find_model(uint8_t* rdram, uint32_t vertex_base, uint32_t first_list) {
@@ -533,7 +572,15 @@ namespace {
         out.bone_count = bone_count;
         out.kazooie_parent = (int16_t)half(rdram, model + bones + 8 + kazooie_root * 16 + 14);
         std::vector<bool> bare(bone_count, false);
-        if (const BanjoSkeleton* skeleton = banjo_skeleton(bone_count, out.kazooie_parent)) {
+        out.solo = is_solo_kazooie(rdram, model, bones, bone_count);
+        if (out.solo) {
+            for (uint32_t b : solo_kazooie_bare()) {
+                if (b < bone_count) {
+                    bare[b] = true;
+                }
+            }
+        }
+        else if (const BanjoSkeleton* skeleton = banjo_skeleton(bone_count, out.kazooie_parent)) {
             for (uint32_t b : skeleton->bare) {
                 if (b < bone_count) {
                     bare[b] = true;
@@ -548,6 +595,10 @@ namespace {
         std::vector<bool> kazooie(bone_count, false);
         for (uint32_t b = 0; b < bone_count; b++) {
             int guard = 0;
+            if (out.solo) {
+                kazooie[b] = true;
+                continue;
+            }
             for (int32_t c = (int32_t)b; c >= 0 && c < (int32_t)bone_count && guard++ < 64; c = (int16_t)half(rdram, model + bones + 8 + c * 16 + 14)) {
                 if ((uint32_t)c == kazooie_root) {
                     kazooie[b] = true;
@@ -1440,7 +1491,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 d += (block.pos[k] - at[k]) * (block.pos[k] - at[k]);
             }
             const KazooieLists& lists = lists_of((int)b);
-            const bool banjo = lists.found && banjo_skeleton(lists.bone_count, lists.kazooie_parent) != nullptr;
+            const bool banjo = lists.found && (lists.solo || banjo_skeleton(lists.bone_count, lists.kazooie_parent) != nullptr);
             if (banjo && (!skeleton || d < best_distance)) {
                 skeleton = true;
                 best_distance = d;
@@ -1614,13 +1665,13 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             return;
         }
         // His vertices' marks, from the player's model as loaded (once each time it is loaded); none for another model
-        // (his cutscene double), which keeps the colour test. TOOIE_FUR_MARKS=0 leaves them all to it (headless aid).
+        // (his cutscene double, Kazooie on her own), which keeps the colour test. TOOIE_FUR_MARKS=0 leaves them all to it (headless aid).
         {
             static const bool marks_off = [] { const char* text = std::getenv("TOOIE_FUR_MARKS"); return text != nullptr && *text == '0'; }();
             static uint32_t sent_block = 0;
             static uint32_t sent_header[3] = {};
             const KazooieLists& model = lists_of(best);
-            const uint32_t block = skeleton && model.model != 0 && !marks_off ? model.model + model.header[2] + 0x18 : 0;
+            const uint32_t block = skeleton && !model.solo && model.model != 0 && !marks_off ? model.model + model.header[2] + 0x18 : 0;
             if (block != sent_block || (block != 0 && std::memcmp(sent_header, model.header, sizeof(sent_header)) != 0)) {
                 if (sent_block != 0) {
                     RT64::SetFurVertexFlags(sent_block, {}, 1.0f);
