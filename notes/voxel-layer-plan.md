@@ -259,8 +259,14 @@ The hole's sides and floor are the blocks round it, drawn by us. So Banjo digs i
   level, not the layer, and the void view shows it is not empty. Tried and dropped: the rim faces at 2 or 8 units
   behind the surface (8 showed more of it, 2 no less than 4), and cutting any level surface inside a cut cell
   (VoxelCuts.hlsli), which cut square steps into the cliff round the hole.
-- With Ray Tracing on, a hole's inside is black and the rim faces show as lighter rectangles on the cliff; not
-  looked into.
+- With Ray Tracing on, a hole's inside was black (fixed 2026-11-17): SceneEffectsPS's VoxelHitCut looked only at the
+  cell a cell's size past a hit, assuming a ray meets a surface from its front. A ray leaving a hole through its
+  mouth meets the cut wall from behind, the cell past it is in front of the wall and never cut, so every traced ray
+  from inside a hole counted as blocked. It now looks on both sides of the hit. The rim faces can still show as
+  slightly lighter patches round a hole under Ray Tracing.
+- The tan speck, 2026-11-17: it is Jinjo Village's sky (tan below the horizon, seen from under the level), so a real
+  look through the cliff. Tried and dropped: bringing the rim faces up to the surface where the cut is, and all of
+  them to four units behind the surface; both showed more tan along the hole's bottom edge, not less.
 - Seen, not the layer's: a `goto` to (-7700, -900, -1034) in Jinjo Village sometimes left Banjo falling through the
   floor or hanging in the air, with the Voxel Layer off too and no cells cut.
 

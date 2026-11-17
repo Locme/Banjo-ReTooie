@@ -3,6 +3,10 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-11-17
+
+- Voxel Layer with Ray Tracing: a hole is lit inside instead of black. Traced light coming out of a hole through its mouth met the wall's cut surface from behind and counted it as solid, so no sky or sun reached in.
+
 ## 2026-11-15
 
 - The colourblind filter moved from Graphics to the top of the Display tab, under an Accessibility heading next to Brightness & Colour Grading, with its strength slider under it while a filter is on.

@@ -1380,15 +1380,26 @@ bool VoxelHitCut(RayDesc ray, float t) {
     if (!VoxelCutsOn()) {
         return false;
     }
-    const float3 p = ray.Origin + ray.Direction * (t + 18.0f / max(length(ray.Direction), 1e-6f));
-    const int3 cell = int3(floor(p / 18.0f));
-    // Outside the cut cells' bounds: not cut, without a look in the table.
+    // Either side of the hit: a ray from inside a hole out through its mouth meets the cut surface from behind, and the
+    // cell a cell's size on is then in front of the surface, never cut. Only the cell past the hit was looked at, so
+    // light never came out of a hole (or into it, traced from inside), and under Ray Tracing a hole was black
+    // (L, 2026-11-15). The cell in front of a surface is never cut, so looking on both sides can't pass a whole one.
+    const float step = 18.0f / max(length(ray.Direction), 1e-6f);
     const int3 lo = asint(gDust.Load3(DustVoxelOffset + 16u));
     const int3 hi = asint(gDust.Load3(DustVoxelOffset + 32u));
-    if (any(cell < lo) || any(cell > hi)) {
-        return false;
+    [unroll]
+    for (int side = 0; side < 2; side++) {
+        const float3 p = ray.Origin + ray.Direction * (t + ((side == 0) ? step : -step));
+        const int3 cell = int3(floor(p / 18.0f));
+        // Outside the cut cells' bounds: not cut, without a look in the table.
+        if (any(cell < lo) || any(cell > hi)) {
+            continue;
+        }
+        if (VoxelCellCutDust(cell)) {
+            return true;
+        }
     }
-    return VoxelCellCutDust(cell);
+    return false;
 }
 
 // After a nearest-hit trace: a level hit (instance 0) over a cut cell moves the ray's start just past it, to be traced
