@@ -10,6 +10,8 @@ licence (`third-party/nvidia-dlss/LICENSE.txt`), not the GPL.
 The FSR 3 / FSR 4 DLLs (`amd_fidelityfx_loader_dx12.dll`, `amd_fidelityfx_upscaler_dx12.dll`) that Windows builds fetch and ship are
 AMD's, redistributed in binary form under AMD's licence (`third-party/amd-fsr/LICENSE.txt`), not the GPL.
 Android builds include Qualcomm's Snapdragon GSR 1 shader (`third-party/snapdragon-gsr`, BSD 3-Clause).
+Linux AppImages are built with linuxdeploy and its GTK plugin (both MIT, downloaded by `tools/build_appimage.sh`
+and not committed). The AppImage bundles GTK 3 and its data for the ROM file dialog, LGPL-2.1-or-later.
 
 GPL-3.0, see [`COPYING`](../COPYING). N64ModernRuntime is GPL-3.0; N64Recomp and
 RT64 are MIT; RecompFrontend ships no licence file and is used only as a
