@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Banjo Re-Tooie
+Comment=Nintendo 64 Banjo-Tooie recompiled for modern PCs
+Type=Application
+Terminal=false
+Icon=banjo-retooie
+Exec=BanjoReTooie
+Categories=Game;

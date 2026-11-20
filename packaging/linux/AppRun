@@ -1,0 +1,22 @@
+#!/bin/sh
+# Entry point inside the AppImage. The game finds assets/ and recompcontrollerdb.txt
+# next to its working directory, so run it from usr/bin where the build places them.
+HERE="$(dirname "$(readlink -f "$0")")"
+export APPDIR="$HERE"
+export LD_LIBRARY_PATH="$HERE/usr/lib:$HERE/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# A portable.txt beside the AppImage keeps settings and saves there instead of in
+# ~/.config/BanjoTooieN64Recomp (src/game/app_data.cpp).
+if [ -n "${APPIMAGE:-}" ]; then
+    image_dir="$(dirname "$(readlink -f "$APPIMAGE")")"
+    if [ -f "$image_dir/portable.txt" ]; then
+        export APP_FOLDER_PATH="$image_dir"
+    fi
+fi
+
+# linuxdeploy wraps this script in its own AppRun, which sources apprun-hooks/
+# first. The GTK plugin uses that to point GTK at the bundled data and modules
+# for the ROM file dialog.
+
+cd "$HERE/usr/bin" || exit 1
+exec "$HERE/usr/bin/BanjoReTooie" "$@"
