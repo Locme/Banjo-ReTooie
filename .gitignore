@@ -9,9 +9,11 @@ decompressed*
 build/
 build-cmake/
 build-cmake-*/
+build-appimage/
 cmake-build/
 Release/
 out/
+dist/
 patches/*.o
 patches/*.d
 patches/*.elf

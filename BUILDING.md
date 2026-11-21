@@ -90,6 +90,35 @@ cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER
 cmake --build build-cmake --target BanjoTooieN64Recomp
 ```
 
+### AppImage
+
+The AppImage packs the game, `assets/`, the controller database and the GTK
+libraries the ROM file dialog needs into one file. Build it with:
+
+```sh
+cmake --build build-cmake --target AppImage
+```
+
+or, to build the game and the AppImage from a fresh folder:
+
+```sh
+tools/build_appimage.sh
+```
+
+The finished file is `dist/BanjoReTooie-<version>-linux-x86_64.AppImage`. The
+first run downloads linuxdeploy, appimagetool and the GTK plugin into
+`build-appimage/tools/`; later runs reuse them. Running the AppImage needs FUSE 2
+(`libfuse2` on Debian and Ubuntu); without it, use
+`./BanjoReTooie-*.AppImage --appimage-extract-and-run`.
+
+Settings and saves go to `~/.config/BanjoTooieN64Recomp` as with the normal
+Linux build. An empty `portable.txt` beside the AppImage keeps them next to it
+instead.
+
+The AppImage is built against the libraries of the distribution it runs on. One
+made on a newer distribution will not start on an older one, so the CI artifact
+is built on Ubuntu 22.04 and works on distributions from around then and later.
+
 ## Android (early: aims to boot to the title screen)
 
 The `android/` folder is an Android Studio project. It builds the same game code

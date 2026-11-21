@@ -749,3 +749,17 @@ add_dependencies(BanjoTooieN64Recomp tooie_build_info)
 target_include_directories(BanjoTooieN64Recomp PRIVATE ${CMAKE_BINARY_DIR}/build_info)
 
 set_property(TARGET BanjoTooieN64Recomp PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+
+# Pack the Linux build as an AppImage (tools/build_appimage.sh). The target is
+# separate from the default build, so a normal build never downloads packaging
+# tools: cmake --build <build dir> --target AppImage
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" AND NOT ANDROID
+        AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
+    add_custom_target(AppImage
+        COMMAND ${CMAKE_COMMAND} -E env TOOIE_BUILD_DIR=${CMAKE_BINARY_DIR} TOOIE_SKIP_BUILD=1
+            ${CMAKE_SOURCE_DIR}/tools/build_appimage.sh "${CMAKE_BINARY_DIR}"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        USES_TERMINAL
+        VERBATIM)
+    add_dependencies(AppImage BanjoTooieN64Recomp)
+endif()
