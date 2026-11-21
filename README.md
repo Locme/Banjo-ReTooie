@@ -75,18 +75,25 @@ in [`notes/keys.md`](notes/keys.md). What changed, newest first, is in
 ## Platforms
 
 - **Windows:** the main target. There are two builds: *Any 64-bit PC (2008 and up)*, and *Optimized for newer CPUs (2013 and up)*, which needs AVX2.
-- **Linux:** builds too.
+- **Linux:** x86-64 builds as an AppImage or a tar.gz. The AppImage is the easy one: it bundles the game's libraries, and needs Vulkan and FUSE 2 (`libfuse2`); without FUSE, start it with `--appimage-extract-and-run`.
 - **Android:** early stage. It needs a 64-bit ARM phone running Android 10 or newer with Vulkan, and aims to reach the title screen. Ray tracing, DLSS/FSR 3/4 and mouse options aren't available there.
 
 ## Getting started
 
-1. Get a build: download one from [Releases](https://github.com/Locme/Banjo-ReTooie/releases), or build it yourself (see [`BUILDING.md`](BUILDING.md)). On Windows, `update_and_build.bat` pulls the latest code and builds it.
-2. Run `BanjoReTooie.exe`, choose **Play** and pick your Banjo-Tooie (USA) ROM. It's remembered after the first time. `--game bt` skips the start menu.
-3. Press **Esc** (or **Back** / **Select**) to open the settings at any time.
+1. Get a build: download one from [Releases](https://github.com/Locme/Banjo-ReTooie/releases) or the build artifacts on
+   GitHub Actions, or build it yourself (see [`BUILDING.md`](BUILDING.md)). On Windows, `update_and_build.bat` pulls
+   the latest code and builds it.
+2. Start it. On Windows, run `BanjoReTooie.exe`. On Linux, make the AppImage executable if needed and run
+   `./BanjoReTooie-*.AppImage` (or add `--appimage-extract-and-run` if FUSE 2 is not installed). The tar.gz build is
+   run from the folder that holds `assets/`.
+3. Choose **Play** and pick your Banjo-Tooie (USA) ROM. It's remembered after the first time. `--game bt` skips the
+   start menu.
+4. Press **Esc** (or **Back** / **Select**) to open the settings at any time.
 
-Settings and saves are kept next to the exe when that folder is writable, and in your user profile otherwise. An
-empty `portable.txt` next to the exe keeps them there. If the game crashes or freezes,
-[`notes/reporting-crashes.md`](notes/reporting-crashes.md) says which logs to send.
+Settings and saves are kept next to the executable when that folder is writable, and in your user profile otherwise.
+An empty `portable.txt` next to the executable keeps them there. An AppImage is read-only, so it uses
+`~/.config/BanjoTooieN64Recomp`; put an empty `portable.txt` beside the AppImage to keep them next to it instead.
+If the game crashes or freezes, [`notes/reporting-crashes.md`](notes/reporting-crashes.md) says which logs to send.
 
 ## How it works
 
